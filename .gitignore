@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Google OAuth credentials (NEVER commit these)
+credentials.json
+token.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
