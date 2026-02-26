@@ -430,6 +430,31 @@ The following information is needed to populate the system:
 
 ---
 
+## Deployment
+
+### GitHub
+- **Repository:** `github.com/lucvanrhyn/farm-management` (private)
+- Every push to `main` triggers an automatic Vercel redeploy
+
+### Vercel
+- **Status:** Live (deployed via GitHub integration)
+- **URL:** *(update this when you have the stable production URL)*
+- Auto-deploys on every `git push origin main`
+
+### Environment Variables (Vercel → Settings → Environment Variables)
+When wiring up Google Sheets in Phase 1, add all four variables:
+
+| Variable | Notes |
+|---|---|
+| `GOOGLE_SHEETS_ID` | The spreadsheet ID from the Google Sheets URL |
+| `GOOGLE_CLIENT_EMAIL` | Service account email from Google Cloud |
+| `GOOGLE_PRIVATE_KEY` | **Paste as-is**, including `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` markers. Vercel handles the newlines correctly — do not encode or escape. |
+| `NEXTAUTH_SECRET` | Generate with: `openssl rand -base64 32` |
+
+> **Security rule:** Never put secrets in code or `.env.local` committed to git. Vercel environment variables are the only safe place for production secrets.
+
+---
+
 ## Key Design Principles
 
 1. **Exception-based logging** — Dicky only reports what changed. No logging 500 animals individually every day.
