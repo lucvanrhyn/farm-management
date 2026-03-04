@@ -114,3 +114,8 @@ export interface DailyCampLog {
   rainfall_mm?: number;
   notes?: string;
 }
+
+export interface CampStats {
+  total: number;
+  byCategory: Partial<Record<AnimalCategory, number>>;
+}

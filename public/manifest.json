@@ -1,0 +1,19 @@
+{
+  "name": "Trio B Logger",
+  "short_name": "Logger",
+  "description": "Brangus daaglikse kamp logger",
+  "start_url": "/logger",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#166534",
+  "background_color": "#f5f5f4",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

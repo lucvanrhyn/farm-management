@@ -1,0 +1,109 @@
+import { openDB, IDBPDatabase } from 'idb';
+import { Camp, Animal } from './types';
+
+const DB_NAME = 'trio-b-offline-db';
+const DB_VERSION = 1;
+
+export interface PendingObservation {
+  local_id?: number;
+  type: string;
+  camp_id: string;
+  animal_id?: string;
+  details: string; // JSON string
+  created_at: string; // ISO
+  synced_at: string | null;
+  sync_status: 'pending' | 'synced' | 'failed';
+}
+
+function getDB(): Promise<IDBPDatabase> {
+  return openDB(DB_NAME, DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('camps')) {
+        db.createObjectStore('camps', { keyPath: 'camp_id' });
+      }
+      if (!db.objectStoreNames.contains('animals')) {
+        const animalsStore = db.createObjectStore('animals', { keyPath: 'animal_id' });
+        animalsStore.createIndex('camp', 'current_camp');
+      }
+      if (!db.objectStoreNames.contains('pending_observations')) {
+        db.createObjectStore('pending_observations', { keyPath: 'local_id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('metadata')) {
+        db.createObjectStore('metadata', { keyPath: 'key' });
+      }
+    },
+  });
+}
+
+export async function seedCamps(camps: Camp[]): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('camps', 'readwrite');
+  await Promise.all(camps.map((c) => tx.store.put(c)));
+  await tx.done;
+}
+
+export async function getCachedCamps(): Promise<Camp[]> {
+  const db = await getDB();
+  return db.getAll('camps');
+}
+
+export async function seedAnimals(animals: Animal[]): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('animals', 'readwrite');
+  await Promise.all(animals.map((a) => tx.store.put(a)));
+  await tx.done;
+}
+
+export async function getAnimalsByCampCached(campId: string): Promise<Animal[]> {
+  const db = await getDB();
+  return db.getAllFromIndex('animals', 'camp', campId);
+}
+
+export async function queueObservation(
+  obs: Omit<PendingObservation, 'local_id'>,
+): Promise<number> {
+  const db = await getDB();
+  return db.add('pending_observations', obs) as Promise<number>;
+}
+
+export async function getPendingObservations(): Promise<PendingObservation[]> {
+  const db = await getDB();
+  const all = await db.getAll('pending_observations');
+  return all.filter((o) => o.sync_status === 'pending');
+}
+
+export async function markObservationSynced(localId: number): Promise<void> {
+  const db = await getDB();
+  const obs = await db.get('pending_observations', localId);
+  if (obs) {
+    await db.put('pending_observations', {
+      ...obs,
+      sync_status: 'synced',
+      synced_at: new Date().toISOString(),
+    });
+  }
+}
+
+export async function markObservationFailed(localId: number): Promise<void> {
+  const db = await getDB();
+  const obs = await db.get('pending_observations', localId);
+  if (obs) {
+    await db.put('pending_observations', { ...obs, sync_status: 'failed' });
+  }
+}
+
+export async function getPendingCount(): Promise<number> {
+  const pending = await getPendingObservations();
+  return pending.length;
+}
+
+export async function getLastSyncedAt(): Promise<string | null> {
+  const db = await getDB();
+  const meta = await db.get('metadata', 'lastSyncedAt');
+  return (meta as { key: string; value: string } | undefined)?.value ?? null;
+}
+
+export async function setLastSyncedAt(iso: string): Promise<void> {
+  const db = await getDB();
+  await db.put('metadata', { key: 'lastSyncedAt', value: iso });
+}
