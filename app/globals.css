@@ -24,3 +24,80 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Leaflet z-index fix — prevents map controls overlapping slide-in panels */
+.leaflet-pane { z-index: 1 !important; }
+.leaflet-control { z-index: 2 !important; }
+.leaflet-top, .leaflet-bottom { z-index: 2 !important; }
+
+/* Dark Leaflet popup styling */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.leaflet-popup-content {
+  margin: 0 !important;
+}
+
+/* Glowing card animations — farm palette (rust → gold → leather) */
+@keyframes border-follow {
+  0%   { left: 0;    top: 0;    transform: translate(-50%, -50%); }
+  25%  { left: 100%; top: 0;    transform: translate(-50%, -50%); }
+  50%  { left: 100%; top: 100%; transform: translate(-50%, -50%); }
+  75%  { left: 0;    top: 100%; transform: translate(-50%, -50%); }
+  100% { left: 0;    top: 0;    transform: translate(-50%, -50%); }
+}
+
+@keyframes color-change {
+  0%   { color: #D46830; }
+  33%  { color: #C49030; }
+  66%  { color: #A08060; }
+  100% { color: #D46830; }
+}
+
+@keyframes border-color-change {
+  0%   { border-color: #D46830; }
+  33%  { border-color: #C49030; }
+  66%  { border-color: #A08060; }
+  100% { border-color: #D46830; }
+}
+
+/* Farm Logger — entrance animation */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fadeUp 0.3s ease-out both;
+}
+
+/* Schematic Map — camp alert pulse */
+@keyframes camp-alert-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 58, 58, 0.6); }
+  50%       { box-shadow: 0 0 0 8px rgba(139, 58, 58, 0); }
+}
+.camp-alert-pulse {
+  animation: camp-alert-pulse 2.2s ease-in-out infinite;
+}
+
+/* Schematic Map — selected camp ring */
+.camp-selected {
+  box-shadow: 0 0 0 2px #5C3D2E, 0 2px 12px rgba(92, 61, 46, 0.25);
+}
+
+/* Warm farm design tokens */
+:root {
+  --farm-bg:      #1A1510;
+  --farm-surface: #241C14;
+  --farm-border:  rgba(140, 100, 60, 0.25);
+  --farm-cream:   #F5EBD4;
+  --farm-tan:     #D2B48C;
+  --farm-amber:   #8B6914;
+  --farm-rust:    #A0522D;
+  --farm-brown:   #5C3D2E;
+  --status-good:  #4A7C59;
+  --status-fair:  #8B6914;
+  --status-poor:  #A0522D;
+  --status-bad:   #8B3A3A;
+}

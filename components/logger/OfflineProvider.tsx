@@ -1,0 +1,135 @@
+'use client';
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  ReactNode,
+} from 'react';
+import { getPendingCount, getLastSyncedAt, getCachedCamps } from '@/lib/offline-store';
+import { syncPendingObservations, refreshCachedData } from '@/lib/sync-manager';
+import { Camp } from '@/lib/types';
+
+type SyncStatus = 'idle' | 'syncing' | 'error';
+
+interface SyncResult {
+  synced: number;
+  timestamp: number;
+}
+
+interface OfflineContextType {
+  isOnline: boolean;
+  syncStatus: SyncStatus;
+  pendingCount: number;
+  lastSyncedAt: string | null;
+  syncResult: SyncResult | null;
+  camps: Camp[];
+  syncNow: () => Promise<void>;
+  refreshData: () => Promise<void>;
+  refreshPendingCount: () => Promise<void>;
+}
+
+const OfflineContext = createContext<OfflineContextType | null>(null);
+
+export function useOffline() {
+  const ctx = useContext(OfflineContext);
+  if (!ctx) throw new Error('useOffline must be used within OfflineProvider');
+  return ctx;
+}
+
+export function OfflineProvider({ children }: { children: ReactNode }) {
+  const [isOnline, setIsOnline] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [pendingCount, setPendingCount] = useState(0);
+  const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [camps, setCamps] = useState<Camp[]>([]);
+  const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshPendingCount = useCallback(async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+  }, []);
+
+  const refreshData = useCallback(async () => {
+    await refreshCachedData();
+    const iso = new Date().toISOString();
+    setLastSyncedAtState(iso);
+    await refreshPendingCount();
+    // Reload camps into context after re-seeding
+    const updated = await getCachedCamps();
+    setCamps(updated);
+  }, [refreshPendingCount]);
+
+  const syncNow = useCallback(async () => {
+    if (syncStatus === 'syncing') return;
+    setSyncStatus('syncing');
+    try {
+      const { synced } = await syncPendingObservations();
+      if (synced > 0) {
+        setSyncResult({ synced, timestamp: Date.now() });
+        if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
+        syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 4000);
+      }
+      await refreshPendingCount();
+      setSyncStatus('idle');
+    } catch {
+      setSyncStatus('error');
+    }
+  }, [syncStatus, refreshPendingCount]);
+
+  // Initialize on mount
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    refreshPendingCount();
+    getLastSyncedAt().then(setLastSyncedAtState);
+
+    // Load or seed camps
+    getCachedCamps().then((existing) => {
+      if (existing.length === 0) {
+        // First run — seed IndexedDB (refreshData sets camps when done)
+        refreshData();
+      } else {
+        // Already seeded — expose immediately
+        setCamps(existing);
+      }
+    });
+  }, [refreshData, refreshPendingCount]);
+
+  // Online/offline listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncNow();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [syncNow]);
+
+  return (
+    <OfflineContext.Provider
+      value={{
+        isOnline,
+        syncStatus,
+        pendingCount,
+        lastSyncedAt,
+        syncResult,
+        camps,
+        syncNow,
+        refreshData,
+        refreshPendingCount,
+      }}
+    >
+      {children}
+    </OfflineContext.Provider>
+  );
+}
