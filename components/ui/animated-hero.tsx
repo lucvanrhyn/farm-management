@@ -32,6 +32,7 @@ export function AnimatedHero() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const interval = setInterval(() => {
       setWordIndex((i) => (i + 1) % words.length);

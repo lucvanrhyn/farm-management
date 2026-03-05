@@ -83,6 +83,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
 
   // Initialize on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsOnline(navigator.onLine);
     refreshPendingCount();
     getLastSyncedAt().then(setLastSyncedAtState);
