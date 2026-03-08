@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const links = [
   { href: "/admin", label: "Oorsig", icon: "📊" },
@@ -28,6 +29,9 @@ export default function AdminNav({ active }: { active: string }) {
           {link.label}
         </Link>
       ))}
+      <div className="mt-auto pt-4">
+        <SignOutButton />
+      </div>
     </nav>
   );
 }
