@@ -1,4 +1,3 @@
-import Link from "next/link";
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
@@ -40,17 +39,6 @@ export default async function LoggerPage() {
             <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Kies &apos;n kamp</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="text-sm px-4 py-2 rounded-xl font-medium"
-              style={{
-                backgroundColor: 'rgba(0,0,0,0.05)',
-                color: '#1A1510',
-                border: '1px solid rgba(0,0,0,0.12)',
-              }}
-            >
-              ← Terug
-            </Link>
             <SignOutButton />
           </div>
         </div>
