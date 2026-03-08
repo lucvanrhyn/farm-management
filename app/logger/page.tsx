@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
+import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const DAYS_AF    = ["Sondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrydag","Saterdag"];
 const MONTHS_AF  = ["Januarie","Februarie","Maart","April","Mei","Junie","Julie","Augustus","September","Oktober","November","Desember"];
@@ -35,17 +36,20 @@ export default function LoggerPage() {
             </h1>
             <p className="text-xs" style={{ color: '#5C3D2E' }}>Dicky · Kies &apos;n kamp</p>
           </div>
-          <Link
-            href="/"
-            className="text-sm px-4 py-2 rounded-xl font-medium"
-            style={{
-              backgroundColor: 'rgba(0,0,0,0.05)',
-              color: '#1A1510',
-              border: '1px solid rgba(0,0,0,0.12)',
-            }}
-          >
-            ← Terug
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="text-sm px-4 py-2 rounded-xl font-medium"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.05)',
+                color: '#1A1510',
+                border: '1px solid rgba(0,0,0,0.12)',
+              }}
+            >
+              ← Terug
+            </Link>
+            <SignOutButton />
+          </div>
         </div>
 
         {/* Date bar */}
