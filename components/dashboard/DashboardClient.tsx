@@ -226,9 +226,9 @@ export default function DashboardClient() {
         {/* Summary stats */}
         <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}>
           <StatChip label="Totale Diere"    value={totalAnimals} />
-          <StatChip label="Kampe Inspekteer" value={`${inspectedToday}/19`} />
+          <StatChip label="Kampe Inspekteer" value={`${inspectedToday}/${CAMPS.length}`} />
           <StatChip label="Aktiewe Waarskuwings" value={alertCount} accent={alertCount > 0} />
-          <StatChip label="Uitstaande Obs."  value={4} />
+          <StatChip label="Uitstaande Obs."  value={alertCount} />
         </div>
 
         {/* Controls */}

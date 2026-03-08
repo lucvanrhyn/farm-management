@@ -179,7 +179,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Pro
         {/* Animal list */}
         <div className="px-5 pt-4">
           <p className="text-xs font-semibold mb-3" style={{ color: P.dim }}>
-            Diereli ({animals.length})
+            Dierelys ({animals.length})
           </p>
           <div className="flex flex-col gap-0.5">
             {animals.slice(0, 30).map((animal) => (
