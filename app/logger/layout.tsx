@@ -24,6 +24,7 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
           alt=""
           fill
           priority
+          sizes="100vw"
           className="object-cover scale-105"
           style={{ filter: 'blur(5px)' }}
         />
