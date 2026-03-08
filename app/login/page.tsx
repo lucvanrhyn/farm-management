@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -26,7 +26,11 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Verkeerde e-pos of wagwoord. Probeer weer.");
       } else if (result?.ok) {
-        router.push("/");
+        const session = await getSession();
+        const role = session?.user?.role;
+        if (role === "admin") router.push("/admin");
+        else if (role === "field_logger") router.push("/logger");
+        else router.push("/dashboard");
       } else {
         setError("Aanmelding het misluk. Probeer later weer.");
       }

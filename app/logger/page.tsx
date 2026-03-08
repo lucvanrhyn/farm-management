@@ -2,6 +2,7 @@ import Link from "next/link";
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
+import { getSession } from "@/lib/auth";
 
 const DAYS_AF    = ["Sondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrydag","Saterdag"];
 const MONTHS_AF  = ["Januarie","Februarie","Maart","April","Mei","Junie","Julie","Augustus","September","Oktober","November","Desember"];
@@ -11,8 +12,10 @@ function getTodayAF(): string {
   return `${DAYS_AF[now.getDay()]}, ${now.getDate()} ${MONTHS_AF[now.getMonth()]} ${now.getFullYear()}`;
 }
 
-export default function LoggerPage() {
+export default async function LoggerPage() {
   const todayLabel = getTodayAF();
+  const session = await getSession();
+  const loggerName = session?.user?.name ?? "Logger";
 
   return (
     <div className="min-h-screen">
@@ -34,7 +37,7 @@ export default function LoggerPage() {
             >
               Trio B
             </h1>
-            <p className="text-xs" style={{ color: '#5C3D2E' }}>Dicky · Kies &apos;n kamp</p>
+            <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Kies &apos;n kamp</p>
           </div>
           <div className="flex items-center gap-2">
             <Link
