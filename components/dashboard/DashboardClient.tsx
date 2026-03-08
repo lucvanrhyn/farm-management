@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
@@ -261,23 +262,7 @@ export default function DashboardClient() {
           {/* View toggle */}
           <ViewToggle value={viewMode} onChange={setViewMode} />
 
-          {/* Home link */}
-          <Link
-            href="/"
-            style={{
-              padding: "4px 10px",
-              borderRadius: 8,
-              fontSize: 11,
-              fontFamily: "var(--font-sans)",
-              color: "rgba(26,21,16,0.55)",
-              border: "1px solid rgba(0,0,0,0.1)",
-              background: "rgba(0,0,0,0.04)",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            ← Tuisblad
-          </Link>
+          <SignOutButton />
         </div>
       </div>
 
