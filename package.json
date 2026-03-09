@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "DATABASE_URL=\"file:./prisma/dev.db\" tsx prisma/seed.ts",
-    "db:push:prod": "dotenv -e .env.production -- prisma db push",
+    "db:migrate:prod": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script 2>/dev/null | turso db shell trio-b-boerdery",
     "db:seed:prod": "dotenv -e .env.production -- tsx prisma/seed.ts"
   },
   "dependencies": {
