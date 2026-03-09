@@ -33,6 +33,8 @@ const dmSerifDisplay = DM_Serif_Display({
   weight: "400",
 });
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Brangus Farm Management",
   description: "Farm management system for Brangus cattle operations",
