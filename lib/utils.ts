@@ -107,7 +107,7 @@ export function getLast7DaysLogs(campId: string): DailyCampLog[] {
 // ============================================================
 
 export function relativeTime(dateStr: string): string {
-  const now = new Date("2026-02-27T12:00:00");
+  const now = new Date();
   const then = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T08:00:00`);
   const diffMs = now.getTime() - then.getTime();
   const diffH = Math.floor(diffMs / (1000 * 60 * 60));
@@ -126,7 +126,7 @@ export function relativeTime(dateStr: string): string {
 
 export function getAnimalAge(dob: string | undefined): string {
   if (!dob) return "Onbekend";
-  const now = new Date("2026-02-27");
+  const now = new Date();
   const birth = new Date(dob);
   const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
   if (months < 24) return `${months} maande`;
@@ -157,7 +157,7 @@ export function getTotalAnimals(): number {
 }
 
 export function getInspectedToday(): number {
-  const today = "2026-02-27";
+  const today = new Date().toISOString().split("T")[0];
   const todayLogs = DAILY_LOGS.filter((l) => l.date === today);
   return new Set(todayLogs.map((l) => l.camp_id)).size;
 }
@@ -202,7 +202,7 @@ export function getStockingDensity(campId: string): number {
 export function daysSinceInspection(campId: string): number {
   const log = getLastInspection(campId);
   if (!log) return 99;
-  const today = new Date("2026-02-28");
+  const today = new Date();
   const inspected = new Date(log.date);
   return Math.floor((today.getTime() - inspected.getTime()) / (1000 * 60 * 60 * 24));
 }

@@ -11,7 +11,7 @@ function createPrismaClient(): PrismaClient {
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
     const adapter = new PrismaLibSQL(libsql);
-    return new PrismaClient({ adapter, datasources: { db: { url: "file:./dummy.db" } } });
+    return new PrismaClient({ adapter });
   }
   return new PrismaClient({
     datasources: { db: { url: process.env.DATABASE_URL } },

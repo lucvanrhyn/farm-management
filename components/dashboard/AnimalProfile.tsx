@@ -197,7 +197,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
               <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen behandelings aangeteken nie.</p>
             ) : treatments.map((t) => {
               const clearDate = t.withdrawal_clear_date;
-              const today = "2026-02-27";
+              const today = new Date().toISOString().split("T")[0];
               const inWithdrawal = clearDate && clearDate > today;
               return (
                 <div key={t.treatment_id} style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
