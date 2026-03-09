@@ -6,13 +6,13 @@ const prisma = new PrismaClient();
 const users = [
   {
     email: "luc@triob.co.za",
-    password: "changeme_admin",
+    password: "Tr!oB_Adm1n_26",
     name: "Luc",
     role: "admin",
   },
   {
     email: "dicky@triob.co.za",
-    password: "changeme_field",
+    password: "Tr!oB_F13ld_26",
     name: "Dicky",
     role: "field_logger",
   },

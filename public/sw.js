@@ -1,4 +1,4 @@
-const CACHE = 'trio-b-logger-v1';
+const CACHE = 'trio-b-logger-v2';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -19,9 +19,11 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   // API calls pass through — handled at the app layer via IndexedDB queue
   if (url.pathname.startsWith('/api/')) return;
-  // Hashed static assets: safe to cache forever (content-addressed)
+  // Next.js static assets: use network-first so dev-mode chunks (webpack.js,
+  // main-app.js, etc.) are never served stale from cache. Content-addressed
+  // files in production will still be cached after the first fetch.
   if (url.pathname.startsWith('/_next/static/')) {
-    e.respondWith(cacheFirst(e.request));
+    e.respondWith(networkFirstWithCache(e.request));
     return;
   }
   // Logger pages and root: network-first, fallback to cache

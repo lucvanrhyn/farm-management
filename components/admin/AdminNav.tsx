@@ -18,6 +18,7 @@ export default function AdminNav({ active }: { active: string }) {
         <Link
           key={link.href}
           href={link.href}
+          prefetch={false}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
             active === link.href
               ? "bg-stone-700 text-white"
