@@ -11,8 +11,6 @@ function createPrismaClient(): PrismaClient {
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
     const adapter = new PrismaLibSQL(libsql);
-    // Pass a dummy datasources override so Prisma doesn't require DATABASE_URL
-    // from the environment — the adapter handles the actual connection.
     return new PrismaClient({ adapter, datasources: { db: { url: "file:./dummy.db" } } });
   }
   return new PrismaClient({
@@ -20,6 +18,14 @@ function createPrismaClient(): PrismaClient {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Lazy proxy — PrismaClient is only instantiated on first property access,
+// never at module load time. This prevents build-time errors during static
+// page generation (e.g. /_not-found) where DB env vars may not be available.
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    if (!globalForPrisma.prisma) {
+      globalForPrisma.prisma = createPrismaClient();
+    }
+    return (globalForPrisma.prisma as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
