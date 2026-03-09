@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,6 +40,12 @@ yarn-error.log*
 # Google OAuth credentials (NEVER commit these)
 credentials.json
 token.json
+
+# Prisma database (local SQLite — never commit)
+prisma/dev.db
+prisma/dev.db-journal
+prisma/prisma/dev.db
+prisma/prisma/dev.db-journal
 
 # typescript
 *.tsbuildinfo
