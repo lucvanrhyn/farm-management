@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
@@ -226,9 +227,9 @@ export default function DashboardClient() {
         {/* Summary stats */}
         <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}>
           <StatChip label="Totale Diere"    value={totalAnimals} />
-          <StatChip label="Kampe Inspekteer" value={`${inspectedToday}/19`} />
+          <StatChip label="Kampe Inspekteer" value={`${inspectedToday}/${CAMPS.length}`} />
           <StatChip label="Aktiewe Waarskuwings" value={alertCount} accent={alertCount > 0} />
-          <StatChip label="Uitstaande Obs."  value={4} />
+          <StatChip label="Uitstaande Obs."  value={alertCount} />
         </div>
 
         {/* Controls */}
@@ -261,23 +262,7 @@ export default function DashboardClient() {
           {/* View toggle */}
           <ViewToggle value={viewMode} onChange={setViewMode} />
 
-          {/* Home link */}
-          <Link
-            href="/"
-            style={{
-              padding: "4px 10px",
-              borderRadius: 8,
-              fontSize: 11,
-              fontFamily: "var(--font-sans)",
-              color: "rgba(26,21,16,0.55)",
-              border: "1px solid rgba(0,0,0,0.1)",
-              background: "rgba(0,0,0,0.04)",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            ← Tuisblad
-          </Link>
+          <SignOutButton />
         </div>
       </div>
 

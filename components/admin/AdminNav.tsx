@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const links = [
   { href: "/admin", label: "Oorsig", icon: "📊" },
   { href: "/admin/animals", label: "Diere", icon: "🐄" },
   { href: "/admin/camps", label: "Kampe", icon: "🌿" },
   { href: "/admin/import", label: "Invoer", icon: "📥" },
-  { href: "/", label: "Tuisblad", icon: "🏠" },
 ];
 
 export default function AdminNav({ active }: { active: string }) {
@@ -18,6 +18,7 @@ export default function AdminNav({ active }: { active: string }) {
         <Link
           key={link.href}
           href={link.href}
+          prefetch={false}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
             active === link.href
               ? "bg-stone-700 text-white"
@@ -28,6 +29,9 @@ export default function AdminNav({ active }: { active: string }) {
           {link.label}
         </Link>
       ))}
+      <div className="mt-auto pt-4">
+        <SignOutButton />
+      </div>
     </nav>
   );
 }

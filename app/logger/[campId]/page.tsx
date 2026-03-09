@@ -11,6 +11,7 @@ import { getCampById, getCampStats, getLastInspection, getGrazingDot, getGrazing
 import { getAnimalsByCampCached, queueObservation } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Animal, AnimalSex, EaseOfBirth, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "condition" | null;
@@ -24,6 +25,7 @@ export default function CampInspectionPage({
   const decodedId = decodeURIComponent(campId);
 
   const router = useRouter();
+  const { data: session } = useSession();
   const { refreshPendingCount } = useOffline();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
@@ -48,7 +50,7 @@ export default function CampInspectionPage({
     await queueObservation({
       type: "camp_check",
       camp_id: decodedId,
-      details: JSON.stringify({ status: "normal", logged_by: "Dicky" }),
+      details: JSON.stringify({ status: "normal", logged_by: session?.user?.name ?? "Logger" }),
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",
