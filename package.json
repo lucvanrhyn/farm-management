@@ -8,9 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "prisma db push",
-    "db:seed": "DATABASE_URL=\"file:./prisma/dev.db\" tsx prisma/seed.ts"
+    "db:seed": "DATABASE_URL=\"file:./prisma/dev.db\" tsx prisma/seed.ts",
+    "db:push:prod": "dotenv -e .env.production -- prisma db push",
+    "db:seed:prod": "dotenv -e .env.production -- tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@prisma/adapter-libsql": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-slot": "^1.2.4",
     "bcryptjs": "^3.0.3",
@@ -34,6 +38,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
