@@ -7,5 +7,6 @@ export default async function Home() {
 
   if (role === "admin") redirect("/admin");
   if (role === "field_logger") redirect("/logger");
-  redirect("/dashboard");
+  if (role) redirect("/dashboard");
+  redirect("/login");
 }

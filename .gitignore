@@ -44,6 +44,8 @@ token.json
 # Prisma database (local SQLite — never commit)
 prisma/dev.db
 prisma/dev.db-journal
+prisma/prisma/dev.db
+prisma/prisma/dev.db-journal
 
 # typescript
 *.tsbuildinfo
