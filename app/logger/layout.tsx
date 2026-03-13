@@ -1,22 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
 import Image from 'next/image';
 import { OfflineProvider } from '@/components/logger/OfflineProvider';
 
-function SWRegistrar() {
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-  }, []);
-  return null;
-}
+// SW registration removed from here — it now lives in components/SWRegistrar.tsx
+// which is rendered at root layout level (app/layout.tsx), ensuring the service
+// worker activates on any page visit, not only when /logger is first opened.
 
 export default function LoggerLayout({ children }: { children: React.ReactNode }) {
   return (
     <OfflineProvider>
-      <SWRegistrar />
       {/* Fixed blurred farm background */}
       <div className="fixed inset-0 z-0 overflow-hidden">
         <Image

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SWRegistrar } from "@/components/SWRegistrar";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 
@@ -42,6 +43,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Trio B Logger",
   },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default async function RootLayout({
@@ -55,6 +59,7 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
+        <SWRegistrar />
         <Providers session={session}>{children}</Providers>
       </body>
     </html>
