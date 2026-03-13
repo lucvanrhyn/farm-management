@@ -69,7 +69,8 @@ export async function queueObservation(
 export async function getPendingObservations(): Promise<PendingObservation[]> {
   const db = await getDB();
   const all = await db.getAll('pending_observations');
-  return all.filter((o) => o.sync_status === 'pending');
+  // Include 'failed' so transient failures are retried on the next sync attempt
+  return all.filter((o) => o.sync_status === 'pending' || o.sync_status === 'failed');
 }
 
 export async function markObservationSynced(localId: number): Promise<void> {
