@@ -1,19 +1,31 @@
 {
   "name": "Trio B Logger",
-  "short_name": "Logger",
-  "description": "Brangus daaglikse kamp logger",
+  "short_name": "Trio B",
+  "description": "Delta Livestock farm management logger",
   "start_url": "/logger",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#166534",
-  "background_color": "#f5f5f4",
+  "background_color": "#052e16",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
