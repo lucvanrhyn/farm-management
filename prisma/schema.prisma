@@ -16,3 +16,13 @@ model User {
   role      String   @default("viewer")
   createdAt DateTime @default(now())
 }
+
+model Observation {
+  id         String   @id @default(cuid())
+  type       String
+  campId     String
+  animalId   String?
+  details    String
+  observedAt DateTime
+  createdAt  DateTime @default(now())
+}
