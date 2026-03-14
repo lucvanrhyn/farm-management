@@ -30,7 +30,9 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
           };
         } catch (err) {
-          console.error("[authorize] DB error:", err);
+          const message = err instanceof Error ? err.message : String(err);
+          const stack = err instanceof Error ? err.stack : undefined;
+          console.error("[authorize] DB error:", message, stack ?? "");
           return null;
         }
       },
