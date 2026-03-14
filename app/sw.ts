@@ -1,6 +1,7 @@
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import {
   CacheFirst,
+  CacheableResponsePlugin,
   NetworkOnly,
   StaleWhileRevalidate,
   Serwist,
@@ -20,7 +21,9 @@ declare global {
 declare const self: WorkerGlobalScope & typeof globalThis;
 
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  // Explicitly include /offline so the fallback is guaranteed to be available
+  // offline, regardless of whether @serwist/next statically exports it.
+  precacheEntries: [...(self.__SW_MANIFEST ?? []), { url: "/offline", revision: "1" }],
   skipWaiting: true,
   clientsClaim: true,
   // navigationPreload disabled for iOS Safari compatibility —
@@ -46,6 +49,10 @@ const serwist = new Serwist({
       handler: new StaleWhileRevalidate({
         cacheName: "pages",
         plugins: [
+          // Only cache 200 OK responses — prevents a 302 redirect to /login
+          // (e.g. from an expired JWT) from being stored and served offline,
+          // which would leave Dicky stuck on a non-functional login form.
+          new CacheableResponsePlugin({ statuses: [200] }),
           new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 }),
         ],
       }),
