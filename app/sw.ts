@@ -2,6 +2,7 @@ import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import {
   CacheFirst,
   NetworkOnly,
+  StaleWhileRevalidate,
   Serwist,
   ExpirationPlugin,
 } from "serwist";
@@ -25,7 +26,30 @@ const serwist = new Serwist({
   // navigationPreload disabled for iOS Safari compatibility —
   // Safari has reliability issues with the Navigation Preload API.
   navigationPreload: false,
+  // Serve /offline as fallback when a navigation request has no cached response
+  // and the network is unavailable.
+  fallbacks: {
+    entries: [
+      {
+        url: "/offline",
+        matcher({ request }) {
+          return request.destination === "document";
+        },
+      },
+    ],
+  },
   runtimeCaching: [
+    // Navigation requests (HTML pages) — cache after first online visit so
+    // the app shell loads offline. Must be first so it matches before defaultCache.
+    {
+      matcher: ({ request }) => request.mode === "navigate",
+      handler: new StaleWhileRevalidate({
+        cacheName: "pages",
+        plugins: [
+          new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 }),
+        ],
+      }),
+    },
     // Farm images — cache on first visit, serve from cache thereafter.
     // Covers brangus.jpg, farm-select.jpg, and any other images.
     {

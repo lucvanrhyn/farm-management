@@ -6,6 +6,11 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient(): PrismaClient {
   if (process.env.TURSO_DATABASE_URL) {
+    if (!process.env.TURSO_AUTH_TOKEN) {
+      throw new Error(
+        "TURSO_AUTH_TOKEN is not set. Add it to Vercel environment variables."
+      );
+    }
     const libsql = createClient({
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
