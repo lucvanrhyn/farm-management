@@ -57,6 +57,23 @@ const serwist = new Serwist({
         ],
       }),
     },
+    // Cache logger camp pages from background warm-up fetches.
+    // When LoggerLayout mounts online it pre-fetches each /logger/[campId] via
+    // fetch(), which has mode="same-origin" (not "navigate") and therefore
+    // misses the navigate rule above. This rule catches those requests and
+    // stores the responses in the same "pages" cache so that the navigate rule
+    // can serve them offline on subsequent hard navigations.
+    {
+      matcher: ({ url, request }: { url: URL; request: Request }) =>
+        url.pathname.startsWith("/logger/") && request.mode !== "navigate",
+      handler: new StaleWhileRevalidate({
+        cacheName: "pages",
+        plugins: [
+          new CacheableResponsePlugin({ statuses: [200] }),
+          new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 }),
+        ],
+      }),
+    },
     // Farm images — cache on first visit, serve from cache thereafter.
     // Covers brangus.jpg, farm-select.jpg, and any other images.
     {
