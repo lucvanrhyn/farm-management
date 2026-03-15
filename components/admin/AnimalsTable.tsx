@@ -2,26 +2,30 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ANIMALS, CAMPS } from "@/lib/dummy-data";
+import { CAMPS } from "@/lib/dummy-data";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
-import type { AnimalCategory, AnimalStatus } from "@/lib/types";
+import type { AnimalCategory, AnimalStatus, PrismaAnimal } from "@/lib/types";
 
 const PAGE_SIZE = 50;
 
-export default function AnimalsTable() {
+interface Props {
+  animals: PrismaAnimal[];
+}
+
+export default function AnimalsTable({ animals }: Props) {
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<string>("animal_id");
+  const [sortKey, setSortKey] = useState<string>("animalId");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return ANIMALS.filter((a) => {
-      if (q && !a.animal_id.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
-      if (campFilter !== "all" && a.current_camp !== campFilter) return false;
+    return animals.filter((a) => {
+      if (q && !a.animalId.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
+      if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
       if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
       return true;
@@ -30,7 +34,7 @@ export default function AnimalsTable() {
       const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
+  }, [animals, search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -100,11 +104,11 @@ export default function AnimalsTable() {
           <thead>
             <tr className="border-b border-stone-100 bg-stone-50">
               {([
-                ["animal_id", "ID"],
+                ["animalId", "ID"],
                 ["category", "Kategorie"],
                 ["sex", "Geslag"],
-                ["date_of_birth", "Ouderdom"],
-                ["current_camp", "Kamp"],
+                ["dateOfBirth", "Ouderdom"],
+                ["currentCamp", "Kamp"],
                 ["status", "Status"],
               ] as [string, string][]).map(([key, label]) => (
                 <th
@@ -119,10 +123,10 @@ export default function AnimalsTable() {
           </thead>
           <tbody>
             {pageData.map((animal) => (
-              <tr key={animal.animal_id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
+              <tr key={animal.animalId} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
                 <td className="px-4 py-3">
-                  <Link href={`/dashboard/animal/${animal.animal_id}`} className="font-mono font-semibold text-stone-800 hover:text-green-700">
-                    {animal.animal_id}
+                  <Link href={`/dashboard/animal/${animal.animalId}`} className="font-mono font-semibold text-stone-800 hover:text-green-700">
+                    {animal.animalId}
                   </Link>
                 </td>
                 <td className="px-4 py-3">
@@ -131,10 +135,10 @@ export default function AnimalsTable() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-stone-600">{animal.sex === "Male" ? "Manlik" : "Vroulik"}</td>
-                <td className="px-4 py-3 text-stone-500">{getAnimalAge(animal.date_of_birth)}</td>
+                <td className="px-4 py-3 text-stone-500">{getAnimalAge(animal.dateOfBirth ?? undefined)}</td>
                 <td className="px-4 py-3">
-                  <Link href={`/dashboard/camp/${animal.current_camp}`} className="text-stone-700 hover:text-green-700 font-medium">
-                    {animal.current_camp}
+                  <Link href={`/dashboard/camp/${animal.currentCamp}`} className="text-stone-700 hover:text-green-700 font-medium">
+                    {animal.currentCamp}
                   </Link>
                 </td>
                 <td className="px-4 py-3">

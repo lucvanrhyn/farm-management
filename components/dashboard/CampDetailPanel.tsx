@@ -1,13 +1,16 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import StatusIndicator from "./StatusIndicator";
-import { getCampById, getCampStats, getLastInspection, getLast7DaysLogs, getAnimalsByCamp, getCategoryLabel, getCategoryPluralLabel, getCategoryChipColor } from "@/lib/utils";
-import type { AnimalCategory } from "@/lib/types";
+import { getCampById, getLastInspection, getLast7DaysLogs, getCategoryLabel, getCategoryPluralLabel } from "@/lib/utils";
+import type { AnimalCategory, PrismaAnimal } from "@/lib/types";
+import type { LiveCampStatus } from "@/lib/server/camp-status";
 
 interface Props {
   campId: string;
   onClose: () => void;
   onSelectAnimal: (animalId: string) => void;
+  liveCondition?: LiveCampStatus;
 }
 
 const CATEGORY_ORDER: AnimalCategory[] = ["Cow", "Heifer", "Calf", "Bull", "Ox"];
@@ -73,11 +76,35 @@ const WARM_CHIP_TEXT: Record<string, string> = {
   Ox:     "#B09878",
 };
 
-export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Props) {
+export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveCondition }: Props) {
   const camp = getCampById(campId);
-  const stats = getCampStats(campId);
   const lastLog = getLastInspection(campId);
-  const animals = getAnimalsByCamp(campId);
+  const [animals, setAnimals] = useState<PrismaAnimal[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/animals?camp=${encodeURIComponent(campId)}&status=all`)
+      .then((r) => r.json())
+      .then((data: PrismaAnimal[]) => setAnimals(Array.isArray(data) ? data : []))
+      .catch(() => setAnimals([]));
+  }, [campId]);
+
+  // Compute stats from fetched animals
+  const stats = {
+    total: animals.length,
+    byCategory: animals.reduce<Partial<Record<AnimalCategory, number>>>((acc, a) => {
+      acc[a.category] = (acc[a.category] ?? 0) + 1;
+      return acc;
+    }, {}),
+  };
+
+  // Prefer Prisma live data over dummy-data fallback
+  const grazing = liveCondition?.grazing_quality ?? lastLog?.grazing_quality ?? "Fair";
+  const water   = liveCondition?.water_status   ?? lastLog?.water_status   ?? "Full";
+  const fence   = liveCondition?.fence_status   ?? lastLog?.fence_status   ?? "Intact";
+  const lastInspectedDate = liveCondition?.last_inspected_at
+    ? liveCondition.last_inspected_at.split("T")[0]
+    : lastLog?.date ?? "Onbekend";
+  const lastInspectedBy = liveCondition?.last_inspected_by ?? lastLog?.inspected_by ?? "—";
 
   if (!camp) return null;
 
@@ -118,9 +145,9 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Pro
           className="px-5 py-4 flex flex-wrap gap-2 border-b"
           style={{ borderColor: P.border }}
         >
-          <StatusIndicator type="grazing" status={lastLog?.grazing_quality ?? "Fair"} />
-          <StatusIndicator type="water"   status={lastLog?.water_status ?? "Full"} />
-          <StatusIndicator type="fence"   status={lastLog?.fence_status ?? "Intact"} />
+          <StatusIndicator type="grazing" status={grazing} />
+          <StatusIndicator type="water"   status={water} />
+          <StatusIndicator type="fence"   status={fence} />
         </div>
 
         {/* Animal count breakdown */}
@@ -168,7 +195,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Pro
             Laaste inspeksie
           </p>
           <p className="text-sm mb-3" style={{ color: P.cream }}>
-            {lastLog?.date ?? "Onbekend"} · {lastLog?.inspected_by ?? "—"}
+            {lastInspectedDate} · {lastInspectedBy}
           </p>
           <p className="text-xs font-semibold mb-1" style={{ color: P.dim }}>
             Diere (laaste 7 dae)
@@ -184,8 +211,8 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Pro
           <div className="flex flex-col gap-0.5">
             {animals.slice(0, 30).map((animal) => (
               <button
-                key={animal.animal_id}
-                onClick={() => onSelectAnimal(animal.animal_id)}
+                key={animal.animalId}
+                onClick={() => onSelectAnimal(animal.animalId)}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-left w-full"
                 style={{ background: "transparent", transition: "background 0.12s" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = P.hover)}
@@ -195,7 +222,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal }: Pro
                   className="font-mono text-xs font-semibold"
                   style={{ color: P.cream }}
                 >
-                  {animal.animal_id}
+                  {animal.animalId}
                 </span>
                 <span
                   style={{

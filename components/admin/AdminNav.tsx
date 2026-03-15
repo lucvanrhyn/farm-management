@@ -3,6 +3,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const links = [
   { href: "/admin", label: "Oorsig", icon: "📊" },
+  { href: "/admin/observations", label: "Waarnemings", icon: "📋" },
   { href: "/admin/animals", label: "Diere", icon: "🐄" },
   { href: "/admin/camps", label: "Kampe", icon: "🌿" },
   { href: "/admin/import", label: "Invoer", icon: "📥" },

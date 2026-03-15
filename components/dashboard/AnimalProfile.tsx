@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { getAnimalById, getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import { CALVING_RECORDS, TREATMENTS, OBSERVATIONS } from "@/lib/dummy-data";
+import type { PrismaAnimal } from "@/lib/types";
 
 type Tab = "overview" | "calving" | "treatments" | "observations";
 
@@ -14,9 +15,17 @@ interface Props {
 
 export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [animal, setAnimal] = useState<PrismaAnimal | null | "loading">("loading");
 
-  const animal = getAnimalById(animalId);
-  const camp = animal ? getCampById(animal.current_camp) : undefined;
+  useEffect(() => {
+    setAnimal("loading");
+    fetch(`/api/animals/${encodeURIComponent(animalId)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: PrismaAnimal | null) => setAnimal(data))
+      .catch(() => setAnimal(null));
+  }, [animalId]);
+
+  const camp = animal && animal !== "loading" ? getCampById(animal.currentCamp) : undefined;
 
   const calvings = CALVING_RECORDS.filter((r) => r.mother_id === animalId || r.calf_id === animalId);
   const treatments = TREATMENTS.filter((t) => t.animal_id === animalId);
@@ -26,6 +35,14 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   const surfaceBg = "#261C12";
   const border    = "rgba(140,100,60,0.22)";
   const textMuted = "#B09878";
+
+  if (animal === "loading") {
+    return (
+      <div className="flex flex-col h-full items-center justify-center" style={{ background: panelBg }}>
+        <p className="text-sm" style={{ color: textMuted }}>Laai…</p>
+      </div>
+    );
+  }
 
   if (!animal) {
     return (
@@ -61,7 +78,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                 fontSize: 17,
                 color: "#F5EBD4",
               }}
-            >{animal.animal_id}</span>
+            >{animal.animalId}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryChipColor(animal.category)}`}>
               {getCategoryLabel(animal.category)}
             </span>
@@ -84,11 +101,11 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Ouderdom</p>
-            <p className="text-sm font-semibold text-white mt-0.5">{getAnimalAge(animal.date_of_birth)}</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{getAnimalAge(animal.dateOfBirth ?? undefined)}</p>
           </div>
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Huidige kamp</p>
-            <p className="text-sm font-semibold text-white mt-0.5">{camp?.camp_name ?? animal.current_camp}</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{camp?.camp_name ?? animal.currentCamp}</p>
           </div>
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Status</p>
@@ -109,7 +126,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
           </div>
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Geboortedatum</p>
-            <p className="text-sm font-semibold text-white mt-0.5">{animal.date_of_birth ?? "Onbekend"}</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{animal.dateOfBirth ?? "Onbekend"}</p>
           </div>
         </div>
       </div>
@@ -136,16 +153,16 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {tab === "overview" && (
           <div className="flex flex-col gap-3">
-            {animal.mother_id && (
+            {animal.motherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
                 <p className="text-xs font-semibold text-white mb-1">Moeder</p>
-                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.mother_id}</p>
+                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.motherId}</p>
               </div>
             )}
-            {animal.father_id && (
+            {animal.fatherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
                 <p className="text-xs font-semibold text-white mb-1">Vader (Bul)</p>
-                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.father_id}</p>
+                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.fatherId}</p>
               </div>
             )}
             {animal.notes && (
@@ -154,7 +171,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                 <p className="text-sm" style={{ color: textMuted }}>{animal.notes}</p>
               </div>
             )}
-            {!animal.mother_id && !animal.father_id && !animal.notes && (
+            {!animal.motherId && !animal.fatherId && !animal.notes && (
               <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen addisionele inligting nie.</p>
             )}
           </div>

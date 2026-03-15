@@ -8,7 +8,7 @@ import MovementForm from "@/components/logger/MovementForm";
 import CalvingForm from "@/components/logger/CalvingForm";
 import CampConditionForm from "@/components/logger/CampConditionForm";
 import { getCampById, getCampStats, getLastInspection, getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
-import { getAnimalsByCampCached, queueObservation } from "@/lib/offline-store";
+import { getAnimalsByCampCached, queueObservation, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -26,7 +26,7 @@ export default function CampInspectionPage({
 
   const router = useRouter();
   const { data: session } = useSession();
-  const { refreshPendingCount } = useOffline();
+  const { refreshPendingCount, refreshCampsState, camps } = useOffline();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
@@ -35,6 +35,8 @@ export default function CampInspectionPage({
   const camp = getCampById(decodedId);
   const stats = getCampStats(decodedId);
   const lastLog = getLastInspection(decodedId);
+  // Prefer IndexedDB live condition over dummy-data lastLog
+  const liveCamp = camps.find((c) => c.camp_id === decodedId);
 
   // Load animals from IndexedDB
   useEffect(() => {
@@ -47,14 +49,18 @@ export default function CampInspectionPage({
   }
 
   async function handleAllNormal() {
+    const now = new Date().toISOString();
+    const loggedBy = session?.user?.name ?? "Logger";
     await queueObservation({
       type: "camp_check",
       camp_id: decodedId,
-      details: JSON.stringify({ status: "normal", logged_by: session?.user?.name ?? "Logger" }),
-      created_at: new Date().toISOString(),
+      details: JSON.stringify({ status: "normal", logged_by: loggedBy }),
+      created_at: now,
       synced_at: null,
       sync_status: "pending",
     });
+    await updateCampCondition(decodedId, { last_inspected_at: now, last_inspected_by: loggedBy });
+    await refreshCampsState();
     refreshPendingCount();
     setAllNormalDone(true);
     setTimeout(() => router.push("/logger"), 1200);
@@ -84,8 +90,11 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    await updateAnimalCamp(data.animalId, data.destCampId);
     refreshPendingCount();
     setActiveModal(null);
+    // Refresh animal list so moved animal disappears
+    getAnimalsByCampCached(decodedId).then(setAnimals);
   }
 
   async function handleCalvingSubmit(data: {
@@ -119,8 +128,11 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    await updateAnimalStatus(selectedAnimalId, "Deceased");
     refreshPendingCount();
     setActiveModal(null);
+    // Refresh animal list so deceased animal is removed from active list
+    getAnimalsByCampCached(decodedId).then(setAnimals);
   }
 
   async function handleConditionSubmit(data: {
@@ -130,14 +142,24 @@ export default function CampInspectionPage({
     fence: FenceStatus;
     notes: string;
   }) {
+    const now = new Date().toISOString();
+    const loggedBy = session?.user?.name ?? "Logger";
     await queueObservation({
       type: "camp_condition",
       camp_id: decodedId,
-      details: JSON.stringify(data),
-      created_at: new Date().toISOString(),
+      details: JSON.stringify({ ...data, logged_by: loggedBy }),
+      created_at: now,
       synced_at: null,
       sync_status: "pending",
     });
+    await updateCampCondition(decodedId, {
+      grazing_quality: data.grazing,
+      water_status: data.water,
+      fence_status: data.fence,
+      last_inspected_at: now,
+      last_inspected_by: loggedBy,
+    });
+    await refreshCampsState();
     refreshPendingCount();
     setActiveModal(null);
   }
@@ -150,8 +172,9 @@ export default function CampInspectionPage({
     );
   }
 
-  const grazingDot = getGrazingDot(lastLog?.grazing_quality ?? "Fair");
-  const grazingBadge = getGrazingTailwindBg(lastLog?.grazing_quality ?? "Fair");
+  const grazingQuality = liveCamp?.grazing_quality ?? lastLog?.grazing_quality ?? "Fair";
+  const grazingDot = getGrazingDot(grazingQuality);
+  const grazingBadge = getGrazingTailwindBg(grazingQuality);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -188,7 +211,7 @@ export default function CampInspectionPage({
           <div className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-full ${grazingDot}`} />
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${grazingBadge}`}>
-              {lastLog?.grazing_quality ?? "Fair"}
+              {grazingQuality}
             </span>
           </div>
         </div>

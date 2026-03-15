@@ -61,6 +61,12 @@ export interface Camp {
   water_source?: string;       // "borehole" | "dam" | "river" | "trough"
   geojson?: string;            // GeoJSON polygon coordinates (stringified)
   notes?: string;
+  // Live condition fields — populated from IndexedDB after logger observations
+  grazing_quality?: GrazingQuality;
+  water_status?: WaterStatus;
+  fence_status?: FenceStatus;
+  last_inspected_at?: string;  // ISO datetime string
+  last_inspected_by?: string;
 }
 
 export interface Observation {
@@ -118,4 +124,38 @@ export interface DailyCampLog {
 export interface CampStats {
   total: number;
   byCategory: Partial<Record<AnimalCategory, number>>;
+}
+
+// Mirrors the Prisma Observation model (camelCase) — returned by /api/observations
+export interface PrismaObservation {
+  id: string;
+  type: ObservationType;
+  campId: string;
+  animalId: string | null;
+  details: string;
+  observedAt: string;
+  createdAt: string;
+  loggedBy: string | null;
+  editedBy: string | null;
+  editedAt: string | null;
+  editHistory: string | null;
+  attachmentUrl: string | null;
+}
+
+// Mirrors the Prisma Animal model (camelCase) — returned by /api/animals
+export interface PrismaAnimal {
+  id: string;
+  animalId: string;
+  name: string | null;
+  sex: string;
+  dateOfBirth: string | null;
+  breed: string;
+  category: AnimalCategory;
+  currentCamp: string;
+  status: AnimalStatus;
+  motherId: string | null;
+  fatherId: string | null;
+  notes: string | null;
+  dateAdded: string;
+  createdAt: string;
 }

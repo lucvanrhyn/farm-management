@@ -1,7 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   // Farm selection page is public — no auth required
   if (req.nextUrl.pathname === "/") {
     return NextResponse.next();
