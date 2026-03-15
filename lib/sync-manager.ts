@@ -4,8 +4,12 @@ import {
   getPendingObservations,
   markObservationSynced,
   markObservationFailed,
+  getPendingAnimalCreates,
+  markAnimalCreateSynced,
+  markAnimalCreateFailed,
   setLastSyncedAt,
   PendingObservation,
+  PendingAnimalCreate,
 } from './offline-store';
 import type { Camp, Animal, AnimalSex } from './types';
 import type { PrismaAnimal } from './types';
@@ -68,6 +72,48 @@ export async function syncPendingObservations(): Promise<{ synced: number; faile
       synced++;
     } else {
       await markObservationFailed(obs.local_id!);
+      failed++;
+    }
+  }
+
+  return { synced, failed };
+}
+
+async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean> {
+  try {
+    const res = await fetch('/api/animals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        animalId: animal.animal_id,
+        name: animal.name ?? null,
+        sex: animal.sex,
+        category: animal.category,
+        currentCamp: animal.current_camp,
+        motherId: animal.mother_id ?? null,
+        dateAdded: animal.date_added,
+        breed: 'Brangus',
+        status: 'Active',
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function syncPendingAnimals(): Promise<{ synced: number; failed: number }> {
+  const pending = await getPendingAnimalCreates();
+  let synced = 0;
+  let failed = 0;
+
+  for (const animal of pending) {
+    const ok = await uploadAnimalCreate(animal);
+    if (ok) {
+      await markAnimalCreateSynced(animal.local_id!);
+      synced++;
+    } else {
+      await markAnimalCreateFailed(animal.local_id!);
       failed++;
     }
   }

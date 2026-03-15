@@ -7,7 +7,15 @@ interface Props {
   animalId: string;
   campId: string;
   onClose: () => void;
-  onSubmit?: (data: { animalId: string; campId: string; calfSex: AnimalSex; calfAlive: boolean; easeOfBirth: EaseOfBirth; notes: string }) => void;
+  onSubmit?: (data: {
+    animalId: string;
+    campId: string;
+    calfName: string;
+    calfSex: AnimalSex;
+    calfAlive: boolean;
+    easeOfBirth: EaseOfBirth;
+    notes: string;
+  }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -81,6 +89,7 @@ function SegmentGroup<T extends string>({
 }
 
 export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Props) {
+  const [calfName, setCalfName] = useState("");
   const [calfSex, setCalfSex] = useState<AnimalSex>("Female");
   const [calfAlive, setCalfAlive] = useState(true);
   const [ease, setEase] = useState<EaseOfBirth>("Unassisted");
@@ -88,7 +97,7 @@ export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Pro
 
   function submit() {
     if (onSubmit) {
-      onSubmit({ animalId, campId, calfSex, calfAlive, easeOfBirth: ease, notes });
+      onSubmit({ animalId, campId, calfName, calfSex, calfAlive, easeOfBirth: ease, notes });
     } else {
       alert(`Kalfgeboorte aangeteken vir ${animalId} in kamp ${campId}\nKalf geslag: ${calfSex}\nLewendig: ${calfAlive ? "Ja" : "Nee"}\nGemak: ${ease}`);
       onClose();
@@ -98,13 +107,31 @@ export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Pro
   return (
     <BottomSheet title={`Kalfgeboorte — ${animalId}`} onClose={onClose}>
       <div className="p-5 flex flex-col gap-6">
+
+        {/* Calf name */}
+        <div>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Kalfnaam (opsioneel)</p>
+          <input
+            type="text"
+            value={calfName}
+            onChange={(e) => setCalfName(e.target.value)}
+            placeholder="bv. Sterretjie"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
+            style={{
+              backgroundColor: 'rgba(26, 13, 5, 0.6)',
+              border: '1px solid rgba(92, 61, 46, 0.5)',
+              color: '#F5F0E8',
+            }}
+          />
+        </div>
+
         <SegmentGroup
           label="Kalf geslag"
           value={calfSex}
           onChange={setCalfSex}
           options={[
-            { value: "Female", label: "Vers",  icon: "🐄" },
-            { value: "Male",   label: "Bulle", icon: "🐂" },
+            { value: "Female", label: "Vroulik", icon: "🐄" },
+            { value: "Male",   label: "Manlik",  icon: "🐂" },
           ]}
         />
 

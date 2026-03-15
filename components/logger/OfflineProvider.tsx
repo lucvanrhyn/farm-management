@@ -10,7 +10,7 @@ import {
   ReactNode,
 } from 'react';
 import { getPendingCount, getLastSyncedAt, getCachedCamps } from '@/lib/offline-store';
-import { syncPendingObservations, refreshCachedData } from '@/lib/sync-manager';
+import { syncPendingObservations, syncPendingAnimals, refreshCachedData } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
@@ -74,7 +74,11 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const { synced } = await syncPendingObservations();
+      const [{ synced: syncedObs }, { synced: syncedAnimals }] = await Promise.all([
+        syncPendingObservations(),
+        syncPendingAnimals(),
+      ]);
+      const synced = syncedObs + syncedAnimals;
       if (synced > 0) {
         setSyncResult({ synced, timestamp: Date.now() });
         if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
