@@ -8,9 +8,15 @@ interface ImportResult {
   errors: string[];
 }
 
+interface ImportProgress {
+  processed: number;
+  total: number;
+}
+
 export default function AnimalImporter() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,6 +26,7 @@ export default function AnimalImporter() {
     setFile(f);
     setResult(null);
     setError(null);
+    setProgress(null);
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -29,6 +36,7 @@ export default function AnimalImporter() {
       setFile(f);
       setResult(null);
       setError(null);
+      setProgress(null);
     }
   }
 
@@ -37,24 +45,57 @@ export default function AnimalImporter() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setProgress(null);
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       const res = await fetch("/api/animals/import", { method: "POST", body: formData });
-      const data = await res.json();
+
       if (!res.ok) {
+        const data = await res.json();
         setError(data.error ?? "Invoer het misluk");
-      } else {
-        setResult(data);
+        return;
+      }
+
+      // Read SSE stream
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
+            } else if (typeof data.processed === "number") {
+              setProgress({ processed: data.processed, total: data.total });
+            }
+          } catch {
+            /* ignore malformed chunks */
+          }
+        }
       }
     } catch {
       setError("Netwerkkout — probeer weer");
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
+
+  const progressPct = progress ? Math.round((progress.processed / progress.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -79,8 +120,12 @@ export default function AnimalImporter() {
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-stone-300 rounded-xl p-10 text-center cursor-pointer hover:border-stone-400 hover:bg-stone-50 transition-colors"
+        onClick={() => !loading && inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
+          loading
+            ? "border-stone-200 bg-stone-50 cursor-not-allowed"
+            : "border-stone-300 cursor-pointer hover:border-stone-400 hover:bg-stone-50"
+        }`}
       >
         <input
           ref={inputRef}
@@ -108,11 +153,43 @@ export default function AnimalImporter() {
       <button
         onClick={handleImport}
         disabled={!file || loading}
-        className="w-full py-3 rounded-xl font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ backgroundColor: file && !loading ? "#78350f" : undefined, background: (!file || loading) ? "#d6d3d1" : undefined }}
+        className="w-full py-3 rounded-xl font-bold transition-colors disabled:cursor-not-allowed"
+        style={
+          file && !loading
+            ? { backgroundColor: "#78350f", color: "#fff" }
+            : { backgroundColor: "#e7e5e4", color: "#78716c" }
+        }
       >
         {loading ? "Besig om in te voer…" : "Voer diere in"}
       </button>
+
+      {/* Progress bar */}
+      {loading && (
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-xs text-stone-500">
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-3 h-3 rounded-full border-2 border-stone-300 border-t-amber-700 animate-spin"
+              />
+              {progress ? `${progress.processed} van ${progress.total} diere verwerk…` : "Lêer word geleë…"}
+            </span>
+            {progress && <span className="font-semibold text-stone-600">{progressPct}%</span>}
+          </div>
+          <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+            {progress ? (
+              <div
+                className="h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progressPct}%`, backgroundColor: "#78350f" }}
+              />
+            ) : (
+              <div
+                className="h-2 rounded-full animate-pulse"
+                style={{ width: "30%", backgroundColor: "#d6d3d1" }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

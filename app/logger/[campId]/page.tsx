@@ -8,7 +8,7 @@ import MovementForm from "@/components/logger/MovementForm";
 import CalvingForm from "@/components/logger/CalvingForm";
 import CampConditionForm from "@/components/logger/CampConditionForm";
 import { getCampById, getCampStats, getLastInspection, getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
-import { getAnimalsByCampCached, queueObservation, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
+import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -26,7 +26,7 @@ export default function CampInspectionPage({
 
   const router = useRouter();
   const { data: session } = useSession();
-  const { refreshPendingCount, refreshCampsState, camps } = useOffline();
+  const { isOnline, refreshPendingCount, refreshCampsState, camps } = useOffline();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
@@ -100,20 +100,77 @@ export default function CampInspectionPage({
   async function handleCalvingSubmit(data: {
     animalId: string;
     campId: string;
+    calfName: string;
     calfSex: AnimalSex;
     calfAlive: boolean;
     easeOfBirth: EaseOfBirth;
     notes: string;
   }) {
+    const now = new Date().toISOString();
+
+    // Queue the calving observation (offline-safe)
     await queueObservation({
       type: "reproduction",
       camp_id: decodedId,
       animal_id: data.animalId,
       details: JSON.stringify(data),
-      created_at: new Date().toISOString(),
+      created_at: now,
       synced_at: null,
       sync_status: "pending",
     });
+
+    // Create the new calf animal record if alive
+    if (data.calfAlive) {
+      const tempId = `KALF-${Date.now()}`;
+      const today = now.split("T")[0];
+      const calfPayload = {
+        animalId: tempId,
+        name: data.calfName || null,
+        sex: data.calfSex,
+        category: "Calf",
+        currentCamp: decodedId,
+        motherId: data.animalId,
+        dateAdded: today,
+        breed: "Brangus",
+        status: "Active",
+      };
+
+      if (isOnline) {
+        // Attempt immediate POST — fall back to queue on failure
+        try {
+          const res = await fetch("/api/animals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(calfPayload),
+          });
+          if (!res.ok) throw new Error("POST failed");
+        } catch {
+          await queueAnimalCreate({
+            animal_id: tempId,
+            name: data.calfName || undefined,
+            sex: data.calfSex,
+            category: "Calf",
+            current_camp: decodedId,
+            mother_id: data.animalId,
+            date_added: today,
+            sync_status: "pending",
+          });
+        }
+      } else {
+        // Offline — queue for later sync
+        await queueAnimalCreate({
+          animal_id: tempId,
+          name: data.calfName || undefined,
+          sex: data.calfSex,
+          category: "Calf",
+          current_camp: decodedId,
+          mother_id: data.animalId,
+          date_added: today,
+          sync_status: "pending",
+        });
+      }
+    }
+
     refreshPendingCount();
     setActiveModal(null);
   }

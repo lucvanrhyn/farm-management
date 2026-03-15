@@ -69,82 +69,103 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let imported = 0;
-  let skipped = 0;
-  const errors: string[] = [];
+  const encoder = new TextEncoder();
+  const total = rows.length;
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 2; // 1-indexed, +1 for header
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(data: object) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      }
 
-    const animalId = String(row.animal_id ?? "").trim();
-    if (!animalId) {
-      errors.push(`Row ${rowNum}: missing animal_id`);
-      skipped++;
-      continue;
-    }
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
 
-    const sex = normalizeSex(String(row.sex ?? ""));
-    if (!sex) {
-      errors.push(`Row ${rowNum} (${animalId}): invalid sex "${row.sex}" — expected Male/Female or Manlik/Vroulik`);
-      skipped++;
-      continue;
-    }
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2; // 1-indexed, +1 for header
 
-    const category = normalizeCategory(String(row.category ?? ""));
-    if (!category) {
-      errors.push(`Row ${rowNum} (${animalId}): invalid category "${row.category}" — expected Cow/Koei, Bull/Bul, Heifer/Vers, Calf/Kalf, or Ox/Os`);
-      skipped++;
-      continue;
-    }
+        const animalId = String(row.animal_id ?? "").trim();
+        if (!animalId) {
+          errors.push(`Row ${rowNum}: missing animal_id`);
+          skipped++;
+        } else {
+          const sex = normalizeSex(String(row.sex ?? ""));
+          if (!sex) {
+            errors.push(`Row ${rowNum} (${animalId}): invalid sex "${row.sex}" — expected Male/Female or Manlik/Vroulik`);
+            skipped++;
+          } else {
+            const category = normalizeCategory(String(row.category ?? ""));
+            if (!category) {
+              errors.push(`Row ${rowNum} (${animalId}): invalid category "${row.category}" — expected Cow/Koei, Bull/Bul, Heifer/Vers, Calf/Kalf, or Ox/Os`);
+              skipped++;
+            } else {
+              const currentCamp = String(row.current_camp ?? "").trim();
+              if (!currentCamp) {
+                errors.push(`Row ${rowNum} (${animalId}): missing current_camp`);
+                skipped++;
+              } else {
+                const status = String(row.status ?? "Active").trim();
+                const resolvedStatus = VALID_STATUSES.has(status) ? status : "Active";
 
-    const currentCamp = String(row.current_camp ?? "").trim();
-    if (!currentCamp) {
-      errors.push(`Row ${rowNum} (${animalId}): missing current_camp`);
-      skipped++;
-      continue;
-    }
+                try {
+                  await prisma.animal.upsert({
+                    where: { animalId },
+                    update: {
+                      name: String(row.name ?? "").trim() || null,
+                      sex,
+                      dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
+                      breed: String(row.breed ?? "Brangus").trim() || "Brangus",
+                      category,
+                      currentCamp,
+                      status: resolvedStatus,
+                      motherId: String(row.mother_id ?? "").trim() || null,
+                      fatherId: String(row.father_id ?? "").trim() || null,
+                      notes: String(row.notes ?? "").trim() || null,
+                      dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
+                    },
+                    create: {
+                      animalId,
+                      name: String(row.name ?? "").trim() || null,
+                      sex,
+                      dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
+                      breed: String(row.breed ?? "Brangus").trim() || "Brangus",
+                      category,
+                      currentCamp,
+                      status: resolvedStatus,
+                      motherId: String(row.mother_id ?? "").trim() || null,
+                      fatherId: String(row.father_id ?? "").trim() || null,
+                      notes: String(row.notes ?? "").trim() || null,
+                      dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
+                    },
+                  });
+                  imported++;
+                } catch (err) {
+                  errors.push(`Row ${rowNum} (${animalId}): DB error — ${String(err)}`);
+                  skipped++;
+                }
+              }
+            }
+          }
+        }
 
-    const status = String(row.status ?? "Active").trim();
-    const resolvedStatus = VALID_STATUSES.has(status) ? status : "Active";
+        // Send progress every 25 rows or on the last row
+        if ((i + 1) % 25 === 0 || i === rows.length - 1) {
+          send({ processed: i + 1, total });
+        }
+      }
 
-    try {
-      await prisma.animal.upsert({
-        where: { animalId },
-        update: {
-          name: String(row.name ?? "").trim() || null,
-          sex,
-          dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
-          breed: String(row.breed ?? "Brangus").trim() || "Brangus",
-          category,
-          currentCamp,
-          status: resolvedStatus,
-          motherId: String(row.mother_id ?? "").trim() || null,
-          fatherId: String(row.father_id ?? "").trim() || null,
-          notes: String(row.notes ?? "").trim() || null,
-          dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
-        },
-        create: {
-          animalId,
-          name: String(row.name ?? "").trim() || null,
-          sex,
-          dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
-          breed: String(row.breed ?? "Brangus").trim() || "Brangus",
-          category,
-          currentCamp,
-          status: resolvedStatus,
-          motherId: String(row.mother_id ?? "").trim() || null,
-          fatherId: String(row.father_id ?? "").trim() || null,
-          notes: String(row.notes ?? "").trim() || null,
-          dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
-        },
-      });
-      imported++;
-    } catch (err) {
-      errors.push(`Row ${rowNum} (${animalId}): DB error — ${String(err)}`);
-      skipped++;
-    }
-  }
+      send({ done: true, imported, skipped, errors });
+      controller.close();
+    },
+  });
 
-  return NextResponse.json({ imported, skipped, errors }, { status: 200 });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
