@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useOffline } from "./OfflineProvider";
-import { getCampStats, getGrazingDot, relativeTime } from "@/lib/utils";
+import { getGrazingDot, relativeTime } from "@/lib/utils";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
 
 function CampSkeleton() {
@@ -38,7 +38,7 @@ export default function CampSelector() {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
       {camps.map((camp, index) => {
-        const stats = getCampStats(camp.camp_id);
+        const animalCount = camp.animal_count ?? 0;
         const dotColor = getGrazingDot(camp.grazing_quality ?? "Fair");
         const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Nog nie";
 
@@ -89,7 +89,7 @@ export default function CampSelector() {
                   border: '1px solid rgba(210, 180, 140, 0.35)',
                 }}
               >
-                {stats.total} diere
+                {animalCount} diere
               </span>
             </div>
           </button>

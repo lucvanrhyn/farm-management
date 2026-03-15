@@ -6,9 +6,26 @@ import * as XLSX from "xlsx";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
 
-const VALID_CATEGORIES = new Set(["Cow", "Bull", "Heifer", "Calf", "Ox"]);
-const VALID_SEXES = new Set(["Male", "Female"]);
 const VALID_STATUSES = new Set(["Active", "Sold", "Deceased"]);
+
+// Normalize sex values — accept English and Afrikaans variants, any case
+function normalizeSex(raw: string): "Male" | "Female" | null {
+  const v = raw.trim().toLowerCase();
+  if (["male", "m", "manlik", "manlike", "bul", "bull", "os", "ox"].includes(v)) return "Male";
+  if (["female", "f", "vroulik", "vroulike", "koei", "vers", "kalf", "heifer", "cow", "calf"].includes(v)) return "Female";
+  return null;
+}
+
+// Normalize category values — accept English and Afrikaans variants, any case
+function normalizeCategory(raw: string): "Cow" | "Bull" | "Heifer" | "Calf" | "Ox" | null {
+  const v = raw.trim().toLowerCase();
+  if (["cow", "koei"].includes(v)) return "Cow";
+  if (["bull", "bul", "bulle"].includes(v)) return "Bull";
+  if (["heifer", "vers", "verset", "versie"].includes(v)) return "Heifer";
+  if (["calf", "kalf", "kalfie", "kalwer"].includes(v)) return "Calf";
+  if (["ox", "os", "osse"].includes(v)) return "Ox";
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -67,16 +84,16 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const sex = String(row.sex ?? "").trim();
-    if (!VALID_SEXES.has(sex)) {
-      errors.push(`Row ${rowNum} (${animalId}): invalid sex "${sex}" — must be Male or Female`);
+    const sex = normalizeSex(String(row.sex ?? ""));
+    if (!sex) {
+      errors.push(`Row ${rowNum} (${animalId}): invalid sex "${row.sex}" — expected Male/Female or Manlik/Vroulik`);
       skipped++;
       continue;
     }
 
-    const category = String(row.category ?? "").trim();
-    if (!VALID_CATEGORIES.has(category)) {
-      errors.push(`Row ${rowNum} (${animalId}): invalid category "${category}"`);
+    const category = normalizeCategory(String(row.category ?? ""));
+    if (!category) {
+      errors.push(`Row ${rowNum} (${animalId}): invalid category "${row.category}" — expected Cow/Koei, Bull/Bul, Heifer/Vers, Calf/Kalf, or Ox/Os`);
       skipped++;
       continue;
     }
