@@ -1,6 +1,6 @@
 import AdminNav from "@/components/admin/AdminNav";
 import StatsCard from "@/components/admin/StatsCard";
-import { getTotalAnimals } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 import { CAMPS } from "@/lib/dummy-data";
 import {
   getLatestCampConditions,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/server/camp-status";
 
 export default async function AdminPage() {
-  const totalAnimals = getTotalAnimals();
+  const totalAnimals = await prisma.animal.count({ where: { status: "Active" } });
   const totalCamps = CAMPS.length;
 
   const sevenDaysAgo = new Date();

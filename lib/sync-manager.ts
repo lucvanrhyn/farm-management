@@ -1,4 +1,3 @@
-import { CAMPS, ANIMALS } from './dummy-data';
 import {
   seedCamps,
   seedAnimals,
@@ -8,10 +7,39 @@ import {
   setLastSyncedAt,
   PendingObservation,
 } from './offline-store';
+import type { Camp, Animal, AnimalSex } from './types';
+import type { PrismaAnimal } from './types';
 
 export async function refreshCachedData(): Promise<void> {
-  await seedCamps(CAMPS);
-  await seedAnimals(ANIMALS);
+  const [campsRes, animalsRes] = await Promise.all([
+    fetch('/api/camps'),
+    fetch('/api/animals'),
+  ]);
+
+  if (campsRes.ok) {
+    const camps: Camp[] = await campsRes.json();
+    await seedCamps(camps);
+  }
+
+  if (animalsRes.ok) {
+    const prismaAnimals: PrismaAnimal[] = await animalsRes.json();
+    const animals: Animal[] = prismaAnimals.map((a) => ({
+      animal_id: a.animalId,
+      name: a.name ?? undefined,
+      sex: a.sex as AnimalSex,
+      date_of_birth: a.dateOfBirth ?? undefined,
+      breed: a.breed,
+      category: a.category,
+      current_camp: a.currentCamp,
+      status: a.status,
+      mother_id: a.motherId ?? undefined,
+      father_id: a.fatherId ?? undefined,
+      notes: a.notes ?? undefined,
+      date_added: a.dateAdded,
+    }));
+    await seedAnimals(animals);
+  }
+
   await setLastSyncedAt(new Date().toISOString());
 }
 

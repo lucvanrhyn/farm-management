@@ -67,6 +67,7 @@ export interface Camp {
   fence_status?: FenceStatus;
   last_inspected_at?: string;  // ISO datetime string
   last_inspected_by?: string;
+  animal_count?: number;       // populated from /api/camps (Prisma count)
 }
 
 export interface Observation {

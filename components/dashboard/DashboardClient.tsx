@@ -8,7 +8,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
-import { getTotalAnimals, getInspectedToday, getAlertCount, getCampStats, getLastInspection } from "@/lib/utils";
+import { getInspectedToday, getAlertCount, getLastInspection } from "@/lib/utils";
 import { CAMPS } from "@/lib/dummy-data";
 
 // Leaflet must only render client-side
@@ -144,7 +144,13 @@ function ViewToggle({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function DashboardClient() {
+export default function DashboardClient({
+  totalAnimals,
+  campAnimalCounts,
+}: {
+  totalAnimals: number;
+  campAnimalCounts: Record<string, number>;
+}) {
   const [selectedCampId, setSelectedCampId]   = useState<string | null>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [viewMode, setViewMode]               = useState<"schematic" | "satellite">("schematic");
@@ -166,13 +172,12 @@ export default function DashboardClient() {
 
   const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
-  const totalAnimals   = getTotalAnimals();
   const inspectedToday = getInspectedToday();
   const alertCount     = getAlertCount();
 
   const campData = CAMPS.map((camp) => ({
     camp,
-    stats: getCampStats(camp.camp_id),
+    stats: { total: campAnimalCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
     grazing: liveConditions[camp.camp_id]?.grazing_quality ?? getLastInspection(camp.camp_id)?.grazing_quality ?? "Fair",
   }));
 
