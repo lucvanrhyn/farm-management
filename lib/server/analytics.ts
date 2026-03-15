@@ -1,0 +1,280 @@
+import { prisma } from "@/lib/prisma";
+
+function daysAgo(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function monthsAgo(months: number): Date {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function toDateString(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+function toMonthString(date: Date): string {
+  return date.toISOString().slice(0, 7); // YYYY-MM
+}
+
+const QUALITY_SCORE: Record<string, number> = {
+  Good: 4,
+  Fair: 3,
+  Poor: 2,
+  Overgrazed: 1,
+};
+
+// ── Camp Condition Trend ──────────────────────────────────────────────────────
+
+export interface ConditionTrendPoint {
+  date: string;
+  avgScore: number;
+  count: number;
+}
+
+export async function getCampConditionTrend(days = 30): Promise<ConditionTrendPoint[]> {
+  const rows = await prisma.observation.findMany({
+    where: { type: "camp_condition", observedAt: { gte: daysAgo(days) } },
+    select: { observedAt: true, details: true },
+    orderBy: { observedAt: "asc" },
+  });
+
+  const byDate = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    let details: Record<string, string> = {};
+    try { details = JSON.parse(row.details); } catch { /* skip */ }
+    const score = QUALITY_SCORE[details.grazing] ?? QUALITY_SCORE[details.grazing_quality] ?? 3;
+    const key = toDateString(new Date(row.observedAt));
+    const existing = byDate.get(key) ?? { total: 0, count: 0 };
+    byDate.set(key, { total: existing.total + score, count: existing.count + 1 });
+  }
+
+  return Array.from(byDate.entries()).map(([date, { total, count }]) => ({
+    date,
+    avgScore: Math.round((total / count) * 10) / 10,
+    count,
+  }));
+}
+
+// ── Health Issues by Camp ─────────────────────────────────────────────────────
+
+export interface HealthByCamp {
+  campId: string;
+  count: number;
+}
+
+export async function getHealthIssuesByCamp(days = 30): Promise<HealthByCamp[]> {
+  const rows = await prisma.observation.groupBy({
+    by: ["campId"],
+    where: { type: "health_issue", observedAt: { gte: daysAgo(days) } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+  });
+  return rows.map((r) => ({ campId: r.campId, count: r._count.id }));
+}
+
+// ── Headcount by Camp ─────────────────────────────────────────────────────────
+
+export interface HeadcountByCamp {
+  campId: string;
+  category: string;
+  count: number;
+}
+
+export async function getHeadcountByCamp(): Promise<HeadcountByCamp[]> {
+  const rows = await prisma.animal.groupBy({
+    by: ["currentCamp", "category"],
+    where: { status: "Active" },
+    _count: { id: true },
+  });
+  return rows.map((r) => ({
+    campId: r.currentCamp ?? "Onbekend",
+    category: r.category,
+    count: r._count.id,
+  }));
+}
+
+// ── Inspection Heatmap ────────────────────────────────────────────────────────
+
+export interface HeatmapCell {
+  campId: string;
+  date: string;
+  count: number;
+}
+
+export async function getInspectionHeatmap(days = 30): Promise<HeatmapCell[]> {
+  const rows = await prisma.observation.findMany({
+    where: {
+      type: { in: ["camp_check", "camp_condition"] },
+      observedAt: { gte: daysAgo(days) },
+    },
+    select: { campId: true, observedAt: true },
+  });
+
+  const byKey = new Map<string, number>();
+  for (const row of rows) {
+    const key = `${row.campId}__${toDateString(new Date(row.observedAt))}`;
+    byKey.set(key, (byKey.get(key) ?? 0) + 1);
+  }
+
+  return Array.from(byKey.entries()).map(([key, count]) => {
+    const [campId, date] = key.split("__");
+    return { campId, date, count };
+  });
+}
+
+// ── Animal Movement Flow ──────────────────────────────────────────────────────
+
+export interface MovementRecord {
+  id: string;
+  date: string;
+  animalId: string | null;
+  fromCamp: string;
+  toCamp: string;
+  loggedBy: string | null;
+}
+
+export async function getAnimalMovements(days = 30): Promise<MovementRecord[]> {
+  const rows = await prisma.observation.findMany({
+    where: { type: "animal_movement", observedAt: { gte: daysAgo(days) } },
+    orderBy: { observedAt: "desc" },
+    take: 100,
+  });
+
+  return rows.map((row) => {
+    let details: Record<string, string> = {};
+    try { details = JSON.parse(row.details); } catch { /* skip */ }
+    return {
+      id: row.id,
+      date: toDateString(new Date(row.observedAt)),
+      animalId: row.animalId,
+      fromCamp: details.from_camp ?? details.from ?? "—",
+      toCamp: details.to_camp ?? details.to ?? "—",
+      loggedBy: row.loggedBy,
+    };
+  });
+}
+
+// ── Calving Trend ─────────────────────────────────────────────────────────────
+
+export interface CalvingPoint {
+  month: string;
+  count: number;
+}
+
+export async function getCalvingTrend(months = 12): Promise<CalvingPoint[]> {
+  const rows = await prisma.observation.findMany({
+    where: { type: "reproduction", observedAt: { gte: monthsAgo(months) } },
+    select: { observedAt: true, details: true },
+    orderBy: { observedAt: "asc" },
+  });
+
+  const byMonth = new Map<string, number>();
+  for (const row of rows) {
+    let details: Record<string, string> = {};
+    try { details = JSON.parse(row.details); } catch { /* skip */ }
+    const event = (details.event ?? "").toLowerCase();
+    if (!event.includes("calv")) continue;
+    const key = toMonthString(new Date(row.observedAt));
+    byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
+  }
+
+  return Array.from(byMonth.entries()).map(([month, count]) => ({ month, count }));
+}
+
+// ── Deaths & Sales Over Time ──────────────────────────────────────────────────
+
+export interface AttritionPoint {
+  month: string;
+  deaths: number;
+  sales: number;
+}
+
+export async function getDeathsAndSales(months = 12): Promise<AttritionPoint[]> {
+  // Use death/sold observations as the source of truth
+  const deathObs = await prisma.observation.findMany({
+    where: { type: "death", observedAt: { gte: monthsAgo(months) } },
+    select: { observedAt: true },
+  });
+
+  // For sales: animals with status=Sold, using dateAdded as proxy (no sale date field)
+  // Better source: look for any observation type we can link — fall back to animal.status change
+  const soldAnimals = await prisma.animal.findMany({
+    where: { status: "Sold" },
+    select: { dateAdded: true },
+  });
+
+  const byMonth = new Map<string, { deaths: number; sales: number }>();
+  const ensure = (key: string) => {
+    if (!byMonth.has(key)) byMonth.set(key, { deaths: 0, sales: 0 });
+    return byMonth.get(key)!;
+  };
+
+  const cutoff = monthsAgo(months);
+  for (const obs of deathObs) {
+    const key = toMonthString(new Date(obs.observedAt));
+    ensure(key).deaths += 1;
+  }
+  for (const animal of soldAnimals) {
+    if (!animal.dateAdded || new Date(animal.dateAdded) < cutoff) continue;
+    const key = toMonthString(new Date(animal.dateAdded));
+    ensure(key).sales += 1;
+  }
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, { deaths, sales }]) => ({ month, deaths, sales }));
+}
+
+// ── Treatment Withdrawal Tracker ──────────────────────────────────────────────
+
+export interface WithdrawalRecord {
+  id: string;
+  animalId: string | null;
+  campId: string;
+  drug: string;
+  daysRemaining: number;
+  observedAt: string;
+}
+
+export async function getWithdrawalTracker(): Promise<WithdrawalRecord[]> {
+  const rows = await prisma.observation.findMany({
+    where: { type: "treatment" },
+    orderBy: { observedAt: "desc" },
+  });
+
+  const today = new Date();
+  const results: WithdrawalRecord[] = [];
+
+  for (const row of rows) {
+    let details: Record<string, string | number> = {};
+    try { details = JSON.parse(row.details); } catch { continue; }
+
+    const withdrawalDays = Number(details.withdrawal_days ?? details.withdrawalDays ?? 0);
+    if (!withdrawalDays) continue;
+
+    const observedAt = new Date(row.observedAt);
+    const withdrawalEnd = new Date(observedAt);
+    withdrawalEnd.setDate(withdrawalEnd.getDate() + withdrawalDays);
+
+    const daysRemaining = Math.ceil((withdrawalEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysRemaining <= 0) continue;
+
+    results.push({
+      id: row.id,
+      animalId: row.animalId,
+      campId: row.campId,
+      drug: String(details.drug ?? details.treatment ?? "Onbekend"),
+      daysRemaining,
+      observedAt: toDateString(observedAt),
+    });
+  }
+
+  return results.sort((a, b) => a.daysRemaining - b.daysRemaining);
+}

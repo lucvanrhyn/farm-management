@@ -125,7 +125,7 @@ export default function AnimalsTable({ animals }: Props) {
             {pageData.map((animal) => (
               <tr key={animal.animalId} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
                 <td className="px-4 py-3">
-                  <Link href={`/dashboard/animal/${animal.animalId}`} className="font-mono font-semibold text-stone-800 hover:text-green-700">
+                  <Link href={`/admin/animals/${animal.animalId}`} className="font-mono font-semibold text-stone-800 hover:text-green-700">
                     {animal.animalId}
                   </Link>
                 </td>

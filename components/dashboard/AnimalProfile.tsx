@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
-import { CALVING_RECORDS, TREATMENTS, OBSERVATIONS } from "@/lib/dummy-data";
-import type { PrismaAnimal } from "@/lib/types";
+import type { PrismaAnimal, PrismaObservation } from "@/lib/types";
 
-type Tab = "overview" | "calving" | "treatments" | "observations";
+type Tab = "overview" | "geskiedenis";
 
 interface Props {
   animalId: string;
@@ -16,6 +15,8 @@ interface Props {
 export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
   const [animal, setAnimal] = useState<PrismaAnimal | null | "loading">("loading");
+  const [observations, setObservations] = useState<PrismaObservation[]>([]);
+  const [obsLoading, setObsLoading] = useState(false);
 
   useEffect(() => {
     setAnimal("loading");
@@ -25,11 +26,16 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
       .catch(() => setAnimal(null));
   }, [animalId]);
 
-  const camp = animal && animal !== "loading" ? getCampById(animal.currentCamp) : undefined;
+  useEffect(() => {
+    if (!animalId) return;
+    setObsLoading(true);
+    fetch(`/api/observations?animalId=${encodeURIComponent(animalId)}&limit=100`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: PrismaObservation[]) => setObservations(Array.isArray(data) ? data : []))
+      .finally(() => setObsLoading(false));
+  }, [animalId]);
 
-  const calvings = CALVING_RECORDS.filter((r) => r.mother_id === animalId || r.calf_id === animalId);
-  const treatments = TREATMENTS.filter((t) => t.animal_id === animalId);
-  const observations = OBSERVATIONS.filter((o) => o.animal_id === animalId);
+  const camp = animal && animal !== "loading" ? getCampById(animal.currentCamp) : undefined;
 
   const panelBg  = "#1E1710";
   const surfaceBg = "#261C12";
@@ -54,9 +60,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Oorsig" },
-    { key: "calving", label: "Kalwings" },
-    { key: "treatments", label: "Behandelings" },
-    { key: "observations", label: "Waarnemings" },
+    { key: "geskiedenis", label: "Geskiedenis" },
   ];
 
   return (
@@ -177,89 +181,60 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
           </div>
         )}
 
-        {tab === "calving" && (
+        {tab === "geskiedenis" && (
           <div className="flex flex-col gap-3">
-            {calvings.length === 0 ? (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen kalwings aangeteken nie.</p>
-            ) : calvings.map((c) => (
-              <div key={c.calving_id} style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                <div className="flex items-start justify-between mb-2">
-                  <p className="text-xs font-semibold text-white">{c.timestamp.split("T")[0]}</p>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 500,
-                      padding: "1px 8px",
-                      borderRadius: 20,
-                      background: c.calf_alive ? "rgba(74,124,89,0.2)" : "rgba(139,58,58,0.22)",
-                      color:      c.calf_alive ? "#6FAB80"             : "#C25858",
-                    }}
-                  >
-                    {c.calf_alive ? "Lewend" : "Doodgebore"}
-                  </span>
-                </div>
-                <p className="text-xs" style={{ color: textMuted }}>
-                  Kalf: <span className="font-mono text-white">{c.calf_id}</span> ·{" "}
-                  {c.calf_sex === "Male" ? "Bul" : "Vers"} · {c.ease_of_birth}
-                </p>
-                {c.notes && <p className="text-xs mt-1" style={{ color: "rgba(176,152,120,0.55)" }}>{c.notes}</p>}
-              </div>
-            ))}
-          </div>
-        )}
+            {obsLoading && (
+              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Laai geskiedenis…</p>
+            )}
+            {!obsLoading && observations.length === 0 && (
+              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen geskiedenisinslae nie.</p>
+            )}
+            {observations.map((obs) => {
+              const date = new Date(obs.observedAt).toLocaleDateString("af-ZA");
+              let details: Record<string, unknown> = {};
+              try { details = JSON.parse(obs.details); } catch { /* ignore */ }
 
-        {tab === "treatments" && (
-          <div className="flex flex-col gap-3">
-            {treatments.length === 0 ? (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen behandelings aangeteken nie.</p>
-            ) : treatments.map((t) => {
-              const clearDate = t.withdrawal_clear_date;
-              const today = new Date().toISOString().split("T")[0];
-              const inWithdrawal = clearDate && clearDate > today;
-              return (
-                <div key={t.treatment_id} style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                  <div className="flex items-start justify-between mb-1">
-                    <p className="text-sm font-semibold text-white">{t.product_name}</p>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 500,
-                        padding: "1px 8px",
-                        borderRadius: 20,
-                        background: inWithdrawal ? "rgba(139,105,20,0.2)" : "rgba(74,124,89,0.2)",
-                        color:      inWithdrawal ? "#C4A030"              : "#6FAB80",
-                      }}
-                    >
-                      {inWithdrawal ? `Onthouding tot ${clearDate}` : "Vry"}
-                    </span>
-                  </div>
-                  <p className="text-xs" style={{ color: textMuted }}>
-                    {t.treatment_type} · {t.dosage ?? "—"} · {t.timestamp.split("T")[0]}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(176,152,120,0.55)" }}>Toegedien deur: {t.administered_by}</p>
-                </div>
-              );
-            })}
-          </div>
-        )}
+              const icons: Record<string, string> = {
+                health_issue: "🏥",
+                animal_movement: "🚚",
+                reproduction: "🐄",
+                death: "💀",
+                treatment: "💉",
+                camp_check: "✅",
+                camp_condition: "✅",
+              };
 
-        {tab === "observations" && (
-          <div className="flex flex-col gap-3">
-            {observations.length === 0 ? (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen waarnemings aangeteken nie.</p>
-            ) : observations.map((o) => {
-              const details = o.details ? (() => { try { return JSON.parse(o.details!); } catch { return {}; } })() : {};
+              let summary = "";
+              if (obs.type === "health_issue") {
+                const syms = (details.symptoms as string[] | undefined)?.join(", ") ?? "";
+                const sev = details.severity as string | undefined;
+                summary = [syms, sev].filter(Boolean).join(" — ");
+              } else if (obs.type === "animal_movement") {
+                summary = `${details.from_camp ?? "?"} → ${details.to_camp ?? "?"}`;
+              } else if (obs.type === "reproduction") {
+                summary = String(details.event ?? "");
+              } else if (obs.type === "treatment") {
+                summary = [details.drug ?? details.product_name, details.dose ?? details.dosage]
+                  .filter(Boolean).join(", ");
+              } else if (obs.type === "death") {
+                summary = String(details.cause ?? "");
+              }
+
               return (
-                <div key={o.observation_id} style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                  <div className="flex items-start justify-between mb-1">
-                    <p className="text-xs font-semibold text-white capitalize">{o.type.replace("_", " ")}</p>
-                    <p className="text-xs" style={{ color: textMuted }}>{o.timestamp.split("T")[0]}</p>
+                <div key={obs.id} style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
+                  <div className="flex gap-3">
+                    <span className="text-base">{icons[obs.type] ?? "📋"}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-semibold text-white capitalize">{obs.type.replace(/_/g, " ")}</p>
+                        <p className="text-xs shrink-0" style={{ color: textMuted }}>{date}</p>
+                      </div>
+                      {summary && <p className="text-xs mt-0.5" style={{ color: textMuted }}>{summary}</p>}
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(176,152,120,0.45)" }}>
+                        {obs.loggedBy ?? "onbekend"}
+                      </p>
+                    </div>
                   </div>
-                  {details.symptoms && (
-                    <p className="text-xs" style={{ color: textMuted }}>
-                      Simptome: {Array.isArray(details.symptoms) ? details.symptoms.join(", ") : details.symptoms}
-                    </p>
-                  )}
                 </div>
               );
             })}
