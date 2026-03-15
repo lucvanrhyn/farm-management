@@ -7,6 +7,7 @@ const links = [
   { href: "/admin/animals", label: "Diere", icon: "🐄" },
   { href: "/admin/camps", label: "Kampe", icon: "🌿" },
   { href: "/admin/import", label: "Invoer", icon: "📥" },
+  { href: "/admin/grafieke", label: "Grafieke", icon: "📈" },
 ];
 
 export default function AdminNav({ active }: { active: string }) {
