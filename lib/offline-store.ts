@@ -1,5 +1,5 @@
 import { openDB, IDBPDatabase } from 'idb';
-import { Camp, Animal } from './types';
+import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
 const DB_NAME = 'trio-b-offline-db';
 const DB_VERSION = 1;
@@ -107,4 +107,37 @@ export async function getLastSyncedAt(): Promise<string | null> {
 export async function setLastSyncedAt(iso: string): Promise<void> {
   const db = await getDB();
   await db.put('metadata', { key: 'lastSyncedAt', value: iso });
+}
+
+export async function updateCampCondition(
+  campId: string,
+  condition: {
+    grazing_quality?: GrazingQuality;
+    water_status?: WaterStatus;
+    fence_status?: FenceStatus;
+    last_inspected_at?: string;
+    last_inspected_by?: string;
+  },
+): Promise<void> {
+  const db = await getDB();
+  const camp = await db.get('camps', campId);
+  if (camp) {
+    await db.put('camps', { ...camp, ...condition });
+  }
+}
+
+export async function updateAnimalCamp(animalId: string, newCampId: string): Promise<void> {
+  const db = await getDB();
+  const animal = await db.get('animals', animalId);
+  if (animal) {
+    await db.put('animals', { ...animal, current_camp: newCampId });
+  }
+}
+
+export async function updateAnimalStatus(animalId: string, status: AnimalStatus): Promise<void> {
+  const db = await getDB();
+  const animal = await db.get('animals', animalId);
+  if (animal) {
+    await db.put('animals', { ...animal, status });
+  }
 }

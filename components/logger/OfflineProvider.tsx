@@ -30,6 +30,7 @@ interface OfflineContextType {
   syncNow: () => Promise<void>;
   refreshData: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
+  refreshCampsState: () => Promise<void>;
 }
 
 const OfflineContext = createContext<OfflineContextType | null>(null);
@@ -52,6 +53,11 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const refreshPendingCount = useCallback(async () => {
     const count = await getPendingCount();
     setPendingCount(count);
+  }, []);
+
+  const refreshCampsState = useCallback(async () => {
+    const updated = await getCachedCamps();
+    setCamps(updated);
   }, []);
 
   const refreshData = useCallback(async () => {
@@ -128,6 +134,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         syncNow,
         refreshData,
         refreshPendingCount,
+        refreshCampsState,
       }}
     >
       {children}

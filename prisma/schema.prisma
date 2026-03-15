@@ -18,11 +18,54 @@ model User {
 }
 
 model Observation {
-  id         String   @id @default(cuid())
-  type       String
-  campId     String
-  animalId   String?
-  details    String
-  observedAt DateTime
-  createdAt  DateTime @default(now())
+  id            String    @id @default(cuid())
+  type          String
+  campId        String
+  animalId      String?
+  details       String
+  observedAt    DateTime
+  createdAt     DateTime  @default(now())
+  loggedBy      String?
+  editedBy      String?
+  editedAt      DateTime?
+  editHistory   String?
+  attachmentUrl String?
+}
+
+model Animal {
+  id          String   @id @default(cuid())
+  animalId    String   @unique
+  name        String?
+  sex         String
+  dateOfBirth String?
+  breed       String   @default("Brangus")
+  category    String
+  currentCamp String
+  status      String   @default("Active")
+  motherId    String?
+  fatherId    String?
+  notes       String?
+  dateAdded   String
+  createdAt   DateTime @default(now())
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String
+  category    String
+  amount      Float
+  date        String
+  description String
+  animalId    String?
+  campId      String?
+  reference   String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+}
+
+model FarmSettings {
+  id                  String   @id @default("singleton")
+  alertThresholdHours Int      @default(48)
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
 }

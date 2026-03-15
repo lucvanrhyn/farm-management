@@ -3,6 +3,36 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const camp = searchParams.get("camp");
+  const type = searchParams.get("type");
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200);
+  const offset = parseInt(searchParams.get("offset") ?? "0");
+
+  const where: Record<string, unknown> = {};
+  if (camp) where.campId = camp;
+  if (type) where.type = type;
+
+  try {
+    const observations = await prisma.observation.findMany({
+      where,
+      orderBy: { observedAt: "desc" },
+      take: limit,
+      skip: offset,
+    });
+    return NextResponse.json(observations);
+  } catch (err) {
+    console.error("[observations GET] DB error:", err);
+    return NextResponse.json({ error: "Failed to fetch observations" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -35,6 +65,7 @@ export async function POST(request: NextRequest) {
         animalId: animal_id ?? null,
         details: details ?? "",
         observedAt,
+        loggedBy: session.user?.email ?? null,
       },
     });
     return NextResponse.json({ success: true, id: record.id });

@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { getCampById, getCampStats, getLastInspection, getAnimalsByCamp, getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
+import { getCampById, getLastInspection, getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
+import type { AnimalCategory } from "@/lib/types";
 
 export default async function CampDetailPage({
   params,
@@ -10,9 +12,19 @@ export default async function CampDetailPage({
   const { campId } = await params;
   const decodedId = decodeURIComponent(campId);
   const camp = getCampById(decodedId);
-  const stats = getCampStats(decodedId);
   const lastLog = getLastInspection(decodedId);
-  const animals = getAnimalsByCamp(decodedId);
+  const animals = await prisma.animal.findMany({
+    where: { currentCamp: decodedId, status: "Active" },
+    orderBy: [{ category: "asc" }, { animalId: "asc" }],
+    select: { animalId: true, category: true },
+  });
+
+  // Compute stats from real animals
+  const byCategory = animals.reduce<Partial<Record<AnimalCategory, number>>>((acc, a) => {
+    const cat = a.category as AnimalCategory;
+    acc[cat] = (acc[cat] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const bg = "#0f172a";
   const surface = "#1e293b";
@@ -28,7 +40,7 @@ export default async function CampDetailPage({
   }
 
   return (
-    <div className="min-h-screen" style={{ background: bg, color: "#f1f5f9" }}>
+    <div className="h-full overflow-y-auto" style={{ background: bg, color: "#f1f5f9" }}>
       {/* Header */}
       <div className="px-6 py-5 border-b flex items-center gap-4" style={{ borderColor: border, background: surface }}>
         <Link href="/dashboard" className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
@@ -58,12 +70,12 @@ export default async function CampDetailPage({
 
         {/* Animal counts */}
         <div className="rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-3">Diere: {stats.total}</h2>
+          <h2 className="text-sm font-semibold text-white mb-3">Diere: {animals.length}</h2>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(stats.byCategory).map(([cat, count]) => (
+            {Object.entries(byCategory).map(([cat, count]) => (
               <div key={cat} className="flex items-center gap-1.5">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryChipColor(cat as Parameters<typeof getCategoryLabel>[0])}`}>
-                  {getCategoryLabel(cat as Parameters<typeof getCategoryLabel>[0])}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryChipColor(cat as AnimalCategory)}`}>
+                  {getCategoryLabel(cat as AnimalCategory)}
                 </span>
                 <span className="text-sm font-bold text-white">{count}</span>
               </div>
@@ -73,18 +85,18 @@ export default async function CampDetailPage({
 
         {/* Animal list */}
         <div className="md:col-span-2 rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-4">Diereli</h2>
+          <h2 className="text-sm font-semibold text-white mb-4">Dierelys</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {animals.map((a) => (
               <Link
-                key={a.animal_id}
-                href={`/dashboard/animal/${a.animal_id}`}
+                key={a.animalId}
+                href={`/dashboard/animal/${a.animalId}`}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm hover:opacity-80 transition-opacity"
                 style={{ background: "#334155" }}
               >
-                <span className="font-mono font-semibold text-white text-xs">{a.animal_id}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryChipColor(a.category)}`}>
-                  {getCategoryLabel(a.category)}
+                <span className="font-mono font-semibold text-white text-xs">{a.animalId}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryChipColor(a.category as AnimalCategory)}`}>
+                  {getCategoryLabel(a.category as AnimalCategory)}
                 </span>
               </Link>
             ))}

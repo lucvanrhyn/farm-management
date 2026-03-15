@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { LiveCampStatus } from "@/lib/server/camp-status";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { SignOutButton } from "@/components/logger/SignOutButton";
@@ -148,17 +149,31 @@ export default function DashboardClient() {
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [viewMode, setViewMode]               = useState<"schematic" | "satellite">("schematic");
   const [filterBy, setFilterBy]               = useState<FilterMode>("grazing");
+  const [liveConditions, setLiveConditions]   = useState<Record<string, LiveCampStatus>>({});
+
+  // Fetch live camp conditions from Prisma via API, then re-poll every 30s
+  useEffect(() => {
+    function fetchConditions() {
+      fetch("/api/camps/status")
+        .then((r) => r.ok ? r.json() : {})
+        .then((data) => setLiveConditions(data ?? {}))
+        .catch(() => {/* fall back to dummy-data */});
+    }
+    fetchConditions();
+    const interval = setInterval(fetchConditions, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
-  const totalAnimals    = getTotalAnimals();
-  const inspectedToday  = getInspectedToday();
-  const alertCount      = getAlertCount();
+  const totalAnimals   = getTotalAnimals();
+  const inspectedToday = getInspectedToday();
+  const alertCount     = getAlertCount();
 
   const campData = CAMPS.map((camp) => ({
     camp,
     stats: getCampStats(camp.camp_id),
-    grazing: getLastInspection(camp.camp_id)?.grazing_quality ?? "Fair",
+    grazing: liveConditions[camp.camp_id]?.grazing_quality ?? getLastInspection(camp.camp_id)?.grazing_quality ?? "Fair",
   }));
 
   function handleCampClick(campId: string) {
@@ -275,6 +290,7 @@ export default function DashboardClient() {
               onCampClick={handleCampClick}
               filterBy={filterBy}
               selectedCampId={selectedCampId}
+              liveConditions={liveConditions}
             />
           ) : (
             <div className="absolute inset-0">
@@ -308,6 +324,7 @@ export default function DashboardClient() {
               campId={selectedCampId}
               onClose={() => setSelectedCampId(null)}
               onSelectAnimal={(id) => setSelectedAnimalId(id)}
+              liveCondition={liveConditions[selectedCampId]}
             />
           ) : null}
         </div>

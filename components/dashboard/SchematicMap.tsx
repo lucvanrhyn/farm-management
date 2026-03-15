@@ -8,6 +8,7 @@ import {
   daysSinceInspection,
   campHasAlert,
 } from "@/lib/utils";
+import type { LiveCampStatus } from "@/lib/server/camp-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ interface Props {
   onCampClick: (campId: string) => void;
   filterBy: FilterMode;
   selectedCampId: string | null;
+  liveConditions?: Record<string, LiveCampStatus>;
 }
 
 // ─── Logical canvas dimensions ────────────────────────────────────────────────
@@ -83,11 +85,11 @@ const WARM = {
   water: { border: "#3B7A8B", bg: "rgba(59,122,139,0.08)",  text: "#2A6070", label: "Vol"       },
 };
 
-function getCampColors(campId: string, filterBy: FilterMode) {
+function getCampColors(campId: string, filterBy: FilterMode, liveCondition?: LiveCampStatus) {
   const log = getLastInspection(campId);
 
   if (filterBy === "grazing") {
-    const q = log?.grazing_quality ?? "Fair";
+    const q = liveCondition?.grazing_quality ?? log?.grazing_quality ?? "Fair";
     if (q === "Good")       return WARM.good;
     if (q === "Fair")       return WARM.fair;
     if (q === "Poor")       return WARM.poor;
@@ -95,7 +97,7 @@ function getCampColors(campId: string, filterBy: FilterMode) {
   }
 
   if (filterBy === "water") {
-    const w = log?.water_status ?? "Full";
+    const w = liveCondition?.water_status ?? log?.water_status ?? "Full";
     if (w === "Full")   return WARM.water;
     if (w === "Low")    return WARM.fair;
     if (w === "Empty")  return WARM.poor;
@@ -110,7 +112,15 @@ function getCampColors(campId: string, filterBy: FilterMode) {
     return WARM.bad;
   }
 
-  // days
+  // days — use liveCondition timestamp if available
+  if (liveCondition?.last_inspected_at) {
+    const inspected = new Date(liveCondition.last_inspected_at);
+    const days = Math.floor((Date.now() - inspected.getTime()) / (1000 * 60 * 60 * 24));
+    if (days === 0) return WARM.good;
+    if (days === 1) return WARM.fair;
+    if (days <= 3)  return WARM.poor;
+    return WARM.bad;
+  }
   const days = daysSinceInspection(campId);
   if (days === 0) return WARM.good;
   if (days === 1) return WARM.fair;
@@ -258,7 +268,7 @@ function TopoUnderlay({ campCenters }: { campCenters: typeof CAMP_CENTERS }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function SchematicMap({ onCampClick, filterBy, selectedCampId }: Props) {
+export default function SchematicMap({ onCampClick, filterBy, selectedCampId, liveConditions = {} }: Props) {
   return (
     <div
       style={{
@@ -288,10 +298,13 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId }: 
           if (!center) return null;
 
           const { w, h } = campSize(camp.size_hectares ?? 120);
-          const colors = getCampColors(camp.camp_id, filterBy);
+          const liveCondition = liveConditions[camp.camp_id];
+          const colors = getCampColors(camp.camp_id, filterBy, liveCondition);
           const stats = getCampStats(camp.camp_id);
           const log = getLastInspection(camp.camp_id);
-          const isAlert = campHasAlert(camp.camp_id);
+          const isAlert = liveCondition
+            ? liveCondition.grazing_quality === "Overgrazed" || liveCondition.water_status === "Empty" || liveCondition.water_status === "Broken" || liveCondition.fence_status === "Damaged"
+            : campHasAlert(camp.camp_id);
           const isSelected = selectedCampId === camp.camp_id;
 
           const leftPct = ((center.cx - w / 2) / CANVAS_W) * 100;
