@@ -3,6 +3,8 @@ import AnimalsTable from "@/components/admin/AnimalsTable";
 import { prisma } from "@/lib/prisma";
 import type { PrismaAnimal } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminAnimalsPage() {
   const animals = (await prisma.animal.findMany({
     orderBy: [{ category: "asc" }, { animalId: "asc" }],
@@ -13,9 +15,9 @@ export default async function AdminAnimalsPage() {
       <AdminNav active="/admin/animals" />
       <main className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-stone-800">Dierekatalogus</h1>
+          <h1 className="text-2xl font-bold text-stone-800">Animal Catalogue</h1>
           <p className="text-stone-500 text-sm mt-1">
-            Alle aktiewe diere op die plaas · {animals.length.toLocaleString()} diere
+            All active animals on the farm · {animals.length.toLocaleString()} animals
           </p>
         </div>
         <AnimalsTable animals={animals} />

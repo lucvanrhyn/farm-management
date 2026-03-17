@@ -14,6 +14,8 @@ import {
   getWithdrawalTracker,
 } from "@/lib/server/analytics";
 
+export const dynamic = "force-dynamic";
+
 export default async function GrafiekePage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -43,9 +45,9 @@ export default async function GrafiekePage() {
       <AdminNav active="/admin/grafieke" />
       <main className="flex-1 p-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-stone-800">Grafieke</h1>
+          <h1 className="text-2xl font-bold text-stone-800">Charts</h1>
           <p className="text-stone-500 text-sm mt-1">
-            30-dag oorsig · Brangus Plaasbestuur
+            30-day overview · Farm Management
           </p>
         </div>
         <GrafiekeClient

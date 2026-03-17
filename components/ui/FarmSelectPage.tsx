@@ -8,8 +8,8 @@ const FARMS = [
     id: "trio-b",
     name: "Trio B Boerdery",
     subtitle: "Brangus · Limpopo",
-    location: "Limpopo, Suid-Afrika",
-    stats: "978 diere · 19 kampe",
+    location: "Limpopo, South Africa",
+    stats: "978 animals · 19 camps",
     href: "/login",
   },
 ];
@@ -67,7 +67,7 @@ export function FarmSelectPage() {
               textShadow: "0 1px 8px rgba(0,0,0,0.6)",
             }}
           >
-            Jou plaas. Jou data.
+            Your Farm. Your Data.
           </span>
         </motion.div>
 
@@ -99,7 +99,7 @@ export function FarmSelectPage() {
               lineHeight: 1.15,
             }}
           >
-            Kies jou plaas
+            Choose Your Farm
           </motion.h1>
 
           <motion.p
@@ -112,7 +112,7 @@ export function FarmSelectPage() {
               textShadow: "0 1px 10px rgba(0,0,0,0.7)",
             }}
           >
-            Klik op jou plaas om in te teken
+            Click on your farm to sign in
           </motion.p>
 
           {/* Decorative rule */}
@@ -147,7 +147,7 @@ export function FarmSelectPage() {
             letterSpacing: "0.06em",
           }}
         >
-          © {new Date().getFullYear()} FarmTrack · Alle regte voorbehou
+          © {new Date().getFullYear()} FarmTrack · All rights reserved
         </motion.p>
       </footer>
     </div>
@@ -285,7 +285,7 @@ function FarmCard({ farm, delay }: { farm: Farm; delay: number }) {
               letterSpacing: "0.04em",
             }}
           >
-            Teken In
+            Sign In
           </span>
           <svg
             className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"

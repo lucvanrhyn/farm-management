@@ -120,3 +120,15 @@ export async function syncPendingAnimals(): Promise<{ synced: number; failed: nu
 
   return { synced, failed };
 }
+
+export async function syncAndRefresh(): Promise<{ synced: number; failed: number }> {
+  const [obsResult, animalsResult] = await Promise.all([
+    syncPendingObservations(),
+    syncPendingAnimals(),
+  ]);
+  await refreshCachedData(); // now server is up to date before we pull
+  return {
+    synced: obsResult.synced + animalsResult.synced,
+    failed: obsResult.failed + animalsResult.failed,
+  };
+}

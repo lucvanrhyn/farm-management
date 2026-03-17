@@ -224,7 +224,7 @@ export default function CampInspectionPage({
   if (!camp) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p style={{ color: '#D2B48C' }}>Kamp nie gevind: {decodedId}</p>
+        <p style={{ color: '#D2B48C' }}>Camp not found: {decodedId}</p>
       </div>
     );
   }
@@ -259,10 +259,10 @@ export default function CampInspectionPage({
               className="text-lg font-bold truncate"
               style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
             >
-              Kamp {camp.camp_name}
+              Camp {camp.camp_name}
             </h1>
             <p className="text-xs" style={{ color: '#D2B48C' }}>
-              {stats.total} diere · {camp.water_source ?? "water"}
+              {stats.total} animals · {camp.water_source ?? "water"}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -288,7 +288,7 @@ export default function CampInspectionPage({
             className="w-full font-bold py-5 rounded-3xl text-base text-center"
             style={{ backgroundColor: 'rgba(44, 78, 44, 0.9)', color: '#A8D87A', border: '1px solid rgba(80, 140, 60, 0.4)' }}
           >
-            ✓ Alles normaal aangeteken!
+            ✓ All normal recorded!
           </div>
         ) : (
           <button
@@ -301,7 +301,7 @@ export default function CampInspectionPage({
             }}
           >
             <span className="text-xl">✓</span>
-            <span>Alles Normaal — Kamp Goed</span>
+            <span>All Normal — Camp Good</span>
           </button>
         )}
       </div>
@@ -322,10 +322,10 @@ export default function CampInspectionPage({
           style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.35)' }}
         >
           <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
-            Diere in kamp ({stats.total})
+            Animals in camp ({stats.total})
           </p>
           <p className="text-xs" style={{ color: 'rgba(210, 180, 140, 0.6)' }}>
-            Tik op ikoon om verslag te doen
+            Tap icon to report
           </p>
         </div>
         <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} />
@@ -350,7 +350,7 @@ export default function CampInspectionPage({
             border: '1px solid rgba(139, 105, 20, 0.3)',
           }}
         >
-          <span>🌿</span> Kamp Toestand Rapporteer
+          <span>🌿</span> Report Camp Condition
         </button>
       </div>
 
@@ -396,13 +396,13 @@ export default function CampInspectionPage({
               className="font-bold text-lg"
               style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
             >
-              Dood Aanteken — {selectedAnimalId}
+              Record Death — {selectedAnimalId}
             </h2>
             <p className="text-sm" style={{ color: '#D2B48C' }}>
-              Bevestig dat dier <span className="font-bold" style={{ color: '#F5F0E8' }}>{selectedAnimalId}</span> oorlede is?
+              Confirm that animal <span className="font-bold" style={{ color: '#F5F0E8' }}>{selectedAnimalId}</span> is deceased?
             </p>
             <div className="flex flex-col gap-2">
-              {["Onbekend", "Rooiwater", "Duisend", "Slang", "Ouderdom", "Geboorteprobleme", "Ander"].map((cause) => (
+              {["Unknown", "Redwater", "Heartwater", "Snake", "Old age", "Birth complications", "Other"].map((cause) => (
                 <button
                   key={cause}
                   onClick={() => handleDeathSubmit(cause)}
@@ -422,7 +422,7 @@ export default function CampInspectionPage({
               className="text-sm py-2"
               style={{ color: 'rgba(210, 180, 140, 0.5)' }}
             >
-              Kanselleer
+              Cancel
             </button>
           </div>
         </div>

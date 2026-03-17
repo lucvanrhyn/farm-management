@@ -54,13 +54,13 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
     if (onSubmit) {
       onSubmit({ animalId, sourceCampId, destCampId });
     } else {
-      alert(`Dier ${animalId} geskuif van ${sourceCampId} na ${destCampId}`);
+      alert(`Animal ${animalId} moved from ${sourceCampId} to ${destCampId}`);
       onClose();
     }
   }
 
   return (
-    <BottomSheet title={`Skuif Dier — ${animalId}`} onClose={onClose}>
+    <BottomSheet title={`Move Animal — ${animalId}`} onClose={onClose}>
       <div className="p-5 flex flex-col gap-6">
         <div
           className="rounded-xl px-4 py-3 text-sm"
@@ -70,11 +70,11 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
             border: '1px solid rgba(92, 61, 46, 0.3)',
           }}
         >
-          Huidige kamp: <span className="font-bold" style={{ color: '#F5F0E8' }}>{sourceCampId}</span>
+          Current camp: <span className="font-bold" style={{ color: '#F5F0E8' }}>{sourceCampId}</span>
         </div>
 
         <div>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>Skuif na kamp</p>
+          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>Move to camp</p>
           <div className="grid grid-cols-3 gap-2">
             {destinations.map((camp) => (
               <button
@@ -103,7 +103,7 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
               : { backgroundColor: '#B87333', color: '#F5F0E8' }
           }
         >
-          Bevestig Skuif
+          Confirm Move
         </button>
       </div>
     </BottomSheet>

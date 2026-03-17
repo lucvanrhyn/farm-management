@@ -99,23 +99,23 @@ export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Pro
     if (onSubmit) {
       onSubmit({ animalId, campId, calfName, calfSex, calfAlive, easeOfBirth: ease, notes });
     } else {
-      alert(`Kalfgeboorte aangeteken vir ${animalId} in kamp ${campId}\nKalf geslag: ${calfSex}\nLewendig: ${calfAlive ? "Ja" : "Nee"}\nGemak: ${ease}`);
+      alert(`Calving recorded for ${animalId} in camp ${campId}\nCalf sex: ${calfSex}\nAlive: ${calfAlive ? "Yes" : "No"}\nEase: ${ease}`);
       onClose();
     }
   }
 
   return (
-    <BottomSheet title={`Kalfgeboorte — ${animalId}`} onClose={onClose}>
+    <BottomSheet title={`Calving — ${animalId}`} onClose={onClose}>
       <div className="p-5 flex flex-col gap-6">
 
         {/* Calf name */}
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Kalfnaam (opsioneel)</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Calf name (optional)</p>
           <input
             type="text"
             value={calfName}
             onChange={(e) => setCalfName(e.target.value)}
-            placeholder="bv. Sterretjie"
+            placeholder="e.g. Star"
             className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
             style={{
               backgroundColor: 'rgba(26, 13, 5, 0.6)',
@@ -126,43 +126,43 @@ export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Pro
         </div>
 
         <SegmentGroup
-          label="Kalf geslag"
+          label="Calf sex"
           value={calfSex}
           onChange={setCalfSex}
           options={[
-            { value: "Female", label: "Vroulik", icon: "🐄" },
-            { value: "Male",   label: "Manlik",  icon: "🐂" },
+            { value: "Female", label: "Female", icon: "🐄" },
+            { value: "Male",   label: "Male",  icon: "🐂" },
           ]}
         />
 
         <SegmentGroup
-          label="Kalf lewend?"
+          label="Calf alive?"
           value={calfAlive ? "yes" : "no"}
           onChange={(v) => setCalfAlive(v === "yes")}
           options={[
-            { value: "yes", label: "Lewend",     icon: "✅" },
-            { value: "no",  label: "Doodgebore", icon: "❌" },
+            { value: "yes", label: "Alive",     icon: "✅" },
+            { value: "no",  label: "Stillborn", icon: "❌" },
           ]}
         />
 
         <SegmentGroup
-          label="Gemak van geboorte"
+          label="Ease of birth"
           value={ease}
           onChange={setEase}
           options={[
-            { value: "Unassisted", label: "Alleen",  icon: "🟢" },
-            { value: "Assisted",   label: "Gehelp",  icon: "🟡" },
-            { value: "Difficult",  label: "Moeilik", icon: "🔴" },
+            { value: "Unassisted", label: "Unassisted",  icon: "🟢" },
+            { value: "Assisted",   label: "Assisted",  icon: "🟡" },
+            { value: "Difficult",  label: "Difficult", icon: "🔴" },
           ]}
         />
 
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notas (opsioneel)</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notes (optional)</p>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="Enige addisionele inligting..."
+            placeholder="Any additional information..."
             className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
             style={{
               backgroundColor: 'rgba(26, 13, 5, 0.6)',
@@ -177,7 +177,7 @@ export default function CalvingForm({ animalId, campId, onClose, onSubmit }: Pro
           className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
           style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
         >
-          Teken Geboorte Aan
+          Record Birth
         </button>
       </div>
     </BottomSheet>

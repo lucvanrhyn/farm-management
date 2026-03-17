@@ -78,11 +78,11 @@ function campSize(ha: number): { w: number; h: number } {
 
 // Camp block colors — border + light bg tint (designed for white/cream canvas)
 const WARM = {
-  good:  { border: "#4A7C59", bg: "rgba(74,124,89,0.08)",   text: "#3A6A48", label: "Goed"      },
-  fair:  { border: "#8B6914", bg: "rgba(139,105,20,0.08)",  text: "#6B4E10", label: "Redelik"   },
-  poor:  { border: "#A0522D", bg: "rgba(160,82,45,0.10)",   text: "#7A3A18", label: "Swak"      },
-  bad:   { border: "#8B3A3A", bg: "rgba(139,58,58,0.12)",   text: "#8B1A1A", label: "Kritiek"   },
-  water: { border: "#3B7A8B", bg: "rgba(59,122,139,0.08)",  text: "#2A6070", label: "Vol"       },
+  good:  { border: "#4A7C59", bg: "rgba(74,124,89,0.08)",   text: "#3A6A48", label: "Good"      },
+  fair:  { border: "#8B6914", bg: "rgba(139,105,20,0.08)",  text: "#6B4E10", label: "Fair"   },
+  poor:  { border: "#A0522D", bg: "rgba(160,82,45,0.10)",   text: "#7A3A18", label: "Poor"      },
+  bad:   { border: "#8B3A3A", bg: "rgba(139,58,58,0.12)",   text: "#8B1A1A", label: "Critical"   },
+  water: { border: "#3B7A8B", bg: "rgba(59,122,139,0.08)",  text: "#2A6070", label: "Full"       },
 };
 
 function getCampColors(campId: string, filterBy: FilterMode, liveCondition?: LiveCampStatus) {
@@ -488,7 +488,7 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId, li
               textTransform: "uppercase",
             }}
           >
-            Trio B Boerdery · Skematiese Uitleg
+            Trio B Boerdery · Schematic Layout
           </div>
         </div>
       </div>

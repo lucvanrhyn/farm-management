@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function CampDetailPage({
   params,
 }: {
@@ -34,7 +36,7 @@ export default async function CampDetailPage({
   if (!camp) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: bg }}>
-        <p style={{ color: muted }}>Kamp nie gevind: {decodedId}</p>
+        <p style={{ color: muted }}>Camp not found: {decodedId}</p>
       </div>
     );
   }
@@ -44,10 +46,10 @@ export default async function CampDetailPage({
       {/* Header */}
       <div className="px-6 py-5 border-b flex items-center gap-4" style={{ borderColor: border, background: surface }}>
         <Link href="/dashboard" className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
-          ← Kaart
+          ← Map
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-white">Kamp {camp.camp_name}</h1>
+          <h1 className="text-xl font-bold text-white">Camp {camp.camp_name}</h1>
           <p className="text-xs mt-0.5" style={{ color: muted }}>
             {camp.size_hectares ? `${camp.size_hectares} ha · ` : ""}{camp.water_source}
           </p>
@@ -57,20 +59,20 @@ export default async function CampDetailPage({
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Status */}
         <div className="rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-4">Huidige Toestand</h2>
+          <h2 className="text-sm font-semibold text-white mb-4">Current Condition</h2>
           <div className="flex flex-wrap gap-2 mb-4">
             <StatusIndicator type="grazing" status={lastLog?.grazing_quality ?? "Fair"} />
             <StatusIndicator type="water" status={lastLog?.water_status ?? "Full"} />
             <StatusIndicator type="fence" status={lastLog?.fence_status ?? "Intact"} />
           </div>
           <p className="text-xs" style={{ color: muted }}>
-            Laaste inspeksie: {lastLog?.date ?? "Onbekend"} · {lastLog?.inspected_by ?? "—"}
+            Last inspection: {lastLog?.date ?? "Unknown"} · {lastLog?.inspected_by ?? "—"}
           </p>
         </div>
 
         {/* Animal counts */}
         <div className="rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-3">Diere: {animals.length}</h2>
+          <h2 className="text-sm font-semibold text-white mb-3">Animals: {animals.length}</h2>
           <div className="flex flex-wrap gap-2">
             {Object.entries(byCategory).map(([cat, count]) => (
               <div key={cat} className="flex items-center gap-1.5">
@@ -85,7 +87,7 @@ export default async function CampDetailPage({
 
         {/* Animal list */}
         <div className="md:col-span-2 rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-4">Dierelys</h2>
+          <h2 className="text-sm font-semibold text-white mb-4">Animal List</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {animals.map((a) => (
               <Link

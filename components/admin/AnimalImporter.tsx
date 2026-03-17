@@ -55,7 +55,7 @@ export default function AnimalImporter() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error ?? "Invoer het misluk");
+        setError(data.error ?? "Import failed");
         return;
       }
 
@@ -88,7 +88,7 @@ export default function AnimalImporter() {
         }
       }
     } catch {
-      setError("Netwerkkout — probeer weer");
+      setError("Network error — try again");
     } finally {
       setLoading(false);
       setProgress(null);
@@ -102,9 +102,9 @@ export default function AnimalImporter() {
       {/* Template download */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-amber-800">Lêerformaat</p>
+          <p className="text-sm font-semibold text-amber-800">File Format</p>
           <p className="text-xs text-amber-700 mt-0.5">
-            Vereiste kolomme: <code className="bg-amber-100 px-1 rounded">animal_id, sex, category, current_camp</code>
+            Required columns: <code className="bg-amber-100 px-1 rounded">Animal ID, Name, Category, Sex, Camp ID</code>
           </p>
         </div>
         <a
@@ -112,7 +112,7 @@ export default function AnimalImporter() {
           download
           className="text-xs font-semibold text-amber-700 border border-amber-300 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
         >
-          Laai template af
+          Download template
         </a>
       </div>
 
@@ -138,13 +138,13 @@ export default function AnimalImporter() {
           <div>
             <p className="text-2xl mb-2">📄</p>
             <p className="font-semibold text-stone-700">{file.name}</p>
-            <p className="text-sm text-stone-400 mt-1">{(file.size / 1024).toFixed(0)} KB — klik om te verander</p>
+            <p className="text-sm text-stone-400 mt-1">{(file.size / 1024).toFixed(0)} KB — click to change</p>
           </div>
         ) : (
           <div>
             <p className="text-3xl mb-3">📂</p>
-            <p className="font-semibold text-stone-600">Sleep 'n lêer hierheen of klik om te kies</p>
-            <p className="text-sm text-stone-400 mt-1">.xlsx, .xls of .csv</p>
+            <p className="font-semibold text-stone-600">Drop a file here or click to select</p>
+            <p className="text-sm text-stone-400 mt-1">.xlsx, .xls or .csv</p>
           </div>
         )}
       </div>
@@ -160,7 +160,7 @@ export default function AnimalImporter() {
             : { backgroundColor: "#e7e5e4", color: "#78716c" }
         }
       >
-        {loading ? "Besig om in te voer…" : "Voer diere in"}
+        {loading ? "Importing..." : "Import Animals"}
       </button>
 
       {/* Progress bar */}
@@ -171,7 +171,7 @@ export default function AnimalImporter() {
               <span
                 className="inline-block w-3 h-3 rounded-full border-2 border-stone-300 border-t-amber-700 animate-spin"
               />
-              {progress ? `${progress.processed} van ${progress.total} diere verwerk…` : "Lêer word geleë…"}
+              {progress ? `${progress.processed} of ${progress.total} animals processed...` : "Loading file..."}
             </span>
             {progress && <span className="font-semibold text-stone-600">{progressPct}%</span>}
           </div>
@@ -194,7 +194,7 @@ export default function AnimalImporter() {
       {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-red-700">Fout</p>
+          <p className="text-sm font-semibold text-red-700">Error</p>
           <p className="text-sm text-red-600 mt-1">{error}</p>
         </div>
       )}
@@ -202,20 +202,20 @@ export default function AnimalImporter() {
       {/* Result */}
       {result && (
         <div className={`rounded-xl p-5 border ${result.skipped === 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
-          <p className="font-bold text-stone-800 mb-3">Invoerresultate</p>
+          <p className="font-bold text-stone-800 mb-3">Import Results</p>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-white rounded-lg p-3 border border-green-100">
               <p className="text-2xl font-bold text-green-700">{result.imported}</p>
-              <p className="text-xs text-stone-500 mt-0.5">Diere ingevoer</p>
+              <p className="text-xs text-stone-500 mt-0.5">Animals imported</p>
             </div>
             <div className="bg-white rounded-lg p-3 border border-amber-100">
               <p className="text-2xl font-bold text-amber-600">{result.skipped}</p>
-              <p className="text-xs text-stone-500 mt-0.5">Oorgeslaap</p>
+              <p className="text-xs text-stone-500 mt-0.5">Skipped</p>
             </div>
           </div>
           {result.errors.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-stone-600 mb-2">Foute ({result.errors.length}):</p>
+              <p className="text-xs font-semibold text-stone-600 mb-2">Errors ({result.errors.length}):</p>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {result.errors.map((e, i) => (
                   <li key={i} className="text-xs text-red-600 font-mono bg-white rounded px-2 py-1">

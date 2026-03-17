@@ -1,0 +1,56 @@
+<h2>Additional analytics ideas — what resonates?</h2>
+<p class="subtitle">Beyond the 4 planned charts. Select any that you'd want included. These are things you might not have thought of but could add real value on a cattle farm.</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="withdrawal" onclick="toggleSelect(this)">
+    <div class="letter">💉</div>
+    <div class="content">
+      <h3>Treatment Withdrawal Tracker</h3>
+      <p>Table of animals currently on medication showing days remaining until withdrawal period ends. Critical for food safety — you'd know exactly which animals can't go to market yet.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="stocking" onclick="toggleSelect(this)">
+    <div class="letter">🌿</div>
+    <div class="content">
+      <h3>Camp Stocking Rate / Grazing Pressure</h3>
+      <p>Each camp's current headcount vs its size (hectares). Shows which camps are overstocked and which have capacity. Helps make smarter movement decisions.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="calving" onclick="toggleSelect(this)">
+    <div class="letter">🐄</div>
+    <div class="content">
+      <h3>Calving Rate Trend</h3>
+      <p>Monthly bar chart of calvings over time. Are calf numbers increasing or declining year-on-year? Quick herd growth indicator.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="attrition" onclick="toggleSelect(this)">
+    <div class="letter">📉</div>
+    <div class="content">
+      <h3>Deaths & Sales Over Time</h3>
+      <p>Monthly trend of animal losses (deaths + sales). Helps spot abnormal mortality spikes or seasonal patterns.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="overdue" onclick="toggleSelect(this)">
+    <div class="letter">⏰</div>
+    <div class="content">
+      <h3>Overdue Inspection Alerts</h3>
+      <p>List of camps that haven't been checked in more than 48 hours (based on your FarmSettings threshold). Already have the config in the DB — just need the UI. Good for the Oorsig overview too.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="movement" onclick="toggleSelect(this)">
+    <div class="letter">🔀</div>
+    <div class="content">
+      <h3>Animal Movement Flow</h3>
+      <p>Which animals moved between which camps this week/month? Useful for tracking grazing rotation patterns and spotting camps that receive too much pressure.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px">Select as many as you like, then tell me in the terminal.</p>

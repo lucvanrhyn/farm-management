@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CAMPS } from "@/lib/dummy-data";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, PrismaAnimal } from "@/lib/types";
+import AnimalActions from "@/components/admin/finansies/AnimalActions";
 
 const PAGE_SIZE = 50;
 
@@ -64,7 +65,7 @@ export default function AnimalsTable({ animals }: Props) {
       <div className="flex flex-wrap gap-3">
         <input
           type="text"
-          placeholder="Soek ID of naam..."
+          placeholder="Search ID or name..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="border border-stone-300 rounded-xl px-4 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -74,7 +75,7 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setCampFilter(e.target.value); setPage(1); }}
           className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
         >
-          <option value="all">Alle Kampe</option>
+          <option value="all">All Camps</option>
           {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
         </select>
         <select
@@ -82,7 +83,7 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
           className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
         >
-          <option value="all">Alle Kategorieë</option>
+          <option value="all">All Categories</option>
           {categories.map((c) => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
         </select>
         <select
@@ -90,11 +91,11 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
         >
-          <option value="all">Alle Status</option>
+          <option value="all">All Statuses</option>
           {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <span className="ml-auto text-sm text-stone-500 self-center">
-          {filtered.length.toLocaleString()} diere gevind
+          {filtered.length.toLocaleString()} animals found
         </span>
       </div>
 
@@ -105,18 +106,19 @@ export default function AnimalsTable({ animals }: Props) {
             <tr className="border-b border-stone-100 bg-stone-50">
               {([
                 ["animalId", "ID"],
-                ["category", "Kategorie"],
-                ["sex", "Geslag"],
-                ["dateOfBirth", "Ouderdom"],
-                ["currentCamp", "Kamp"],
+                ["category", "Category"],
+                ["sex", "Sex"],
+                ["dateOfBirth", "Age"],
+                ["currentCamp", "Camp"],
                 ["status", "Status"],
+                ["", ""],
               ] as [string, string][]).map(([key, label]) => (
                 <th
-                  key={key}
-                  className="text-left px-4 py-3 font-semibold text-stone-600 cursor-pointer select-none hover:text-stone-900"
-                  onClick={() => toggleSort(key)}
+                  key={key || "__actions"}
+                  className={`text-left px-4 py-3 font-semibold text-stone-600 ${key ? "cursor-pointer select-none hover:text-stone-900" : ""}`}
+                  onClick={() => key && toggleSort(key)}
                 >
-                  {label}<SortIcon col={key} />
+                  {label}{key && <SortIcon col={key} />}
                 </th>
               ))}
             </tr>
@@ -134,7 +136,7 @@ export default function AnimalsTable({ animals }: Props) {
                     {getCategoryLabel(animal.category)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-stone-600">{animal.sex === "Male" ? "Manlik" : "Vroulik"}</td>
+                <td className="px-4 py-3 text-stone-600">{animal.sex === "Male" ? "Male" : "Female"}</td>
                 <td className="px-4 py-3 text-stone-500">{getAnimalAge(animal.dateOfBirth ?? undefined)}</td>
                 <td className="px-4 py-3">
                   <Link href={`/dashboard/camp/${animal.currentCamp}`} className="text-stone-700 hover:text-green-700 font-medium">
@@ -147,8 +149,13 @@ export default function AnimalsTable({ animals }: Props) {
                     : animal.status === "Sold" ? "bg-stone-100 text-stone-600"
                     : "bg-red-100 text-red-600"
                   }`}>
-                    {animal.status === "Active" ? "Aktief" : animal.status === "Sold" ? "Verkoop" : "Oorlede"}
+                    {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
                   </span>
+                </td>
+                <td className="px-4 py-3">
+                  {animal.status === "Active" && (
+                    <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
+                  )}
                 </td>
               </tr>
             ))}
@@ -164,15 +171,15 @@ export default function AnimalsTable({ animals }: Props) {
             disabled={page === 1}
             className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
           >
-            ← Vorige
+            ← Previous
           </button>
-          <span className="text-sm text-stone-500">Bladsy {page} van {totalPages}</span>
+          <span className="text-sm text-stone-500">Page {page} of {totalPages}</span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
           >
-            Volgende →
+            Next →
           </button>
         </div>
       )}

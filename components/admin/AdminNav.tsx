@@ -2,12 +2,13 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const links = [
-  { href: "/admin", label: "Oorsig", icon: "📊" },
-  { href: "/admin/observations", label: "Waarnemings", icon: "📋" },
-  { href: "/admin/animals", label: "Diere", icon: "🐄" },
-  { href: "/admin/camps", label: "Kampe", icon: "🌿" },
-  { href: "/admin/import", label: "Invoer", icon: "📥" },
-  { href: "/admin/grafieke", label: "Grafieke", icon: "📈" },
+  { href: "/admin", label: "Overview", icon: "📊" },
+  { href: "/admin/observations", label: "Observations", icon: "📋" },
+  { href: "/admin/animals", label: "Animals", icon: "🐄" },
+  { href: "/admin/camps", label: "Camps", icon: "🌿" },
+  { href: "/admin/import", label: "Import", icon: "📥" },
+  { href: "/admin/grafieke", label: "Charts", icon: "📈" },
+  { href: "/admin/finansies", label: "Finances", icon: "💰" },
 ];
 
 export default function AdminNav({ active }: { active: string }) {

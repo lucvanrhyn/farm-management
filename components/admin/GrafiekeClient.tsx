@@ -44,7 +44,7 @@ export default function GrafiekeClient({ data }: { data: GrafiekeData }) {
                 : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            {t === "kampe" ? "📍 Kampe" : "🐄 Diere"}
+            {t === "kampe" ? "📍 Camps" : "🐄 Animals"}
           </button>
         ))}
       </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 export async function PATCH(
   request: NextRequest,
@@ -49,6 +50,8 @@ export async function PATCH(
       },
     });
 
+    revalidatePath('/admin');
+    revalidatePath('/admin/observations');
     return NextResponse.json(updated);
   } catch (err) {
     console.error("[observations PATCH] DB error:", err);

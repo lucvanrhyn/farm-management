@@ -24,7 +24,7 @@ const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
           className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-3"
           style={{ borderColor: "#8B6914", borderTopColor: "transparent" }}
         />
-        <p className="text-sm" style={{ color: "#8B6914" }}>Satelliet kaart laai...</p>
+        <p className="text-sm" style={{ color: "#8B6914" }}>Loading satellite map...</p>
       </div>
     </div>
   ),
@@ -32,7 +32,7 @@ const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
 
 // ─── Date helper ──────────────────────────────────────────────────────────────
 
-const MONTHS_SHORT = ["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Des"];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function getTodayShort(): string {
   const now = new Date();
   return `${now.getDate()} ${MONTHS_SHORT[now.getMonth()]} ${now.getFullYear()}`;
@@ -41,10 +41,10 @@ function getTodayShort(): string {
 // ─── Filter options ───────────────────────────────────────────────────────────
 
 const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
-  { value: "grazing",  label: "Beweidingskwaliteit" },
-  { value: "water",    label: "Waterstatus"          },
-  { value: "density",  label: "Besettingsdigtheid"   },
-  { value: "days",     label: "Dae Sedert Inspeksie" },
+  { value: "grazing",  label: "Grazing Quality" },
+  { value: "water",    label: "Water Status"          },
+  { value: "density",  label: "Stocking Density"   },
+  { value: "days",     label: "Days Since Inspection" },
 ];
 
 // ─── Stat chip ────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ function ViewToggle({
             color: value === mode ? "#F5EBD4" : "rgba(26,21,16,0.45)",
           }}
         >
-          {mode === "schematic" ? "Skematies" : "Satelliet"}
+          {mode === "schematic" ? "Schematic" : "Satellite"}
         </button>
       ))}
     </div>
@@ -166,7 +166,7 @@ export default function DashboardClient({
         .catch(() => {/* fall back to dummy-data */});
     }
     fetchConditions();
-    const interval = setInterval(fetchConditions, 30_000);
+    const interval = setInterval(fetchConditions, 10_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -240,16 +240,16 @@ export default function DashboardClient({
               marginTop: 2,
             }}
           >
-            Kaart Sentrum · {getTodayShort()}
+            Map Center · {getTodayShort()}
           </div>
         </div>
 
         {/* Summary stats */}
         <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}>
-          <StatChip label="Totale Diere"    value={totalAnimals} />
-          <StatChip label="Kampe Inspekteer" value={`${inspectedToday}/${CAMPS.length}`} />
-          <StatChip label="Aktiewe Waarskuwings" value={alertCount} accent={alertCount > 0} />
-          <StatChip label="Uitstaande Obs."  value={alertCount} />
+          <StatChip label="Total Animals"    value={totalAnimals} />
+          <StatChip label="Camps Inspected" value={`${inspectedToday}/${CAMPS.length}`} />
+          <StatChip label="Active Alerts" value={alertCount} accent={alertCount > 0} />
+          <StatChip label="Outstanding Obs."  value={alertCount} />
         </div>
 
         {/* Controls */}

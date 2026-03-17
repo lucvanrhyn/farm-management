@@ -52,7 +52,7 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
   const stockingData = CAMPS.map((c) => ({
     campId: c.camp_id,
     lsu: headcountByCamp.has(c.camp_id)
-      ? Math.round(((headcountByCamp.get(c.camp_id) ?? 0) / c.size_hectares) * 100) / 100
+      ? Math.round(((headcountByCamp.get(c.camp_id) ?? 0) / (c.size_hectares ?? 1)) * 100) / 100
       : 0,
   })).filter((d) => d.lsu > 0);
 
@@ -77,47 +77,47 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* 1. Camp Condition Trend */}
-      <ChartCard title="Kamp Toestand Tendens" subtitle="Gemiddelde beweidingskwaliteit (laaste 30 dae)">
+      <ChartCard title="Camp Condition Trend" subtitle="Average grazing quality (last 30 days)">
         {conditionTrend.length === 0 ? (
-          <Empty message="Geen kamp-toestand data nie" />
+          <Empty message="No camp condition data" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={conditionTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} />
-              <YAxis domain={[0, 4]} tick={{ fontSize: 11 }} tickFormatter={(v) => ["", "Oorblaai", "Swak", "Redelik", "Goed"][v] ?? v} />
+              <YAxis domain={[0, 4]} tick={{ fontSize: 11 }} tickFormatter={(v) => ["", "Overgrazed", "Poor", "Fair", "Good"][v] ?? v} />
               <Tooltip
-                formatter={(v) => [["", "Oorblaai", "Swak", "Redelik", "Goed"][Math.round(Number(v))] ?? v, "Kwaliteit"]}
-                labelFormatter={(l) => `Datum: ${String(l)}`}
+                formatter={(v) => [["", "Overgrazed", "Poor", "Fair", "Good"][Math.round(Number(v))] ?? v, "Quality"]}
+                labelFormatter={(l) => `Date: ${String(l)}`}
               />
-              <ReferenceLine y={3} stroke="#22c55e" strokeDasharray="4 2" label={{ value: "Redelik", fontSize: 10, fill: "#22c55e" }} />
-              <Line type="monotone" dataKey="avgScore" stroke="#C4A030" strokeWidth={2} dot={false} name="Gem. kwaliteit" />
+              <ReferenceLine y={3} stroke="#22c55e" strokeDasharray="4 2" label={{ value: "Fair", fontSize: 10, fill: "#22c55e" }} />
+              <Line type="monotone" dataKey="avgScore" stroke="#C4A030" strokeWidth={2} dot={false} name="Avg. quality" />
             </LineChart>
           </ResponsiveContainer>
         )}
       </ChartCard>
 
       {/* 2. Health Issues by Camp */}
-      <ChartCard title="Gesondheidsinsidente per Kamp" subtitle="Laaste 30 dae">
+      <ChartCard title="Health Incidents per Camp" subtitle="Last 30 days">
         {healthByCamp.length === 0 ? (
-          <Empty message="Geen gesondheidsinsidente aangeteken nie" />
+          <Empty message="No health incidents recorded" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={healthByCamp} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
               <YAxis type="category" dataKey="campId" tick={{ fontSize: 11 }} width={80} />
-              <Tooltip formatter={(v) => [v, "Insidente"]} />
-              <Bar dataKey="count" fill="#ef4444" name="Insidente" radius={[0, 4, 4, 0]} />
+              <Tooltip formatter={(v) => [v, "Incidents"]} />
+              <Bar dataKey="count" fill="#ef4444" name="Incidents" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
       </ChartCard>
 
       {/* 3. Headcount per Camp */}
-      <ChartCard title="Kopgetal per Kamp" subtitle="Aktiewe diere per kategorie">
+      <ChartCard title="Headcount per Camp" subtitle="Active animals per category">
         {headcountChartData.length === 0 ? (
-          <Empty message="Geen aktiewe diere nie" />
+          <Empty message="No active animals" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={headcountChartData}>
@@ -135,17 +135,17 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
       </ChartCard>
 
       {/* 4. Stocking Rate */}
-      <ChartCard title="Beweidingsdruk per Kamp" subtitle="Diere per hektaar (optimum ≈ 1 LSU/ha)">
+      <ChartCard title="Grazing Pressure per Camp" subtitle="Animals per hectare (optimum ≈ 1 LSU/ha)">
         {stockingData.length === 0 ? (
-          <Empty message="Geen data vir beweidingsdruk nie" />
+          <Empty message="No data for grazing pressure" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={stockingData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
               <XAxis dataKey="campId" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => [`${v} LSU/ha`, "Beweidingsdruk"]} />
-              <ReferenceLine y={1} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "Maks", fontSize: 10, fill: "#ef4444" }} />
+              <Tooltip formatter={(v) => [`${v} LSU/ha`, "Grazing pressure"]} />
+              <ReferenceLine y={1} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "Max", fontSize: 10, fill: "#ef4444" }} />
               <Bar dataKey="lsu" name="LSU/ha" fill="#C4A030" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -153,15 +153,15 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
       </ChartCard>
 
       {/* 5. Inspection Heatmap */}
-      <ChartCard title="Inspeksie-hittegolf" subtitle="Kampe × dae (laaste 14 dae)">
+      <ChartCard title="Inspection Heatmap" subtitle="Camps × days (last 14 days)">
         {heatmap.length === 0 ? (
-          <Empty message="Geen inspeksiedata nie" />
+          <Empty message="No inspection data" />
         ) : (
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse">
               <thead>
                 <tr>
-                  <th className="text-left p-1 text-stone-400 font-normal w-24">Kamp</th>
+                  <th className="text-left p-1 text-stone-400 font-normal w-24">Camp</th>
                   {heatmapDates.map((d) => (
                     <th key={d} className="p-1 text-stone-400 font-normal text-center w-7">
                       {d.slice(8)}
@@ -181,7 +181,7 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
                           <div
                             className="w-6 h-6 rounded"
                             style={{ backgroundColor: `rgba(74, 55, 40, ${opacity})` }}
-                            title={`${campId} – ${date}: ${count} inspeksies`}
+                            title={`${campId} – ${date}: ${count} inspections`}
                           />
                         </td>
                       );
@@ -195,19 +195,19 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
       </ChartCard>
 
       {/* 6. Movement Table */}
-      <ChartCard title="Dierbeweging" subtitle="Laaste 30 dae">
+      <ChartCard title="Animal Movement" subtitle="Last 30 days">
         {movements.length === 0 ? (
-          <Empty message="Geen bewegings aangeteken nie" />
+          <Empty message="No movements recorded" />
         ) : (
           <div className="overflow-y-auto max-h-56">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-stone-400 border-b border-stone-100">
-                  <th className="text-left pb-2 font-medium">Datum</th>
-                  <th className="text-left pb-2 font-medium">Dier</th>
-                  <th className="text-left pb-2 font-medium">Van</th>
-                  <th className="text-left pb-2 font-medium">Na</th>
-                  <th className="text-left pb-2 font-medium">Aangeteken deur</th>
+                  <th className="text-left pb-2 font-medium">Date</th>
+                  <th className="text-left pb-2 font-medium">Animal</th>
+                  <th className="text-left pb-2 font-medium">From</th>
+                  <th className="text-left pb-2 font-medium">To</th>
+                  <th className="text-left pb-2 font-medium">Logged by</th>
                 </tr>
               </thead>
               <tbody>

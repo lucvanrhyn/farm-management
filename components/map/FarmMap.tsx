@@ -52,7 +52,7 @@ export default function FarmMap({ campData, onCampClick }: Props) {
       >
         <button
           disabled
-          title="Binnekort beskikbaar — Teken GPS grense vir elke kamp"
+          title="Coming soon — Draw GPS boundaries for each camp"
           style={{
             display: "flex",
             alignItems: "center",
@@ -70,7 +70,7 @@ export default function FarmMap({ campData, onCampClick }: Props) {
           }}
         >
           <span style={{ fontSize: 14 }}>✦</span>
-          Kamp Grense Teken
+          Draw Camp Boundaries
           <span
             style={{
               fontSize: 9,
@@ -82,7 +82,7 @@ export default function FarmMap({ campData, onCampClick }: Props) {
               textTransform: "uppercase",
             }}
           >
-            Binnekort
+            Coming Soon
           </span>
         </button>
       </div>
