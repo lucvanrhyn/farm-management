@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useOffline } from "./OfflineProvider";
 import { getGrazingDot, relativeTime } from "@/lib/utils";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
@@ -21,6 +22,23 @@ function CampSkeleton() {
   );
 }
 
+const containerVariants = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.05, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 14, scale: 0.97 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring" as const, stiffness: 90, damping: 22 },
+  },
+};
+
 export default function CampSelector() {
   const router = useRouter();
   const { camps } = useOffline();
@@ -36,24 +54,30 @@ export default function CampSelector() {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
-      {camps.map((camp, index) => {
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+      className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4"
+    >
+      {camps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
         const dotColor = getGrazingDot(camp.grazing_quality ?? "Fair");
         const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Never";
 
         return (
-          <button
+          <motion.button
             key={camp.camp_id}
+            variants={itemVariants}
+            whileTap={{ scale: 0.95, transition: { type: "spring", stiffness: 400, damping: 30 } }}
             onClick={() => router.push(`/logger/${encodeURIComponent(camp.camp_id)}`)}
-            className="relative rounded-2xl p-4 text-left active:scale-95 transition-transform animate-fade-up flex flex-col gap-2 min-h-[96px]"
+            className="relative rounded-2xl p-4 text-left flex flex-col gap-2 min-h-[96px]"
             style={{
               backgroundColor: 'rgba(250, 240, 220, 0.18)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
               border: '1px solid rgba(210, 180, 140, 0.5)',
               boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,248,235,0.15)',
-              animationDelay: `${index * 55}ms`,
             }}
           >
             <GlowingEffect
@@ -92,9 +116,9 @@ export default function CampSelector() {
                 {animalCount} animals
               </span>
             </div>
-          </button>
+          </motion.button>
         );
       })}
-    </div>
+    </motion.div>
   );
 }

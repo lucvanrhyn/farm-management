@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -49,18 +50,32 @@ const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
 
 // ─── Stat chip ────────────────────────────────────────────────────────────────
 
+const chipVariants = {
+  hidden: { opacity: 0, y: 6, scale: 0.92 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring" as const, stiffness: 200, damping: 22 },
+  },
+};
+
 function StatChip({
   label,
   value,
   accent,
+  pulse,
 }: {
   label: string;
   value: string | number;
   accent?: boolean;
+  pulse?: boolean;
 }) {
   return (
-    <div
+    <motion.div
+      variants={chipVariants}
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -71,6 +86,21 @@ function StatChip({
         gap: 1,
       }}
     >
+      {/* Pulse ring for alerts */}
+      {pulse && (
+        <span
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 4,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "#B03030",
+            animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
+          }}
+        />
+      )}
       <span
         style={{
           fontFamily: "var(--font-dm-serif)",
@@ -93,8 +123,17 @@ function StatChip({
       >
         {label}
       </span>
-    </div>
+    </motion.div>
   );
+}
+
+// ─── Morning briefing helper ──────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 // ─── View toggle ──────────────────────────────────────────────────────────────
@@ -157,7 +196,7 @@ export default function DashboardClient({
   const [filterBy, setFilterBy]               = useState<FilterMode>("grazing");
   const [liveConditions, setLiveConditions]   = useState<Record<string, LiveCampStatus>>({});
 
-  // Fetch live camp conditions from Prisma via API, then re-poll every 30s
+  // Fetch live camp conditions from Prisma via API, then re-poll every 10s
   useEffect(() => {
     function fetchConditions() {
       fetch("/api/camps/status")
@@ -245,12 +284,17 @@ export default function DashboardClient({
         </div>
 
         {/* Summary stats */}
-        <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}>
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
+          style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
+        >
           <StatChip label="Total Animals"    value={totalAnimals} />
-          <StatChip label="Camps Inspected" value={`${inspectedToday}/${CAMPS.length}`} />
-          <StatChip label="Active Alerts" value={alertCount} accent={alertCount > 0} />
-          <StatChip label="Outstanding Obs."  value={alertCount} />
-        </div>
+          <StatChip label="Camps Inspected"  value={`${inspectedToday}/${CAMPS.length}`} />
+          <StatChip label="Active Alerts"    value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} />
+          <StatChip label="Outstanding Obs." value={alertCount} />
+        </motion.div>
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -285,6 +329,48 @@ export default function DashboardClient({
           <SignOutButton />
         </div>
       </div>
+
+      {/* ── Morning briefing strip ────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.3 }}
+        style={{
+          flexShrink: 0,
+          padding: "6px 16px",
+          background: "#1A1510",
+          borderBottom: "1px solid rgba(139,105,20,0.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 12, color: "rgba(210,180,140,0.7)", fontFamily: "var(--font-sans)" }}>
+          {getGreeting()} — {getTodayShort()}
+        </span>
+        {alertCount > 0 && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 11,
+            color: "#B03030",
+            fontWeight: 600,
+            fontFamily: "var(--font-sans)",
+          }}>
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#B03030",
+              display: "inline-block",
+              animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
+            }} />
+            {alertCount} open alert{alertCount !== 1 ? "s" : ""}
+          </span>
+        )}
+      </motion.div>
 
       {/* ── Main content area ─────────────────────────────────────────── */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex" }}>
