@@ -81,6 +81,13 @@ body {
   animation: camp-alert-pulse 2.2s ease-in-out infinite;
 }
 
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
 /* Schematic Map — selected camp ring */
 .camp-selected {
   box-shadow: 0 0 0 2px #5C3D2E, 0 2px 12px rgba(92, 61, 46, 0.25);
