@@ -3,6 +3,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
+import AnimalActions from "@/components/admin/finansies/AnimalActions";
+
+export const dynamic = "force-dynamic";
 
 const OBS_ICONS: Record<string, string> = {
   health_issue: "🏥",
@@ -53,40 +56,45 @@ export default async function AnimalDetailPage({
         href="/admin/animals"
         className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"
       >
-        ← Terug na Diere
+        ← Back to Animals
       </Link>
 
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-2xl font-bold text-stone-900 font-mono">{animal.animalId}</h1>
         {animal.name && <span className="text-stone-500 text-lg">— {animal.name}</span>}
         <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${getCategoryChipColor(animal.category as AnimalCategory)}`}>
           {getCategoryLabel(animal.category as AnimalCategory)}
         </span>
+        {animal.status === "Active" && (
+          <div className="ml-auto">
+            <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="detail" />
+          </div>
+        )}
       </div>
 
       {/* Profile card */}
       <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-stone-700 mb-4">Identiteit</h2>
+        <h2 className="text-sm font-semibold text-stone-700 mb-4">Identity</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div>
-            <p className="text-xs text-stone-400">Geslag</p>
-            <p className="font-semibold text-stone-800">{animal.sex === "Female" ? "Vroulik" : "Manlik"}</p>
+            <p className="text-xs text-stone-400">Sex</p>
+            <p className="font-semibold text-stone-800">{animal.sex === "Female" ? "Female" : "Male"}</p>
           </div>
           <div>
-            <p className="text-xs text-stone-400">Ras</p>
+            <p className="text-xs text-stone-400">Breed</p>
             <p className="font-semibold text-stone-800">{animal.breed}</p>
           </div>
           <div>
-            <p className="text-xs text-stone-400">Ouderdom</p>
+            <p className="text-xs text-stone-400">Age</p>
             <p className="font-semibold text-stone-800">{getAnimalAge(animal.dateOfBirth ?? undefined)}</p>
           </div>
           <div>
-            <p className="text-xs text-stone-400">Geboortedatum</p>
-            <p className="font-semibold text-stone-800">{animal.dateOfBirth ?? "Onbekend"}</p>
+            <p className="text-xs text-stone-400">Date of Birth</p>
+            <p className="font-semibold text-stone-800">{animal.dateOfBirth ?? "Unknown"}</p>
           </div>
           <div>
-            <p className="text-xs text-stone-400">Huidige kamp</p>
+            <p className="text-xs text-stone-400">Current camp</p>
             <Link
               href={`/dashboard/camp/${animal.currentCamp}`}
               className="font-semibold text-green-700 hover:underline"
@@ -101,12 +109,12 @@ export default async function AnimalDetailPage({
               : animal.status === "Sold" ? "bg-stone-100 text-stone-600"
               : "bg-red-100 text-red-600"
             }`}>
-              {animal.status === "Active" ? "Aktief" : animal.status === "Sold" ? "Verkoop" : "Oorlede"}
+              {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
             </span>
           </div>
           {animal.motherId && (
             <div>
-              <p className="text-xs text-stone-400">Moeder</p>
+              <p className="text-xs text-stone-400">Mother</p>
               <Link href={`/admin/animals/${animal.motherId}`} className="font-mono font-semibold text-green-700 hover:underline">
                 {animal.motherId}
               </Link>
@@ -114,7 +122,7 @@ export default async function AnimalDetailPage({
           )}
           {animal.fatherId && (
             <div>
-              <p className="text-xs text-stone-400">Vader (Bul)</p>
+              <p className="text-xs text-stone-400">Sire (Bull)</p>
               <Link href={`/admin/animals/${animal.fatherId}`} className="font-mono font-semibold text-green-700 hover:underline">
                 {animal.fatherId}
               </Link>
@@ -122,24 +130,24 @@ export default async function AnimalDetailPage({
           )}
           {animal.notes && (
             <div className="col-span-2 md:col-span-3">
-              <p className="text-xs text-stone-400">Notas</p>
+              <p className="text-xs text-stone-400">Notes</p>
               <p className="text-stone-700">{animal.notes}</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Geskiedenis */}
+      {/* History */}
       <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-stone-700 mb-4">
-          Geskiedenis ({observations.length})
+          History ({observations.length})
         </h2>
         {observations.length === 0 ? (
-          <p className="text-sm text-stone-400">Geen geskiedenisinslae nie.</p>
+          <p className="text-sm text-stone-400">No history records.</p>
         ) : (
           <ol className="space-y-4">
             {observations.map((obs) => {
-              const date = new Date(obs.observedAt).toLocaleDateString("af-ZA");
+              const date = new Date(obs.observedAt).toLocaleDateString("en-ZA");
               const summary = getObsSummary(obs.type, obs.details);
               return (
                 <li key={obs.id} className="flex gap-3 text-sm">
@@ -148,7 +156,7 @@ export default async function AnimalDetailPage({
                     <p className="font-semibold text-stone-800 capitalize">{obs.type.replace(/_/g, " ")}</p>
                     {summary && <p className="text-stone-500">{summary}</p>}
                     <p className="text-xs text-stone-400 mt-0.5">
-                      {date} · Kamp: {obs.campId} · {obs.loggedBy ?? "onbekend"}
+                      {date} · Camp: {obs.campId} · {obs.loggedBy ?? "unknown"}
                     </p>
                   </div>
                 </li>

@@ -84,22 +84,22 @@ function CardGroup<T extends string>({
 }
 
 const GRAZING_OPTIONS: OptionCard<GrazingQuality>[] = [
-  { value: "Good",       label: "Goed",      icon: "🟢", color: "border-lime-700 bg-lime-900/40 text-lime-300" },
-  { value: "Fair",       label: "Redelik",   icon: "🟡", color: "border-amber-600 bg-amber-900/40 text-amber-300" },
-  { value: "Poor",       label: "Swak",      icon: "🟠", color: "border-orange-700 bg-orange-900/40 text-orange-300" },
-  { value: "Overgrazed", label: "Oorbevolk", icon: "🔴", color: "border-red-700 bg-red-900/40 text-red-300" },
+  { value: "Good",       label: "Good",      icon: "🟢", color: "border-lime-700 bg-lime-900/40 text-lime-300" },
+  { value: "Fair",       label: "Fair",   icon: "🟡", color: "border-amber-600 bg-amber-900/40 text-amber-300" },
+  { value: "Poor",       label: "Poor",      icon: "🟠", color: "border-orange-700 bg-orange-900/40 text-orange-300" },
+  { value: "Overgrazed", label: "Overgrazed", icon: "🔴", color: "border-red-700 bg-red-900/40 text-red-300" },
 ];
 
 const WATER_OPTIONS: OptionCard<WaterStatus>[] = [
-  { value: "Full",   label: "Vol",      icon: "💧", color: "border-sky-600 bg-sky-900/40 text-sky-300" },
-  { value: "Low",    label: "Laag",     icon: "🔵", color: "border-sky-500 bg-sky-900/30 text-sky-400" },
-  { value: "Empty",  label: "Leeg",     icon: "⚠️", color: "border-amber-600 bg-amber-900/40 text-amber-300" },
-  { value: "Broken", label: "Stukkend", icon: "🔧", color: "border-red-700 bg-red-900/40 text-red-300" },
+  { value: "Full",   label: "Full",      icon: "💧", color: "border-sky-600 bg-sky-900/40 text-sky-300" },
+  { value: "Low",    label: "Low",     icon: "🔵", color: "border-sky-500 bg-sky-900/30 text-sky-400" },
+  { value: "Empty",  label: "Empty",     icon: "⚠️", color: "border-amber-600 bg-amber-900/40 text-amber-300" },
+  { value: "Broken", label: "Broken", icon: "🔧", color: "border-red-700 bg-red-900/40 text-red-300" },
 ];
 
 const FENCE_OPTIONS: OptionCard<FenceStatus>[] = [
-  { value: "Intact",  label: "Heel",     icon: "✅", color: "border-lime-700 bg-lime-900/40 text-lime-300" },
-  { value: "Damaged", label: "Beskadig", icon: "⚠️", color: "border-red-700 bg-red-900/40 text-red-300" },
+  { value: "Intact",  label: "Intact",     icon: "✅", color: "border-lime-700 bg-lime-900/40 text-lime-300" },
+  { value: "Damaged", label: "Damaged", icon: "⚠️", color: "border-red-700 bg-red-900/40 text-red-300" },
 ];
 
 export default function CampConditionForm({ campId, onClose, onSubmit }: Props) {
@@ -112,25 +112,25 @@ export default function CampConditionForm({ campId, onClose, onSubmit }: Props) 
     if (onSubmit) {
       onSubmit({ campId, grazing, water, fence, notes });
     } else {
-      alert(`Kamp ${campId} toestand aangeteken:\nBeweiding: ${grazing}\nWater: ${water}\nHeining: ${fence}`);
+      alert(`Camp ${campId} condition recorded:\nGrazing: ${grazing}\nWater: ${water}\nFence: ${fence}`);
       onClose();
     }
   }
 
   return (
-    <BottomSheet title={`Kamp Toestand — ${campId}`} onClose={onClose}>
+    <BottomSheet title={`Camp Condition — ${campId}`} onClose={onClose}>
       <div className="p-5 flex flex-col gap-6">
-        <CardGroup label="Beweidingstoestand" options={GRAZING_OPTIONS} value={grazing} onChange={setGrazing} />
-        <CardGroup label="Watertoestand" options={WATER_OPTIONS} value={water} onChange={setWater} />
-        <CardGroup label="Heining" options={FENCE_OPTIONS} value={fence} onChange={setFence} />
+        <CardGroup label="Grazing condition" options={GRAZING_OPTIONS} value={grazing} onChange={setGrazing} />
+        <CardGroup label="Water status" options={WATER_OPTIONS} value={water} onChange={setWater} />
+        <CardGroup label="Fence" options={FENCE_OPTIONS} value={fence} onChange={setFence} />
 
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notas (opsioneel)</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notes (optional)</p>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            placeholder="Enige addisionele opmerkings..."
+            placeholder="Any additional remarks..."
             className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
             style={{
               backgroundColor: 'rgba(26, 13, 5, 0.6)',
@@ -145,7 +145,7 @@ export default function CampConditionForm({ campId, onClose, onSubmit }: Props) 
           className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
           style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
         >
-          Stuur Kamp Verslag
+          Submit Camp Report
         </button>
       </div>
     </BottomSheet>

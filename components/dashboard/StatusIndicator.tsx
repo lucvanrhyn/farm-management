@@ -18,9 +18,9 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; border: string }
 };
 
 const STATUS_LABELS: Record<StatusType, Record<string, string>> = {
-  grazing: { Good: "Goed", Fair: "Redelik", Poor: "Swak", Overgrazed: "Oorbevolk" },
-  water:   { Full: "Vol", Low: "Laag", Empty: "Leeg", Broken: "Stukkend" },
-  fence:   { Intact: "Heel", Damaged: "Beskadig" },
+  grazing: { Good: "Good", Fair: "Fair", Poor: "Poor", Overgrazed: "Overgrazed" },
+  water:   { Full: "Full", Low: "Low", Empty: "Empty", Broken: "Broken" },
+  fence:   { Intact: "Intact", Damaged: "Damaged" },
 };
 
 const TYPE_ICONS: Record<StatusType, string> = {

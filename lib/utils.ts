@@ -26,21 +26,21 @@ export function getAnimalsByCamp(campId: string): Animal[] {
 
 export function getCategoryLabel(category: AnimalCategory): string {
   switch (category) {
-    case "Cow":    return "Koei";
-    case "Calf":   return "Speen Kalf";
-    case "Heifer": return "Vers";
-    case "Bull":   return "Bul";
-    case "Ox":     return "Os";
+    case "Cow":    return "Cow";
+    case "Calf":   return "Calf";
+    case "Heifer": return "Heifer";
+    case "Bull":   return "Bull";
+    case "Ox":     return "Ox";
   }
 }
 
 export function getCategoryPluralLabel(category: AnimalCategory): string {
   switch (category) {
-    case "Cow":    return "Koeie";
-    case "Calf":   return "Speen Kalwers";
-    case "Heifer": return "Verse";
-    case "Bull":   return "Bulle";
-    case "Ox":     return "Osse";
+    case "Cow":    return "Cows";
+    case "Calf":   return "Calves";
+    case "Heifer": return "Heifers";
+    case "Bull":   return "Bulls";
+    case "Ox":     return "Oxen";
   }
 }
 
@@ -113,11 +113,11 @@ export function relativeTime(dateStr: string): string {
   const diffH = Math.floor(diffMs / (1000 * 60 * 60));
   const diffD = Math.floor(diffH / 24);
 
-  if (diffH < 1) return "Sopas";
-  if (diffH < 24) return `${diffH}u gelede`;
-  if (diffD === 1) return "Gister";
-  if (diffD < 7) return `${diffD} dae gelede`;
-  return `${Math.floor(diffD / 7)} w gelede`;
+  if (diffH < 1) return "Just now";
+  if (diffH < 24) return `${diffH}h ago`;
+  if (diffD === 1) return "Yesterday";
+  if (diffD < 7) return `${diffD} days ago`;
+  return `${Math.floor(diffD / 7)}w ago`;
 }
 
 // ============================================================
@@ -125,13 +125,13 @@ export function relativeTime(dateStr: string): string {
 // ============================================================
 
 export function getAnimalAge(dob: string | undefined): string {
-  if (!dob) return "Onbekend";
+  if (!dob) return "Unknown";
   const now = new Date();
   const birth = new Date(dob);
   const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-  if (months < 24) return `${months} maande`;
+  if (months < 24) return `${months} months`;
   const years = Math.floor(months / 12);
-  return `${years} jaar`;
+  return `${years} years`;
 }
 
 // ============================================================

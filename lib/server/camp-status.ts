@@ -32,12 +32,13 @@ export async function getLatestCampConditions(): Promise<Map<string, LiveCampSta
     } catch {
       // malformed details — skip
     }
+    const inspectedAt = obs.observedAt instanceof Date ? obs.observedAt.toISOString() : obs.observedAt;
     if (obs.type === "camp_condition") {
       result.set(obs.campId, {
         grazing_quality: (details.grazing as GrazingQuality) ?? "Fair",
         water_status: (details.water as WaterStatus) ?? "Full",
         fence_status: (details.fence as FenceStatus) ?? "Intact",
-        last_inspected_at: obs.observedAt.toISOString(),
+        last_inspected_at: inspectedAt,
         last_inspected_by: details.logged_by ?? null,
       });
     } else {
@@ -46,7 +47,7 @@ export async function getLatestCampConditions(): Promise<Map<string, LiveCampSta
         grazing_quality: "Good",
         water_status: "Full",
         fence_status: "Intact",
-        last_inspected_at: obs.observedAt.toISOString(),
+        last_inspected_at: inspectedAt,
         last_inspected_by: details.logged_by ?? null,
       });
     }
@@ -73,7 +74,7 @@ export async function getRecentHealthObservations(limit = 8): Promise<HealthObse
       animalId: obs.animalId,
       campId: obs.campId,
       details,
-      observedAt: obs.observedAt.toISOString(),
+      observedAt: obs.observedAt instanceof Date ? obs.observedAt.toISOString() : obs.observedAt,
     };
   });
 }

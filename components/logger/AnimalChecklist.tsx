@@ -10,10 +10,10 @@ interface AnimalChecklistProps {
 }
 
 const ACTION_BUTTONS: { type: ModalType; icon: string; label: string; className: string }[] = [
-  { type: "health",   icon: "🏥", label: "Gesond", className: "text-amber-400 active:bg-amber-400/10" },
-  { type: "movement", icon: "➡️", label: "Skuif",  className: "text-sky-400 active:bg-sky-400/10" },
-  { type: "calving",  icon: "🐄", label: "Kalf",   className: "text-violet-400 active:bg-violet-400/10" },
-  { type: "death",    icon: "✕",  label: "Dood",   className: "text-red-400 active:bg-red-400/10" },
+  { type: "health",   icon: "🏥", label: "Health", className: "text-amber-400 active:bg-amber-400/10" },
+  { type: "movement", icon: "➡️", label: "Move",  className: "text-sky-400 active:bg-sky-400/10" },
+  { type: "calving",  icon: "🐄", label: "Calving",   className: "text-violet-400 active:bg-violet-400/10" },
+  { type: "death",    icon: "✕",  label: "Death",   className: "text-red-400 active:bg-red-400/10" },
 ];
 
 function getCategoryChipDark(category: AnimalCategory): string {
@@ -32,7 +32,7 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp }
   if (animals.length === 0) {
     return (
       <div className="px-4 py-8 text-center text-sm" style={{ color: 'rgba(210, 180, 140, 0.6)' }}>
-        Geen diere in hierdie kamp nie.
+        No animals in this camp.
       </div>
     );
   }

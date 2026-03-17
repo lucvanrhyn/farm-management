@@ -1,0 +1,72 @@
+<h2>Grafieke — Full tab design</h2>
+<p class="subtitle">What lives in each tab. Both use Recharts, server-fetched, 30-day window.</p>
+
+<div class="section">
+  <h3 style="color:#C4A030">📍 Kampe Tab — 6 items</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">1. Camp Condition Trend</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Line chart — last 30 days</div>
+      <div style="font-size:11px;color:#888">Data: <code>camp_condition</code> observations grouped by day, avg grazing quality score (Goed=4, Redelik=3, Swak=2, Oorblaai=1). One line per camp (or avg all camps).</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">2. Health Issues by Camp</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Bar chart — last 30 days</div>
+      <div style="font-size:11px;color:#888">Data: Count of <code>health_issue</code> observations grouped by campId. Bars coloured red/orange by severity. X-axis: 19 camps.</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">3. Headcount per Camp</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Stacked bar — current snapshot</div>
+      <div style="font-size:11px;color:#888">Data: Active animals grouped by currentCamp + category (Cow/Bull/Heifer/Calf/Ox). Stacked colours per category. X-axis: 19 camps.</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">4. Stocking Rate / Grazing Pressure</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Bar with target line — current snapshot</div>
+      <div style="font-size:11px;color:#888">Data: Animals per hectare per camp (headcount ÷ camp size_hectares). Reference line at optimal density (e.g. 1 LSU/ha). Bars red if over threshold.</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">5. Inspection Heatmap</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Grid heatmap — last 30 days</div>
+      <div style="font-size:11px;color:#888">Data: Count of <code>camp_check</code> + <code>camp_condition</code> per camp per day. Grid: camps (Y) × days (X). Darker = more inspections. White = no visit.</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">6. Animal Movement Flow</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Table — last 30 days</div>
+      <div style="font-size:11px;color:#888">Data: <code>animal_movement</code> observations. Table: Date | Animal ID | From camp → To camp | Logged by. Sorted newest first. Simpler than a Sankey for now.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3 style="color:#C4A030">🐄 Diere Tab — 3 items</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px">
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">7. Calving Rate Trend</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Bar chart — last 12 months</div>
+      <div style="font-size:11px;color:#888">Data: <code>reproduction</code> observations where details.event includes "calving", grouped by month. Shows calf count per month.</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">8. Deaths & Sales Over Time</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Grouped bar — last 12 months</div>
+      <div style="font-size:11px;color:#888">Data: Animals where status changed to Deceased/Sold, grouped by month. Two bars per month: Deaths (red) + Sales (blue).</div>
+    </div>
+
+    <div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px">
+      <div style="font-weight:700;margin-bottom:4px">9. Treatment Withdrawal Tracker</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">Table — active only</div>
+      <div style="font-size:11px;color:#888">Data: <code>treatment</code> observations with withdrawal_days > 0 where observedAt + withdrawal_days > today. Shows: Animal ID | Drug | Days remaining | Camp. Red if &lt; 3 days.</div>
+    </div>
+
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px">All charts styled in the existing admin stone/brown palette. Recharts tooltips in Afrikaans.</p>

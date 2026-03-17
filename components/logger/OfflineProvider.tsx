@@ -10,7 +10,7 @@ import {
   ReactNode,
 } from 'react';
 import { getPendingCount, getLastSyncedAt, getCachedCamps } from '@/lib/offline-store';
-import { syncPendingObservations, syncPendingAnimals, refreshCachedData } from '@/lib/sync-manager';
+import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
@@ -61,29 +61,42 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshData = useCallback(async () => {
-    await refreshCachedData();
-    const iso = new Date().toISOString();
-    setLastSyncedAtState(iso);
-    await refreshPendingCount();
-    // Reload camps into context after re-seeding
-    const updated = await getCachedCamps();
-    setCamps(updated);
-  }, [refreshPendingCount]);
+    if (syncStatus === 'syncing') return;
+    setSyncStatus('syncing');
+    try {
+      // If there are pending changes, sync-and-refresh (handles both sync + cache pull)
+      // Otherwise just pull fresh data from server
+      if (pendingCount > 0) {
+        await syncAndRefresh();
+      } else {
+        await refreshCachedData();
+      }
+      const iso = new Date().toISOString();
+      setLastSyncedAtState(iso);
+      await refreshPendingCount();
+      // Reload camps into context after refresh
+      const updated = await getCachedCamps();
+      setCamps(updated);
+      setSyncStatus('idle');
+    } catch (err) {
+      console.error('refreshData error:', err);
+      setSyncStatus('error');
+    }
+  }, [pendingCount, syncStatus, refreshPendingCount]);
 
   const syncNow = useCallback(async () => {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const [{ synced: syncedObs }, { synced: syncedAnimals }] = await Promise.all([
-        syncPendingObservations(),
-        syncPendingAnimals(),
-      ]);
-      const synced = syncedObs + syncedAnimals;
+      const { synced } = await syncAndRefresh();
       if (synced > 0) {
         setSyncResult({ synced, timestamp: Date.now() });
         if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
         syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 4000);
       }
+      // Reload camps into context after refresh
+      const updated = await getCachedCamps();
+      setCamps(updated);
       await refreshPendingCount();
       setSyncStatus('idle');
     } catch {
@@ -108,7 +121,8 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         setCamps(existing);
       }
     });
-  }, [refreshData, refreshPendingCount]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshPendingCount]);
 
   // Online/offline listeners
   useEffect(() => {

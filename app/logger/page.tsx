@@ -3,16 +3,17 @@ import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import { getSession } from "@/lib/auth";
 
-const DAYS_AF    = ["Sondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrydag","Saterdag"];
-const MONTHS_AF  = ["Januarie","Februarie","Maart","April","Mei","Junie","Julie","Augustus","September","Oktober","November","Desember"];
-
-function getTodayAF(): string {
-  const now = new Date();
-  return `${DAYS_AF[now.getDay()]}, ${now.getDate()} ${MONTHS_AF[now.getMonth()]} ${now.getFullYear()}`;
+function getTodayLabel(): string {
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date())
 }
 
 export default async function LoggerPage() {
-  const todayLabel = getTodayAF();
+  const todayLabel = getTodayLabel();
   const session = await getSession();
   const loggerName = session?.user?.name ?? "Logger";
 
@@ -36,7 +37,7 @@ export default async function LoggerPage() {
             >
               Trio B
             </h1>
-            <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Kies &apos;n kamp</p>
+            <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Select a camp</p>
           </div>
           <div className="flex items-center gap-2">
             <SignOutButton />

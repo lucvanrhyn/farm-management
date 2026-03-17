@@ -103,7 +103,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
   const fence   = liveCondition?.fence_status   ?? lastLog?.fence_status   ?? "Intact";
   const lastInspectedDate = liveCondition?.last_inspected_at
     ? liveCondition.last_inspected_at.split("T")[0]
-    : lastLog?.date ?? "Onbekend";
+    : lastLog?.date ?? "Unknown";
   const lastInspectedBy = liveCondition?.last_inspected_by ?? lastLog?.inspected_by ?? "—";
 
   if (!camp) return null;
@@ -124,7 +124,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
               lineHeight: 1.2,
             }}
           >
-            Kamp {camp.camp_name}
+            Camp {camp.camp_name}
           </h2>
           <p className="text-xs mt-0.5" style={{ color: P.tan }}>
             {camp.size_hectares ? `${camp.size_hectares} ha · ` : ""}{camp.water_source}
@@ -153,7 +153,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
         {/* Animal count breakdown */}
         <div className="px-5 py-4 border-b" style={{ borderColor: P.border }}>
           <div className="flex items-baseline justify-between mb-3">
-            <p className="text-sm font-semibold" style={{ color: P.tan }}>Diere</p>
+            <p className="text-sm font-semibold" style={{ color: P.tan }}>Animals</p>
             <span
               style={{
                 fontFamily: "var(--font-dm-serif)",
@@ -192,13 +192,13 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
         {/* Last inspection + sparkline */}
         <div className="px-5 py-4 border-b" style={{ borderColor: P.border }}>
           <p className="text-xs font-semibold mb-2" style={{ color: P.dim }}>
-            Laaste inspeksie
+            Last inspection
           </p>
           <p className="text-sm mb-3" style={{ color: P.cream }}>
             {lastInspectedDate} · {lastInspectedBy}
           </p>
           <p className="text-xs font-semibold mb-1" style={{ color: P.dim }}>
-            Diere (laaste 7 dae)
+            Animals (last 7 days)
           </p>
           <Sparkline campId={campId} />
         </div>
@@ -206,7 +206,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
         {/* Animal list */}
         <div className="px-5 pt-4">
           <p className="text-xs font-semibold mb-3" style={{ color: P.dim }}>
-            Dierelys ({animals.length})
+            Animal List ({animals.length})
           </p>
           <div className="flex flex-col gap-0.5">
             {animals.slice(0, 30).map((animal) => (
@@ -240,7 +240,7 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
             ))}
             {animals.length > 30 && (
               <p className="text-xs text-center py-2" style={{ color: P.dim }}>
-                + {animals.length - 30} meer diere
+                + {animals.length - 30} more animals
               </p>
             )}
           </div>

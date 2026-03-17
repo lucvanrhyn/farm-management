@@ -24,14 +24,14 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Verkeerde e-pos of wagwoord. Probeer weer.");
+        setError("Incorrect email or password. Try again.");
       } else if (result?.ok) {
         router.push("/home");
       } else {
-        setError("Aanmelding het misluk. Probeer later weer.");
+        setError("Sign in failed. Try again later.");
       }
     } catch {
-      setError("Netwerkfout. Kontroleer jou verbinding.");
+      setError("Network error. Check your connection.");
     } finally {
       setLoading(false);
     }
@@ -116,7 +116,7 @@ export default function LoginPage() {
                 textTransform: "uppercase",
               }}
             >
-              E-posadres
+              Email address
             </label>
             <input
               id="email"
@@ -160,7 +160,7 @@ export default function LoginPage() {
                 textTransform: "uppercase",
               }}
             >
-              Wagwoord
+              Password
             </label>
             <input
               id="password"
@@ -246,7 +246,7 @@ export default function LoginPage() {
               }
             }}
           >
-            {loading ? "Besig..." : "Teken in"}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
       </div>

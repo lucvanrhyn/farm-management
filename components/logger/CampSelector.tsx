@@ -40,7 +40,7 @@ export default function CampSelector() {
       {camps.map((camp, index) => {
         const animalCount = camp.animal_count ?? 0;
         const dotColor = getGrazingDot(camp.grazing_quality ?? "Fair");
-        const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Nog nie";
+        const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Never";
 
         return (
           <button
@@ -89,7 +89,7 @@ export default function CampSelector() {
                   border: '1px solid rgba(210, 180, 140, 0.35)',
                 }}
               >
-                {animalCount} diere
+                {animalCount} animals
               </span>
             </div>
           </button>

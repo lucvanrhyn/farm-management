@@ -7,9 +7,9 @@ export default function AdminImportPage() {
       <AdminNav active="/admin/import" />
       <main className="flex-1 p-8">
         <div className="max-w-2xl">
-          <h1 className="text-2xl font-bold text-stone-800 mb-1">Invoer — Diere</h1>
+          <h1 className="text-2xl font-bold text-stone-800 mb-1">Import — Animals</h1>
           <p className="text-stone-500 text-sm mb-8">
-            Laai 'n Excel- of CSV-lêer op om diere in die stelsel in te voer. Bestaande diere word opgedateer (op grond van diere-ID).
+            Upload an Excel or CSV file to import animals into the system. Existing animals will be updated (based on animal ID).
           </p>
           <AnimalImporter />
         </div>

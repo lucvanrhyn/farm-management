@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -70,6 +71,9 @@ export async function POST(request: NextRequest) {
         loggedBy: session.user?.email ?? null,
       },
     });
+    revalidatePath('/admin');
+    revalidatePath('/admin/observations');
+    revalidatePath('/dashboard');
     return NextResponse.json({ success: true, id: record.id });
   } catch (err) {
     console.error("[observations] DB error:", err);

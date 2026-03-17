@@ -1,0 +1,40 @@
+<h2>Where should the analytics live?</h2>
+<p class="subtitle">The admin currently has 5 tabs. We need to decide where graphs and analytics fit in.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>New "Grafieke" tab in admin nav</h3>
+      <p>A dedicated analytics page — <strong>/admin/grafieke</strong> — with all 4+ charts on one scrollable dashboard. Clean separation from the data tables. Adds a 6th tab to the sidebar.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Focused analytics experience</li><li>Easy to expand later</li><li>Doesn't clutter existing pages</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>One more tab to click to</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Expand the existing "Oorsig" (Overview) page</h3>
+      <p>The current <strong>/admin</strong> overview already has 4 stat cards + 2 panels. Add charts directly below the stats — analytics become part of the landing page when you enter admin.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fewer tabs to navigate</li><li>Analytics front and center on login</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Page gets long</li><li>Harder to find specific data</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Replace "Oorsig" with a full analytics dashboard</h3>
+      <p>Remove the current overview and replace it with a proper analytics dashboard — stat cards at top, charts below. The <strong>/admin</strong> route becomes the analytics home.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>No extra tabs</li><li>Analytics IS the overview</li><li>Clean slate for richer design</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Replaces existing overview work</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

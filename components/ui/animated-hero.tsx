@@ -3,23 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
-const AFRIKAANS_MONTHS = [
-  "Januarie", "Februarie", "Maart", "April", "Mei", "Junie",
-  "Julie", "Augustus", "September", "Oktober", "November", "Desember",
+const ENGLISH_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
-const AFRIKAANS_DAYS = [
-  "Sondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrydag", "Saterdag",
+const ENGLISH_DAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 ];
 
-function formatAfrikaansDate(date: Date): string {
-  return `${AFRIKAANS_DAYS[date.getDay()]}, ${date.getDate()} ${AFRIKAANS_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+function formatEnglishDate(date: Date): string {
+  return `${ENGLISH_DAYS[date.getDay()]}, ${date.getDate()} ${ENGLISH_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function getGreeting(hour: number): { text: string; icon: string } {
-  if (hour < 12) return { text: "Goeie more", icon: "🌅" };
-  if (hour < 17) return { text: "Goeie middag", icon: "☀️" };
-  return { text: "Goeie aand", icon: "🌙" };
+  if (hour < 12) return { text: "Good morning", icon: "🌅" };
+  if (hour < 17) return { text: "Good afternoon", icon: "☀️" };
+  return { text: "Good evening", icon: "🌙" };
 }
 
 export function AnimatedHero() {
@@ -27,7 +27,7 @@ export function AnimatedHero() {
   const [mounted, setMounted] = useState(false);
 
   const words = useMemo(
-    () => ["Opgespoor", "Bestuur", "Gemonitor", "Versorg", "Slagbaar"],
+    () => ["Tracked", "Managed", "Monitored", "Cared For", "Profitable"],
     [],
   );
 
@@ -42,7 +42,7 @@ export function AnimatedHero() {
 
   const now = new Date();
   const greeting = getGreeting(now.getHours());
-  const dateStr = formatAfrikaansDate(now);
+  const dateStr = formatEnglishDate(now);
 
   return (
     <div className="flex flex-col items-center text-center gap-3">
@@ -113,7 +113,7 @@ export function AnimatedHero() {
           }}
           className="text-sm tracking-wide"
         >
-          Jou plaas is altyd —
+          Your farm is always —
         </span>
         <div className="relative h-14 flex items-center justify-center overflow-hidden w-72">
           {words.map((word, index) => (
@@ -154,7 +154,7 @@ export function AnimatedHero() {
           fontFamily: "var(--font-sans)",
         }}
       >
-        Brangus · 978 diere · 19 kampe
+        Brangus · 978 animals · 19 camps
       </motion.div>
     </div>
   );

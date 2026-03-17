@@ -63,6 +63,14 @@ model Transaction {
   createdAt   DateTime @default(now())
 }
 
+model TransactionCategory {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // "income" | "expense"
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model FarmSettings {
   id                  String   @id @default("singleton")
   alertThresholdHours Int      @default(48)

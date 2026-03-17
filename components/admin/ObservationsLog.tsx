@@ -7,14 +7,14 @@ import type { ObservationType, PrismaObservation } from "@/lib/types";
 const PAGE_SIZE = 50;
 
 const OBS_TYPES: { value: ObservationType | "all"; label: string }[] = [
-  { value: "all",             label: "Alle tipes" },
-  { value: "camp_check",      label: "Kamp-inspeksie" },
-  { value: "camp_condition",  label: "Kamp-toestand" },
-  { value: "health_issue",    label: "Gesondheid" },
-  { value: "animal_movement", label: "Beweging" },
-  { value: "reproduction",    label: "Reproduksie" },
-  { value: "treatment",       label: "Behandeling" },
-  { value: "death",           label: "Sterfte" },
+  { value: "all",             label: "All types" },
+  { value: "camp_check",      label: "Camp inspection" },
+  { value: "camp_condition",  label: "Camp condition" },
+  { value: "health_issue",    label: "Health" },
+  { value: "animal_movement", label: "Movement" },
+  { value: "reproduction",    label: "Reproduction" },
+  { value: "treatment",       label: "Treatment" },
+  { value: "death",           label: "Death" },
 ];
 
 const TYPE_BADGE: Record<string, string> = {
@@ -28,13 +28,13 @@ const TYPE_BADGE: Record<string, string> = {
 };
 
 const TYPE_LABEL: Record<string, string> = {
-  camp_check:      "Kamp-inspeksie",
-  camp_condition:  "Kamp-toestand",
-  health_issue:    "Gesondheid",
-  animal_movement: "Beweging",
-  reproduction:    "Reproduksie",
-  treatment:       "Behandeling",
-  death:           "Sterfte",
+  camp_check:      "Camp inspection",
+  camp_condition:  "Camp condition",
+  health_issue:    "Health",
+  animal_movement: "Movement",
+  reproduction:    "Reproduction",
+  treatment:       "Treatment",
+  death:           "Death",
 };
 
 function parseDetails(raw: string): string {
@@ -43,15 +43,15 @@ function parseDetails(raw: string): string {
     const parts: string[] = [];
     if (obj.symptoms) {
       const s = Array.isArray(obj.symptoms) ? obj.symptoms.join(", ") : obj.symptoms;
-      parts.push(`Simptome: ${s}`);
+      parts.push(`Symptoms: ${s}`);
     }
-    if (obj.severity) parts.push(`Erns: ${obj.severity}`);
-    if (obj.grazing_quality) parts.push(`Beweiding: ${obj.grazing_quality}`);
+    if (obj.severity) parts.push(`Severity: ${obj.severity}`);
+    if (obj.grazing_quality) parts.push(`Grazing: ${obj.grazing_quality}`);
     if (obj.water_status) parts.push(`Water: ${obj.water_status}`);
     if (obj.notes) parts.push(obj.notes);
-    if (obj.cause) parts.push(`Oorsaak: ${obj.cause}`);
-    if (obj.drug) parts.push(`Middel: ${obj.drug}`);
-    if (obj.to_camp) parts.push(`Na kamp: ${obj.to_camp}`);
+    if (obj.cause) parts.push(`Cause: ${obj.cause}`);
+    if (obj.drug) parts.push(`Medicine: ${obj.drug}`);
+    if (obj.to_camp) parts.push(`To camp: ${obj.to_camp}`);
     return parts.join(" · ") || raw.slice(0, 120);
   } catch {
     return raw.slice(0, 120);
@@ -80,14 +80,14 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
       });
       if (!res.ok) {
         const e = await res.json();
-        setError(e.error ?? "Stoor het misluk");
+        setError(e.error ?? "Save failed");
         return;
       }
       const updated: PrismaObservation = await res.json();
       onSaved(updated);
       onClose();
     } catch {
-      setError("Netwerk fout — probeer weer");
+      setError("Network error — try again");
     } finally {
       setSaving(false);
     }
@@ -97,20 +97,20 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-stone-800">Redigeer Waarneming</h3>
+          <h3 className="text-base font-bold text-stone-800">Edit Observation</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-700 text-xl leading-none">×</button>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs text-stone-500">
-          <span><span className="font-semibold text-stone-700">Tipe:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
-          <span><span className="font-semibold text-stone-700">Kamp:</span> {obs.campId}</span>
-          <span><span className="font-semibold text-stone-700">Datum:</span> {obs.observedAt.split("T")[0]}</span>
-          {obs.animalId && <span><span className="font-semibold text-stone-700">Dier:</span> {obs.animalId}</span>}
-          {obs.loggedBy && <span><span className="font-semibold text-stone-700">Aangeteken deur:</span> {obs.loggedBy}</span>}
+          <span><span className="font-semibold text-stone-700">Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
+          <span><span className="font-semibold text-stone-700">Camp:</span> {obs.campId}</span>
+          <span><span className="font-semibold text-stone-700">Date:</span> {obs.observedAt.split("T")[0]}</span>
+          {obs.animalId && <span><span className="font-semibold text-stone-700">Animal:</span> {obs.animalId}</span>}
+          {obs.loggedBy && <span><span className="font-semibold text-stone-700">Logged by:</span> {obs.loggedBy}</span>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-stone-600 mb-1">Besonderhede (JSON)</label>
+          <label className="block text-xs font-semibold text-stone-600 mb-1">Details (JSON)</label>
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -126,14 +126,14 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
             onClick={onClose}
             className="px-4 py-2 text-sm text-stone-600 border border-stone-300 rounded-xl hover:bg-stone-50"
           >
-            Kanselleer
+            Cancel
           </button>
           <button
             onClick={save}
             disabled={saving}
             className="px-4 py-2 text-sm bg-green-700 text-white rounded-xl hover:bg-green-800 disabled:opacity-50"
           >
-            {saving ? "Stoor…" : "Stoor"}
+            {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function ObservationsLog() {
             onChange={(e) => handleFilterChange(e.target.value, typeFilter)}
             className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
           >
-            <option value="all">Alle Kampe</option>
+            <option value="all">All Camps</option>
             {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
           </select>
 
@@ -215,7 +215,7 @@ export default function ObservationsLog() {
             {OBS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
 
-          {loading && <span className="self-center text-xs text-stone-400">Laai…</span>}
+          {loading && <span className="self-center text-xs text-stone-400">Loading...</span>}
         </div>
 
         {/* Table */}
@@ -223,12 +223,12 @@ export default function ObservationsLog() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 bg-stone-50">
-                <th className="text-left px-4 py-3 font-semibold text-stone-600 whitespace-nowrap">Datum</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Tipe</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Kamp</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Dier</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Deur</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600 w-64">Besonderhede</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600 whitespace-nowrap">Date</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600">Type</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600">Camp</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600">Animal</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600">By</th>
+                <th className="text-left px-4 py-3 font-semibold text-stone-600 w-64">Details</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -236,7 +236,7 @@ export default function ObservationsLog() {
               {!loading && observations.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-stone-400 text-sm">
-                    Geen waarnemings gevind nie.
+                    No observations found.
                   </td>
                 </tr>
               )}
@@ -256,7 +256,7 @@ export default function ObservationsLog() {
                   <td className="px-4 py-3 text-stone-500 text-xs max-w-xs truncate">
                     {parseDetails(obs.details)}
                     {obs.editedAt && (
-                      <span className="ml-1 text-amber-600 text-xs" title={`Geredigeer deur ${obs.editedBy ?? "?"}`}>✎</span>
+                      <span className="ml-1 text-amber-600 text-xs" title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -264,7 +264,7 @@ export default function ObservationsLog() {
                       onClick={() => setEditTarget(obs)}
                       className="px-3 py-1 text-xs border border-stone-300 rounded-lg hover:bg-stone-100 text-stone-600"
                     >
-                      Redigeer
+                      Edit
                     </button>
                   </td>
                 </tr>
@@ -280,15 +280,15 @@ export default function ObservationsLog() {
             disabled={page === 1 || loading}
             className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
           >
-            ← Vorige
+            ← Previous
           </button>
-          <span className="text-sm text-stone-500">Bladsy {page}</span>
+          <span className="text-sm text-stone-500">Page {page}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={!hasMore || loading}
             className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
           >
-            Volgende →
+            Next →
           </button>
         </div>
       </div>

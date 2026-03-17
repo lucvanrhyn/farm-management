@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { PrismaAnimal, PrismaObservation } from "@/lib/types";
 
-type Tab = "overview" | "geskiedenis";
+type Tab = "overview" | "history";
 
 interface Props {
   animalId: string;
@@ -45,7 +45,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   if (animal === "loading") {
     return (
       <div className="flex flex-col h-full items-center justify-center" style={{ background: panelBg }}>
-        <p className="text-sm" style={{ color: textMuted }}>Laai…</p>
+        <p className="text-sm" style={{ color: textMuted }}>Loading…</p>
       </div>
     );
   }
@@ -53,14 +53,14 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   if (!animal) {
     return (
       <div className="flex flex-col h-full" style={{ background: panelBg }}>
-        <div className="p-5 text-white">Dier nie gevind: {animalId}</div>
+        <div className="p-5 text-white">Animal not found: {animalId}</div>
       </div>
     );
   }
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: "overview", label: "Oorsig" },
-    { key: "geskiedenis", label: "Geskiedenis" },
+    { key: "overview", label: "Overview" },
+    { key: "history", label: "History" },
   ];
 
   return (
@@ -88,7 +88,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
             </span>
           </div>
           <p className="text-xs mt-0.5" style={{ color: textMuted }}>
-            {animal.sex === "Female" ? "Vroulik" : "Manlik"} · {animal.breed}
+            {animal.sex === "Female" ? "Female" : "Male"} · {animal.breed}
           </p>
         </div>
         <button
@@ -104,11 +104,11 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
       <div className="px-4 py-4 border-b" style={{ borderColor: border, background: surfaceBg }}>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xs" style={{ color: textMuted }}>Ouderdom</p>
+            <p className="text-xs" style={{ color: textMuted }}>Age</p>
             <p className="text-sm font-semibold text-white mt-0.5">{getAnimalAge(animal.dateOfBirth ?? undefined)}</p>
           </div>
           <div>
-            <p className="text-xs" style={{ color: textMuted }}>Huidige kamp</p>
+            <p className="text-xs" style={{ color: textMuted }}>Current Camp</p>
             <p className="text-sm font-semibold text-white mt-0.5">{camp?.camp_name ?? animal.currentCamp}</p>
           </div>
           <div>
@@ -125,12 +125,12 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                 color:      animal.status === "Active" ? "#6FAB80"             : "#B09878",
               }}
             >
-              {animal.status === "Active" ? "Aktief" : animal.status}
+              {animal.status === "Active" ? "Active" : animal.status}
             </span>
           </div>
           <div>
-            <p className="text-xs" style={{ color: textMuted }}>Geboortedatum</p>
-            <p className="text-sm font-semibold text-white mt-0.5">{animal.dateOfBirth ?? "Onbekend"}</p>
+            <p className="text-xs" style={{ color: textMuted }}>Date of Birth</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{animal.dateOfBirth ?? "Unknown"}</p>
           </div>
         </div>
       </div>
@@ -159,38 +159,38 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
           <div className="flex flex-col gap-3">
             {animal.motherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                <p className="text-xs font-semibold text-white mb-1">Moeder</p>
+                <p className="text-xs font-semibold text-white mb-1">Mother</p>
                 <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.motherId}</p>
               </div>
             )}
             {animal.fatherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                <p className="text-xs font-semibold text-white mb-1">Vader (Bul)</p>
+                <p className="text-xs font-semibold text-white mb-1">Father (Sire)</p>
                 <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.fatherId}</p>
               </div>
             )}
             {animal.notes && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                <p className="text-xs font-semibold text-white mb-1">Notas</p>
+                <p className="text-xs font-semibold text-white mb-1">Notes</p>
                 <p className="text-sm" style={{ color: textMuted }}>{animal.notes}</p>
               </div>
             )}
             {!animal.motherId && !animal.fatherId && !animal.notes && (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen addisionele inligting nie.</p>
+              <p className="text-sm text-center py-6" style={{ color: textMuted }}>No additional information.</p>
             )}
           </div>
         )}
 
-        {tab === "geskiedenis" && (
+        {tab === "history" && (
           <div className="flex flex-col gap-3">
             {obsLoading && (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Laai geskiedenis…</p>
+              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Loading history…</p>
             )}
             {!obsLoading && observations.length === 0 && (
-              <p className="text-sm text-center py-6" style={{ color: textMuted }}>Geen geskiedenisinslae nie.</p>
+              <p className="text-sm text-center py-6" style={{ color: textMuted }}>No history entries.</p>
             )}
             {observations.map((obs) => {
-              const date = new Date(obs.observedAt).toLocaleDateString("af-ZA");
+              const date = new Date(obs.observedAt).toLocaleDateString("en-ZA");
               let details: Record<string, unknown> = {};
               try { details = JSON.parse(obs.details); } catch { /* ignore */ }
 
@@ -231,7 +231,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                       </div>
                       {summary && <p className="text-xs mt-0.5" style={{ color: textMuted }}>{summary}</p>}
                       <p className="text-xs mt-0.5" style={{ color: "rgba(176,152,120,0.45)" }}>
-                        {obs.loggedBy ?? "onbekend"}
+                        {obs.loggedBy ?? "unknown"}
                       </p>
                     </div>
                   </div>

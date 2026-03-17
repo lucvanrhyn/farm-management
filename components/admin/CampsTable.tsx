@@ -11,12 +11,12 @@ export default async function CampsTable() {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-stone-100 bg-stone-50">
-            <th className="text-left px-4 py-3 font-semibold text-stone-600">Kamp</th>
-            <th className="text-right px-4 py-3 font-semibold text-stone-600">Diere</th>
-            <th className="text-left px-4 py-3 font-semibold text-stone-600">Waterbroen</th>
-            <th className="text-left px-4 py-3 font-semibold text-stone-600">Laaste Inspeksie</th>
-            <th className="text-left px-4 py-3 font-semibold text-stone-600">Beweiding</th>
-            <th className="text-left px-4 py-3 font-semibold text-stone-600">Heinings</th>
+            <th className="text-left px-4 py-3 font-semibold text-stone-600">Camp</th>
+            <th className="text-right px-4 py-3 font-semibold text-stone-600">Animals</th>
+            <th className="text-left px-4 py-3 font-semibold text-stone-600">Water Source</th>
+            <th className="text-left px-4 py-3 font-semibold text-stone-600">Last Inspection</th>
+            <th className="text-left px-4 py-3 font-semibold text-stone-600">Grazing</th>
+            <th className="text-left px-4 py-3 font-semibold text-stone-600">Fence</th>
             <th className="px-4 py-3" />
           </tr>
         </thead>
@@ -39,7 +39,7 @@ export default async function CampsTable() {
                 <td className="px-4 py-3 text-right font-mono text-stone-700">{stats.total}</td>
                 <td className="px-4 py-3 text-stone-600 capitalize">{camp.water_source ?? "—"}</td>
                 <td className="px-4 py-3 text-stone-500">
-                  {lastDate !== "—" ? `${lastDate} · ${lastBy}` : "—"}
+                  {lastDate !== "—" ? `${lastDate} · ${lastBy}` : "Never"}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getGrazingTailwindBg(grazing)}`}>
@@ -48,12 +48,12 @@ export default async function CampsTable() {
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${fence === "Intact" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                    {fence === "Intact" ? "Heel" : "Beskadig"}
+                    {fence === "Intact" ? "Intact" : "Damaged"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <Link href={`/dashboard/camp/${camp.camp_id}`} className="text-xs text-blue-600 hover:underline">
-                    Bekyk →
+                    View →
                   </Link>
                 </td>
               </tr>

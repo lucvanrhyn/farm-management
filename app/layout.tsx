@@ -35,13 +35,13 @@ const dmSerifDisplay = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Brangus Farm Management",
-  description: "Farm management system for Brangus cattle operations",
+  title: "FarmTrack",
+  description: "Livestock farm management system",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Trio B Logger",
+    title: "FarmTrack",
   },
   icons: {
     apple: "/apple-touch-icon.png",

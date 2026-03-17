@@ -3,6 +3,8 @@ import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } fro
 import { prisma } from "@/lib/prisma";
 import type { AnimalCategory } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function AnimalProfilePage({
   params,
 }: {
@@ -27,7 +29,7 @@ export default async function AnimalProfilePage({
   if (!animal) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: bg }}>
-        <p style={{ color: muted }}>Dier nie gevind: {animalId}</p>
+        <p style={{ color: muted }}>Animal not found: {animalId}</p>
       </div>
     );
   }
@@ -49,14 +51,14 @@ export default async function AnimalProfilePage({
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Identity */}
         <div className="rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-4">Identiteit</h2>
+          <h2 className="text-sm font-semibold text-white mb-4">Identity</h2>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
-              ["Geslag", animal.sex === "Female" ? "Vroulik" : "Manlik"],
-              ["Ras", animal.breed],
-              ["Ouderdom", getAnimalAge(animal.dateOfBirth ?? undefined)],
-              ["Geboortedatum", animal.dateOfBirth ?? "Onbekend"],
-              ["Huidige kamp", camp?.camp_name ?? animal.currentCamp],
+              ["Sex", animal.sex === "Female" ? "Female" : "Male"],
+              ["Breed", animal.breed],
+              ["Age", getAnimalAge(animal.dateOfBirth ?? undefined)],
+              ["Date of Birth", animal.dateOfBirth ?? "Unknown"],
+              ["Current camp", camp?.camp_name ?? animal.currentCamp],
               ["Status", animal.status],
             ].map(([label, value]) => (
               <div key={label}>
@@ -69,13 +71,13 @@ export default async function AnimalProfilePage({
 
         {/* Geskiedenis */}
         <div className="rounded-2xl p-5 md:col-span-1" style={{ background: surface, border: `1px solid ${border}` }}>
-          <h2 className="text-sm font-semibold text-white mb-4">Geskiedenis ({observations.length})</h2>
+          <h2 className="text-sm font-semibold text-white mb-4">History ({observations.length})</h2>
           {observations.length === 0 ? (
-            <p className="text-sm" style={{ color: muted }}>Geen geskiedenisinslae nie.</p>
+            <p className="text-sm" style={{ color: muted }}>No history records.</p>
           ) : (
             <div className="flex flex-col gap-3">
               {observations.map((obs) => {
-                const date = new Date(obs.observedAt).toLocaleDateString("af-ZA");
+                const date = new Date(obs.observedAt).toLocaleDateString("en-ZA");
                 let details: Record<string, unknown> = {};
                 try { details = JSON.parse(obs.details); } catch { /* ignore */ }
 
@@ -106,7 +108,7 @@ export default async function AnimalProfilePage({
                         <span className="text-xs shrink-0" style={{ color: muted }}>{date}</span>
                       </div>
                       {summary && <p className="text-xs" style={{ color: muted }}>{summary}</p>}
-                      <p className="text-xs mt-0.5" style={{ color: "rgba(148,163,184,0.55)" }}>{obs.loggedBy ?? "onbekend"}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(148,163,184,0.55)" }}>{obs.loggedBy ?? "unknown"}</p>
                     </div>
                   </div>
                 );

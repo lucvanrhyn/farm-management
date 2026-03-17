@@ -35,7 +35,7 @@ export default function CampPopup({ camp, stats, grazing }: Props) {
       >
         <p style={{ fontWeight: 700, fontSize: "14px", marginBottom: "6px" }}>{camp.camp_name}</p>
         <p style={{ color: "#94a3b8", fontSize: "12px", marginBottom: "4px" }}>
-          {stats.total} diere
+          {stats.total} animals
         </p>
         <span
           style={{

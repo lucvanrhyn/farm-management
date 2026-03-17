@@ -29,7 +29,7 @@ function Empty({ message }: { message: string }) {
 
 function formatMonth(ym: string): string {
   const [year, month] = ym.split("-");
-  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Des"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${months[parseInt(month, 10) - 1]} ${year?.slice(2)}`;
 }
 
@@ -42,26 +42,26 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* 1. Calving Trend */}
-      <ChartCard title="Kalwingstendens" subtitle="Maandelikse kalf-aanmeldinge (laaste 12 maande)">
+      <ChartCard title="Calving Trend" subtitle="Monthly calf registrations (last 12 months)">
         {calvingChartData.length === 0 ? (
-          <Empty message="Geen kalwingsrekords aangeteken nie" />
+          <Empty message="No calving records recorded" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={calvingChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip formatter={(v) => [v, "Kalwings"]} />
-              <Bar dataKey="count" fill="#22c55e" name="Kalwings" radius={[4, 4, 0, 0]} />
+              <Tooltip formatter={(v) => [v, "Calvings"]} />
+              <Bar dataKey="count" fill="#22c55e" name="Calvings" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
       </ChartCard>
 
       {/* 2. Deaths & Sales */}
-      <ChartCard title="Sterftes & Verkope" subtitle="Maandelikse aftrekking (laaste 12 maande)">
+      <ChartCard title="Deaths & Sales" subtitle="Monthly deductions (last 12 months)">
         {attritionChartData.length === 0 ? (
-          <Empty message="Geen sterftes of verkope aangeteken nie" />
+          <Empty message="No deaths or sales recorded" />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={attritionChartData}>
@@ -70,8 +70,8 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="deaths" fill="#ef4444" name="Sterftes" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="sales" fill="#3b82f6" name="Verkope" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="deaths" fill="#ef4444" name="Deaths" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="sales" fill="#3b82f6" name="Sales" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -79,21 +79,21 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
 
       {/* 3. Withdrawal Tracker — full width */}
       <div className="xl:col-span-2">
-        <ChartCard title="Behandeling Onttrekkingsperiode" subtitle="Diere wat nog nie na mark mag nie">
+        <ChartCard title="Treatment Withdrawal Period" subtitle="Animals not yet cleared for market">
           {withdrawals.length === 0 ? (
             <p className="text-sm text-stone-400 py-4 text-center">
-              ✅ Geen aktiewe onttrekkingsperiodes nie
+              ✅ No active withdrawal periods
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-stone-400 border-b border-stone-100">
-                    <th className="text-left pb-2 font-medium">Dier</th>
-                    <th className="text-left pb-2 font-medium">Kamp</th>
-                    <th className="text-left pb-2 font-medium">Medisyne</th>
-                    <th className="text-left pb-2 font-medium">Datum Behandel</th>
-                    <th className="text-right pb-2 font-medium">Dae Oor</th>
+                    <th className="text-left pb-2 font-medium">Animal</th>
+                    <th className="text-left pb-2 font-medium">Camp</th>
+                    <th className="text-left pb-2 font-medium">Medicine</th>
+                    <th className="text-left pb-2 font-medium">Date Treated</th>
+                    <th className="text-right pb-2 font-medium">Days Left</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -109,7 +109,7 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
                       <td className="py-2 text-stone-700 font-medium">{w.drug}</td>
                       <td className="py-2 text-stone-500 text-xs">{w.observedAt}</td>
                       <td className={`py-2 text-right font-semibold ${w.daysRemaining <= 3 ? "text-red-600" : "text-stone-700"}`}>
-                        {w.daysRemaining} dae
+                        {w.daysRemaining} days
                         {w.daysRemaining <= 3 && " ⚠️"}
                       </td>
                     </tr>
