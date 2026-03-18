@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     });
     revalidatePath('/admin');
     revalidatePath('/admin/observations');
+    revalidatePath('/admin/grafieke');
     revalidatePath('/dashboard');
     return NextResponse.json({ success: true, id: record.id });
   } catch (err) {

@@ -91,6 +91,13 @@ export default function CampInspectionPage({
       sync_status: "pending",
     });
     await updateAnimalCamp(data.animalId, data.destCampId);
+    if (navigator.onLine) {
+      fetch(`/api/animals/${data.animalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentCamp: data.destCampId }),
+      }).catch(() => {/* will sync later */});
+    }
     refreshPendingCount();
     setActiveModal(null);
     // Refresh animal list so moved animal disappears
@@ -186,6 +193,13 @@ export default function CampInspectionPage({
       sync_status: "pending",
     });
     await updateAnimalStatus(selectedAnimalId, "Deceased");
+    if (navigator.onLine) {
+      fetch(`/api/animals/${selectedAnimalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Deceased" }),
+      }).catch(() => {/* will sync later */});
+    }
     refreshPendingCount();
     setActiveModal(null);
     // Refresh animal list so deceased animal is removed from active list

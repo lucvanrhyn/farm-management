@@ -59,5 +59,7 @@ export async function POST(req: NextRequest) {
 
   revalidatePath('/admin');
   revalidatePath('/admin/animals');
+  revalidatePath('/admin/grafieke');
+  revalidatePath('/dashboard');
   return NextResponse.json({ success: true, animal }, { status: 201 });
 }

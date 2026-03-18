@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
 import AdminNav from "@/components/admin/AdminNav";
 import FinansiesClient from "@/components/admin/FinansiesClient";
+import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 
@@ -35,7 +36,10 @@ export default async function FinansiesPage() {
     <div className="flex min-h-screen bg-stone-50">
       <AdminNav active="/admin/finansies" />
       <main className="flex-1 p-8 space-y-2">
-        <h1 className="text-2xl font-bold text-stone-900 mb-6">Finance</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-stone-900">Finance</h1>
+          <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
+        </div>
         <FinansiesClient
           initialTransactions={transactions.map((t) => ({
             ...t,

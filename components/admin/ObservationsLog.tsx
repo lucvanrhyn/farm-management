@@ -218,59 +218,42 @@ export default function ObservationsLog() {
           {loading && <span className="self-center text-xs text-stone-400">Loading...</span>}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-100 bg-stone-50">
-                <th className="text-left px-4 py-3 font-semibold text-stone-600 whitespace-nowrap">Date</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Type</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Camp</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">Animal</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600">By</th>
-                <th className="text-left px-4 py-3 font-semibold text-stone-600 w-64">Details</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && observations.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-stone-400 text-sm">
-                    No observations found.
-                  </td>
-                </tr>
-              )}
-              {observations.map((obs) => (
-                <tr key={obs.id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
-                  <td className="px-4 py-3 text-stone-500 whitespace-nowrap">
-                    {obs.observedAt.split("T")[0]}
-                  </td>
-                  <td className="px-4 py-3">
+        {/* Timeline list */}
+        <div className="rounded-2xl border border-stone-200 bg-white shadow-sm px-4 py-3">
+          {!loading && observations.length === 0 && (
+            <p className="text-center py-10 text-stone-400 text-sm">No observations found.</p>
+          )}
+          <div className="flex flex-col">
+            {observations.map((obs) => (
+              <div key={obs.id} className="flex items-start gap-3 border-l-2 border-amber-500/30 pl-3 py-1.5 ml-1 hover:bg-stone-50/60 transition-colors group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono text-stone-400 whitespace-nowrap">
+                      {obs.observedAt.split("T")[0]}
+                    </span>
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[obs.type] ?? "bg-stone-100 text-stone-600"}`}>
                       {TYPE_LABEL[obs.type] ?? obs.type}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-stone-700 font-medium">{obs.campId}</td>
-                  <td className="px-4 py-3 font-mono text-stone-600 text-xs">{obs.animalId ?? "—"}</td>
-                  <td className="px-4 py-3 text-stone-500 text-xs">{obs.loggedBy ?? "—"}</td>
-                  <td className="px-4 py-3 text-stone-500 text-xs max-w-xs truncate">
+                    <span className="text-xs text-stone-600 font-medium font-mono">{obs.campId}</span>
+                    {obs.animalId && <span className="text-xs font-mono text-stone-500">{obs.animalId}</span>}
+                    {obs.loggedBy && <span className="text-xs text-stone-400">· {obs.loggedBy}</span>}
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5 truncate">
                     {parseDetails(obs.details)}
                     {obs.editedAt && (
-                      <span className="ml-1 text-amber-600 text-xs" title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
+                      <span className="ml-1 text-amber-600" title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setEditTarget(obs)}
-                      className="px-3 py-1 text-xs border border-stone-300 rounded-lg hover:bg-stone-100 text-stone-600"
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditTarget(obs)}
+                  className="shrink-0 px-2.5 py-1 text-xs border border-stone-200 rounded-lg hover:bg-stone-100 text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  Edit
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Pagination */}

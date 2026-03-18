@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 interface ImportResult {
   imported: number;
@@ -14,6 +15,7 @@ interface ImportProgress {
 }
 
 export default function AnimalImporter() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -79,6 +81,7 @@ export default function AnimalImporter() {
             const data = JSON.parse(line.slice(6));
             if (data.done) {
               setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
+              if (data.imported > 0) router.refresh();
             } else if (typeof data.processed === "number") {
               setProgress({ processed: data.processed, total: data.total });
             }
