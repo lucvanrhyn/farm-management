@@ -115,7 +115,7 @@ export default function AnimalsTable({ animals }: Props) {
               ] as [string, string][]).map(([key, label]) => (
                 <th
                   key={key || "__actions"}
-                  className={`text-left px-4 py-3 font-semibold text-stone-600 ${key ? "cursor-pointer select-none hover:text-stone-900" : ""}`}
+                  className={`text-left px-3 py-2 text-xs font-medium uppercase tracking-wide text-stone-500 ${key ? "cursor-pointer select-none hover:text-stone-800" : ""}`}
                   onClick={() => key && toggleSort(key)}
                 >
                   {label}{key && <SortIcon col={key} />}
@@ -126,33 +126,40 @@ export default function AnimalsTable({ animals }: Props) {
           <tbody>
             {pageData.map((animal) => (
               <tr key={animal.animalId} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
-                <td className="px-4 py-3">
-                  <Link href={`/admin/animals/${animal.animalId}`} className="font-mono font-semibold text-stone-800 hover:text-green-700">
+                <td className="px-3 py-2">
+                  <Link href={`/admin/animals/${animal.animalId}`} className="font-mono text-sm font-semibold text-stone-800 hover:text-green-700">
                     {animal.animalId}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getCategoryChipColor(animal.category)}`}>
                     {getCategoryLabel(animal.category)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-stone-600">{animal.sex === "Male" ? "Male" : "Female"}</td>
-                <td className="px-4 py-3 text-stone-500">{getAnimalAge(animal.dateOfBirth ?? undefined)}</td>
-                <td className="px-4 py-3">
-                  <Link href={`/dashboard/camp/${animal.currentCamp}`} className="text-stone-700 hover:text-green-700 font-medium">
+                <td className="px-3 py-2 text-sm text-stone-600">{animal.sex === "Male" ? "Male" : "Female"}</td>
+                <td className="px-3 py-2 text-sm text-stone-500 font-mono">{getAnimalAge(animal.dateOfBirth ?? undefined)}</td>
+                <td className="px-3 py-2">
+                  <Link href={`/dashboard/camp/${animal.currentCamp}`} className="text-sm text-stone-700 hover:text-green-700 font-medium font-mono">
                     {animal.currentCamp}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                    animal.status === "Active" ? "bg-green-100 text-green-700"
-                    : animal.status === "Sold" ? "bg-stone-100 text-stone-600"
-                    : "bg-red-100 text-red-600"
-                  }`}>
-                    {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
+                <td className="px-3 py-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      animal.status === "Active" ? "bg-green-500"
+                      : animal.status === "Sold" ? "bg-stone-400"
+                      : "bg-red-400"
+                    }`} />
+                    <span className={`text-xs ${
+                      animal.status === "Active" ? "text-green-700"
+                      : animal.status === "Sold" ? "text-stone-500"
+                      : "text-red-600"
+                    }`}>
+                      {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
+                    </span>
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   {animal.status === "Active" && (
                     <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
                   )}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
@@ -158,6 +159,13 @@ export async function POST(req: NextRequest) {
 
       send({ done: true, imported, skipped, errors });
       controller.close();
+
+      if (imported > 0) {
+        revalidatePath('/admin');
+        revalidatePath('/admin/animals');
+        revalidatePath('/admin/grafieke');
+        revalidatePath('/dashboard');
+      }
     },
   });
 

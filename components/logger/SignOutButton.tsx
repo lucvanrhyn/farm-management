@@ -32,7 +32,7 @@ export function SignOutButton() {
 
       {/* Sign Out → full sign out */}
       <button
-        onClick={() => signOut({ callbackUrl: "/" })}
+        onClick={() => signOut({ callbackUrl: "/login" })}
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-stone-600 hover:bg-red-950/30 hover:text-red-400 group"
         title="Sign out"
       >

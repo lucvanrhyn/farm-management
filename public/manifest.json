@@ -1,13 +1,13 @@
 {
-  "name": "Trio B Logger",
-  "short_name": "Trio B",
-  "description": "Trio B Boerdery farm management logger",
-  "start_url": "/logger",
+  "name": "FarmTrack",
+  "short_name": "FarmTrack",
+  "description": "Livestock farm management system",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#166534",
-  "background_color": "#052e16",
+  "theme_color": "#1A1510",
+  "background_color": "#1A1510",
   "icons": [
     {
       "src": "/icon-192.png",

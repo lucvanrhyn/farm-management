@@ -143,7 +143,7 @@ export default function HomePage() {
 
         {/* Logout */}
         <button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => signOut({ callbackUrl: "/login" })}
           className="flex items-center gap-2 text-xs transition-colors duration-200"
           style={{ color: "#4A3020", fontFamily: "var(--font-sans)", letterSpacing: "0.04em" }}
           onMouseEnter={(e) => { e.currentTarget.style.color = "#8A5030"; }}

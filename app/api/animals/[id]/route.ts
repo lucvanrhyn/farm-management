@@ -46,6 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   revalidatePath('/admin');
   revalidatePath('/admin/animals');
   revalidatePath('/admin/animals/[id]', 'page');
+  revalidatePath('/admin/grafieke');
   revalidatePath('/dashboard');
   return NextResponse.json(animal);
 }
