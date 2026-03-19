@@ -33,18 +33,24 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
     }
   }
 
+  const isIncome = type === "income";
+  const chipColor = isIncome ? "#4A7C59" : "#A0522D";
+  const chipBg = isIncome ? "rgba(74,124,89,0.15)" : "rgba(160,82,45,0.15)";
+
   return (
     <div className="space-y-2">
-      <h3 className={`text-xs font-semibold uppercase tracking-wide ${type === "income" ? "text-green-700" : "text-red-600"}`}>
-        {type === "income" ? "Income" : "Expenses"}
+      <h3
+        className="text-xs font-semibold uppercase tracking-wide"
+        style={{ color: chipColor }}
+      >
+        {isIncome ? "Income" : "Expenses"}
       </h3>
       <div className="flex flex-wrap gap-2 min-h-8">
         {categories.map((c) => (
           <span
             key={c.id}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-              type === "income" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-            }`}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+            style={{ background: chipBg, color: chipColor }}
           >
             {c.name}
             {!c.isDefault && (
@@ -63,7 +69,7 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
       <div className="flex gap-2">
         <input
           type="text"
-          placeholder={`Add ${type === "income" ? "income" : "expense"} category...`}
+          placeholder={`Add ${isIncome ? "income" : "expense"} category...`}
           value={newVal}
           onChange={(e) => setNewVal(e.target.value)}
           onKeyDown={(e) => {
@@ -72,17 +78,27 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
               handleAdd();
             }
           }}
-          className="flex-1 border border-stone-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="flex-1 rounded-xl px-3 py-1.5 text-sm focus:outline-none"
+          style={{
+            background: "#1A1510",
+            border: "1px solid rgba(139,105,20,0.25)",
+            color: "#F5EBD4",
+          }}
         />
         <button
           onClick={handleAdd}
           disabled={addingType === `add-${type}` || !newVal.trim()}
-          className="px-3 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-sm hover:bg-stone-200 disabled:opacity-40"
+          className="px-3 py-1.5 rounded-xl text-sm disabled:opacity-40 transition-colors"
+          style={{
+            background: "rgba(139,105,20,0.15)",
+            color: "rgba(210,180,140,0.85)",
+            border: "1px solid rgba(139,105,20,0.25)",
+          }}
         >
           ＋
         </button>
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs" style={{ color: "#A0522D" }}>{error}</p>}
     </div>
   );
 }
@@ -131,8 +147,11 @@ export default function CategoryManager({ incomeCategories, expenseCategories, o
   }
 
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-6">
-      <h2 className="text-sm font-semibold text-stone-700">Manage Categories</h2>
+    <div
+      className="rounded-2xl p-6 space-y-6"
+      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+    >
+      <h2 className="text-sm font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Manage Categories</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CategoryList
           categories={incomeCategories}

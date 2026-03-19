@@ -13,18 +13,36 @@ import {
 } from "recharts";
 import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
 
+const cardStyle = {
+  background: "#241C14",
+  border: "1px solid rgba(139,105,20,0.18)",
+  borderRadius: "1rem",
+  padding: "1.5rem",
+};
+const titleStyle = { fontWeight: 600, color: "#F5EBD4", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "rgba(210,180,140,0.55)", padding: "2rem 0", textAlign: "center" as const };
+const gridStroke = "rgba(139,105,20,0.15)";
+const tickStyle = { fill: "rgba(210,180,140,0.55)", fontSize: 11 };
+const tooltipStyle = {
+  backgroundColor: "#1A1510",
+  border: "1px solid rgba(139,105,20,0.3)",
+  color: "#F5EBD4",
+  fontSize: 12,
+};
+
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
-      <h2 className="font-semibold text-stone-700 mb-1">{title}</h2>
-      {subtitle && <p className="text-xs text-stone-400 mb-4">{subtitle}</p>}
-      <div className="mt-3">{children}</div>
+    <div style={cardStyle}>
+      <h2 style={titleStyle}>{title}</h2>
+      {subtitle && <p style={subtitleStyle}>{subtitle}</p>}
+      <div style={{ marginTop: "0.75rem" }}>{children}</div>
     </div>
   );
 }
 
 function Empty({ message }: { message: string }) {
-  return <p className="text-sm text-stone-400 py-8 text-center">{message}</p>;
+  return <p style={emptyStyle}>{message}</p>;
 }
 
 function formatMonth(ym: string): string {
@@ -48,10 +66,10 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={calvingChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip formatter={(v) => [v, "Calvings"]} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+              <XAxis dataKey="month" tick={tickStyle} />
+              <YAxis tick={tickStyle} allowDecimals={false} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, "Calvings"]} />
               <Bar dataKey="count" fill="#22c55e" name="Calvings" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -65,11 +83,11 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={attritionChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+              <XAxis dataKey="month" tick={tickStyle} />
+              <YAxis tick={tickStyle} allowDecimals={false} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "rgba(210,180,140,0.75)" }} />
               <Bar dataKey="deaths" fill="#ef4444" name="Deaths" radius={[4, 4, 0, 0]} />
               <Bar dataKey="sales" fill="#3b82f6" name="Sales" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -81,34 +99,40 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
       <div className="xl:col-span-2">
         <ChartCard title="Treatment Withdrawal Period" subtitle="Animals not yet cleared for market">
           {withdrawals.length === 0 ? (
-            <p className="text-sm text-stone-400 py-4 text-center">
+            <p style={{ ...emptyStyle, padding: "1rem 0" }}>
               ✅ No active withdrawal periods
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr className="text-xs text-stone-400 border-b border-stone-100">
-                    <th className="text-left pb-2 font-medium">Animal</th>
-                    <th className="text-left pb-2 font-medium">Camp</th>
-                    <th className="text-left pb-2 font-medium">Medicine</th>
-                    <th className="text-left pb-2 font-medium">Date Treated</th>
-                    <th className="text-right pb-2 font-medium">Days Left</th>
+                  <tr style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", borderBottom: "1px solid rgba(139,105,20,0.12)" }}>
+                    <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Animal</th>
+                    <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Camp</th>
+                    <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Medicine</th>
+                    <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Date Treated</th>
+                    <th style={{ textAlign: "right", paddingBottom: "0.5rem", fontWeight: 500 }}>Days Left</th>
                   </tr>
                 </thead>
                 <tbody>
                   {withdrawals.map((w) => (
                     <tr
                       key={w.id}
-                      className={`border-b border-stone-50 last:border-0 ${
-                        w.daysRemaining <= 3 ? "bg-red-50" : ""
-                      }`}
+                      style={{
+                        borderBottom: "1px solid rgba(139,105,20,0.08)",
+                        background: w.daysRemaining <= 3 ? "rgba(139,20,20,0.08)" : "transparent",
+                      }}
                     >
-                      <td className="py-2 font-mono text-xs text-stone-700">{w.animalId ?? "—"}</td>
-                      <td className="py-2 text-stone-600">{w.campId}</td>
-                      <td className="py-2 text-stone-700 font-medium">{w.drug}</td>
-                      <td className="py-2 text-stone-500 text-xs">{w.observedAt}</td>
-                      <td className={`py-2 text-right font-semibold ${w.daysRemaining <= 3 ? "text-red-600" : "text-stone-700"}`}>
+                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#F5EBD4" }}>{w.animalId ?? "—"}</td>
+                      <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.75)" }}>{w.campId}</td>
+                      <td style={{ padding: "0.5rem 0", color: "#F5EBD4", fontWeight: 500 }}>{w.drug}</td>
+                      <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.55)", fontSize: "0.75rem" }}>{w.observedAt}</td>
+                      <td style={{
+                        padding: "0.5rem 0",
+                        textAlign: "right",
+                        fontWeight: 600,
+                        color: w.daysRemaining <= 3 ? "#C0574C" : "#F5EBD4",
+                      }}>
                         {w.daysRemaining} days
                         {w.daysRemaining <= 3 && " ⚠️"}
                       </td>

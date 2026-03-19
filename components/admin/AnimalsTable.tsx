@@ -13,6 +13,11 @@ interface Props {
   animals: PrismaAnimal[];
 }
 
+const farmInput =
+  "rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(139,105,20,0.5)]";
+const farmSelect =
+  "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(139,105,20,0.5)]";
+
 export default function AnimalsTable({ animals }: Props) {
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
@@ -24,17 +29,19 @@ export default function AnimalsTable({ animals }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return animals.filter((a) => {
-      if (q && !a.animalId.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
-      if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
-      if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
-      if (statusFilter !== "all" && a.status !== statusFilter) return false;
-      return true;
-    }).sort((a, b) => {
-      const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? "");
-      const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
-      return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
+    return animals
+      .filter((a) => {
+        if (q && !a.animalId.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
+        if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
+        if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
+        if (statusFilter !== "all" && a.status !== statusFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? "");
+        const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
   }, [animals, search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -51,7 +58,7 @@ export default function AnimalsTable({ animals }: Props) {
   }
 
   const SortIcon = ({ col }: { col: string }) => (
-    <span className="ml-1 opacity-40 text-xs">
+    <span className="ml-1 text-xs" style={{ opacity: 0.4 }}>
       {sortKey === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
     </span>
   );
@@ -67,43 +74,82 @@ export default function AnimalsTable({ animals }: Props) {
           type="text"
           placeholder="Search ID or name..."
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="border border-stone-300 rounded-xl px-4 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-green-500"
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className={farmInput}
+          style={{
+            background: "#241C14",
+            border: "1px solid rgba(139,105,20,0.25)",
+            color: "#F5EBD4",
+            width: "14rem",
+          }}
         />
         <select
           value={campFilter}
           onChange={(e) => { setCampFilter(e.target.value); setPage(1); }}
-          className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+          className={farmSelect}
+          style={{
+            background: "#241C14",
+            border: "1px solid rgba(139,105,20,0.25)",
+            color: "#F5EBD4",
+          }}
         >
           <option value="all">All Camps</option>
-          {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
+          {CAMPS.map((c) => (
+            <option key={c.camp_id} value={c.camp_id}>
+              {c.camp_name}
+            </option>
+          ))}
         </select>
         <select
           value={categoryFilter}
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+          className={farmSelect}
+          style={{
+            background: "#241C14",
+            border: "1px solid rgba(139,105,20,0.25)",
+            color: "#F5EBD4",
+          }}
         >
           <option value="all">All Categories</option>
-          {categories.map((c) => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {getCategoryLabel(c)}
+            </option>
+          ))}
         </select>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+          className={farmSelect}
+          style={{
+            background: "#241C14",
+            border: "1px solid rgba(139,105,20,0.25)",
+            color: "#F5EBD4",
+          }}
         >
           <option value="all">All Statuses</option>
-          {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
-        <span className="ml-auto text-sm text-stone-500 self-center">
+        <span className="ml-auto text-sm self-center" style={{ color: "rgba(210,180,140,0.55)" }}>
           {filtered.length.toLocaleString()} animals found
         </span>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-sm">
+      <div
+        className="overflow-x-auto rounded-2xl"
+        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+      >
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-stone-100 bg-stone-50">
+            <tr style={{ borderBottom: "1px solid rgba(139,105,20,0.15)" }}>
               {([
                 ["animalId", "ID"],
                 ["category", "Category"],
@@ -115,19 +161,33 @@ export default function AnimalsTable({ animals }: Props) {
               ] as [string, string][]).map(([key, label]) => (
                 <th
                   key={key || "__actions"}
-                  className={`text-left px-3 py-2 text-xs font-medium uppercase tracking-wide text-stone-500 ${key ? "cursor-pointer select-none hover:text-stone-800" : ""}`}
+                  className={`text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${key ? "cursor-pointer select-none" : ""}`}
+                  style={{ color: "rgba(210,180,140,0.55)", background: "rgba(139,105,20,0.06)" }}
                   onClick={() => key && toggleSort(key)}
                 >
-                  {label}{key && <SortIcon col={key} />}
+                  {label}
+                  {key && <SortIcon col={key} />}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {pageData.map((animal) => (
-              <tr key={animal.animalId} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
+              <tr
+                key={animal.animalId}
+                className="transition-colors"
+                style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.06)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
                 <td className="px-3 py-2">
-                  <Link href={`/admin/animals/${animal.animalId}`} className="font-mono text-sm font-semibold text-stone-800 hover:text-green-700">
+                  <Link
+                    href={`/admin/animals/${animal.animalId}`}
+                    className="font-mono text-sm font-semibold transition-colors"
+                    style={{ color: "#F5EBD4" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#F5EBD4")}
+                  >
                     {animal.animalId}
                   </Link>
                 </td>
@@ -136,25 +196,43 @@ export default function AnimalsTable({ animals }: Props) {
                     {getCategoryLabel(animal.category)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-sm text-stone-600">{animal.sex === "Male" ? "Male" : "Female"}</td>
-                <td className="px-3 py-2 text-sm text-stone-500 font-mono">{getAnimalAge(animal.dateOfBirth ?? undefined)}</td>
+                <td className="px-3 py-2 text-sm" style={{ color: "rgba(210,180,140,0.75)" }}>
+                  {animal.sex === "Male" ? "Male" : "Female"}
+                </td>
+                <td className="px-3 py-2 text-sm font-mono" style={{ color: "rgba(210,180,140,0.6)" }}>
+                  {getAnimalAge(animal.dateOfBirth ?? undefined)}
+                </td>
                 <td className="px-3 py-2">
-                  <Link href={`/dashboard/camp/${animal.currentCamp}`} className="text-sm text-stone-700 hover:text-green-700 font-medium font-mono">
+                  <Link
+                    href={`/dashboard/camp/${animal.currentCamp}`}
+                    className="text-sm font-medium font-mono transition-colors"
+                    style={{ color: "rgba(210,180,140,0.85)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(210,180,140,0.85)")}
+                  >
                     {animal.currentCamp}
                   </Link>
                 </td>
                 <td className="px-3 py-2">
                   <span className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      animal.status === "Active" ? "bg-green-500"
-                      : animal.status === "Sold" ? "bg-stone-400"
-                      : "bg-red-400"
-                    }`} />
-                    <span className={`text-xs ${
-                      animal.status === "Active" ? "text-green-700"
-                      : animal.status === "Sold" ? "text-stone-500"
-                      : "text-red-600"
-                    }`}>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{
+                        background:
+                          animal.status === "Active" ? "#4A7C59"
+                          : animal.status === "Sold" ? "rgba(210,180,140,0.4)"
+                          : "#8B3A3A",
+                      }}
+                    />
+                    <span
+                      className="text-xs"
+                      style={{
+                        color:
+                          animal.status === "Active" ? "#4A7C59"
+                          : animal.status === "Sold" ? "rgba(210,180,140,0.55)"
+                          : "#8B3A3A",
+                      }}
+                    >
                       {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
                     </span>
                   </span>
@@ -176,15 +254,27 @@ export default function AnimalsTable({ animals }: Props) {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
+            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
+            style={{
+              border: "1px solid rgba(139,105,20,0.25)",
+              color: "rgba(210,180,140,0.85)",
+              background: "transparent",
+            }}
           >
             ← Previous
           </button>
-          <span className="text-sm text-stone-500">Page {page} of {totalPages}</span>
+          <span className="text-sm font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>
+            Page {page} of {totalPages}
+          </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
+            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
+            style={{
+              border: "1px solid rgba(139,105,20,0.25)",
+              color: "rgba(210,180,140,0.85)",
+              background: "transparent",
+            }}
           >
             Next →
           </button>
