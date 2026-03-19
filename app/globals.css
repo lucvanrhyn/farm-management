@@ -95,21 +95,21 @@ body {
 
 /* Admin table row hover — used in Server Components (can't use JS handlers) */
 .admin-row:hover {
-  background: rgba(139,105,20,0.06) !important;
+  background: rgba(122,92,30,0.05) !important;
 }
 
-/* Warm farm design tokens */
+/* Warm farm design tokens (admin light palette — matches website v2) */
 :root {
-  --farm-bg:      #1A1510;
-  --farm-surface: #241C14;
-  --farm-border:  rgba(140, 100, 60, 0.25);
-  --farm-cream:   #F5EBD4;
-  --farm-tan:     #D2B48C;
-  --farm-amber:   #8B6914;
-  --farm-rust:    #A0522D;
-  --farm-brown:   #5C3D2E;
+  --farm-bg:      #FAFAF8;
+  --farm-surface: #F5F2EE;
+  --farm-border:  #E0D5C8;
+  --farm-text:    #1C1815;
+  --farm-muted:   #6B5C4E;
+  --farm-subtle:  #9C8E7A;
+  --farm-amber:   #7A5C1E;
+  --farm-rust:    #8B4513;
   --status-good:  #4A7C59;
-  --status-fair:  #8B6914;
-  --status-poor:  #A0522D;
+  --status-fair:  #7A5C1E;
+  --status-poor:  #8B4513;
   --status-bad:   #8B3A3A;
 }

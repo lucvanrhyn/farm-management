@@ -75,8 +75,8 @@ export default function DangerZone() {
           {!confirming ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium" style={{ color: "#F5EBD4" }}>Remove All Farm Data</p>
-                <p className="text-xs mt-0.5" style={{ color: "rgba(210,180,140,0.5)" }}>
+                <p className="text-sm font-medium" style={{ color: "#1C1815" }}>Remove All Farm Data</p>
+                <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
                   Permanently deletes all animals, observations, transactions and categories. Users and settings are preserved.
                 </p>
               </div>
@@ -94,9 +94,9 @@ export default function DangerZone() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <p className="text-xs" style={{ color: "rgba(210,180,140,0.75)" }}>
+              <p className="text-xs" style={{ color: "#6B5C4E" }}>
                 This action is <span className="font-semibold" style={{ color: "#C0574C" }}>irreversible</span>.
-                Type <span className="font-mono font-bold" style={{ color: "#F5EBD4" }}>RESET</span> to confirm.
+                Type <span className="font-mono font-bold" style={{ color: "#1C1815" }}>RESET</span> to confirm.
               </p>
               <input
                 type="text"
@@ -105,9 +105,9 @@ export default function DangerZone() {
                 placeholder="Type RESET"
                 className="w-48 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none"
                 style={{
-                  background: "#1A1510",
+                  background: "#FFFFFF",
                   border: "1px solid rgba(192,87,76,0.4)",
-                  color: "#F5EBD4",
+                  color: "#1C1815",
                 }}
                 autoFocus
               />
@@ -127,8 +127,8 @@ export default function DangerZone() {
                   disabled={isLoading}
                   className="px-3 py-1.5 text-sm rounded-lg transition-colors"
                   style={{
-                    border: "1px solid rgba(139,105,20,0.25)",
-                    color: "rgba(210,180,140,0.65)",
+                    border: "1px solid #E0D5C8",
+                    color: "#6B5C4E",
                     background: "transparent",
                   }}
                 >

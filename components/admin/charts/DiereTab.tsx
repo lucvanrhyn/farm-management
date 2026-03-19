@@ -14,16 +14,18 @@ import {
 import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
 
 const cardStyle = {
-  background: "#241C14",
-  border: "1px solid rgba(139,105,20,0.18)",
+  background: "#FFFFFF",
+  border: "1px solid #E0D5C8",
   borderRadius: "1rem",
   padding: "1.5rem",
 };
-const titleStyle = { fontWeight: 600, color: "#F5EBD4", marginBottom: "0.25rem" };
-const subtitleStyle = { fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", marginBottom: "1rem" };
-const emptyStyle = { fontSize: "0.875rem", color: "rgba(210,180,140,0.55)", padding: "2rem 0", textAlign: "center" as const };
-const gridStroke = "rgba(139,105,20,0.15)";
-const tickStyle = { fill: "rgba(210,180,140,0.55)", fontSize: 11 };
+const titleStyle = { fontWeight: 600, color: "#1C1815", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "#9C8E7A", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "#9C8E7A", padding: "2rem 0", textAlign: "center" as const };
+const gridStroke = "#E0D5C8";
+const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+
+// Tooltips stay dark for contrast on light background
 const tooltipStyle = {
   backgroundColor: "#1A1510",
   border: "1px solid rgba(139,105,20,0.3)",
@@ -87,7 +89,7 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
               <XAxis dataKey="month" tick={tickStyle} />
               <YAxis tick={tickStyle} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "rgba(210,180,140,0.75)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
               <Bar dataKey="deaths" fill="#ef4444" name="Deaths" radius={[4, 4, 0, 0]} />
               <Bar dataKey="sales" fill="#3b82f6" name="Sales" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -106,7 +108,7 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
             <div className="overflow-x-auto">
               <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", borderBottom: "1px solid rgba(139,105,20,0.12)" }}>
+                  <tr style={{ fontSize: "0.75rem", color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Animal</th>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Camp</th>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Medicine</th>
@@ -119,19 +121,19 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
                     <tr
                       key={w.id}
                       style={{
-                        borderBottom: "1px solid rgba(139,105,20,0.08)",
-                        background: w.daysRemaining <= 3 ? "rgba(139,20,20,0.08)" : "transparent",
+                        borderBottom: "1px solid #E0D5C8",
+                        background: w.daysRemaining <= 3 ? "rgba(139,20,20,0.06)" : "transparent",
                       }}
                     >
-                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#F5EBD4" }}>{w.animalId ?? "—"}</td>
-                      <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.75)" }}>{w.campId}</td>
-                      <td style={{ padding: "0.5rem 0", color: "#F5EBD4", fontWeight: 500 }}>{w.drug}</td>
-                      <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.55)", fontSize: "0.75rem" }}>{w.observedAt}</td>
+                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#1C1815" }}>{w.animalId ?? "—"}</td>
+                      <td style={{ padding: "0.5rem 0", color: "#6B5C4E" }}>{w.campId}</td>
+                      <td style={{ padding: "0.5rem 0", color: "#1C1815", fontWeight: 500 }}>{w.drug}</td>
+                      <td style={{ padding: "0.5rem 0", color: "#9C8E7A", fontSize: "0.75rem" }}>{w.observedAt}</td>
                       <td style={{
                         padding: "0.5rem 0",
                         textAlign: "right",
                         fontWeight: 600,
-                        color: w.daysRemaining <= 3 ? "#C0574C" : "#F5EBD4",
+                        color: w.daysRemaining <= 3 ? "#C0574C" : "#1C1815",
                       }}>
                         {w.daysRemaining} days
                         {w.daysRemaining <= 3 && " ⚠️"}

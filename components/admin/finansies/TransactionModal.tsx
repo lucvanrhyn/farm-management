@@ -27,9 +27,9 @@ interface Props {
 }
 
 const fieldStyle: React.CSSProperties = {
-  background: "#1A1510",
-  border: "1px solid rgba(139,105,20,0.25)",
-  color: "#F5EBD4",
+  background: "#FFFFFF",
+  border: "1px solid #E0D5C8",
+  color: "#1C1815",
   borderRadius: "0.75rem",
   padding: "0.5rem 1rem",
   fontSize: "0.875rem",
@@ -91,9 +91,9 @@ export default function TransactionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
       <div
         className="rounded-2xl w-full max-w-md p-6 space-y-4"
-        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.25)" }}
+        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
-        <h2 className="text-lg font-bold" style={{ color: "#F5EBD4" }}>
+        <h2 className="text-lg font-bold" style={{ color: "#1C1815" }}>
           {isEdit ? "Edit Transaction" : "New Transaction"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -106,7 +106,7 @@ export default function TransactionModal({
               style={
                 type === "income"
                   ? { background: "rgba(74,124,89,0.2)", border: "1px solid rgba(74,124,89,0.5)", color: "#4A7C59" }
-                  : { background: "transparent", border: "1px solid rgba(139,105,20,0.25)", color: "rgba(210,180,140,0.55)" }
+                  : { background: "transparent", border: "1px solid #E0D5C8", color: "#9C8E7A" }
               }
             >
               Income
@@ -118,7 +118,7 @@ export default function TransactionModal({
               style={
                 type === "expense"
                   ? { background: "rgba(160,82,45,0.2)", border: "1px solid rgba(160,82,45,0.5)", color: "#A0522D" }
-                  : { background: "transparent", border: "1px solid rgba(139,105,20,0.25)", color: "rgba(210,180,140,0.55)" }
+                  : { background: "transparent", border: "1px solid #E0D5C8", color: "#9C8E7A" }
               }
             >
               Expense
@@ -126,11 +126,11 @@ export default function TransactionModal({
           </div>
 
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Category *</label>
+            <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Category *</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              style={{ ...fieldStyle, colorScheme: "dark" }}
+              style={{ ...fieldStyle, colorScheme: "light" }}
               required
             >
               <option value="">Select category...</option>
@@ -141,7 +141,7 @@ export default function TransactionModal({
           </div>
 
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Amount (R) *</label>
+            <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Amount (R) *</label>
             <input
               type="number"
               min="0"
@@ -155,18 +155,18 @@ export default function TransactionModal({
           </div>
 
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Date *</label>
+            <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Date *</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              style={{ ...fieldStyle, colorScheme: "dark" }}
+              style={{ ...fieldStyle, colorScheme: "light" }}
               required
             />
           </div>
 
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Description</label>
+            <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Description</label>
             <input
               type="text"
               placeholder="Short description..."
@@ -184,8 +184,8 @@ export default function TransactionModal({
               onClick={onClose}
               className="flex-1 py-2 rounded-xl text-sm transition-colors"
               style={{
-                border: "1px solid rgba(139,105,20,0.25)",
-                color: "rgba(210,180,140,0.65)",
+                border: "1px solid #E0D5C8",
+                color: "#6B5C4E",
                 background: "transparent",
               }}
             >

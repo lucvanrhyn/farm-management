@@ -24,7 +24,7 @@ const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
   animal_movement: { color: "#9B7ED4", bg: "rgba(155,126,212,0.15)" },
   reproduction:    { color: "#D47EB5", bg: "rgba(212,126,181,0.15)" },
   treatment:       { color: "#D4904A", bg: "rgba(212,144,74,0.15)" },
-  death:           { color: "rgba(210,180,140,0.55)", bg: "rgba(210,180,140,0.1)" },
+  death:           { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" },
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -37,10 +37,10 @@ const TYPE_LABEL: Record<string, string> = {
   death:           "Death",
 };
 
-const darkSelect: React.CSSProperties = {
-  background: "#1A1510",
-  border: "1px solid rgba(139,105,20,0.25)",
-  color: "#F5EBD4",
+const lightSelect: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E0D5C8",
+  color: "#1C1815",
   borderRadius: "0.75rem",
   padding: "0.375rem 0.75rem",
   fontSize: "0.875rem",
@@ -107,38 +107,38 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
         className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4"
-        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.25)" }}
+        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold" style={{ color: "#F5EBD4" }}>Edit Observation</h3>
+          <h3 className="text-base font-bold" style={{ color: "#1C1815" }}>Edit Observation</h3>
           <button
             onClick={onClose}
             className="text-xl leading-none transition-opacity hover:opacity-70"
-            style={{ color: "rgba(210,180,140,0.55)" }}
+            style={{ color: "#9C8E7A" }}
           >
             ×
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "rgba(210,180,140,0.55)" }}>
-          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
-          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Camp:</span> {obs.campId}</span>
-          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
-          {obs.animalId && <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Animal:</span> {obs.animalId}</span>}
-          {obs.loggedBy && <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Logged by:</span> {obs.loggedBy}</span>}
+        <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "#9C8E7A" }}>
+          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
+          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Camp:</span> {obs.campId}</span>
+          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
+          {obs.animalId && <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Animal:</span> {obs.animalId}</span>}
+          {obs.loggedBy && <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Logged by:</span> {obs.loggedBy}</span>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "rgba(210,180,140,0.65)" }}>Details (JSON)</label>
+          <label className="block text-xs font-semibold mb-1" style={{ color: "#9C8E7A" }}>Details (JSON)</label>
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
             rows={6}
             className="w-full rounded-xl px-3 py-2 text-sm font-mono focus:outline-none resize-none"
             style={{
-              background: "#1A1510",
-              border: "1px solid rgba(139,105,20,0.25)",
-              color: "#F5EBD4",
+              background: "#FFFFFF",
+              border: "1px solid #E0D5C8",
+              color: "#1C1815",
             }}
           />
         </div>
@@ -150,8 +150,8 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-xl transition-colors"
             style={{
-              color: "rgba(210,180,140,0.65)",
-              border: "1px solid rgba(139,105,20,0.25)",
+              color: "#6B5C4E",
+              border: "1px solid #E0D5C8",
               background: "transparent",
             }}
           >
@@ -231,7 +231,7 @@ export default function ObservationsLog() {
           <select
             value={campFilter}
             onChange={(e) => handleFilterChange(e.target.value, typeFilter)}
-            style={darkSelect}
+            style={lightSelect}
           >
             <option value="all">All Camps</option>
             {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
@@ -240,38 +240,38 @@ export default function ObservationsLog() {
           <select
             value={typeFilter}
             onChange={(e) => handleFilterChange(campFilter, e.target.value as ObservationType | "all")}
-            style={darkSelect}
+            style={lightSelect}
           >
             {OBS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
 
-          {loading && <span className="self-center text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>Loading...</span>}
+          {loading && <span className="self-center text-xs" style={{ color: "#9C8E7A" }}>Loading...</span>}
         </div>
 
         {/* Timeline list */}
         <div
           className="rounded-2xl px-4 py-3"
-          style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
         >
           {!loading && observations.length === 0 && (
-            <p className="text-center py-10 text-sm" style={{ color: "rgba(210,180,140,0.4)" }}>
+            <p className="text-center py-10 text-sm" style={{ color: "#9C8E7A" }}>
               No observations found.
             </p>
           )}
           <div className="flex flex-col">
             {observations.map((obs) => {
-              const badge = TYPE_BADGE[obs.type] ?? { color: "rgba(210,180,140,0.55)", bg: "rgba(210,180,140,0.1)" };
+              const badge = TYPE_BADGE[obs.type] ?? { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" };
               return (
                 <div
                   key={obs.id}
                   className="flex items-start gap-3 pl-3 py-1.5 ml-1 transition-colors group"
-                  style={{ borderLeft: "2px solid rgba(139,105,20,0.3)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.05)")}
+                  style={{ borderLeft: "2px solid rgba(122,92,30,0.25)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono whitespace-nowrap" style={{ color: "rgba(210,180,140,0.45)" }}>
+                      <span className="text-xs font-mono whitespace-nowrap" style={{ color: "#9C8E7A" }}>
                         {obs.observedAt.split("T")[0]}
                       </span>
                       <span
@@ -280,21 +280,21 @@ export default function ObservationsLog() {
                       >
                         {TYPE_LABEL[obs.type] ?? obs.type}
                       </span>
-                      <span className="text-xs font-medium font-mono" style={{ color: "rgba(210,180,140,0.75)" }}>
+                      <span className="text-xs font-medium font-mono" style={{ color: "#6B5C4E" }}>
                         {obs.campId}
                       </span>
                       {obs.animalId && (
-                        <span className="text-xs font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>
+                        <span className="text-xs font-mono" style={{ color: "#9C8E7A" }}>
                           {obs.animalId}
                         </span>
                       )}
                       {obs.loggedBy && (
-                        <span className="text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>
+                        <span className="text-xs" style={{ color: "#9C8E7A" }}>
                           · {obs.loggedBy}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(210,180,140,0.5)" }}>
+                    <p className="text-xs mt-0.5 truncate" style={{ color: "#9C8E7A" }}>
                       {parseDetails(obs.details)}
                       {obs.editedAt && (
                         <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
@@ -305,8 +305,8 @@ export default function ObservationsLog() {
                     onClick={() => setEditTarget(obs)}
                     className="shrink-0 px-2.5 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{
-                      border: "1px solid rgba(139,105,20,0.25)",
-                      color: "rgba(210,180,140,0.55)",
+                      border: "1px solid #E0D5C8",
+                      color: "#9C8E7A",
                       background: "transparent",
                     }}
                   >
@@ -325,21 +325,21 @@ export default function ObservationsLog() {
             disabled={page === 1 || loading}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid rgba(139,105,20,0.25)",
-              color: "rgba(210,180,140,0.85)",
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
               background: "transparent",
             }}
           >
             ← Previous
           </button>
-          <span className="text-sm font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>Page {page}</span>
+          <span className="text-sm font-mono" style={{ color: "#9C8E7A" }}>Page {page}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={!hasMore || loading}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid rgba(139,105,20,0.25)",
-              color: "rgba(210,180,140,0.85)",
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
               background: "transparent",
             }}
           >

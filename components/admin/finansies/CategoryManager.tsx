@@ -80,9 +80,9 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
           }}
           className="flex-1 rounded-xl px-3 py-1.5 text-sm focus:outline-none"
           style={{
-            background: "#1A1510",
-            border: "1px solid rgba(139,105,20,0.25)",
-            color: "#F5EBD4",
+            background: "#FFFFFF",
+            border: "1px solid #E0D5C8",
+            color: "#1C1815",
           }}
         />
         <button
@@ -90,9 +90,9 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
           disabled={addingType === `add-${type}` || !newVal.trim()}
           className="px-3 py-1.5 rounded-xl text-sm disabled:opacity-40 transition-colors"
           style={{
-            background: "rgba(139,105,20,0.15)",
-            color: "rgba(210,180,140,0.85)",
-            border: "1px solid rgba(139,105,20,0.25)",
+            background: "#F5F2EE",
+            color: "#6B5C4E",
+            border: "1px solid #E0D5C8",
           }}
         >
           ＋
@@ -149,9 +149,9 @@ export default function CategoryManager({ incomeCategories, expenseCategories, o
   return (
     <div
       className="rounded-2xl p-6 space-y-6"
-      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
     >
-      <h2 className="text-sm font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Manage Categories</h2>
+      <h2 className="text-sm font-semibold" style={{ color: "#6B5C4E" }}>Manage Categories</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CategoryList
           categories={incomeCategories}

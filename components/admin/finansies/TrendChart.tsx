@@ -76,22 +76,22 @@ export default function TrendChart({ transactions }: Props) {
   return (
     <div
       className="rounded-2xl p-6"
-      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "#6B5C4E" }}>
           Income vs Expenses
         </h2>
-        <div className="flex gap-1 rounded-lg p-1" style={{ background: "rgba(139,105,20,0.1)" }}>
+        <div className="flex gap-1 rounded-lg p-1" style={{ background: "rgba(122,92,30,0.08)" }}>
           {(["week", "month", "year"] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
               style={{
-                background: period === p ? "#241C14" : "transparent",
-                color: period === p ? "#F5EBD4" : "rgba(210,180,140,0.55)",
-                boxShadow: period === p ? "0 1px 3px rgba(0,0,0,0.3)" : undefined,
+                background: period === p ? "#FFFFFF" : "transparent",
+                color: period === p ? "#1C1815" : "#9C8E7A",
+                boxShadow: period === p ? "0 1px 3px rgba(0,0,0,0.1)" : undefined,
               }}
             >
               {p === "week" ? "Weekly" : p === "month" ? "Monthly" : "Yearly"}
@@ -100,17 +100,17 @@ export default function TrendChart({ transactions }: Props) {
         </div>
       </div>
       {data.length === 0 ? (
-        <p className="text-sm text-center py-12" style={{ color: "rgba(210,180,140,0.4)" }}>
+        <p className="text-sm text-center py-12" style={{ color: "#9C8E7A" }}>
           No transactions.
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(139,105,20,0.12)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "rgba(210,180,140,0.55)" }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E0D5C8" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9C8E7A" }} />
             <YAxis
               tickFormatter={(v) => `R${(v / 1000).toFixed(0)}k`}
-              tick={{ fontSize: 11, fill: "rgba(210,180,140,0.55)" }}
+              tick={{ fontSize: 11, fill: "#9C8E7A" }}
             />
             <Tooltip
               contentStyle={{ background: "#1A1510", border: "1px solid rgba(139,105,20,0.3)", borderRadius: 8 }}
@@ -121,7 +121,7 @@ export default function TrendChart({ transactions }: Props) {
                 name === "income" ? "Income" : "Expenses",
               ]}
             />
-            <Legend formatter={(v) => (v === "income" ? "Income" : "Expenses")} wrapperStyle={{ color: "rgba(210,180,140,0.7)" }} />
+            <Legend formatter={(v) => (v === "income" ? "Income" : "Expenses")} wrapperStyle={{ color: "#6B5C4E" }} />
             <Bar dataKey="income" fill="#4A7C59" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expense" fill="#A0522D" radius={[4, 4, 0, 0]} />
           </BarChart>

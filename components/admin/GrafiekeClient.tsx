@@ -33,16 +33,16 @@ export default function GrafiekeClient({ data }: { data: GrafiekeData }) {
   return (
     <div>
       {/* Tab switcher */}
-      <div className="flex gap-1 mb-8 p-1 rounded-xl w-fit" style={{ background: "rgba(139,105,20,0.1)" }}>
+      <div className="flex gap-1 mb-8 p-1 rounded-xl w-fit" style={{ background: "rgba(122,92,30,0.08)" }}>
         {(["kampe", "diere"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className="px-5 py-2 text-sm font-medium rounded-lg transition-colors"
             style={{
-              background: tab === t ? "#241C14" : "transparent",
-              color: tab === t ? "#F5EBD4" : "rgba(210,180,140,0.55)",
-              boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.3)" : undefined,
+              background: tab === t ? "#FFFFFF" : "transparent",
+              color: tab === t ? "#1C1815" : "#9C8E7A",
+              boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.1)" : undefined,
             }}
           >
             {t === "kampe" ? "📍 Camps" : "🐄 Animals"}
