@@ -74,25 +74,35 @@ export default function TransactionLedger({
     return `R${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
+  const darkSelect = {
+    background: "#1A1510",
+    border: "1px solid rgba(139,105,20,0.25)",
+    color: "#F5EBD4",
+    borderRadius: "0.75rem",
+    padding: "0.375rem 0.75rem",
+    fontSize: "0.875rem",
+    outline: "none",
+  } as React.CSSProperties;
+
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+    >
       {/* Toolbar */}
-      <div className="p-4 border-b border-stone-100 flex flex-wrap gap-3 items-center">
-        <h2 className="text-sm font-semibold text-stone-700 mr-2">Transactions</h2>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="border border-stone-300 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
+      <div
+        className="p-4 flex flex-wrap gap-3 items-center"
+        style={{ borderBottom: "1px solid rgba(139,105,20,0.12)" }}
+      >
+        <h2 className="text-sm font-semibold mr-2" style={{ color: "rgba(210,180,140,0.85)" }}>
+          Transactions
+        </h2>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={darkSelect}>
           <option value="all">All types</option>
           <option value="income">Income</option>
           <option value="expense">Expenses</option>
         </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border border-stone-300 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={darkSelect}>
           <option value="all">All categories</option>
           {allCategories.map((c) => (
             <option key={c.id} value={c.name}>{c.name}</option>
@@ -102,18 +112,19 @@ export default function TransactionLedger({
           type="date"
           value={fromDate}
           onChange={(e) => setFromDate(e.target.value)}
-          className="border border-stone-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          style={{ ...darkSelect, colorScheme: "dark" }}
         />
-        <span className="text-stone-400 text-sm">–</span>
+        <span className="text-sm" style={{ color: "rgba(210,180,140,0.4)" }}>–</span>
         <input
           type="date"
           value={toDate}
           onChange={(e) => setToDate(e.target.value)}
-          className="border border-stone-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          style={{ ...darkSelect, colorScheme: "dark" }}
         />
         <button
           onClick={() => setModal("add")}
-          className="ml-auto px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700"
+          className="ml-auto px-4 py-1.5 rounded-xl text-sm font-medium transition-colors"
+          style={{ background: "#4A7C59", color: "#F5EBD4" }}
         >
           ＋ Add
         </button>
@@ -121,12 +132,21 @@ export default function TransactionLedger({
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-12">No transactions found.</p>
+        <p className="text-sm text-center py-12" style={{ color: "rgba(210,180,140,0.4)" }}>
+          No transactions found.
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-stone-100 bg-stone-50 text-stone-600 text-xs uppercase tracking-wide">
+              <tr
+                className="text-xs uppercase tracking-wide"
+                style={{
+                  borderBottom: "1px solid rgba(139,105,20,0.15)",
+                  background: "rgba(139,105,20,0.06)",
+                  color: "rgba(210,180,140,0.55)",
+                }}
+              >
                 <th className="text-left px-4 py-3">Date</th>
                 <th className="text-left px-4 py-3">Type</th>
                 <th className="text-left px-4 py-3">Category</th>
@@ -138,39 +158,53 @@ export default function TransactionLedger({
             </thead>
             <tbody>
               {filtered.map((tx) => (
-                <tr key={tx.id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
-                  <td className="px-4 py-3 text-stone-600 whitespace-nowrap">
+                <tr
+                  key={tx.id}
+                  className="transition-colors"
+                  style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.06)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs" style={{ color: "rgba(210,180,140,0.65)" }}>
                     {new Date(tx.date).toLocaleDateString("en-ZA")}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                      tx.type === "income" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>
+                    <span
+                      className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={
+                        tx.type === "income"
+                          ? { background: "rgba(74,124,89,0.2)", color: "#4A7C59" }
+                          : { background: "rgba(160,82,45,0.2)", color: "#A0522D" }
+                      }
+                    >
                       {tx.type === "income" ? "Income" : "Expense"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-stone-700">{tx.category}</td>
-                  <td className="px-4 py-3 text-stone-500 max-w-xs truncate">{tx.description}</td>
+                  <td className="px-4 py-3" style={{ color: "rgba(210,180,140,0.85)" }}>{tx.category}</td>
+                  <td className="px-4 py-3 max-w-xs truncate" style={{ color: "rgba(210,180,140,0.55)" }}>{tx.description}</td>
                   <td className="px-4 py-3">
                     {tx.animalId && (
                       <Link
                         href={`/admin/animals/${tx.animalId}`}
-                        className="font-mono text-xs text-green-700 hover:underline"
+                        className="font-mono text-xs hover:underline"
+                        style={{ color: "#8B6914" }}
                       >
                         {tx.animalId}
                       </Link>
                     )}
                   </td>
-                  <td className={`px-4 py-3 text-right font-semibold tabular-nums ${
-                    tx.type === "income" ? "text-green-700" : "text-red-600"
-                  }`}>
+                  <td
+                    className="px-4 py-3 text-right font-semibold tabular-nums"
+                    style={{ color: tx.type === "income" ? "#4A7C59" : "#A0522D" }}
+                  >
                     {tx.type === "expense" ? "−" : "+"}{formatRand(tx.amount)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setModal(tx)}
-                        className="text-stone-400 hover:text-stone-700 text-xs"
+                        className="text-xs transition-opacity hover:opacity-70"
+                        style={{ color: "rgba(210,180,140,0.45)" }}
                         title="Edit"
                       >
                         ✏️
@@ -180,13 +214,15 @@ export default function TransactionLedger({
                           <button
                             onClick={() => deleteTransaction(tx.id)}
                             disabled={deleting === tx.id}
-                            className="text-xs text-red-600 hover:text-red-800 font-medium"
+                            className="text-xs font-medium"
+                            style={{ color: "#8B3A3A" }}
                           >
                             {deleting === tx.id ? "..." : "Yes"}
                           </button>
                           <button
                             onClick={() => setConfirmDelete(null)}
-                            className="text-xs text-stone-400 hover:text-stone-600"
+                            className="text-xs"
+                            style={{ color: "rgba(210,180,140,0.45)" }}
                           >
                             No
                           </button>
@@ -194,7 +230,8 @@ export default function TransactionLedger({
                       ) : (
                         <button
                           onClick={() => setConfirmDelete(tx.id)}
-                          className="text-stone-400 hover:text-red-500 text-xs"
+                          className="text-xs transition-opacity hover:opacity-70"
+                          style={{ color: "rgba(210,180,140,0.45)" }}
                           title="Delete"
                         >
                           🗑️

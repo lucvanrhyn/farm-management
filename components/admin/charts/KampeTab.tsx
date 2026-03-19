@@ -27,18 +27,30 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const CAMP_SIZES = new Map(CAMPS.map((c) => [c.camp_id, c.size_hectares]));
 
+const cardStyle = {
+  background: "#241C14",
+  border: "1px solid rgba(139,105,20,0.18)",
+  borderRadius: "1rem",
+  padding: "1.5rem",
+};
+const titleStyle = { fontWeight: 600, color: "#F5EBD4", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "rgba(210,180,140,0.55)", padding: "2rem 0", textAlign: "center" as const };
+const gridStroke = "rgba(139,105,20,0.15)";
+const tickStyle = { fill: "rgba(210,180,140,0.55)", fontSize: 11 };
+
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
-      <h2 className="font-semibold text-stone-700 mb-1">{title}</h2>
-      {subtitle && <p className="text-xs text-stone-400 mb-4">{subtitle}</p>}
-      <div className="mt-3">{children}</div>
+    <div style={cardStyle}>
+      <h2 style={titleStyle}>{title}</h2>
+      {subtitle && <p style={subtitleStyle}>{subtitle}</p>}
+      <div style={{ marginTop: "0.75rem" }}>{children}</div>
     </div>
   );
 }
 
 function Empty({ message }: { message: string }) {
-  return <p className="text-sm text-stone-400 py-8 text-center">{message}</p>;
+  return <p style={emptyStyle}>{message}</p>;
 }
 
 export default function KampeTab({ data }: { data: GrafiekeData }) {
@@ -70,9 +82,16 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
 
   // ── Heatmap ──
   const heatmapCamps = Array.from(new Set(heatmap.map((h) => h.campId))).sort();
-  const heatmapDates = Array.from(new Set(heatmap.map((h) => h.date))).sort().slice(-14); // last 14 days
+  const heatmapDates = Array.from(new Set(heatmap.map((h) => h.date))).sort().slice(-14);
   const heatmapLookup = new Map(heatmap.map((h) => [`${h.campId}__${h.date}`, h.count]));
   const maxCount = Math.max(1, ...heatmap.map((h) => h.count));
+
+  const tooltipStyle = {
+    backgroundColor: "#1A1510",
+    border: "1px solid rgba(139,105,20,0.3)",
+    color: "#F5EBD4",
+    fontSize: 12,
+  };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -83,10 +102,11 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={conditionTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} />
-              <YAxis domain={[0, 4]} tick={{ fontSize: 11 }} tickFormatter={(v) => ["", "Overgrazed", "Poor", "Fair", "Good"][v] ?? v} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+              <XAxis dataKey="date" tick={tickStyle} tickFormatter={(v) => v.slice(5)} />
+              <YAxis domain={[0, 4]} tick={tickStyle} tickFormatter={(v) => ["", "Overgrazed", "Poor", "Fair", "Good"][v] ?? v} />
               <Tooltip
+                contentStyle={tooltipStyle}
                 formatter={(v) => [["", "Overgrazed", "Poor", "Fair", "Good"][Math.round(Number(v))] ?? v, "Quality"]}
                 labelFormatter={(l) => `Date: ${String(l)}`}
               />
@@ -104,10 +124,10 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={healthByCamp} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="campId" tick={{ fontSize: 11 }} width={80} />
-              <Tooltip formatter={(v) => [v, "Incidents"]} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+              <XAxis type="number" tick={tickStyle} allowDecimals={false} />
+              <YAxis type="category" dataKey="campId" tick={tickStyle} width={80} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, "Incidents"]} />
               <Bar dataKey="count" fill="#ef4444" name="Incidents" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -121,11 +141,11 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={headcountChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
-              <XAxis dataKey="campId" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+              <XAxis dataKey="campId" tick={{ ...tickStyle, fontSize: 10 }} />
+              <YAxis tick={tickStyle} allowDecimals={false} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "rgba(210,180,140,0.75)" }} />
               {allCategories.map((cat) => (
                 <Bar key={cat} dataKey={cat} stackId="a" fill={CATEGORY_COLORS[cat] ?? "#94a3b8"} name={cat} />
               ))}
@@ -141,10 +161,10 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={stockingData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" />
-              <XAxis dataKey="campId" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => [`${v} LSU/ha`, "Grazing pressure"]} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+              <XAxis dataKey="campId" tick={{ ...tickStyle, fontSize: 10 }} />
+              <YAxis tick={tickStyle} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} LSU/ha`, "Grazing pressure"]} />
               <ReferenceLine y={1} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "Max", fontSize: 10, fill: "#ef4444" }} />
               <Bar dataKey="lsu" name="LSU/ha" fill="#C4A030" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -158,12 +178,12 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
           <Empty message="No inspection data" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="text-xs border-collapse">
+            <table style={{ fontSize: "0.75rem", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th className="text-left p-1 text-stone-400 font-normal w-24">Camp</th>
+                  <th style={{ textAlign: "left", padding: "0.25rem", color: "rgba(210,180,140,0.55)", fontWeight: 400, width: "6rem" }}>Camp</th>
                   {heatmapDates.map((d) => (
-                    <th key={d} className="p-1 text-stone-400 font-normal text-center w-7">
+                    <th key={d} style={{ padding: "0.25rem", color: "rgba(210,180,140,0.55)", fontWeight: 400, textAlign: "center", width: "1.75rem" }}>
                       {d.slice(8)}
                     </th>
                   ))}
@@ -172,15 +192,19 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
               <tbody>
                 {heatmapCamps.map((campId) => (
                   <tr key={campId}>
-                    <td className="p-1 text-stone-600 font-medium pr-3">{campId}</td>
+                    <td style={{ padding: "0.25rem", color: "rgba(210,180,140,0.75)", fontWeight: 500, paddingRight: "0.75rem" }}>{campId}</td>
                     {heatmapDates.map((date) => {
                       const count = heatmapLookup.get(`${campId}__${date}`) ?? 0;
                       const opacity = count === 0 ? 0.05 : 0.2 + (count / maxCount) * 0.8;
                       return (
-                        <td key={date} className="p-0.5">
+                        <td key={date} style={{ padding: "0.125rem" }}>
                           <div
-                            className="w-6 h-6 rounded"
-                            style={{ backgroundColor: `rgba(74, 55, 40, ${opacity})` }}
+                            style={{
+                              width: "1.5rem",
+                              height: "1.5rem",
+                              borderRadius: "0.25rem",
+                              backgroundColor: `rgba(139,105,20,${opacity})`,
+                            }}
                             title={`${campId} – ${date}: ${count} inspections`}
                           />
                         </td>
@@ -199,25 +223,25 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
         {movements.length === 0 ? (
           <Empty message="No movements recorded" />
         ) : (
-          <div className="overflow-y-auto max-h-56">
-            <table className="w-full text-sm">
+          <div style={{ overflowY: "auto", maxHeight: "14rem" }}>
+            <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
               <thead>
-                <tr className="text-xs text-stone-400 border-b border-stone-100">
-                  <th className="text-left pb-2 font-medium">Date</th>
-                  <th className="text-left pb-2 font-medium">Animal</th>
-                  <th className="text-left pb-2 font-medium">From</th>
-                  <th className="text-left pb-2 font-medium">To</th>
-                  <th className="text-left pb-2 font-medium">Logged by</th>
+                <tr style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", borderBottom: "1px solid rgba(139,105,20,0.12)" }}>
+                  <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Date</th>
+                  <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Animal</th>
+                  <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>From</th>
+                  <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>To</th>
+                  <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Logged by</th>
                 </tr>
               </thead>
               <tbody>
                 {movements.map((m) => (
-                  <tr key={m.id} className="border-b border-stone-50 last:border-0">
-                    <td className="py-2 text-stone-500 text-xs">{m.date}</td>
-                    <td className="py-2 font-mono text-xs text-stone-700">{m.animalId ?? "—"}</td>
-                    <td className="py-2 text-stone-600">{m.fromCamp}</td>
-                    <td className="py-2 text-stone-600">→ {m.toCamp}</td>
-                    <td className="py-2 text-stone-400 text-xs">{m.loggedBy ?? "—"}</td>
+                  <tr key={m.id} style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}>
+                    <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.55)", fontSize: "0.75rem" }}>{m.date}</td>
+                    <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#F5EBD4" }}>{m.animalId ?? "—"}</td>
+                    <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.75)" }}>{m.fromCamp}</td>
+                    <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.75)" }}>→ {m.toCamp}</td>
+                    <td style={{ padding: "0.5rem 0", color: "rgba(210,180,140,0.45)", fontSize: "0.75rem" }}>{m.loggedBy ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

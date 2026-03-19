@@ -103,17 +103,37 @@ export default function AnimalImporter() {
   return (
     <div className="space-y-6">
       {/* Template download */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+      <div style={{
+        background: "rgba(139,105,20,0.08)",
+        border: "1px solid rgba(139,105,20,0.25)",
+        borderRadius: "0.75rem",
+        padding: "1rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}>
         <div>
-          <p className="text-sm font-semibold text-amber-800">File Format</p>
-          <p className="text-xs text-amber-700 mt-0.5">
-            Required columns: <code className="bg-amber-100 px-1 rounded">Animal ID, Name, Category, Sex, Camp ID</code>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#F5EBD4" }}>File Format</p>
+          <p style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.75)", marginTop: "0.125rem" }}>
+            Required columns:{" "}
+            <code style={{ background: "rgba(139,105,20,0.15)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "#C4A030" }}>
+              Animal ID, Name, Category, Sex, Camp ID
+            </code>
           </p>
         </div>
         <a
           href="/templates/animals-template.xlsx"
           download
-          className="text-xs font-semibold text-amber-700 border border-amber-300 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
+          style={{
+            fontSize: "0.75rem",
+            fontWeight: 600,
+            color: "#C4A030",
+            border: "1px solid rgba(139,105,20,0.35)",
+            borderRadius: "0.5rem",
+            padding: "0.375rem 0.75rem",
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+          }}
         >
           Download template
         </a>
@@ -124,11 +144,15 @@ export default function AnimalImporter() {
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => !loading && inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
-          loading
-            ? "border-stone-200 bg-stone-50 cursor-not-allowed"
-            : "border-stone-300 cursor-pointer hover:border-stone-400 hover:bg-stone-50"
-        }`}
+        style={{
+          border: `2px dashed ${loading ? "rgba(139,105,20,0.15)" : "rgba(139,105,20,0.3)"}`,
+          borderRadius: "0.75rem",
+          padding: "2.5rem",
+          textAlign: "center",
+          cursor: loading ? "not-allowed" : "pointer",
+          background: loading ? "rgba(139,105,20,0.03)" : "transparent",
+          transition: "border-color 0.15s, background 0.15s",
+        }}
       >
         <input
           ref={inputRef}
@@ -139,15 +163,17 @@ export default function AnimalImporter() {
         />
         {file ? (
           <div>
-            <p className="text-2xl mb-2">📄</p>
-            <p className="font-semibold text-stone-700">{file.name}</p>
-            <p className="text-sm text-stone-400 mt-1">{(file.size / 1024).toFixed(0)} KB — click to change</p>
+            <p style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>📄</p>
+            <p style={{ fontWeight: 600, color: "#F5EBD4" }}>{file.name}</p>
+            <p style={{ fontSize: "0.875rem", color: "rgba(210,180,140,0.55)", marginTop: "0.25rem" }}>
+              {(file.size / 1024).toFixed(0)} KB — click to change
+            </p>
           </div>
         ) : (
           <div>
-            <p className="text-3xl mb-3">📂</p>
-            <p className="font-semibold text-stone-600">Drop a file here or click to select</p>
-            <p className="text-sm text-stone-400 mt-1">.xlsx, .xls or .csv</p>
+            <p style={{ fontSize: "1.875rem", marginBottom: "0.75rem" }}>📂</p>
+            <p style={{ fontWeight: 600, color: "rgba(210,180,140,0.85)" }}>Drop a file here or click to select</p>
+            <p style={{ fontSize: "0.875rem", color: "rgba(210,180,140,0.45)", marginTop: "0.25rem" }}>.xlsx, .xls or .csv</p>
           </div>
         )}
       </div>
@@ -159,8 +185,8 @@ export default function AnimalImporter() {
         className="w-full py-3 rounded-xl font-bold transition-colors disabled:cursor-not-allowed"
         style={
           file && !loading
-            ? { backgroundColor: "#78350f", color: "#fff" }
-            : { backgroundColor: "#e7e5e4", color: "#78716c" }
+            ? { backgroundColor: "#8B6914", color: "#F5EBD4" }
+            : { backgroundColor: "rgba(139,105,20,0.1)", color: "rgba(210,180,140,0.35)" }
         }
       >
         {loading ? "Importing..." : "Import Animals"}
@@ -169,25 +195,43 @@ export default function AnimalImporter() {
       {/* Progress bar */}
       {loading && (
         <div className="space-y-2">
-          <div className="flex justify-between items-center text-xs text-stone-500">
-            <span className="flex items-center gap-1.5">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "rgba(210,180,140,0.55)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <span
-                className="inline-block w-3 h-3 rounded-full border-2 border-stone-300 border-t-amber-700 animate-spin"
+                style={{
+                  display: "inline-block",
+                  width: "0.75rem",
+                  height: "0.75rem",
+                  borderRadius: "50%",
+                  border: "2px solid rgba(139,105,20,0.25)",
+                  borderTopColor: "#8B6914",
+                  animation: "spin 0.8s linear infinite",
+                }}
               />
               {progress ? `${progress.processed} of ${progress.total} animals processed...` : "Loading file..."}
             </span>
-            {progress && <span className="font-semibold text-stone-600">{progressPct}%</span>}
+            {progress && <span style={{ fontWeight: 600, color: "rgba(210,180,140,0.75)" }}>{progressPct}%</span>}
           </div>
-          <div className="w-full bg-stone-200 rounded-full h-2 overflow-hidden">
+          <div style={{ width: "100%", background: "rgba(139,105,20,0.1)", borderRadius: "9999px", height: "0.5rem", overflow: "hidden" }}>
             {progress ? (
               <div
-                className="h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progressPct}%`, backgroundColor: "#78350f" }}
+                style={{
+                  height: "0.5rem",
+                  borderRadius: "9999px",
+                  transition: "width 0.3s",
+                  width: `${progressPct}%`,
+                  backgroundColor: "#8B6914",
+                }}
               />
             ) : (
               <div
-                className="h-2 rounded-full animate-pulse"
-                style={{ width: "30%", backgroundColor: "#d6d3d1" }}
+                style={{
+                  height: "0.5rem",
+                  borderRadius: "9999px",
+                  width: "30%",
+                  backgroundColor: "rgba(139,105,20,0.25)",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                }}
               />
             )}
           </div>
@@ -196,32 +240,61 @@ export default function AnimalImporter() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-red-700">Error</p>
-          <p className="text-sm text-red-600 mt-1">{error}</p>
+        <div style={{
+          background: "rgba(139,20,20,0.08)",
+          border: "1px solid rgba(160,50,50,0.3)",
+          borderRadius: "0.75rem",
+          padding: "1rem",
+        }}>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#C0574C" }}>Error</p>
+          <p style={{ fontSize: "0.875rem", color: "rgba(192,87,76,0.85)", marginTop: "0.25rem" }}>{error}</p>
         </div>
       )}
 
       {/* Result */}
       {result && (
-        <div className={`rounded-xl p-5 border ${result.skipped === 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
-          <p className="font-bold text-stone-800 mb-3">Import Results</p>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-white rounded-lg p-3 border border-green-100">
-              <p className="text-2xl font-bold text-green-700">{result.imported}</p>
-              <p className="text-xs text-stone-500 mt-0.5">Animals imported</p>
+        <div style={{
+          borderRadius: "0.75rem",
+          padding: "1.25rem",
+          border: `1px solid ${result.skipped === 0 ? "rgba(74,124,89,0.35)" : "rgba(139,105,20,0.3)"}`,
+          background: result.skipped === 0 ? "rgba(74,124,89,0.08)" : "rgba(139,105,20,0.06)",
+        }}>
+          <p style={{ fontWeight: 700, color: "#F5EBD4", marginBottom: "0.75rem" }}>Import Results</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+            <div style={{
+              background: "rgba(74,124,89,0.12)",
+              border: "1px solid rgba(74,124,89,0.25)",
+              borderRadius: "0.5rem",
+              padding: "0.75rem",
+            }}>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4A7C59" }}>{result.imported}</p>
+              <p style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", marginTop: "0.125rem" }}>Animals imported</p>
             </div>
-            <div className="bg-white rounded-lg p-3 border border-amber-100">
-              <p className="text-2xl font-bold text-amber-600">{result.skipped}</p>
-              <p className="text-xs text-stone-500 mt-0.5">Skipped</p>
+            <div style={{
+              background: "rgba(139,105,20,0.1)",
+              border: "1px solid rgba(139,105,20,0.25)",
+              borderRadius: "0.5rem",
+              padding: "0.75rem",
+            }}>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#C4A030" }}>{result.skipped}</p>
+              <p style={{ fontSize: "0.75rem", color: "rgba(210,180,140,0.55)", marginTop: "0.125rem" }}>Skipped</p>
             </div>
           </div>
           {result.errors.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-stone-600 mb-2">Errors ({result.errors.length}):</p>
-              <ul className="space-y-1 max-h-40 overflow-y-auto">
+              <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(210,180,140,0.75)", marginBottom: "0.5rem" }}>
+                Errors ({result.errors.length}):
+              </p>
+              <ul style={{ maxHeight: "10rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                 {result.errors.map((e, i) => (
-                  <li key={i} className="text-xs text-red-600 font-mono bg-white rounded px-2 py-1">
+                  <li key={i} style={{
+                    fontSize: "0.75rem",
+                    color: "#C0574C",
+                    fontFamily: "monospace",
+                    background: "rgba(139,20,20,0.08)",
+                    borderRadius: "0.25rem",
+                    padding: "0.125rem 0.5rem",
+                  }}>
                     {e}
                   </li>
                 ))}

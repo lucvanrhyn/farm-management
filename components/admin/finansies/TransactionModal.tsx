@@ -26,6 +26,17 @@ interface Props {
   onSaved: () => void;
 }
 
+const fieldStyle: React.CSSProperties = {
+  background: "#1A1510",
+  border: "1px solid rgba(139,105,20,0.25)",
+  color: "#F5EBD4",
+  borderRadius: "0.75rem",
+  padding: "0.5rem 1rem",
+  fontSize: "0.875rem",
+  outline: "none",
+  width: "100%",
+};
+
 export default function TransactionModal({
   transaction,
   incomeCategories,
@@ -46,7 +57,6 @@ export default function TransactionModal({
 
   const categories = type === "income" ? incomeCategories : expenseCategories;
 
-  // Reset category when type changes if current category doesn't belong
   useEffect(() => {
     const valid = categories.some((c) => c.name === category);
     if (!valid) setCategory(categories[0]?.name ?? "");
@@ -78,9 +88,12 @@ export default function TransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-bold text-stone-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div
+        className="rounded-2xl w-full max-w-md p-6 space-y-4"
+        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.25)" }}
+      >
+        <h2 className="text-lg font-bold" style={{ color: "#F5EBD4" }}>
           {isEdit ? "Edit Transaction" : "New Transaction"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,33 +102,35 @@ export default function TransactionModal({
             <button
               type="button"
               onClick={() => setType("income")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+              className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
+              style={
                 type === "income"
-                  ? "bg-green-50 border-green-400 text-green-700"
-                  : "border-stone-300 text-stone-500 hover:bg-stone-50"
-              }`}
+                  ? { background: "rgba(74,124,89,0.2)", border: "1px solid rgba(74,124,89,0.5)", color: "#4A7C59" }
+                  : { background: "transparent", border: "1px solid rgba(139,105,20,0.25)", color: "rgba(210,180,140,0.55)" }
+              }
             >
               Income
             </button>
             <button
               type="button"
               onClick={() => setType("expense")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
+              className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
+              style={
                 type === "expense"
-                  ? "bg-red-50 border-red-400 text-red-700"
-                  : "border-stone-300 text-stone-500 hover:bg-stone-50"
-              }`}
+                  ? { background: "rgba(160,82,45,0.2)", border: "1px solid rgba(160,82,45,0.5)", color: "#A0522D" }
+                  : { background: "transparent", border: "1px solid rgba(139,105,20,0.25)", color: "rgba(210,180,140,0.55)" }
+              }
             >
               Expense
             </button>
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 mb-1 block">Category *</label>
+            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Category *</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              style={{ ...fieldStyle, colorScheme: "dark" }}
               required
             >
               <option value="">Select category...</option>
@@ -126,7 +141,7 @@ export default function TransactionModal({
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 mb-1 block">Amount (R) *</label>
+            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Amount (R) *</label>
             <input
               type="number"
               min="0"
@@ -134,47 +149,53 @@ export default function TransactionModal({
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              style={fieldStyle}
               required
             />
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 mb-1 block">Date *</label>
+            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Date *</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              style={{ ...fieldStyle, colorScheme: "dark" }}
               required
             />
           </div>
 
           <div>
-            <label className="text-xs text-stone-500 mb-1 block">Description</label>
+            <label className="text-xs mb-1 block" style={{ color: "rgba(210,180,140,0.55)" }}>Description</label>
             <input
               type="text"
               placeholder="Short description..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              style={fieldStyle}
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm" style={{ color: "#C0574C" }}>{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 rounded-xl border border-stone-300 text-sm text-stone-600 hover:bg-stone-50"
+              className="flex-1 py-2 rounded-xl text-sm transition-colors"
+              style={{
+                border: "1px solid rgba(139,105,20,0.25)",
+                color: "rgba(210,180,140,0.65)",
+                background: "transparent",
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+              className="flex-1 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors"
+              style={{ background: "#4A7C59", color: "#F5EBD4" }}
             >
               {loading ? "Saving..." : isEdit ? "Save Changes" : "Add"}
             </button>

@@ -41,12 +41,12 @@ export default async function GrafiekePage() {
   ]);
 
   return (
-    <div className="flex min-h-screen bg-stone-50">
+    <div className="flex min-h-screen bg-[#17130E]">
       <AdminNav active="/admin/grafieke" />
       <main className="flex-1 p-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-stone-800">Charts</h1>
-          <p className="text-stone-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-[#F5EBD4]">Charts</h1>
+          <p className="text-sm mt-1" style={{ color: "rgba(210,180,140,0.6)" }}>
             30-day overview · Farm Management
           </p>
         </div>

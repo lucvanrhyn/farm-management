@@ -6,13 +6,13 @@ export const dynamic = "force-dynamic";
 
 export default function AdminObservationsPage() {
   return (
-    <div className="flex min-h-screen bg-stone-50">
+    <div className="flex min-h-screen bg-[#17130E]">
       <AdminNav active="/admin/observations" />
       <main className="flex-1 p-8">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-stone-800">Observations</h1>
-            <p className="text-stone-500 text-sm mt-1">All field observations — search, filter and edit</p>
+            <h1 className="text-2xl font-bold text-[#F5EBD4]">Observations</h1>
+            <p className="text-sm mt-1" style={{ color: "rgba(210,180,140,0.6)" }}>All field observations — search, filter and edit</p>
           </div>
           <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />
         </div>

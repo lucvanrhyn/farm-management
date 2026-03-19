@@ -1,5 +1,4 @@
 import AdminNav from "@/components/admin/AdminNav";
-import StatsCard from "@/components/admin/StatsCard";
 import DangerZone from "@/components/admin/DangerZone";
 import { prisma } from "@/lib/prisma";
 import { CAMPS } from "@/lib/dummy-data";
@@ -9,6 +8,7 @@ import {
   countHealthIssuesSince,
   countInspectedToday,
 } from "@/lib/server/camp-status";
+import { PawPrint, Tent, ClipboardCheck, HeartPulse } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -45,36 +45,108 @@ export default async function AdminPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-stone-50">
+    <div className="flex min-h-screen bg-[#17130E]">
       <AdminNav active="/admin" />
       <main className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-stone-800">Operations Overview</h1>
-          <p className="text-stone-400 text-xs mt-0.5 font-mono">{new Date().toISOString().split("T")[0]} · Farm Management</p>
+          <h1 className="text-xl font-bold text-[#F5EBD4]">Operations Overview</h1>
+          <p className="text-xs mt-0.5 font-mono" style={{ color: "rgba(210,180,140,0.5)" }}>{new Date().toISOString().split("T")[0]} · Farm Management</p>
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-8">
-          <StatsCard label="Total Animals" value={totalAnimals.toLocaleString()} sub="Active records" color="green" icon="🐄" />
-          <StatsCard label="Total Camps" value={totalCamps} sub={`${totalCamps} camps on farm`} color="blue" icon="🌿" />
-          <StatsCard label="Inspections Today" value={`${inspectedToday} / ${totalCamps}`} sub="Camps checked" color="amber" icon="✅" />
-          <StatsCard label="Health Issues" value={healthIssuesThisWeek} sub="Recorded this week" color={healthIssuesThisWeek > 3 ? "red" : "green"} icon="🏥" />
+        {/* Connected stats bar — Delivoice pattern */}
+        <div
+          className="rounded-2xl overflow-hidden mb-8"
+          style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+        >
+          <div className="grid grid-cols-4">
+            {[
+              {
+                icon: PawPrint,
+                iconColor: "#4A7C59",
+                badge: "Active",
+                badgeColor: "rgba(74,124,89,0.15)",
+                badgeText: "#4A7C59",
+                value: totalAnimals.toLocaleString(),
+                label: "Total Animals",
+              },
+              {
+                icon: Tent,
+                iconColor: "#8B6914",
+                badge: "Farm Layout",
+                badgeColor: "rgba(139,105,20,0.15)",
+                badgeText: "#8B6914",
+                value: totalCamps,
+                label: "Total Camps",
+              },
+              {
+                icon: ClipboardCheck,
+                iconColor: inspectedToday === totalCamps ? "#4A7C59" : "#8B6914",
+                badge: `${Math.round((inspectedToday / (totalCamps || 1)) * 100)}% done`,
+                badgeColor: inspectedToday === totalCamps ? "rgba(74,124,89,0.15)" : "rgba(139,105,20,0.15)",
+                badgeText: inspectedToday === totalCamps ? "#4A7C59" : "#8B6914",
+                value: `${inspectedToday}/${totalCamps}`,
+                label: "Inspections Today",
+              },
+              {
+                icon: HeartPulse,
+                iconColor: healthIssuesThisWeek === 0 ? "#4A7C59" : healthIssuesThisWeek > 3 ? "#8B3A3A" : "#A0522D",
+                badge: healthIssuesThisWeek === 0 ? "All clear" : healthIssuesThisWeek > 3 ? "Critical" : "Monitor",
+                badgeColor: healthIssuesThisWeek === 0 ? "rgba(74,124,89,0.15)" : healthIssuesThisWeek > 3 ? "rgba(139,58,58,0.15)" : "rgba(160,82,45,0.15)",
+                badgeText: healthIssuesThisWeek === 0 ? "#4A7C59" : healthIssuesThisWeek > 3 ? "#8B3A3A" : "#A0522D",
+                value: healthIssuesThisWeek,
+                label: "Health Issues · 7d",
+              },
+            ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label }, i) => (
+              <div
+                key={label}
+                className="p-5"
+                style={{
+                  borderRight: i < 3 ? "1px solid rgba(139,105,20,0.12)" : undefined,
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: iconColor }} />
+                  <span
+                    className="text-[10px] font-semibold rounded-full px-2 py-0.5"
+                    style={{ background: badgeColor, color: badgeText }}
+                  >
+                    {badge}
+                  </span>
+                </div>
+                <p className="text-3xl font-bold font-mono" style={{ color: "#F5EBD4" }}>{value}</p>
+                <p className="text-xs mt-1" style={{ color: "rgba(210,180,140,0.55)" }}>{label}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 mb-3">Recent Health Incidents</h2>
+          <div
+            className="rounded-xl p-4"
+            style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+          >
+            <h2
+              className="text-xs font-semibold uppercase tracking-wide mb-3"
+              style={{ color: "rgba(210,180,140,0.65)" }}
+            >
+              Recent Health Incidents
+            </h2>
             {recentHealth.length === 0 ? (
-              <p className="text-xs text-stone-400">No health incidents recorded.</p>
+              <p className="text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>No health incidents recorded.</p>
             ) : (
               <div className="flex flex-col">
                 {recentHealth.map((obs) => (
-                  <div key={obs.id} className="flex items-start gap-2.5 py-1.5 border-b border-stone-50 last:border-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                  <div
+                    key={obs.id}
+                    className="flex items-start gap-2.5 py-1.5 last:border-0"
+                    style={{ borderBottom: "1px solid rgba(139,105,20,0.1)" }}
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: "#A0522D" }} />
                     <div>
-                      <p className="text-xs font-medium text-stone-700 font-mono">
+                      <p className="text-xs font-medium font-mono" style={{ color: "#F5EBD4" }}>
                         {obs.animalId ?? "Unknown"} · Camp {obs.campId}
                       </p>
-                      <p className="text-xs text-stone-400">
+                      <p className="text-xs" style={{ color: "rgba(210,180,140,0.5)" }}>
                         {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"}
                         {" · "}
                         {obs.observedAt.split("T")[0]}
@@ -86,21 +158,41 @@ export default async function AdminPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 mb-3">Camp Status Summary</h2>
-            <div className="flex flex-col gap-1.5">
+          <div
+            className="rounded-xl p-4"
+            style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+          >
+            <h2
+              className="text-xs font-semibold uppercase tracking-wide mb-4"
+              style={{ color: "rgba(210,180,140,0.65)" }}
+            >
+              Camp Status Summary
+            </h2>
+            <div className="flex flex-col gap-3">
               {[
-                { label: "Good grazing", quality: "Good", color: "bg-green-500" },
-                { label: "Fair grazing", quality: "Fair", color: "bg-yellow-500" },
-                { label: "Poor grazing", quality: "Poor", color: "bg-orange-500" },
-                { label: "Overgrazed", quality: "Overgrazed", color: "bg-red-500" },
-              ].map(({ label, quality, color }) => (
-                <div key={quality} className="flex items-center gap-2.5">
-                  <div className={`w-2 h-2 rounded-full ${color} shrink-0`} />
-                  <span className="text-xs text-stone-600 flex-1">{label}</span>
-                  <span className="text-xs font-mono font-semibold text-stone-700">{grazingCounts[quality] ?? 0} camps</span>
-                </div>
-              ))}
+                { label: "Good grazing",  quality: "Good",       dot: "#4A7C59" },
+                { label: "Fair grazing",  quality: "Fair",       dot: "#8B6914" },
+                { label: "Poor grazing",  quality: "Poor",       dot: "#A0522D" },
+                { label: "Overgrazed",    quality: "Overgrazed", dot: "#8B3A3A" },
+              ].map(({ label, quality, dot }) => {
+                const count = grazingCounts[quality] ?? 0;
+                const pct = Math.round((count / (totalCamps || 1)) * 100);
+                return (
+                  <div key={quality}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
+                      <span className="text-xs flex-1" style={{ color: "rgba(210,180,140,0.75)" }}>{label}</span>
+                      <span className="text-xs font-mono font-semibold" style={{ color: "#F5EBD4" }}>{count}</span>
+                    </div>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(139,105,20,0.12)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, background: dot }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

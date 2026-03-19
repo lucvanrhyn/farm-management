@@ -17,14 +17,14 @@ const OBS_TYPES: { value: ObservationType | "all"; label: string }[] = [
   { value: "death",           label: "Death" },
 ];
 
-const TYPE_BADGE: Record<string, string> = {
-  camp_check:      "bg-blue-100 text-blue-700",
-  camp_condition:  "bg-teal-100 text-teal-700",
-  health_issue:    "bg-red-100 text-red-700",
-  animal_movement: "bg-purple-100 text-purple-700",
-  reproduction:    "bg-pink-100 text-pink-700",
-  treatment:       "bg-orange-100 text-orange-700",
-  death:           "bg-stone-200 text-stone-700",
+const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
+  camp_check:      { color: "#5B9BD5", bg: "rgba(91,155,213,0.15)" },
+  camp_condition:  { color: "#4AAFA0", bg: "rgba(74,175,160,0.15)" },
+  health_issue:    { color: "#C0574C", bg: "rgba(192,87,76,0.15)" },
+  animal_movement: { color: "#9B7ED4", bg: "rgba(155,126,212,0.15)" },
+  reproduction:    { color: "#D47EB5", bg: "rgba(212,126,181,0.15)" },
+  treatment:       { color: "#D4904A", bg: "rgba(212,144,74,0.15)" },
+  death:           { color: "rgba(210,180,140,0.55)", bg: "rgba(210,180,140,0.1)" },
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -35,6 +35,16 @@ const TYPE_LABEL: Record<string, string> = {
   reproduction:    "Reproduction",
   treatment:       "Treatment",
   death:           "Death",
+};
+
+const darkSelect: React.CSSProperties = {
+  background: "#1A1510",
+  border: "1px solid rgba(139,105,20,0.25)",
+  color: "#F5EBD4",
+  borderRadius: "0.75rem",
+  padding: "0.375rem 0.75rem",
+  fontSize: "0.875rem",
+  outline: "none",
 };
 
 function parseDetails(raw: string): string {
@@ -94,44 +104,64 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div
+        className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4"
+        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.25)" }}
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-stone-800">Edit Observation</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 text-xl leading-none">×</button>
+          <h3 className="text-base font-bold" style={{ color: "#F5EBD4" }}>Edit Observation</h3>
+          <button
+            onClick={onClose}
+            className="text-xl leading-none transition-opacity hover:opacity-70"
+            style={{ color: "rgba(210,180,140,0.55)" }}
+          >
+            ×
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs text-stone-500">
-          <span><span className="font-semibold text-stone-700">Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
-          <span><span className="font-semibold text-stone-700">Camp:</span> {obs.campId}</span>
-          <span><span className="font-semibold text-stone-700">Date:</span> {obs.observedAt.split("T")[0]}</span>
-          {obs.animalId && <span><span className="font-semibold text-stone-700">Animal:</span> {obs.animalId}</span>}
-          {obs.loggedBy && <span><span className="font-semibold text-stone-700">Logged by:</span> {obs.loggedBy}</span>}
+        <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "rgba(210,180,140,0.55)" }}>
+          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
+          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Camp:</span> {obs.campId}</span>
+          <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
+          {obs.animalId && <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Animal:</span> {obs.animalId}</span>}
+          {obs.loggedBy && <span><span className="font-semibold" style={{ color: "rgba(210,180,140,0.85)" }}>Logged by:</span> {obs.loggedBy}</span>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-stone-600 mb-1">Details (JSON)</label>
+          <label className="block text-xs font-semibold mb-1" style={{ color: "rgba(210,180,140,0.65)" }}>Details (JSON)</label>
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
             rows={6}
-            className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+            className="w-full rounded-xl px-3 py-2 text-sm font-mono focus:outline-none resize-none"
+            style={{
+              background: "#1A1510",
+              border: "1px solid rgba(139,105,20,0.25)",
+              color: "#F5EBD4",
+            }}
           />
         </div>
 
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
 
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-stone-600 border border-stone-300 rounded-xl hover:bg-stone-50"
+            className="px-4 py-2 text-sm rounded-xl transition-colors"
+            style={{
+              color: "rgba(210,180,140,0.65)",
+              border: "1px solid rgba(139,105,20,0.25)",
+              background: "transparent",
+            }}
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 text-sm bg-green-700 text-white rounded-xl hover:bg-green-800 disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
+            style={{ background: "#4A7C59", color: "#F5EBD4" }}
           >
             {saving ? "Saving..." : "Save"}
           </button>
@@ -201,7 +231,7 @@ export default function ObservationsLog() {
           <select
             value={campFilter}
             onChange={(e) => handleFilterChange(e.target.value, typeFilter)}
-            className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={darkSelect}
           >
             <option value="all">All Camps</option>
             {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
@@ -210,49 +240,81 @@ export default function ObservationsLog() {
           <select
             value={typeFilter}
             onChange={(e) => handleFilterChange(campFilter, e.target.value as ObservationType | "all")}
-            className="border border-stone-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={darkSelect}
           >
             {OBS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
 
-          {loading && <span className="self-center text-xs text-stone-400">Loading...</span>}
+          {loading && <span className="self-center text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>Loading...</span>}
         </div>
 
         {/* Timeline list */}
-        <div className="rounded-2xl border border-stone-200 bg-white shadow-sm px-4 py-3">
+        <div
+          className="rounded-2xl px-4 py-3"
+          style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+        >
           {!loading && observations.length === 0 && (
-            <p className="text-center py-10 text-stone-400 text-sm">No observations found.</p>
+            <p className="text-center py-10 text-sm" style={{ color: "rgba(210,180,140,0.4)" }}>
+              No observations found.
+            </p>
           )}
           <div className="flex flex-col">
-            {observations.map((obs) => (
-              <div key={obs.id} className="flex items-start gap-3 border-l-2 border-amber-500/30 pl-3 py-1.5 ml-1 hover:bg-stone-50/60 transition-colors group">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono text-stone-400 whitespace-nowrap">
-                      {obs.observedAt.split("T")[0]}
-                    </span>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE[obs.type] ?? "bg-stone-100 text-stone-600"}`}>
-                      {TYPE_LABEL[obs.type] ?? obs.type}
-                    </span>
-                    <span className="text-xs text-stone-600 font-medium font-mono">{obs.campId}</span>
-                    {obs.animalId && <span className="text-xs font-mono text-stone-500">{obs.animalId}</span>}
-                    {obs.loggedBy && <span className="text-xs text-stone-400">· {obs.loggedBy}</span>}
-                  </div>
-                  <p className="text-xs text-stone-500 mt-0.5 truncate">
-                    {parseDetails(obs.details)}
-                    {obs.editedAt && (
-                      <span className="ml-1 text-amber-600" title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
-                    )}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setEditTarget(obs)}
-                  className="shrink-0 px-2.5 py-1 text-xs border border-stone-200 rounded-lg hover:bg-stone-100 text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity"
+            {observations.map((obs) => {
+              const badge = TYPE_BADGE[obs.type] ?? { color: "rgba(210,180,140,0.55)", bg: "rgba(210,180,140,0.1)" };
+              return (
+                <div
+                  key={obs.id}
+                  className="flex items-start gap-3 pl-3 py-1.5 ml-1 transition-colors group"
+                  style={{ borderLeft: "2px solid rgba(139,105,20,0.3)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.05)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  Edit
-                </button>
-              </div>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono whitespace-nowrap" style={{ color: "rgba(210,180,140,0.45)" }}>
+                        {obs.observedAt.split("T")[0]}
+                      </span>
+                      <span
+                        className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ background: badge.bg, color: badge.color }}
+                      >
+                        {TYPE_LABEL[obs.type] ?? obs.type}
+                      </span>
+                      <span className="text-xs font-medium font-mono" style={{ color: "rgba(210,180,140,0.75)" }}>
+                        {obs.campId}
+                      </span>
+                      {obs.animalId && (
+                        <span className="text-xs font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>
+                          {obs.animalId}
+                        </span>
+                      )}
+                      {obs.loggedBy && (
+                        <span className="text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>
+                          · {obs.loggedBy}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(210,180,140,0.5)" }}>
+                      {parseDetails(obs.details)}
+                      {obs.editedAt && (
+                        <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setEditTarget(obs)}
+                    className="shrink-0 px-2.5 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{
+                      border: "1px solid rgba(139,105,20,0.25)",
+                      color: "rgba(210,180,140,0.55)",
+                      background: "transparent",
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -261,15 +323,25 @@ export default function ObservationsLog() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1 || loading}
-            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
+            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
+            style={{
+              border: "1px solid rgba(139,105,20,0.25)",
+              color: "rgba(210,180,140,0.85)",
+              background: "transparent",
+            }}
           >
             ← Previous
           </button>
-          <span className="text-sm text-stone-500">Page {page}</span>
+          <span className="text-sm font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>Page {page}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={!hasMore || loading}
-            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg disabled:opacity-40 hover:bg-stone-100"
+            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
+            style={{
+              border: "1px solid rgba(139,105,20,0.25)",
+              color: "rgba(210,180,140,0.85)",
+              background: "transparent",
+            }}
           >
             Next →
           </button>
