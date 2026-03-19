@@ -25,16 +25,16 @@ export default async function CampsTable() {
   return (
     <div
       className="overflow-x-auto rounded-2xl"
-      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
     >
       <table className="w-full text-sm">
         <thead>
           <tr
             className="text-xs uppercase tracking-wide"
             style={{
-              borderBottom: "1px solid rgba(139,105,20,0.15)",
-              background: "rgba(139,105,20,0.06)",
-              color: "rgba(210,180,140,0.55)",
+              borderBottom: "1px solid #E0D5C8",
+              background: "#F5F2EE",
+              color: "#9C8E7A",
             }}
           >
             <th className="text-left px-4 py-3 font-semibold">Camp</th>
@@ -64,18 +64,18 @@ export default async function CampsTable() {
               <tr
                 key={camp.camp_id}
                 className="admin-row"
-                style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}
+                style={{ borderBottom: "1px solid #E0D5C8" }}
               >
-                <td className="px-4 py-3 font-semibold" style={{ color: "#F5EBD4" }}>
+                <td className="px-4 py-3 font-semibold" style={{ color: "#1C1815" }}>
                   {camp.camp_name}
                 </td>
-                <td className="px-4 py-3 text-right font-mono" style={{ color: "rgba(210,180,140,0.85)" }}>
+                <td className="px-4 py-3 text-right font-mono" style={{ color: "#6B5C4E" }}>
                   {liveCount}
                 </td>
-                <td className="px-4 py-3 capitalize" style={{ color: "rgba(210,180,140,0.65)" }}>
+                <td className="px-4 py-3 capitalize" style={{ color: "#9C8E7A" }}>
                   {camp.water_source ?? "—"}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs" style={{ color: "rgba(210,180,140,0.5)" }}>
+                <td className="px-4 py-3 font-mono text-xs" style={{ color: "#9C8E7A" }}>
                   {lastDate !== "—" ? `${lastDate} · ${lastBy}` : "Never"}
                 </td>
                 <td className="px-4 py-3">

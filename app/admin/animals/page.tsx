@@ -12,13 +12,13 @@ export default async function AdminAnimalsPage() {
   })) as unknown as PrismaAnimal[];
 
   return (
-    <div className="flex min-h-screen bg-[#17130E]">
+    <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav active="/admin/animals" />
       <main className="flex-1 p-8">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#F5EBD4]">Animal Catalogue</h1>
-            <p className="text-sm mt-1" style={{ color: "rgba(210,180,140,0.6)" }}>
+            <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
+            <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
               All active animals on the farm · {animals.length.toLocaleString()} animals
             </p>
           </div>

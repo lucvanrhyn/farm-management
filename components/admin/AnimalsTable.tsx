@@ -14,9 +14,9 @@ interface Props {
 }
 
 const farmInput =
-  "rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(139,105,20,0.5)]";
+  "rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 const farmSelect =
-  "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(139,105,20,0.5)]";
+  "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
 export default function AnimalsTable({ animals }: Props) {
   const [search, setSearch] = useState("");
@@ -80,9 +80,9 @@ export default function AnimalsTable({ animals }: Props) {
           }}
           className={farmInput}
           style={{
-            background: "#241C14",
-            border: "1px solid rgba(139,105,20,0.25)",
-            color: "#F5EBD4",
+            background: "#FFFFFF",
+            border: "1px solid #E0D5C8",
+            color: "#1C1815",
             width: "14rem",
           }}
         />
@@ -91,9 +91,9 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setCampFilter(e.target.value); setPage(1); }}
           className={farmSelect}
           style={{
-            background: "#241C14",
-            border: "1px solid rgba(139,105,20,0.25)",
-            color: "#F5EBD4",
+            background: "#FFFFFF",
+            border: "1px solid #E0D5C8",
+            color: "#1C1815",
           }}
         >
           <option value="all">All Camps</option>
@@ -108,9 +108,9 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
           className={farmSelect}
           style={{
-            background: "#241C14",
-            border: "1px solid rgba(139,105,20,0.25)",
-            color: "#F5EBD4",
+            background: "#FFFFFF",
+            border: "1px solid #E0D5C8",
+            color: "#1C1815",
           }}
         >
           <option value="all">All Categories</option>
@@ -125,9 +125,9 @@ export default function AnimalsTable({ animals }: Props) {
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className={farmSelect}
           style={{
-            background: "#241C14",
-            border: "1px solid rgba(139,105,20,0.25)",
-            color: "#F5EBD4",
+            background: "#FFFFFF",
+            border: "1px solid #E0D5C8",
+            color: "#1C1815",
           }}
         >
           <option value="all">All Statuses</option>
@@ -137,7 +137,7 @@ export default function AnimalsTable({ animals }: Props) {
             </option>
           ))}
         </select>
-        <span className="ml-auto text-sm self-center" style={{ color: "rgba(210,180,140,0.55)" }}>
+        <span className="ml-auto text-sm self-center" style={{ color: "#9C8E7A" }}>
           {filtered.length.toLocaleString()} animals found
         </span>
       </div>
@@ -145,11 +145,11 @@ export default function AnimalsTable({ animals }: Props) {
       {/* Table */}
       <div
         className="overflow-x-auto rounded-2xl"
-        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: "1px solid rgba(139,105,20,0.15)" }}>
+            <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
               {([
                 ["animalId", "ID"],
                 ["category", "Category"],
@@ -162,7 +162,7 @@ export default function AnimalsTable({ animals }: Props) {
                 <th
                   key={key || "__actions"}
                   className={`text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${key ? "cursor-pointer select-none" : ""}`}
-                  style={{ color: "rgba(210,180,140,0.55)", background: "rgba(139,105,20,0.06)" }}
+                  style={{ color: "#9C8E7A", background: "#F5F2EE" }}
                   onClick={() => key && toggleSort(key)}
                 >
                   {label}
@@ -176,17 +176,17 @@ export default function AnimalsTable({ animals }: Props) {
               <tr
                 key={animal.animalId}
                 className="transition-colors"
-                style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.06)")}
+                style={{ borderBottom: "1px solid #E0D5C8" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td className="px-3 py-2">
                   <Link
                     href={`/admin/animals/${animal.animalId}`}
                     className="font-mono text-sm font-semibold transition-colors"
-                    style={{ color: "#F5EBD4" }}
+                    style={{ color: "#1C1815" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#F5EBD4")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#1C1815")}
                   >
                     {animal.animalId}
                   </Link>
@@ -196,19 +196,19 @@ export default function AnimalsTable({ animals }: Props) {
                     {getCategoryLabel(animal.category)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-sm" style={{ color: "rgba(210,180,140,0.75)" }}>
+                <td className="px-3 py-2 text-sm" style={{ color: "#6B5C4E" }}>
                   {animal.sex === "Male" ? "Male" : "Female"}
                 </td>
-                <td className="px-3 py-2 text-sm font-mono" style={{ color: "rgba(210,180,140,0.6)" }}>
+                <td className="px-3 py-2 text-sm font-mono" style={{ color: "#9C8E7A" }}>
                   {getAnimalAge(animal.dateOfBirth ?? undefined)}
                 </td>
                 <td className="px-3 py-2">
                   <Link
                     href={`/dashboard/camp/${animal.currentCamp}`}
                     className="text-sm font-medium font-mono transition-colors"
-                    style={{ color: "rgba(210,180,140,0.85)" }}
+                    style={{ color: "#6B5C4E" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(210,180,140,0.85)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#6B5C4E")}
                   >
                     {animal.currentCamp}
                   </Link>
@@ -220,7 +220,7 @@ export default function AnimalsTable({ animals }: Props) {
                       style={{
                         background:
                           animal.status === "Active" ? "#4A7C59"
-                          : animal.status === "Sold" ? "rgba(210,180,140,0.4)"
+                          : animal.status === "Sold" ? "#9C8E7A"
                           : "#8B3A3A",
                       }}
                     />
@@ -229,7 +229,7 @@ export default function AnimalsTable({ animals }: Props) {
                       style={{
                         color:
                           animal.status === "Active" ? "#4A7C59"
-                          : animal.status === "Sold" ? "rgba(210,180,140,0.55)"
+                          : animal.status === "Sold" ? "#9C8E7A"
                           : "#8B3A3A",
                       }}
                     >
@@ -256,14 +256,14 @@ export default function AnimalsTable({ animals }: Props) {
             disabled={page === 1}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid rgba(139,105,20,0.25)",
-              color: "rgba(210,180,140,0.85)",
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
               background: "transparent",
             }}
           >
             ← Previous
           </button>
-          <span className="text-sm font-mono" style={{ color: "rgba(210,180,140,0.55)" }}>
+          <span className="text-sm font-mono" style={{ color: "#9C8E7A" }}>
             Page {page} of {totalPages}
           </span>
           <button
@@ -271,8 +271,8 @@ export default function AnimalsTable({ animals }: Props) {
             disabled={page === totalPages}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid rgba(139,105,20,0.25)",
-              color: "rgba(210,180,140,0.85)",
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
               background: "transparent",
             }}
           >

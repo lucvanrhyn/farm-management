@@ -45,18 +45,18 @@ export default async function AdminPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#17130E]">
+    <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav active="/admin" />
       <main className="flex-1 p-8">
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-[#F5EBD4]">Operations Overview</h1>
-          <p className="text-xs mt-0.5 font-mono" style={{ color: "rgba(210,180,140,0.5)" }}>{new Date().toISOString().split("T")[0]} · Farm Management</p>
+          <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>
+          <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>{new Date().toISOString().split("T")[0]} · Farm Management</p>
         </div>
 
         {/* Connected stats bar — Delivoice pattern */}
         <div
           className="rounded-2xl overflow-hidden mb-8"
-          style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
         >
           <div className="grid grid-cols-4">
             {[
@@ -113,8 +113,8 @@ export default async function AdminPage() {
                     {badge}
                   </span>
                 </div>
-                <p className="text-3xl font-bold font-mono" style={{ color: "#F5EBD4" }}>{value}</p>
-                <p className="text-xs mt-1" style={{ color: "rgba(210,180,140,0.55)" }}>{label}</p>
+                <p className="text-3xl font-bold font-mono" style={{ color: "#1C1815" }}>{value}</p>
+                <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>{label}</p>
               </div>
             ))}
           </div>
@@ -123,30 +123,30 @@ export default async function AdminPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div
             className="rounded-xl p-4"
-            style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
           >
             <h2
               className="text-xs font-semibold uppercase tracking-wide mb-3"
-              style={{ color: "rgba(210,180,140,0.65)" }}
+              style={{ color: "#9C8E7A" }}
             >
               Recent Health Incidents
             </h2>
             {recentHealth.length === 0 ? (
-              <p className="text-xs" style={{ color: "rgba(210,180,140,0.4)" }}>No health incidents recorded.</p>
+              <p className="text-xs" style={{ color: "#9C8E7A" }}>No health incidents recorded.</p>
             ) : (
               <div className="flex flex-col">
                 {recentHealth.map((obs) => (
                   <div
                     key={obs.id}
                     className="flex items-start gap-2.5 py-1.5 last:border-0"
-                    style={{ borderBottom: "1px solid rgba(139,105,20,0.1)" }}
+                    style={{ borderBottom: "1px solid #E0D5C8" }}
                   >
                     <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: "#A0522D" }} />
                     <div>
-                      <p className="text-xs font-medium font-mono" style={{ color: "#F5EBD4" }}>
+                      <p className="text-xs font-medium font-mono" style={{ color: "#1C1815" }}>
                         {obs.animalId ?? "Unknown"} · Camp {obs.campId}
                       </p>
-                      <p className="text-xs" style={{ color: "rgba(210,180,140,0.5)" }}>
+                      <p className="text-xs" style={{ color: "#9C8E7A" }}>
                         {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"}
                         {" · "}
                         {obs.observedAt.split("T")[0]}
@@ -160,11 +160,11 @@ export default async function AdminPage() {
 
           <div
             className="rounded-xl p-4"
-            style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
           >
             <h2
               className="text-xs font-semibold uppercase tracking-wide mb-4"
-              style={{ color: "rgba(210,180,140,0.65)" }}
+              style={{ color: "#9C8E7A" }}
             >
               Camp Status Summary
             </h2>
@@ -181,10 +181,10 @@ export default async function AdminPage() {
                   <div key={quality}>
                     <div className="flex items-center gap-2 mb-1">
                       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
-                      <span className="text-xs flex-1" style={{ color: "rgba(210,180,140,0.75)" }}>{label}</span>
-                      <span className="text-xs font-mono font-semibold" style={{ color: "#F5EBD4" }}>{count}</span>
+                      <span className="text-xs flex-1" style={{ color: "#6B5C4E" }}>{label}</span>
+                      <span className="text-xs font-mono font-semibold" style={{ color: "#1C1815" }}>{count}</span>
                     </div>
-                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(139,105,20,0.12)" }}>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "#E0D5C8" }}>
                       <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{ width: `${pct}%`, background: dot }}

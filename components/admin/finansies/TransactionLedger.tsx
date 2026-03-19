@@ -74,10 +74,10 @@ export default function TransactionLedger({
     return `R${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
-  const darkSelect = {
-    background: "#1A1510",
-    border: "1px solid rgba(139,105,20,0.25)",
-    color: "#F5EBD4",
+  const lightSelect = {
+    background: "#FFFFFF",
+    border: "1px solid #E0D5C8",
+    color: "#1C1815",
     borderRadius: "0.75rem",
     padding: "0.375rem 0.75rem",
     fontSize: "0.875rem",
@@ -87,22 +87,22 @@ export default function TransactionLedger({
   return (
     <div
       className="rounded-2xl overflow-hidden"
-      style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
     >
       {/* Toolbar */}
       <div
         className="p-4 flex flex-wrap gap-3 items-center"
-        style={{ borderBottom: "1px solid rgba(139,105,20,0.12)" }}
+        style={{ borderBottom: "1px solid #E0D5C8" }}
       >
-        <h2 className="text-sm font-semibold mr-2" style={{ color: "rgba(210,180,140,0.85)" }}>
+        <h2 className="text-sm font-semibold mr-2" style={{ color: "#6B5C4E" }}>
           Transactions
         </h2>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={darkSelect}>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={lightSelect}>
           <option value="all">All types</option>
           <option value="income">Income</option>
           <option value="expense">Expenses</option>
         </select>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={darkSelect}>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={lightSelect}>
           <option value="all">All categories</option>
           {allCategories.map((c) => (
             <option key={c.id} value={c.name}>{c.name}</option>
@@ -112,14 +112,14 @@ export default function TransactionLedger({
           type="date"
           value={fromDate}
           onChange={(e) => setFromDate(e.target.value)}
-          style={{ ...darkSelect, colorScheme: "dark" }}
+          style={{ ...lightSelect, colorScheme: "light" }}
         />
-        <span className="text-sm" style={{ color: "rgba(210,180,140,0.4)" }}>–</span>
+        <span className="text-sm" style={{ color: "#9C8E7A" }}>–</span>
         <input
           type="date"
           value={toDate}
           onChange={(e) => setToDate(e.target.value)}
-          style={{ ...darkSelect, colorScheme: "dark" }}
+          style={{ ...lightSelect, colorScheme: "light" }}
         />
         <button
           onClick={() => setModal("add")}
@@ -132,7 +132,7 @@ export default function TransactionLedger({
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-center py-12" style={{ color: "rgba(210,180,140,0.4)" }}>
+        <p className="text-sm text-center py-12" style={{ color: "#9C8E7A" }}>
           No transactions found.
         </p>
       ) : (
@@ -142,9 +142,9 @@ export default function TransactionLedger({
               <tr
                 className="text-xs uppercase tracking-wide"
                 style={{
-                  borderBottom: "1px solid rgba(139,105,20,0.15)",
-                  background: "rgba(139,105,20,0.06)",
-                  color: "rgba(210,180,140,0.55)",
+                  borderBottom: "1px solid #E0D5C8",
+                  background: "#F5F2EE",
+                  color: "#9C8E7A",
                 }}
               >
                 <th className="text-left px-4 py-3">Date</th>
@@ -161,11 +161,11 @@ export default function TransactionLedger({
                 <tr
                   key={tx.id}
                   className="transition-colors"
-                  style={{ borderBottom: "1px solid rgba(139,105,20,0.08)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,105,20,0.06)")}
+                  style={{ borderBottom: "1px solid #E0D5C8" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs" style={{ color: "rgba(210,180,140,0.65)" }}>
+                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs" style={{ color: "#9C8E7A" }}>
                     {new Date(tx.date).toLocaleDateString("en-ZA")}
                   </td>
                   <td className="px-4 py-3">
@@ -180,8 +180,8 @@ export default function TransactionLedger({
                       {tx.type === "income" ? "Income" : "Expense"}
                     </span>
                   </td>
-                  <td className="px-4 py-3" style={{ color: "rgba(210,180,140,0.85)" }}>{tx.category}</td>
-                  <td className="px-4 py-3 max-w-xs truncate" style={{ color: "rgba(210,180,140,0.55)" }}>{tx.description}</td>
+                  <td className="px-4 py-3" style={{ color: "#6B5C4E" }}>{tx.category}</td>
+                  <td className="px-4 py-3 max-w-xs truncate" style={{ color: "#9C8E7A" }}>{tx.description}</td>
                   <td className="px-4 py-3">
                     {tx.animalId && (
                       <Link
@@ -204,7 +204,7 @@ export default function TransactionLedger({
                       <button
                         onClick={() => setModal(tx)}
                         className="text-xs transition-opacity hover:opacity-70"
-                        style={{ color: "rgba(210,180,140,0.45)" }}
+                        style={{ color: "#9C8E7A" }}
                         title="Edit"
                       >
                         ✏️
@@ -222,7 +222,7 @@ export default function TransactionLedger({
                           <button
                             onClick={() => setConfirmDelete(null)}
                             className="text-xs"
-                            style={{ color: "rgba(210,180,140,0.45)" }}
+                            style={{ color: "#9C8E7A" }}
                           >
                             No
                           </button>
@@ -231,7 +231,7 @@ export default function TransactionLedger({
                         <button
                           onClick={() => setConfirmDelete(tx.id)}
                           className="text-xs transition-opacity hover:opacity-70"
-                          style={{ color: "rgba(210,180,140,0.45)" }}
+                          style={{ color: "#9C8E7A" }}
                           title="Delete"
                         >
                           🗑️

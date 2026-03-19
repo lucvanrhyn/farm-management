@@ -3,12 +3,12 @@ import AnimalImporter from "@/components/admin/AnimalImporter";
 
 export default function AdminImportPage() {
   return (
-    <div className="flex min-h-screen bg-[#17130E]">
+    <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav active="/admin/import" />
       <main className="flex-1 p-8">
         <div className="max-w-2xl">
-          <h1 className="text-2xl font-bold text-[#F5EBD4] mb-1">Import — Animals</h1>
-          <p className="text-sm mb-8" style={{ color: "rgba(210,180,140,0.6)" }}>
+          <h1 className="text-2xl font-bold text-[#1C1815] mb-1">Import — Animals</h1>
+          <p className="text-sm mb-8" style={{ color: "#9C8E7A" }}>
             Upload an Excel or CSV file to import animals into the system. Existing animals will be updated (based on animal ID).
           </p>
           <AnimalImporter />

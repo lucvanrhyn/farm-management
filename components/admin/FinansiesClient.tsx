@@ -100,7 +100,7 @@ export default function FinansiesClient({
       {/* Summary stats bar */}
       <div
         className="rounded-2xl overflow-hidden"
-        style={{ background: "#241C14", border: "1px solid rgba(139,105,20,0.18)" }}
+        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <div className="grid grid-cols-1 sm:grid-cols-3">
           {statsItems.map((item, i) => (
@@ -108,8 +108,8 @@ export default function FinansiesClient({
               key={item.label}
               className="px-6 py-5"
               style={{
-                borderRight: i < 2 ? "1px solid rgba(139,105,20,0.12)" : undefined,
-                borderBottom: "1px solid rgba(139,105,20,0.08)",
+                borderRight: i < 2 ? "1px solid #E0D5C8" : undefined,
+                borderBottom: "1px solid #E0D5C8",
               }}
             >
               <div className="flex items-center gap-2 mb-3">
@@ -126,7 +126,7 @@ export default function FinansiesClient({
               >
                 {item.value}
               </div>
-              <div className="text-xs" style={{ color: "rgba(210,180,140,0.5)" }}>
+              <div className="text-xs" style={{ color: "#9C8E7A" }}>
                 {item.label}
               </div>
             </div>

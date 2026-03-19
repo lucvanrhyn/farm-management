@@ -33,11 +33,11 @@ export default async function FinansiesPage() {
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   return (
-    <div className="flex min-h-screen bg-[#17130E]">
+    <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav active="/admin/finansies" />
       <main className="flex-1 p-8 space-y-2">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[#F5EBD4]">Finance</h1>
+          <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
           <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
         </div>
         <FinansiesClient

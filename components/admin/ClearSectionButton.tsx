@@ -52,7 +52,7 @@ export default function ClearSectionButton({ endpoint, label }: Props) {
 
   return (
     <span className="flex items-center gap-2">
-      <span className="text-xs" style={{ color: "rgba(210,180,140,0.65)" }}>Are you sure?</span>
+      <span className="text-xs" style={{ color: "#6B5C4E" }}>Are you sure?</span>
       <button
         onClick={handleClear}
         disabled={isLoading}
@@ -67,8 +67,8 @@ export default function ClearSectionButton({ endpoint, label }: Props) {
         disabled={isLoading}
         className="px-3 py-1.5 text-xs rounded-lg transition-colors"
         style={{
-          border: "1px solid rgba(139,105,20,0.25)",
-          color: "rgba(210,180,140,0.65)",
+          border: "1px solid #E0D5C8",
+          color: "#6B5C4E",
           background: "transparent",
         }}
       >
