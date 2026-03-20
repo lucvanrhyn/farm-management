@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
+import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import type { AnimalCategory } from "@/lib/types";
 
@@ -12,14 +12,12 @@ export default async function AnimalProfilePage({
 }) {
   const { animalId } = await params;
   const animal = await prisma.animal.findUnique({ where: { animalId } });
-  const camp = animal ? getCampById(animal.currentCamp) : undefined;
-  const observations = animal
-    ? await prisma.observation.findMany({
-        where: { animalId },
-        orderBy: { observedAt: "desc" },
-        take: 100,
-      })
-    : [];
+  const [campRecord, observations] = await Promise.all([
+    animal ? prisma.camp.findFirst({ where: { campId: animal.currentCamp } }) : Promise.resolve(null),
+    animal
+      ? prisma.observation.findMany({ where: { animalId }, orderBy: { observedAt: "desc" }, take: 100 })
+      : Promise.resolve([]),
+  ]);
 
   const bg = "#0f172a";
   const surface = "#1e293b";
@@ -58,7 +56,7 @@ export default async function AnimalProfilePage({
               ["Breed", animal.breed],
               ["Age", getAnimalAge(animal.dateOfBirth ?? undefined)],
               ["Date of Birth", animal.dateOfBirth ?? "Unknown"],
-              ["Current camp", camp?.camp_name ?? animal.currentCamp],
+              ["Current camp", campRecord?.campName ?? animal.currentCamp],
               ["Status", animal.status],
             ].map(([label, value]) => (
               <div key={label}>

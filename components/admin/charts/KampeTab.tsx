@@ -14,7 +14,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { CAMPS } from "@/lib/dummy-data";
+import type { Camp } from "@/lib/types";
 import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -24,8 +24,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   Calf: "#f97316",
   Ox: "#a78bfa",
 };
-
-const CAMP_SIZES = new Map(CAMPS.map((c) => [c.camp_id, c.size_hectares]));
 
 const cardStyle = {
   background: "#FFFFFF",
@@ -61,7 +59,7 @@ function Empty({ message }: { message: string }) {
   return <p style={emptyStyle}>{message}</p>;
 }
 
-export default function KampeTab({ data }: { data: GrafiekeData }) {
+export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: Camp[] }) {
   const { conditionTrend, healthByCamp, headcount, heatmap, movements } = data;
 
   // ── Stocking rate: headcount per camp / size_hectares ──
@@ -69,7 +67,7 @@ export default function KampeTab({ data }: { data: GrafiekeData }) {
   for (const row of headcount) {
     headcountByCamp.set(row.campId, (headcountByCamp.get(row.campId) ?? 0) + row.count);
   }
-  const stockingData = CAMPS.map((c) => ({
+  const stockingData = camps.map((c) => ({
     campId: c.camp_id,
     lsu: headcountByCamp.has(c.camp_id)
       ? Math.round(((headcountByCamp.get(c.camp_id) ?? 0) / (c.size_hectares ?? 1)) * 100) / 100

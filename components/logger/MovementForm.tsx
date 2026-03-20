@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CAMPS } from "@/lib/dummy-data";
+import { useOffline } from "@/components/logger/OfflineProvider";
 
 interface Props {
   animalId: string;
@@ -46,8 +46,9 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
 }
 
 export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit }: Props) {
+  const { camps } = useOffline();
   const [destCampId, setDestCampId] = useState("");
-  const destinations = CAMPS.filter((c) => c.camp_id !== sourceCampId);
+  const destinations = camps.filter((c) => c.camp_id !== sourceCampId);
 
   function submit() {
     if (!destCampId) return;

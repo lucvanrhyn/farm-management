@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
+import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 
@@ -47,7 +47,7 @@ export default async function AnimalDetailPage({
     take: 100,
   });
 
-  const camp = getCampById(animal.currentCamp);
+  const camp = await prisma.camp.findFirst({ where: { campId: animal.currentCamp } });
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -99,7 +99,7 @@ export default async function AnimalDetailPage({
               href={`/dashboard/camp/${animal.currentCamp}`}
               className="font-semibold text-green-700 hover:underline"
             >
-              {camp?.camp_name ?? animal.currentCamp}
+              {camp?.campName ?? animal.currentCamp}
             </Link>
           </div>
           <div>

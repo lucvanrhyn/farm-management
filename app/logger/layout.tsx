@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { OfflineProvider } from '@/components/logger/OfflineProvider';
 import { useEffect, useRef } from 'react';
-import { CAMPS } from '@/lib/dummy-data';
+import type { Camp } from '@/lib/types';
 
 // SW registration removed from here — it now lives in components/SWRegistrar.tsx
 // which is rendered at root layout level (app/layout.tsx), ensuring the service
@@ -19,11 +19,16 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
     // and stores the responses so the navigate handler can serve them offline.
     if (warmedUp.current || !navigator.onLine) return;
     warmedUp.current = true;
-    CAMPS.forEach((camp) => {
-      fetch(`/logger/${encodeURIComponent(camp.camp_id)}`, {
-        credentials: "same-origin",
-      }).catch(() => {});
-    });
+    fetch("/api/camps")
+      .then((r) => r.ok ? r.json() : [])
+      .then((camps: Camp[]) => {
+        camps.forEach((camp) => {
+          fetch(`/logger/${encodeURIComponent(camp.camp_id)}`, {
+            credentials: "same-origin",
+          }).catch(() => {});
+        });
+      })
+      .catch(() => {});
   }, []);
 
   return (

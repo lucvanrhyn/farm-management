@@ -111,15 +111,10 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     refreshPendingCount();
     getLastSyncedAt().then(setLastSyncedAtState);
 
-    // Load or seed camps
+    // Load camps: paint instantly with cache, always pull fresh in background
     getCachedCamps().then((existing) => {
-      if (existing.length === 0) {
-        // First run — seed IndexedDB (refreshData sets camps when done)
-        refreshData();
-      } else {
-        // Already seeded — expose immediately
-        setCamps(existing);
-      }
+      if (existing.length > 0) setCamps(existing);
+      refreshData();
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshPendingCount]);

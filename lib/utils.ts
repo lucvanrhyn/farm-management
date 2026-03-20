@@ -1,24 +1,4 @@
-import type { Animal, AnimalCategory, Camp, CampStats, DailyCampLog, GrazingQuality } from "./types";
-import { ANIMALS, CAMPS, DAILY_LOGS } from "./dummy-data";
-
-// Re-export CAMPS for use in components that only import from utils
-export { CAMPS };
-
-// ============================================================
-// LOOKUPS
-// ============================================================
-
-export function getCampById(campId: string): Camp | undefined {
-  return CAMPS.find((c) => c.camp_id === campId);
-}
-
-export function getAnimalById(animalId: string): Animal | undefined {
-  return ANIMALS.find((a) => a.animal_id === animalId);
-}
-
-export function getAnimalsByCamp(campId: string): Animal[] {
-  return ANIMALS.filter((a) => a.current_camp === campId && a.status === "Active");
-}
+import type { AnimalCategory, GrazingQuality } from "./types";
 
 // ============================================================
 // LABELS
@@ -76,33 +56,6 @@ export function getGrazingDot(quality: GrazingQuality): string {
 }
 
 // ============================================================
-// CAMP STATS
-// ============================================================
-
-export function getCampStats(campId: string): CampStats {
-  const animals = getAnimalsByCamp(campId);
-  const byCategory: Partial<Record<AnimalCategory, number>> = {};
-  for (const a of animals) {
-    byCategory[a.category] = (byCategory[a.category] ?? 0) + 1;
-  }
-  return { total: animals.length, byCategory };
-}
-
-// ============================================================
-// INSPECTION LOGS
-// ============================================================
-
-export function getLastInspection(campId: string): DailyCampLog | undefined {
-  const logs = DAILY_LOGS.filter((l) => l.camp_id === campId);
-  return logs.sort((a, b) => b.date.localeCompare(a.date))[0];
-}
-
-export function getLast7DaysLogs(campId: string): DailyCampLog[] {
-  return DAILY_LOGS.filter((l) => l.camp_id === campId)
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-// ============================================================
 // RELATIVE TIME
 // ============================================================
 
@@ -146,65 +99,6 @@ export function getCategoryChipColor(category: AnimalCategory): string {
     case "Bull":   return "bg-amber-100 text-amber-800";
     case "Ox":     return "bg-stone-100 text-stone-700";
   }
-}
-
-// ============================================================
-// ADMIN STATS
-// ============================================================
-
-export function getTotalAnimals(): number {
-  return ANIMALS.filter((a) => a.status === "Active").length;
-}
-
-export function getInspectedToday(): number {
-  const today = new Date().toISOString().split("T")[0];
-  const todayLogs = DAILY_LOGS.filter((l) => l.date === today);
-  return new Set(todayLogs.map((l) => l.camp_id)).size;
-}
-
-// ============================================================
-// ALERT + DENSITY HELPERS (for Schematic Map)
-// ============================================================
-
-/** Count camps that have at least one active alert condition */
-export function getAlertCount(): number {
-  return CAMPS.filter((camp) => {
-    const log = getLastInspection(camp.camp_id);
-    return (
-      log?.grazing_quality === "Overgrazed" ||
-      log?.water_status === "Empty" ||
-      log?.water_status === "Broken" ||
-      log?.fence_status === "Damaged"
-    );
-  }).length;
-}
-
-/** Whether a single camp has an active alert */
-export function campHasAlert(campId: string): boolean {
-  const log = getLastInspection(campId);
-  return (
-    log?.grazing_quality === "Overgrazed" ||
-    log?.water_status === "Empty" ||
-    log?.water_status === "Broken" ||
-    log?.fence_status === "Damaged"
-  ) ?? false;
-}
-
-/** Animals per hectare for a camp */
-export function getStockingDensity(campId: string): number {
-  const camp = getCampById(campId);
-  const stats = getCampStats(campId);
-  if (!camp?.size_hectares || camp.size_hectares === 0) return 0;
-  return stats.total / camp.size_hectares;
-}
-
-/** Days since last inspection (from today = 2026-02-28) */
-export function daysSinceInspection(campId: string): number {
-  const log = getLastInspection(campId);
-  if (!log) return 99;
-  const today = new Date();
-  const inspected = new Date(log.date);
-  return Math.floor((today.getTime() - inspected.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 // ============================================================

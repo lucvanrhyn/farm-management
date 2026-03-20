@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
+interface FarmStats {
+  farmName: string;
+  breed: string;
+  animalCount: number;
+  campCount: number;
+}
 import { motion } from "framer-motion";
 
 const ENGLISH_MONTHS = [
@@ -25,6 +32,7 @@ function getGreeting(hour: number): { text: string; icon: string } {
 export function AnimatedHero() {
   const [wordIndex, setWordIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [farm, setFarm] = useState<FarmStats | null>(null);
 
   const words = useMemo(
     () => ["Tracked", "Managed", "Monitored", "Cared For", "Profitable"],
@@ -37,6 +45,10 @@ export function AnimatedHero() {
     const interval = setInterval(() => {
       setWordIndex((i) => (i + 1) % words.length);
     }, 2500);
+    fetch("/api/farm")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFarm(data); })
+      .catch(() => {});
     return () => clearInterval(interval);
   }, [words.length]);
 
@@ -80,7 +92,7 @@ export function AnimatedHero() {
         }}
         className="text-5xl md:text-7xl font-bold uppercase"
       >
-        Trio B Boerdery
+        {farm?.farmName ?? "—"}
       </motion.h1>
 
       {/* Subtitle */}
@@ -95,7 +107,7 @@ export function AnimatedHero() {
         }}
         className="text-sm md:text-base tracking-widest uppercase font-light"
       >
-        Brangus Farm Management System
+        {farm ? `${farm.breed} Farm Management System` : "Farm Management System"}
       </motion.p>
 
       {/* Animated slogan */}
@@ -154,7 +166,9 @@ export function AnimatedHero() {
           fontFamily: "var(--font-sans)",
         }}
       >
-        Brangus · 978 animals · 19 camps
+        {farm
+          ? `${farm.breed} · ${farm.animalCount} animals · ${farm.campCount} camps`
+          : "Loading…"}
       </motion.div>
     </div>
   );

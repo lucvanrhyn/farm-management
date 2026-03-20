@@ -1,13 +1,6 @@
 "use client";
 
-import { CAMPS } from "@/lib/dummy-data";
-import {
-  getCampStats,
-  getLastInspection,
-  getStockingDensity,
-  daysSinceInspection,
-  campHasAlert,
-} from "@/lib/utils";
+import type { Camp } from "@/lib/types";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +12,8 @@ interface Props {
   filterBy: FilterMode;
   selectedCampId: string | null;
   liveConditions?: Record<string, LiveCampStatus>;
+  camps: Camp[];
+  campAnimalCounts: Record<string, number>;
 }
 
 // ─── Logical canvas dimensions ────────────────────────────────────────────────
@@ -85,34 +80,37 @@ const WARM = {
   water: { border: "#3B7A8B", bg: "rgba(59,122,139,0.08)",  text: "#2A6070", label: "Full"       },
 };
 
-function getCampColors(campId: string, filterBy: FilterMode, liveCondition?: LiveCampStatus) {
-  const log = getLastInspection(campId);
-
+function getCampColors(
+  filterBy: FilterMode,
+  liveCondition: LiveCampStatus | undefined,
+  animalCount: number,
+  sizeHectares: number | undefined,
+) {
   if (filterBy === "grazing") {
-    const q = liveCondition?.grazing_quality ?? log?.grazing_quality ?? "Fair";
-    if (q === "Good")       return WARM.good;
-    if (q === "Fair")       return WARM.fair;
-    if (q === "Poor")       return WARM.poor;
-    return WARM.bad; // Overgrazed
+    const q = liveCondition?.grazing_quality ?? "Fair";
+    if (q === "Good")  return WARM.good;
+    if (q === "Fair")  return WARM.fair;
+    if (q === "Poor")  return WARM.poor;
+    return WARM.bad;
   }
 
   if (filterBy === "water") {
-    const w = liveCondition?.water_status ?? log?.water_status ?? "Full";
-    if (w === "Full")   return WARM.water;
-    if (w === "Low")    return WARM.fair;
-    if (w === "Empty")  return WARM.poor;
-    return WARM.bad; // Broken
+    const w = liveCondition?.water_status ?? "Full";
+    if (w === "Full")  return WARM.water;
+    if (w === "Low")   return WARM.fair;
+    if (w === "Empty") return WARM.poor;
+    return WARM.bad;
   }
 
   if (filterBy === "density") {
-    const d = getStockingDensity(campId);
+    const d = animalCount / (sizeHectares ?? 1);
     if (d < 0.25)  return WARM.good;
     if (d < 0.38)  return WARM.fair;
     if (d < 0.50)  return WARM.poor;
     return WARM.bad;
   }
 
-  // days — use liveCondition timestamp if available
+  // days since inspection
   if (liveCondition?.last_inspected_at) {
     const inspected = new Date(liveCondition.last_inspected_at);
     const days = Math.floor((Date.now() - inspected.getTime()) / (1000 * 60 * 60 * 24));
@@ -121,11 +119,7 @@ function getCampColors(campId: string, filterBy: FilterMode, liveCondition?: Liv
     if (days <= 3)  return WARM.poor;
     return WARM.bad;
   }
-  const days = daysSinceInspection(campId);
-  if (days === 0) return WARM.good;
-  if (days === 1) return WARM.fair;
-  if (days <= 3)  return WARM.poor;
-  return WARM.bad;
+  return WARM.bad; // No inspection data
 }
 
 // ─── Water source icon ────────────────────────────────────────────────────────
@@ -268,7 +262,7 @@ function TopoUnderlay({ campCenters }: { campCenters: typeof CAMP_CENTERS }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function SchematicMap({ onCampClick, filterBy, selectedCampId, liveConditions = {} }: Props) {
+export default function SchematicMap({ onCampClick, filterBy, selectedCampId, liveConditions = {}, camps, campAnimalCounts }: Props) {
   return (
     <div
       style={{
@@ -293,19 +287,22 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId, li
         <TopoUnderlay campCenters={CAMP_CENTERS} />
 
         {/* Camp blocks */}
-        {CAMPS.map((camp) => {
+        {camps.map((camp) => {
           const center = CAMP_CENTERS[camp.camp_id];
           if (!center) return null;
 
           const { w, h } = campSize(camp.size_hectares ?? 120);
           const liveCondition = liveConditions[camp.camp_id];
-          const colors = getCampColors(camp.camp_id, filterBy, liveCondition);
-          const stats = getCampStats(camp.camp_id);
-          const log = getLastInspection(camp.camp_id);
+          const animalCount = campAnimalCounts[camp.camp_id] ?? 0;
+          const colors = getCampColors(filterBy, liveCondition, animalCount, camp.size_hectares);
           const isAlert = liveCondition
             ? liveCondition.grazing_quality === "Overgrazed" || liveCondition.water_status === "Empty" || liveCondition.water_status === "Broken" || liveCondition.fence_status === "Damaged"
-            : campHasAlert(camp.camp_id);
+            : false;
           const isSelected = selectedCampId === camp.camp_id;
+          const densityLabel = `${(animalCount / (camp.size_hectares ?? 1)).toFixed(2)}/ha`;
+          const daysLabel = liveCondition?.last_inspected_at
+            ? `${Math.floor((Date.now() - new Date(liveCondition.last_inspected_at).getTime()) / (1000 * 60 * 60 * 24))}d`
+            : "—";
 
           const leftPct = ((center.cx - w / 2) / CANVAS_W) * 100;
           const topPct  = ((center.cy - h / 2) / CANVAS_H) * 100;
@@ -379,7 +376,7 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId, li
                   justifyContent: "center",
                 }}
               >
-                {stats.total}
+                {animalCount}
               </div>
 
               {/* Bottom row: water icon + status label */}
@@ -405,7 +402,7 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId, li
                     {camp.water_source}
                   </span>
                 </span>
-                {log && (
+                {(liveCondition || filterBy === "density") && (
                   <span
                     style={{
                       fontSize: "clamp(6px, 0.65vw, 8px)",
@@ -415,10 +412,10 @@ export default function SchematicMap({ onCampClick, filterBy, selectedCampId, li
                       textTransform: "uppercase",
                     }}
                   >
-                    {filterBy === "grazing" && log.grazing_quality}
-                    {filterBy === "water"   && log.water_status}
-                    {filterBy === "density" && `${getStockingDensity(camp.camp_id).toFixed(2)}/ha`}
-                    {filterBy === "days"    && `${daysSinceInspection(camp.camp_id)}d`}
+                    {filterBy === "grazing" && liveCondition?.grazing_quality}
+                    {filterBy === "water"   && liveCondition?.water_status}
+                    {filterBy === "density" && densityLabel}
+                    {filterBy === "days"    && daysLabel}
                   </span>
                 )}
               </div>

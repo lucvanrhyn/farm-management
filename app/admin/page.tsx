@@ -1,7 +1,6 @@
 import AdminNav from "@/components/admin/AdminNav";
 import DangerZone from "@/components/admin/DangerZone";
 import { prisma } from "@/lib/prisma";
-import { CAMPS } from "@/lib/dummy-data";
 import {
   getLatestCampConditions,
   getRecentHealthObservations,
@@ -13,8 +12,10 @@ import { PawPrint, Tent, ClipboardCheck, HeartPulse } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const totalAnimals = await prisma.animal.count({ where: { status: "Active" } });
-  const totalCamps = CAMPS.length;
+  const [totalAnimals, totalCamps] = await Promise.all([
+    prisma.animal.count({ where: { status: "Active" } }),
+    prisma.camp.count(),
+  ]);
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

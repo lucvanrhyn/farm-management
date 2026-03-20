@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
 import AdminNav from "@/components/admin/AdminNav";
 import GrafiekeClient from "@/components/admin/GrafiekeClient";
+import { prisma } from "@/lib/prisma";
+import type { Camp } from "@/lib/types";
 import {
   getCampConditionTrend,
   getHealthIssuesByCamp,
@@ -29,6 +31,7 @@ export default async function GrafiekePage() {
     calvings,
     attrition,
     withdrawals,
+    prismaCamps,
   ] = await Promise.all([
     getCampConditionTrend(30),
     getHealthIssuesByCamp(30),
@@ -38,7 +41,15 @@ export default async function GrafiekePage() {
     getCalvingTrend(12),
     getDeathsAndSales(12),
     getWithdrawalTracker(),
+    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
+
+  const camps: Camp[] = prismaCamps.map((c) => ({
+    camp_id: c.campId,
+    camp_name: c.campName,
+    size_hectares: c.sizeHectares ?? undefined,
+    water_source: c.waterSource ?? undefined,
+  }));
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
@@ -51,6 +62,7 @@ export default async function GrafiekePage() {
           </p>
         </div>
         <GrafiekeClient
+          camps={camps}
           data={{
             conditionTrend,
             healthByCamp,

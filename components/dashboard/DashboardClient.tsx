@@ -9,8 +9,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
-import { getInspectedToday, getAlertCount, getLastInspection } from "@/lib/utils";
-import { CAMPS } from "@/lib/dummy-data";
+import type { Camp } from "@/lib/types";
 
 // Leaflet must only render client-side
 const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
@@ -186,9 +185,11 @@ function ViewToggle({
 export default function DashboardClient({
   totalAnimals,
   campAnimalCounts,
+  camps,
 }: {
   totalAnimals: number;
   campAnimalCounts: Record<string, number>;
+  camps: Camp[];
 }) {
   const [selectedCampId, setSelectedCampId]   = useState<string | null>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
@@ -211,13 +212,22 @@ export default function DashboardClient({
 
   const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
-  const inspectedToday = getInspectedToday();
-  const alertCount     = getAlertCount();
+  const today = new Date().toISOString().split("T")[0];
+  const inspectedToday = Object.values(liveConditions).filter(
+    (c) => c.last_inspected_at?.startsWith(today)
+  ).length;
+  const alertCount = Object.values(liveConditions).filter(
+    (c) =>
+      c.grazing_quality === "Overgrazed" ||
+      c.water_status === "Empty" ||
+      c.water_status === "Broken" ||
+      c.fence_status === "Damaged"
+  ).length;
 
-  const campData = CAMPS.map((camp) => ({
+  const campData = camps.map((camp) => ({
     camp,
     stats: { total: campAnimalCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
-    grazing: liveConditions[camp.camp_id]?.grazing_quality ?? getLastInspection(camp.camp_id)?.grazing_quality ?? "Fair",
+    grazing: liveConditions[camp.camp_id]?.grazing_quality ?? "Fair",
   }));
 
   function handleCampClick(campId: string) {
@@ -291,7 +301,7 @@ export default function DashboardClient({
           style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
         >
           <StatChip label="Total Animals"    value={totalAnimals} />
-          <StatChip label="Camps Inspected"  value={`${inspectedToday}/${CAMPS.length}`} />
+          <StatChip label="Camps Inspected"  value={`${inspectedToday}/${camps.length}`} />
           <StatChip label="Active Alerts"    value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} />
           <StatChip label="Outstanding Obs." value={alertCount} />
         </motion.div>
@@ -382,6 +392,8 @@ export default function DashboardClient({
               filterBy={filterBy}
               selectedCampId={selectedCampId}
               liveConditions={liveConditions}
+              camps={camps}
+              campAnimalCounts={campAnimalCounts}
             />
           ) : (
             <div className="absolute inset-0">
@@ -413,6 +425,7 @@ export default function DashboardClient({
           ) : selectedCampId ? (
             <CampDetailPanel
               campId={selectedCampId}
+              camp={camps.find((c) => c.camp_id === selectedCampId)}
               onClose={() => setSelectedCampId(null)}
               onSelectAnimal={(id) => setSelectedAnimalId(id)}
               liveCondition={liveConditions[selectedCampId]}

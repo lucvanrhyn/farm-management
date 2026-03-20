@@ -74,6 +74,19 @@ model TransactionCategory {
 model FarmSettings {
   id                  String   @id @default("singleton")
   alertThresholdHours Int      @default(48)
+  farmName            String   @default("My Farm")
+  breed               String   @default("Mixed")
   updatedAt           DateTime @updatedAt
   updatedBy           String?
+}
+
+model Camp {
+  id           String   @id @default(cuid())
+  campId       String   @unique
+  campName     String
+  sizeHectares Float?
+  waterSource  String?
+  geojson      String?
+  notes        String?
+  createdAt    DateTime @default(now())
 }

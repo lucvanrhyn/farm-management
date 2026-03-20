@@ -7,7 +7,8 @@ import HealthIssueForm from "@/components/logger/HealthIssueForm";
 import MovementForm from "@/components/logger/MovementForm";
 import CalvingForm from "@/components/logger/CalvingForm";
 import CampConditionForm from "@/components/logger/CampConditionForm";
-import { getCampById, getCampStats, getLastInspection, getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
+import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
+import type { Camp } from "@/lib/types";
 import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
@@ -32,11 +33,10 @@ export default function CampInspectionPage({
   const [allNormalDone, setAllNormalDone] = useState(false);
   const [animals, setAnimals] = useState<Animal[]>([]);
 
-  const camp = getCampById(decodedId);
-  const stats = getCampStats(decodedId);
-  const lastLog = getLastInspection(decodedId);
-  // Prefer IndexedDB live condition over dummy-data lastLog
-  const liveCamp = camps.find((c) => c.camp_id === decodedId);
+  const camp = camps.find((c) => c.camp_id === decodedId);
+  // camps in IndexedDB may carry merged condition fields (grazing_quality etc.) from updateCampCondition
+  const campWithCondition = camp as (Camp & { grazing_quality?: string }) | undefined;
+  const stats = { total: animals.length };
 
   // Load animals from IndexedDB
   useEffect(() => {
@@ -243,7 +243,7 @@ export default function CampInspectionPage({
     );
   }
 
-  const grazingQuality = liveCamp?.grazing_quality ?? lastLog?.grazing_quality ?? "Fair";
+  const grazingQuality = campWithCondition?.grazing_quality ?? "Fair";
   const grazingDot = getGrazingDot(grazingQuality);
   const grazingBadge = getGrazingTailwindBg(grazingQuality);
 
