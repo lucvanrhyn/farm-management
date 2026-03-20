@@ -3,6 +3,7 @@
 import { useState } from "react";
 import KampeTab from "@/components/admin/charts/KampeTab";
 import DiereTab from "@/components/admin/charts/DiereTab";
+import type { Camp } from "@/lib/types";
 import type {
   ConditionTrendPoint,
   HealthByCamp,
@@ -27,7 +28,7 @@ export interface GrafiekeData {
 
 type Tab = "kampe" | "diere";
 
-export default function GrafiekeClient({ data }: { data: GrafiekeData }) {
+export default function GrafiekeClient({ data, camps }: { data: GrafiekeData; camps: Camp[] }) {
   const [tab, setTab] = useState<Tab>("kampe");
 
   return (
@@ -50,7 +51,7 @@ export default function GrafiekeClient({ data }: { data: GrafiekeData }) {
         ))}
       </div>
 
-      {tab === "kampe" ? <KampeTab data={data} /> : <DiereTab data={data} />}
+      {tab === "kampe" ? <KampeTab data={data} camps={camps} /> : <DiereTab data={data} />}
     </div>
   );
 }

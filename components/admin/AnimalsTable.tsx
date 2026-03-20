@@ -2,15 +2,15 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { CAMPS } from "@/lib/dummy-data";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
-import type { AnimalCategory, AnimalStatus, PrismaAnimal } from "@/lib/types";
+import type { AnimalCategory, AnimalStatus, Camp, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 
 const PAGE_SIZE = 50;
 
 interface Props {
   animals: PrismaAnimal[];
+  camps: Camp[];
 }
 
 const farmInput =
@@ -18,7 +18,7 @@ const farmInput =
 const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
-export default function AnimalsTable({ animals }: Props) {
+export default function AnimalsTable({ animals, camps }: Props) {
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -97,7 +97,7 @@ export default function AnimalsTable({ animals }: Props) {
           }}
         >
           <option value="all">All Camps</option>
-          {CAMPS.map((c) => (
+          {camps.map((c) => (
             <option key={c.camp_id} value={c.camp_id}>
               {c.camp_name}
             </option>

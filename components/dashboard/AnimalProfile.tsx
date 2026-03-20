@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCampById, getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
+import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { PrismaAnimal, PrismaObservation } from "@/lib/types";
 
 type Tab = "overview" | "history";
@@ -34,8 +34,6 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
       .then((data: PrismaObservation[]) => setObservations(Array.isArray(data) ? data : []))
       .finally(() => setObsLoading(false));
   }, [animalId]);
-
-  const camp = animal && animal !== "loading" ? getCampById(animal.currentCamp) : undefined;
 
   const panelBg  = "#1E1710";
   const surfaceBg = "#261C12";
@@ -109,7 +107,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
           </div>
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Current Camp</p>
-            <p className="text-sm font-semibold text-white mt-0.5">{camp?.camp_name ?? animal.currentCamp}</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{animal.currentCamp}</p>
           </div>
           <div>
             <p className="text-xs" style={{ color: textMuted }}>Status</p>

@@ -1,4 +1,4 @@
-import { getAnimalsByCamp, getCategoryLabel } from "@/lib/utils";
+import { getCategoryLabel } from "@/lib/utils";
 import { Animal, AnimalCategory } from "@/lib/types";
 
 type ModalType = "health" | "movement" | "calving" | "death";
@@ -27,7 +27,7 @@ function getCategoryChipDark(category: AnimalCategory): string {
 }
 
 export default function AnimalChecklist({ campId, onFlag, animals: animalsProp }: AnimalChecklistProps) {
-  const animals = animalsProp ?? getAnimalsByCamp(campId);
+  const animals = animalsProp ?? [];
 
   if (animals.length === 0) {
     return (

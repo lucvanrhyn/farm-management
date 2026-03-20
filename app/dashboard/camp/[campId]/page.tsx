@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getCampById, getLastInspection, getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
+import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
+import { getLatestCampConditions } from "@/lib/server/camp-status";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
 
@@ -13,13 +14,16 @@ export default async function CampDetailPage({
 }) {
   const { campId } = await params;
   const decodedId = decodeURIComponent(campId);
-  const camp = getCampById(decodedId);
-  const lastLog = getLastInspection(decodedId);
-  const animals = await prisma.animal.findMany({
-    where: { currentCamp: decodedId, status: "Active" },
-    orderBy: [{ category: "asc" }, { animalId: "asc" }],
-    select: { animalId: true, category: true },
-  });
+  const [camp, animals, liveConditions] = await Promise.all([
+    prisma.camp.findFirst({ where: { campId: decodedId } }),
+    prisma.animal.findMany({
+      where: { currentCamp: decodedId, status: "Active" },
+      orderBy: [{ category: "asc" }, { animalId: "asc" }],
+      select: { animalId: true, category: true },
+    }),
+    getLatestCampConditions(),
+  ]);
+  const liveCondition = liveConditions.get(decodedId);
 
   // Compute stats from real animals
   const byCategory = animals.reduce<Partial<Record<AnimalCategory, number>>>((acc, a) => {
@@ -49,9 +53,9 @@ export default async function CampDetailPage({
           ← Map
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-white">Camp {camp.camp_name}</h1>
+          <h1 className="text-xl font-bold text-white">Camp {camp.campName}</h1>
           <p className="text-xs mt-0.5" style={{ color: muted }}>
-            {camp.size_hectares ? `${camp.size_hectares} ha · ` : ""}{camp.water_source}
+            {camp.sizeHectares ? `${camp.sizeHectares} ha · ` : ""}{camp.waterSource}
           </p>
         </div>
       </div>
@@ -61,12 +65,12 @@ export default async function CampDetailPage({
         <div className="rounded-2xl p-5" style={{ background: surface, border: `1px solid ${border}` }}>
           <h2 className="text-sm font-semibold text-white mb-4">Current Condition</h2>
           <div className="flex flex-wrap gap-2 mb-4">
-            <StatusIndicator type="grazing" status={lastLog?.grazing_quality ?? "Fair"} />
-            <StatusIndicator type="water" status={lastLog?.water_status ?? "Full"} />
-            <StatusIndicator type="fence" status={lastLog?.fence_status ?? "Intact"} />
+            <StatusIndicator type="grazing" status={liveCondition?.grazing_quality ?? "Fair"} />
+            <StatusIndicator type="water" status={liveCondition?.water_status ?? "Full"} />
+            <StatusIndicator type="fence" status={liveCondition?.fence_status ?? "Intact"} />
           </div>
           <p className="text-xs" style={{ color: muted }}>
-            Last inspection: {lastLog?.date ?? "Unknown"} · {lastLog?.inspected_by ?? "—"}
+            Last inspection: {liveCondition?.last_inspected_at?.split("T")[0] ?? "Unknown"} · {liveCondition?.last_inspected_by ?? "—"}
           </p>
         </div>
 

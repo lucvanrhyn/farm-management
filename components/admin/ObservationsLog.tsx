@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CAMPS } from "@/lib/dummy-data";
-import type { ObservationType, PrismaObservation } from "@/lib/types";
+import type { Camp, ObservationType, PrismaObservation } from "@/lib/types";
 
 const PAGE_SIZE = 50;
 
@@ -172,6 +171,7 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
 }
 
 export default function ObservationsLog() {
+  const [camps, setCamps] = useState<Camp[]>([]);
   const [campFilter, setCampFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<ObservationType | "all">("all");
   const [page, setPage] = useState(1);
@@ -179,6 +179,13 @@ export default function ObservationsLog() {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [editTarget, setEditTarget] = useState<PrismaObservation | null>(null);
+
+  useEffect(() => {
+    fetch("/api/camps")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Camp[]) => setCamps(data))
+      .catch(() => {});
+  }, []);
 
   const fetchObs = useCallback(async (campVal: string, typeVal: string, pageVal: number) => {
     setLoading(true);
@@ -234,7 +241,7 @@ export default function ObservationsLog() {
             style={lightSelect}
           >
             <option value="all">All Camps</option>
-            {CAMPS.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
+            {camps.map((c) => <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>)}
           </select>
 
           <select

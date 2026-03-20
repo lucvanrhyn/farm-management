@@ -2,52 +2,19 @@
 
 import { useState, useEffect } from "react";
 import StatusIndicator from "./StatusIndicator";
-import { getCampById, getLastInspection, getLast7DaysLogs, getCategoryLabel, getCategoryPluralLabel } from "@/lib/utils";
-import type { AnimalCategory, PrismaAnimal } from "@/lib/types";
+import { getCategoryLabel, getCategoryPluralLabel } from "@/lib/utils";
+import type { AnimalCategory, Camp, PrismaAnimal } from "@/lib/types";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 
 interface Props {
   campId: string;
+  camp?: Camp;
   onClose: () => void;
   onSelectAnimal: (animalId: string) => void;
   liveCondition?: LiveCampStatus;
 }
 
 const CATEGORY_ORDER: AnimalCategory[] = ["Cow", "Heifer", "Calf", "Bull", "Ox"];
-
-function Sparkline({ campId }: { campId: string }) {
-  const logs = getLast7DaysLogs(campId);
-  if (logs.length < 2) return null;
-
-  const counts = logs.map((l) => l.animal_count ?? 0);
-  const min = Math.min(...counts);
-  const max = Math.max(...counts);
-  const range = max - min || 1;
-
-  const W = 100;
-  const H = 32;
-  const points = counts.map((c, i) => {
-    const x = (i / (counts.length - 1)) * W;
-    const y = H - ((c - min) / range) * (H - 4) - 2;
-    return `${x},${y}`;
-  });
-
-  const lastPoint = points[points.length - 1].split(",");
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 32 }}>
-      <polyline
-        points={points.join(" ")}
-        fill="none"
-        stroke="#8B6914"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx={lastPoint[0]} cy={lastPoint[1]} r="2.5" fill="#C4A030" />
-    </svg>
-  );
-}
 
 // Warm palette tokens for the panel
 const P = {
@@ -76,9 +43,7 @@ const WARM_CHIP_TEXT: Record<string, string> = {
   Ox:     "#B09878",
 };
 
-export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveCondition }: Props) {
-  const camp = getCampById(campId);
-  const lastLog = getLastInspection(campId);
+export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal, liveCondition }: Props) {
   const [animals, setAnimals] = useState<PrismaAnimal[]>([]);
 
   useEffect(() => {
@@ -97,14 +62,11 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
     }, {}),
   };
 
-  // Prefer Prisma live data over dummy-data fallback
-  const grazing = liveCondition?.grazing_quality ?? lastLog?.grazing_quality ?? "Fair";
-  const water   = liveCondition?.water_status   ?? lastLog?.water_status   ?? "Full";
-  const fence   = liveCondition?.fence_status   ?? lastLog?.fence_status   ?? "Intact";
-  const lastInspectedDate = liveCondition?.last_inspected_at
-    ? liveCondition.last_inspected_at.split("T")[0]
-    : lastLog?.date ?? "Unknown";
-  const lastInspectedBy = liveCondition?.last_inspected_by ?? lastLog?.inspected_by ?? "—";
+  const grazing = liveCondition?.grazing_quality ?? "Fair";
+  const water   = liveCondition?.water_status   ?? "Full";
+  const fence   = liveCondition?.fence_status   ?? "Intact";
+  const lastInspectedDate = liveCondition?.last_inspected_at?.split("T")[0] ?? "Unknown";
+  const lastInspectedBy   = liveCondition?.last_inspected_by ?? "—";
 
   if (!camp) return null;
 
@@ -189,18 +151,14 @@ export default function CampDetailPanel({ campId, onClose, onSelectAnimal, liveC
           </div>
         </div>
 
-        {/* Last inspection + sparkline */}
+        {/* Last inspection */}
         <div className="px-5 py-4 border-b" style={{ borderColor: P.border }}>
           <p className="text-xs font-semibold mb-2" style={{ color: P.dim }}>
             Last inspection
           </p>
-          <p className="text-sm mb-3" style={{ color: P.cream }}>
+          <p className="text-sm" style={{ color: P.cream }}>
             {lastInspectedDate} · {lastInspectedBy}
           </p>
-          <p className="text-xs font-semibold mb-1" style={{ color: P.dim }}>
-            Animals (last 7 days)
-          </p>
-          <Sparkline campId={campId} />
         </div>
 
         {/* Animal list */}

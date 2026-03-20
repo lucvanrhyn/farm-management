@@ -2,14 +2,22 @@ import AdminNav from "@/components/admin/AdminNav";
 import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import { prisma } from "@/lib/prisma";
-import type { PrismaAnimal } from "@/lib/types";
+import type { Camp, PrismaAnimal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAnimalsPage() {
-  const animals = (await prisma.animal.findMany({
-    orderBy: [{ category: "asc" }, { animalId: "asc" }],
-  })) as unknown as PrismaAnimal[];
+  const [animals, prismaCamps] = await Promise.all([
+    prisma.animal.findMany({ orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
+    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+  ]);
+
+  const camps: Camp[] = prismaCamps.map((c) => ({
+    camp_id: c.campId,
+    camp_name: c.campName,
+    size_hectares: c.sizeHectares ?? undefined,
+    water_source: c.waterSource ?? undefined,
+  }));
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
@@ -24,7 +32,7 @@ export default async function AdminAnimalsPage() {
           </div>
           <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
         </div>
-        <AnimalsTable animals={animals} />
+        <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} />
       </main>
     </div>
   );

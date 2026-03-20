@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { CAMPS } from "@/lib/dummy-data";
-import { getLastInspection } from "@/lib/utils";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { prisma } from "@/lib/prisma";
+import type { Camp } from "@/lib/types";
 
 function grazingColor(g: string): { color: string; bg: string } {
   if (g === "Excellent") return { color: "#4A7C59", bg: "rgba(74,124,89,0.18)" };
@@ -12,15 +11,15 @@ function grazingColor(g: string): { color: string; bg: string } {
   return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
 }
 
-export default async function CampsTable() {
+export default async function CampsTable({ camps }: { camps: Camp[] }) {
   const liveConditions = await getLatestCampConditions();
 
   const animalCounts = await Promise.all(
-    CAMPS.map((camp) =>
+    camps.map((camp) =>
       prisma.animal.count({ where: { currentCamp: camp.camp_id, status: "Active" } })
     )
   );
-  const countByCamp = new Map(CAMPS.map((camp, i) => [camp.camp_id, animalCounts[i]]));
+  const countByCamp = new Map(camps.map((camp, i) => [camp.camp_id, animalCounts[i]]));
 
   return (
     <div
@@ -47,17 +46,14 @@ export default async function CampsTable() {
           </tr>
         </thead>
         <tbody>
-          {CAMPS.map((camp) => {
+          {camps.map((camp) => {
             const liveCount = countByCamp.get(camp.camp_id) ?? 0;
-            const lastLog = getLastInspection(camp.camp_id);
             const live = liveConditions.get(camp.camp_id);
 
-            const grazing = live?.grazing_quality ?? lastLog?.grazing_quality ?? "Fair";
-            const fence = live?.fence_status ?? lastLog?.fence_status ?? "Intact";
-            const lastDate = live
-              ? live.last_inspected_at.split("T")[0]
-              : lastLog?.date ?? "—";
-            const lastBy = live?.last_inspected_by ?? lastLog?.inspected_by ?? "—";
+            const grazing = live?.grazing_quality ?? "Fair";
+            const fence = live?.fence_status ?? "Intact";
+            const lastDate = live ? live.last_inspected_at.split("T")[0] : "—";
+            const lastBy = live?.last_inspected_by ?? "—";
             const gc = grazingColor(grazing);
 
             return (
