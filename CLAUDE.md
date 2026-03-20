@@ -1,73 +1,109 @@
-# Agent Instructions
+# FarmTrack — Agent Instructions
 
-You're working inside the **WAT framework** (Workflows, Agents, Tools). This architecture separates concerns so that probabilistic AI handles reasoning while deterministic code handles execution. That separation is what makes this system reliable.
+FarmTrack is a multi-tenant livestock farm management SaaS built on Next.js 16 App Router,
+Prisma 5 + Turso (libSQL), next-auth v4, Tailwind, and Serwist PWA.
 
-## The WAT Architecture
+Local dev: `pnpm dev --port 3001`
+Deployed: https://farm-management-lilac.vercel.app
 
-**Layer 1: Workflows (The Instructions)**
-- Markdown SOPs stored in `workflows/`
-- Each workflow defines the objective, required inputs, which tools to use, expected outputs, and how to handle edge cases
-- Written in plain language, the same way you'd brief someone on your team
+---
 
-**Layer 2: Agents (The Decision-Maker)**
-- This is your role. You're responsible for intelligent coordination.
-- Read the relevant workflow, run tools in the correct sequence, handle failures gracefully, and ask clarifying questions when needed
-- You connect intent to execution without trying to do everything yourself
-- Example: If you need to pull data from a website, don't attempt it directly. Read `workflows/scrape_website.md`, figure out the required inputs, then execute `tools/scrape_single_site.py`
+## Critical Build Rules
 
-**Layer 3: Tools (The Execution)**
-- Python scripts in `tools/` that do the actual work
-- API calls, data transformations, file operations, database queries
-- Credentials and API keys are stored in `.env`
-- These scripts are consistent, testable, and fast
+- **Build command:** `pnpm build --webpack` — Turbopack breaks Serwist. Never use `turbo` flag for builds.
+- **Schema changes:** Use `turso db shell delta-livestock "ALTER TABLE ..."` directly. Do NOT run `prisma db push` — it will break the Turso remote database.
+- **tsc gotcha:** `tsconfig.json` has `incremental: true`. Always run `rm -rf .next/cache/tsbuildinfo .tsbuildinfo` before trusting a clean `tsc` result.
+- **Next.js 16 params:** Must be awaited — `{ params }: { params: Promise<{ campId: string }> }`.
 
-**Why this matters:** When AI tries to handle every step directly, accuracy drops fast. If each step is 90% accurate, you're down to 59% success after just five steps. By offloading execution to deterministic scripts, you stay focused on orchestration and decision-making where you excel.
+---
 
-## How to Operate
+## Data Principles (No Dummy Data)
 
-**1. Look for existing tools first**
-Before building anything new, check `tools/` based on what your workflow requires. Only create new scripts when nothing exists for that task.
+**`dummy-data.ts` must never be imported anywhere in the app.** All camp and farm data
+comes from the database via API routes or Prisma server queries.
 
-**2. Learn and adapt when things fail**
-When you hit an error:
-- Read the full error message and trace
-- Fix the script and retest (if it uses paid API calls or credits, check with me before running again)
-- Document what you learned in the workflow (rate limits, timing quirks, unexpected behavior)
-- Example: You get rate-limited on an API, so you dig into the docs, discover a batch endpoint, refactor the tool to use it, verify it works, then update the workflow so this never happens again
+### Camp data flow
 
-**3. Keep workflows current**
-Workflows should evolve as you learn. When you find better methods, discover constraints, or encounter recurring issues, update the workflow. That said, don't create or overwrite workflows without asking unless I explicitly tell you to. These are your instructions and need to be preserved and refined, not tossed after one use.
+- **Server components** (pages, layouts): query Prisma directly — `prisma.camp.findMany()`.
+  Prisma returns camelCase (`campId`, `campName`, `sizeHectares`, `waterSource`).
+  Map to snake_case before passing to client components as `Camp[]`.
+- **Client components**: fetch from `/api/camps` (returns snake_case to match `Camp` type in `lib/types.ts`).
+- **OfflineProvider / logger**: uses `useOffline().camps` backed by IndexedDB + `/api/camps` refresh.
 
-## The Self-Improvement Loop
+### API routes (all require next-auth session)
 
-Every failure is a chance to make the system stronger:
-1. Identify what broke
-2. Fix the tool
-3. Verify the fix works
-4. Update the workflow with the new approach
-5. Move on with a more robust system
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/camps` | GET | `prisma.camp.findMany()` + animal counts, snake_case response |
+| `/api/camps` | POST | Create camp, blocks duplicate campId |
+| `/api/camps/[campId]` | DELETE | Delete camp, blocks if has active animals |
+| `/api/camps/reset` | DELETE | Delete all camps, blocks if any active animals exist |
+| `/api/farm` | GET | `{ farmName, breed, animalCount, campCount }` from DB |
 
-This loop is how the framework improves over time.
+### `/api/camps` response shape (snake_case)
 
-## File Structure
-
-**What goes where:**
-- **Deliverables**: Final outputs go to cloud services (Google Sheets, Slides, etc.) where I can access them directly
-- **Intermediates**: Temporary processing files that can be regenerated
-
-**Directory layout:**
-```
-.tmp/           # Temporary files (scraped data, intermediate exports). Regenerated as needed.
-tools/          # Python scripts for deterministic execution
-workflows/      # Markdown SOPs defining what to do and how
-.env            # API keys and environment variables (NEVER store secrets anywhere else)
-credentials.json, token.json  # Google OAuth (gitignored)
+```ts
+{ camp_id, camp_name, size_hectares, water_source, geojson, notes, animal_count }
 ```
 
-**Core principle:** Local files are just for processing. Anything I need to see or use lives in cloud services. Everything in `.tmp/` is disposable.
+---
 
-## Bottom Line
+## Key Component Contracts
 
-You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
+### SchematicMap
 
-Stay pragmatic. Stay reliable. Keep learning.
+```ts
+props: {
+  onCampClick: (campId: string) => void
+  filterBy: FilterType
+  selectedCampId: string | null
+  liveConditions: Record<string, LiveCondition>
+  camps: Camp[]
+  campAnimalCounts: Record<string, number>
+}
+```
+
+`getCampColors` is a **pure function**: `(filterBy, liveCondition, animalCount, sizeHectares) => colors`.
+It has no imports from dummy-data and no side effects.
+
+### DashboardClient
+
+Receives `camps: Camp[]` and `liveConditions` as props from `app/dashboard/page.tsx`
+(which fetches from Prisma). Computes `alertCount` and `inspectedToday` inline from `liveConditions` —
+never calls `getAlertCount()` or `getInspectedToday()` from utils.
+
+### OfflineProvider type cast
+
+`useOffline().camps` is typed `Camp[]` but IndexedDB records at runtime can have condition fields
+merged in (e.g. `grazing_quality`, `water_status`). Use `camp as (Camp & { grazing_quality?: string })`
+to access merged fields.
+
+---
+
+## Prisma / Turso
+
+- Prisma client targets Turso via `@prisma/adapter-libsql` + `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`.
+- Local: `.env.local` must contain Turso creds.
+- Seed script: `scripts/seed-camps.ts` — run with `npx tsx scripts/seed-camps.ts`.
+  Note: script uses `dotenv.config({ path: ".env" })` but Turso creds are in `.env.local`;
+  pass creds as shell env vars or insert via `turso db shell` directly if dotenv interferes.
+
+---
+
+## Removed Utils (do not re-add)
+
+These functions were deleted from `lib/utils.ts` because they depended on dummy-data:
+
+`getLastInspection`, `getCampStats`, `getCampById`, `getStockingDensity`,
+`daysSinceInspection`, `campHasAlert`, `getLast7DaysLogs`, `getAnimalsByCamp`,
+`getInspectedToday`, `getAlertCount`
+
+If similar functionality is needed, compute it from the live data passed as props or fetched from the API.
+
+---
+
+## Product Direction
+
+FarmTrack is a **multi-tenant SaaS** for any livestock farm — not a Delta Livestock-specific app.
+Keep all code generic: no hardcoded farm names, breed names, or farm-specific data in source code.
+Farm identity (`farmName`, `breed`) lives in the `FarmSettings` DB table.
