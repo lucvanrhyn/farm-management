@@ -10,7 +10,7 @@ export async function proxy(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token) {
+  if (!token || !Array.isArray(token.farms)) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

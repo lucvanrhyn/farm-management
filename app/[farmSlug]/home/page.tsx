@@ -2,6 +2,7 @@
 
 import { signOut } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { AnimatedHero } from "@/components/ui/animated-hero";
 
 const SECTIONS = [
@@ -40,6 +41,21 @@ const SECTIONS = [
   },
 ];
 
+const cardVariants = {
+  hidden: { opacity: 0, y: 24, scale: 0.95 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring" as const,
+      stiffness: 200,
+      damping: 22,
+      delay: i * 0.08,
+    },
+  }),
+};
+
 export default function HomePage() {
   const router = useRouter();
   const params = useParams();
@@ -71,17 +87,29 @@ export default function HomePage() {
 
         {/* Section cards */}
         <div className="grid grid-cols-3 gap-4 w-full">
-          {SECTIONS.map((section) => (
-            <button
+          {SECTIONS.map((section, i) => (
+            <motion.button
               key={section.path}
+              custom={i}
+              variants={cardVariants}
+              initial="hidden"
+              animate="show"
+              whileHover={{
+                scale: 1.03,
+                transition: { type: "spring", stiffness: 300, damping: 20 },
+              }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => router.push(`/${farmSlug}${section.path}`)}
-              className="group flex flex-col items-center gap-3 rounded-2xl px-4 py-6 transition-all duration-200"
+              className="group flex flex-col items-center gap-3 px-4 py-6"
               style={{
+                borderRadius: "2rem",
                 background: "rgba(5,3,1,0.52)",
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
                 border: "1px solid rgba(255,255,255,0.07)",
                 boxShadow: "0 4px 24px rgba(0,0,0,0.40)",
+                cursor: "pointer",
+                minHeight: "140px",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "rgba(12,7,2,0.70)";
@@ -139,7 +167,7 @@ export default function HomePage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
-            </button>
+            </motion.button>
           ))}
         </div>
 

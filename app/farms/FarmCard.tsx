@@ -1,34 +1,38 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import type { SessionFarm } from '@/types/next-auth';
 
-export function FarmCard({ farm }: { farm: SessionFarm }) {
+export function FarmCard({ farm, index }: { farm: SessionFarm; index: number }) {
   return (
-    <a
+    <motion.a
       href={`/api/farms/${farm.slug}/select`}
-      className="group flex items-center justify-between rounded-2xl px-6 py-5 transition-all duration-200"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 24, delay: index * 0.07 }}
+      whileHover={{ scale: 1.015, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
+      whileTap={{ scale: 0.98 }}
+      className="group flex items-center justify-between px-6 py-5"
       style={{
-        background: 'rgba(5,3,1,0.58)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: '2rem',
+        background: '#241C14',
+        border: '1px solid rgba(196,144,48,0.18)',
         boxShadow: '0 4px 24px rgba(0,0,0,0.40)',
         textDecoration: 'none',
+        cursor: 'pointer',
       }}
       onMouseEnter={(e) => {
         const el = e.currentTarget;
-        el.style.background = 'rgba(12,7,2,0.70)';
-        el.style.border = '1px solid rgba(196,144,48,0.30)';
-        el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(196,144,48,0.15)';
+        el.style.border = '1px solid rgba(196,144,48,0.40)';
+        el.style.boxShadow = '0 0 32px rgba(196,144,48,0.08), 0 8px 32px rgba(0,0,0,0.55)';
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget;
-        el.style.background = 'rgba(5,3,1,0.58)';
-        el.style.border = '1px solid rgba(255,255,255,0.07)';
+        el.style.border = '1px solid rgba(196,144,48,0.18)';
         el.style.boxShadow = '0 4px 24px rgba(0,0,0,0.40)';
       }}
     >
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-1">
         <span
           style={{
             fontFamily: 'var(--font-display)',
@@ -43,9 +47,9 @@ export function FarmCard({ farm }: { farm: SessionFarm }) {
         <span
           style={{
             fontFamily: 'var(--font-sans)',
-            color: '#7A5840',
+            color: '#6A4E30',
             fontSize: '0.7rem',
-            letterSpacing: '0.06em',
+            letterSpacing: '0.07em',
             textTransform: 'uppercase',
           }}
         >
@@ -63,6 +67,6 @@ export function FarmCard({ farm }: { farm: SessionFarm }) {
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
       </svg>
-    </a>
+    </motion.a>
   );
 }

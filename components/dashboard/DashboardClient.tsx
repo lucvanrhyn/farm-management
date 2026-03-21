@@ -559,6 +559,7 @@ export default function DashboardClient({
           ) : selectedCampId ? (
             <CampDetailPanel
               campId={selectedCampId}
+              camp={camps.find((c) => c.camp_id === selectedCampId)}
               onClose={() => setSelectedCampId(null)}
               onSelectAnimal={(id) => setSelectedAnimalId(id)}
               liveCondition={liveConditions[selectedCampId]}
