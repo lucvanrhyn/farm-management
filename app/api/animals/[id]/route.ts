@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForRequest } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,6 +9,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const { id } = await params;
 
@@ -28,6 +32,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const { id } = await params;
   const body = await req.json();

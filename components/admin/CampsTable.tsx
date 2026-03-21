@@ -1,10 +1,13 @@
 import { getLatestCampConditions } from "@/lib/server/camp-status";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 import CampsTableClient, { type CampRow } from "./CampsTableClient";
 
-export default async function CampsTable({ camps }: { camps: Camp[] }) {
-  const liveConditions = await getLatestCampConditions();
+export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; farmSlug: string }) {
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
+
+  const liveConditions = await getLatestCampConditions(prisma);
 
   const animalCounts = await Promise.all(
     camps.map((camp) =>

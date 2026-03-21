@@ -58,14 +58,14 @@ const serwist = new Serwist({
       }),
     },
     // Cache logger camp pages from background warm-up fetches.
-    // When LoggerLayout mounts online it pre-fetches each /logger/[campId] via
+    // When LoggerLayout mounts online it pre-fetches each /[farmSlug]/logger/[campId] via
     // fetch(), which has mode="same-origin" (not "navigate") and therefore
     // misses the navigate rule above. This rule catches those requests and
     // stores the responses in the same "pages" cache so that the navigate rule
     // can serve them offline on subsequent hard navigations.
     {
       matcher: ({ url, request }: { url: URL; request: Request }) =>
-        url.pathname.startsWith("/logger/") && request.mode !== "navigate",
+        /\/logger\//.test(url.pathname) && request.mode !== "navigate",
       handler: new StaleWhileRevalidate({
         cacheName: "pages",
         plugins: [

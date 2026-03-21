@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForRequest } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { revalidatePath } from "next/cache";
 
@@ -10,6 +10,10 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const count = await prisma.transactionCategory.count();
   if (count === 0) {
@@ -31,6 +35,10 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const { name, type } = await request.json();
   if (!name || !type || !["income", "expense"].includes(type)) {

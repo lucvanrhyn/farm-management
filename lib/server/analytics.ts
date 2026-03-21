@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { type PrismaClient } from "@prisma/client";
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -38,7 +38,7 @@ export interface ConditionTrendPoint {
   count: number;
 }
 
-export async function getCampConditionTrend(days = 30): Promise<ConditionTrendPoint[]> {
+export async function getCampConditionTrend(prisma: PrismaClient, days = 30): Promise<ConditionTrendPoint[]> {
   const rows = await prisma.observation.findMany({
     where: { type: "camp_condition", observedAt: { gte: daysAgo(days) } },
     select: { observedAt: true, details: true },
@@ -69,7 +69,7 @@ export interface HealthByCamp {
   count: number;
 }
 
-export async function getHealthIssuesByCamp(days = 30): Promise<HealthByCamp[]> {
+export async function getHealthIssuesByCamp(prisma: PrismaClient, days = 30): Promise<HealthByCamp[]> {
   const rows = await prisma.observation.groupBy({
     by: ["campId"],
     where: { type: "health_issue", observedAt: { gte: daysAgo(days) } },
@@ -87,7 +87,7 @@ export interface HeadcountByCamp {
   count: number;
 }
 
-export async function getHeadcountByCamp(): Promise<HeadcountByCamp[]> {
+export async function getHeadcountByCamp(prisma: PrismaClient): Promise<HeadcountByCamp[]> {
   const rows = await prisma.animal.groupBy({
     by: ["currentCamp", "category"],
     where: { status: "Active" },
@@ -108,7 +108,7 @@ export interface HeatmapCell {
   count: number;
 }
 
-export async function getInspectionHeatmap(days = 30): Promise<HeatmapCell[]> {
+export async function getInspectionHeatmap(prisma: PrismaClient, days = 30): Promise<HeatmapCell[]> {
   const rows = await prisma.observation.findMany({
     where: {
       type: { in: ["camp_check", "camp_condition"] },
@@ -140,7 +140,7 @@ export interface MovementRecord {
   loggedBy: string | null;
 }
 
-export async function getAnimalMovements(days = 30): Promise<MovementRecord[]> {
+export async function getAnimalMovements(prisma: PrismaClient, days = 30): Promise<MovementRecord[]> {
   const rows = await prisma.observation.findMany({
     where: { type: "animal_movement", observedAt: { gte: daysAgo(days) } },
     orderBy: { observedAt: "desc" },
@@ -168,7 +168,7 @@ export interface CalvingPoint {
   count: number;
 }
 
-export async function getCalvingTrend(months = 12): Promise<CalvingPoint[]> {
+export async function getCalvingTrend(prisma: PrismaClient, months = 12): Promise<CalvingPoint[]> {
   const rows = await prisma.observation.findMany({
     where: { type: "reproduction", observedAt: { gte: monthsAgo(months) } },
     select: { observedAt: true, details: true },
@@ -196,15 +196,12 @@ export interface AttritionPoint {
   sales: number;
 }
 
-export async function getDeathsAndSales(months = 12): Promise<AttritionPoint[]> {
-  // Use death/sold observations as the source of truth
+export async function getDeathsAndSales(prisma: PrismaClient, months = 12): Promise<AttritionPoint[]> {
   const deathObs = await prisma.observation.findMany({
     where: { type: "death", observedAt: { gte: monthsAgo(months) } },
     select: { observedAt: true },
   });
 
-  // For sales: animals with status=Sold, using dateAdded as proxy (no sale date field)
-  // Better source: look for any observation type we can link — fall back to animal.status change
   const soldAnimals = await prisma.animal.findMany({
     where: { status: "Sold" },
     select: { dateAdded: true },
@@ -243,7 +240,7 @@ export interface WithdrawalRecord {
   observedAt: string;
 }
 
-export async function getWithdrawalTracker(): Promise<WithdrawalRecord[]> {
+export async function getWithdrawalTracker(prisma: PrismaClient): Promise<WithdrawalRecord[]> {
   const rows = await prisma.observation.findMany({
     where: { type: "treatment" },
     orderBy: { observedAt: "desc" },

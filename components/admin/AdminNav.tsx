@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -14,30 +15,17 @@ import {
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 
-const groups = [
-  {
-    label: "Data",
-    links: [
-      { href: "/admin",              label: "Overview",      icon: LayoutDashboard },
-      { href: "/admin/animals",      label: "Animals",       icon: PawPrint        },
-      { href: "/admin/observations", label: "Observations",  icon: ClipboardList   },
-      { href: "/admin/camps",        label: "Camps",         icon: Tent            },
-    ],
-  },
-  {
-    label: "Finance",
-    links: [
-      { href: "/admin/finansies",    label: "Finances",      icon: Receipt         },
-      { href: "/admin/grafieke",     label: "Charts",        icon: BarChart3       },
-    ],
-  },
-  {
-    label: "Tools",
-    links: [
-      { href: "/admin/import",       label: "Import",        icon: Upload          },
-    ],
-  },
+const NAV_ITEMS = [
+  { path: "/admin",              label: "Overview",      icon: LayoutDashboard, group: "Data"    },
+  { path: "/admin/animals",      label: "Animals",       icon: PawPrint,        group: "Data"    },
+  { path: "/admin/observations", label: "Observations",  icon: ClipboardList,   group: "Data"    },
+  { path: "/admin/camps",        label: "Camps",         icon: Tent,            group: "Data"    },
+  { path: "/admin/finansies",    label: "Finances",      icon: Receipt,         group: "Finance" },
+  { path: "/admin/grafieke",     label: "Charts",        icon: BarChart3,       group: "Finance" },
+  { path: "/admin/import",       label: "Import",        icon: Upload,          group: "Tools"   },
 ];
+
+const GROUP_ORDER = ["Data", "Finance", "Tools"];
 
 const linkVariants = {
   hidden: { opacity: 0, x: -8 },
@@ -89,7 +77,22 @@ function NavLink({
   );
 }
 
-export default function AdminNav({ active }: { active: string }) {
+export default function AdminNav() {
+  const pathname = usePathname();
+  // pathname is e.g. "/trio-b-boerdery/admin/camps" — first segment is the farmSlug
+  const farmSlug = pathname.split("/")[1];
+
+  const groups = GROUP_ORDER.map((groupLabel) => ({
+    label: groupLabel,
+    links: NAV_ITEMS
+      .filter((item) => item.group === groupLabel)
+      .map((item) => ({
+        href: `/${farmSlug}${item.path}`,
+        label: item.label,
+        icon: item.icon,
+      })),
+  }));
+
   return (
     <nav
       className="w-52 shrink-0 min-h-screen p-3 flex flex-col"
@@ -140,7 +143,7 @@ export default function AdminNav({ active }: { active: string }) {
                   href={link.href}
                   label={link.label}
                   icon={link.icon}
-                  isActive={active === link.href}
+                  isActive={pathname === link.href}
                 />
               ))}
             </motion.div>

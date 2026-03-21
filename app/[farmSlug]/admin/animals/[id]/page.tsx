@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
@@ -35,9 +35,11 @@ function getObsSummary(type: string, detailsJson: string): string {
 export default async function AnimalDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ farmSlug: string; id: string }>;
 }) {
-  const { id } = await params;
+  const { farmSlug, id } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return <p>Farm not found.</p>;
   const animal = await prisma.animal.findUnique({ where: { animalId: id } });
   if (!animal) notFound();
 
@@ -53,7 +55,7 @@ export default async function AnimalDetailPage({
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       {/* Back */}
       <Link
-        href="/admin/animals"
+        href={`/${farmSlug}/admin/animals`}
         className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"
       >
         ← Back to Animals
@@ -96,7 +98,7 @@ export default async function AnimalDetailPage({
           <div>
             <p className="text-xs text-stone-400">Current camp</p>
             <Link
-              href={`/dashboard/camp/${animal.currentCamp}`}
+              href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
               className="font-semibold text-green-700 hover:underline"
             >
               {camp?.campName ?? animal.currentCamp}
@@ -115,7 +117,7 @@ export default async function AnimalDetailPage({
           {animal.motherId && (
             <div>
               <p className="text-xs text-stone-400">Mother</p>
-              <Link href={`/admin/animals/${animal.motherId}`} className="font-mono font-semibold text-green-700 hover:underline">
+              <Link href={`/${farmSlug}/admin/animals/${animal.motherId}`} className="font-mono font-semibold text-green-700 hover:underline">
                 {animal.motherId}
               </Link>
             </div>
@@ -123,7 +125,7 @@ export default async function AnimalDetailPage({
           {animal.fatherId && (
             <div>
               <p className="text-xs text-stone-400">Sire (Bull)</p>
-              <Link href={`/admin/animals/${animal.fatherId}`} className="font-mono font-semibold text-green-700 hover:underline">
+              <Link href={`/${farmSlug}/admin/animals/${animal.fatherId}`} className="font-mono font-semibold text-green-700 hover:underline">
                 {animal.fatherId}
               </Link>
             </div>

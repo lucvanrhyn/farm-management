@@ -1,16 +1,19 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export function SignOutButton() {
   const router = useRouter();
+  const pathname = usePathname();
+  // pathname is e.g. "/trio-b-boerdery/logger" — first segment is the farmSlug
+  const farmSlug = pathname.split("/")[1];
 
   return (
     <div className="flex flex-col gap-1">
       {/* Exit → back to hub (no sign out) */}
       <button
-        onClick={() => router.push("/home")}
+        onClick={() => router.push(`/${farmSlug}/home`)}
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-amber-600 hover:bg-amber-950/30 hover:text-amber-500 group"
         title="Back to home"
       >

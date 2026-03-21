@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
@@ -10,10 +10,26 @@ export const dynamic = "force-dynamic";
 export default async function CampDetailPage({
   params,
 }: {
-  params: Promise<{ campId: string }>;
+  params: Promise<{ farmSlug: string; campId: string }>;
 }) {
-  const { campId } = await params;
+  const { farmSlug, campId } = await params;
   const decodedId = decodeURIComponent(campId);
+  const dashboardRoot = `/${farmSlug}/dashboard`;
+
+  const prisma = await getPrismaForFarm(farmSlug);
+  const bg = "#0f172a";
+  const surface = "#1e293b";
+  const border = "#334155";
+  const muted = "#94a3b8";
+
+  if (!prisma) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: bg }}>
+        <p style={{ color: muted }}>Farm not found.</p>
+      </div>
+    );
+  }
+
   const [camp, animals, liveConditions] = await Promise.all([
     prisma.camp.findFirst({ where: { campId: decodedId } }),
     prisma.animal.findMany({
@@ -21,7 +37,7 @@ export default async function CampDetailPage({
       orderBy: [{ category: "asc" }, { animalId: "asc" }],
       select: { animalId: true, category: true },
     }),
-    getLatestCampConditions(),
+    getLatestCampConditions(prisma),
   ]);
   const liveCondition = liveConditions.get(decodedId);
 
@@ -31,11 +47,6 @@ export default async function CampDetailPage({
     acc[cat] = (acc[cat] ?? 0) + 1;
     return acc;
   }, {});
-
-  const bg = "#0f172a";
-  const surface = "#1e293b";
-  const border = "#334155";
-  const muted = "#94a3b8";
 
   if (!camp) {
     return (
@@ -49,7 +60,7 @@ export default async function CampDetailPage({
     <div className="h-full overflow-y-auto" style={{ background: bg, color: "#f1f5f9" }}>
       {/* Header */}
       <div className="px-6 py-5 border-b flex items-center gap-4" style={{ borderColor: border, background: surface }}>
-        <Link href="/dashboard" className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
+        <Link href={dashboardRoot} className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
           ← Map
         </Link>
         <div>
@@ -96,7 +107,7 @@ export default async function CampDetailPage({
             {animals.map((a) => (
               <Link
                 key={a.animalId}
-                href={`/dashboard/animal/${a.animalId}`}
+                href={`/${farmSlug}/dashboard/animal/${a.animalId}`}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm hover:opacity-80 transition-opacity"
                 style={{ background: "#334155" }}
               >

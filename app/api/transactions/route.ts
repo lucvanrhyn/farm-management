@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForRequest } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
 
 export async function GET(request: NextRequest) {
@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
@@ -39,6 +43,10 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const body = await request.json();
   const { type, category, amount, date, description, animalId, campId, reference } = body;

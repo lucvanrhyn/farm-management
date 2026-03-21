@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { AnimalCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,24 @@ export const dynamic = "force-dynamic";
 export default async function AnimalProfilePage({
   params,
 }: {
-  params: Promise<{ animalId: string }>;
+  params: Promise<{ farmSlug: string; animalId: string }>;
 }) {
-  const { animalId } = await params;
+  const { farmSlug, animalId } = await params;
+
+  const bg = "#0f172a";
+  const surface = "#1e293b";
+  const border = "#334155";
+  const muted = "#94a3b8";
+
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: bg }}>
+        <p style={{ color: muted }}>Farm not found.</p>
+      </div>
+    );
+  }
+
   const animal = await prisma.animal.findUnique({ where: { animalId } });
   const [campRecord, observations] = await Promise.all([
     animal ? prisma.camp.findFirst({ where: { campId: animal.currentCamp } }) : Promise.resolve(null),
@@ -18,11 +33,6 @@ export default async function AnimalProfilePage({
       ? prisma.observation.findMany({ where: { animalId }, orderBy: { observedAt: "desc" }, take: 100 })
       : Promise.resolve([]),
   ]);
-
-  const bg = "#0f172a";
-  const surface = "#1e293b";
-  const border = "#334155";
-  const muted = "#94a3b8";
 
   if (!animal) {
     return (
@@ -35,7 +45,7 @@ export default async function AnimalProfilePage({
   return (
     <div className="min-h-screen" style={{ background: bg, color: "#f1f5f9" }}>
       <div className="px-6 py-5 border-b flex items-center gap-4" style={{ borderColor: border, background: surface }}>
-        <Link href={`/dashboard/camp/${animal.currentCamp}`} className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
+        <Link href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`} className="px-3 py-1.5 rounded-lg text-sm" style={{ background: "#334155", color: muted }}>
           ← {animal.currentCamp}
         </Link>
         <div className="flex items-center gap-3">

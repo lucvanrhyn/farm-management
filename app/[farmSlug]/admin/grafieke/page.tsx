@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
 import AdminNav from "@/components/admin/AdminNav";
 import GrafiekeClient from "@/components/admin/GrafiekeClient";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 import {
   getCampConditionTrend,
@@ -18,9 +18,17 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function GrafiekePage() {
+export default async function GrafiekePage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+
+  const { farmSlug } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return <p>Farm not found.</p>;
 
   const [
     conditionTrend,
@@ -33,14 +41,14 @@ export default async function GrafiekePage() {
     withdrawals,
     prismaCamps,
   ] = await Promise.all([
-    getCampConditionTrend(30),
-    getHealthIssuesByCamp(30),
-    getHeadcountByCamp(),
-    getInspectionHeatmap(30),
-    getAnimalMovements(30),
-    getCalvingTrend(12),
-    getDeathsAndSales(12),
-    getWithdrawalTracker(),
+    getCampConditionTrend(prisma, 30),
+    getHealthIssuesByCamp(prisma, 30),
+    getHeadcountByCamp(prisma),
+    getInspectionHeatmap(prisma, 30),
+    getAnimalMovements(prisma, 30),
+    getCalvingTrend(prisma, 12),
+    getDeathsAndSales(prisma, 12),
+    getWithdrawalTracker(prisma),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
@@ -53,7 +61,7 @@ export default async function GrafiekePage() {
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav active="/admin/grafieke" />
+      <AdminNav />
       <main className="flex-1 p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-[#1C1815]">Charts</h1>
