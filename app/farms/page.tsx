@@ -12,18 +12,14 @@ export default async function FarmsPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url("/brangus.jpg")',
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
+      style={{ background: "#1A1510" }}
     >
-      {/* Overlay */}
+      {/* Radial amber glow */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(8,5,2,0.78) 0%, rgba(8,5,2,0.48) 45%, rgba(8,5,2,0.82) 100%)",
+            "radial-gradient(ellipse 60% 50% at 50% 55%, rgba(196,144,48,0.09) 0%, transparent 70%)",
           zIndex: 1,
         }}
       />
@@ -43,23 +39,23 @@ export default async function FarmsPage() {
               letterSpacing: "0.01em",
             }}
           >
-            Select a Farm
+            Welcome back, {session.user.name ?? session.user.username}
           </h1>
           <p
             style={{
               fontFamily: "var(--font-sans)",
-              color: "#7A5840",
-              fontSize: "0.8125rem",
-              letterSpacing: "0.06em",
+              color: "#6A4E30",
+              fontSize: "0.75rem",
+              letterSpacing: "0.08em",
               textTransform: "uppercase",
             }}
           >
-            Welcome, {session.user.name ?? session.user.username}
+            Select a farm to continue
           </p>
           <div className="flex items-center justify-center gap-3 mt-1">
-            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.30)" }} />
-            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(196,144,48,0.45)" }} />
-            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.30)" }} />
+            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.25)" }} />
+            <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: "rgba(196,144,48,0.40)" }} />
+            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.25)" }} />
           </div>
         </div>
 
@@ -70,9 +66,9 @@ export default async function FarmsPage() {
               fontFamily: "var(--font-sans)",
               color: "#7A5840",
               fontSize: "0.9rem",
-              background: "rgba(5,3,1,0.52)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: "16px",
+              background: "#241C14",
+              border: "1px solid rgba(196,144,48,0.18)",
+              borderRadius: "2rem",
               padding: "1.5rem 2rem",
             }}
           >
@@ -80,8 +76,8 @@ export default async function FarmsPage() {
           </p>
         ) : (
           <div className="flex flex-col gap-3 w-full">
-            {farms.map((farm) => (
-              <FarmCard key={farm.slug} farm={farm} />
+            {farms.map((farm, i) => (
+              <FarmCard key={farm.slug} farm={farm} index={i} />
             ))}
           </div>
         )}
@@ -89,7 +85,7 @@ export default async function FarmsPage() {
 
       <footer
         className="absolute bottom-6 text-xs text-center"
-        style={{ color: "#4A3020", fontFamily: "var(--font-sans)", zIndex: 10 }}
+        style={{ color: "#3A2A1A", fontFamily: "var(--font-sans)", zIndex: 10 }}
       >
         © {new Date().getFullYear()} FarmTrack
       </footer>

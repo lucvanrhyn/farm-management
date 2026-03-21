@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,65 +61,70 @@ export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url("/brangus.jpg")',
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
+      style={{ background: "#1A1510" }}
     >
+      {/* Radial amber glow */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(8,5,2,0.80) 0%, rgba(8,5,2,0.55) 45%, rgba(8,5,2,0.85) 100%)",
+            "radial-gradient(ellipse 60% 50% at 50% 60%, rgba(196,144,48,0.10) 0%, transparent 70%)",
           zIndex: 1,
         }}
       />
 
-      <div
-        className="relative w-full max-w-sm rounded-3xl px-8 py-10 flex flex-col gap-8"
+      {/* Logo */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.05 }}
+        className="relative flex flex-col items-center gap-1 mb-8"
+        style={{ zIndex: 10 }}
+      >
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            color: "#F0DEB8",
+            fontSize: "2.5rem",
+            fontWeight: 700,
+            letterSpacing: "0.01em",
+            lineHeight: 1.1,
+          }}
+        >
+          FarmTrack
+        </h1>
+        <p
+          style={{
+            fontFamily: "var(--font-sans)",
+            color: "#6A4E30",
+            fontSize: "0.75rem",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          Livestock Management
+        </p>
+        <div className="flex items-center justify-center gap-3 mt-2">
+          <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.25)" }} />
+          <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: "rgba(196,144,48,0.40)" }} />
+          <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.25)" }} />
+        </div>
+      </motion.div>
+
+      {/* Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 32 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 180, damping: 22, delay: 0.12 }}
+        className="relative w-full max-w-sm px-8 py-10 flex flex-col gap-8"
         style={{
           zIndex: 10,
-          background: "rgba(5,3,1,0.58)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          boxShadow: "0 8px 48px rgba(0,0,0,0.55)",
+          borderRadius: "2rem",
+          background: "#241C14",
+          border: "1px solid rgba(196,144,48,0.18)",
+          boxShadow: "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
         }}
       >
-        {/* Heading */}
-        <div className="flex flex-col gap-2 text-center">
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              color: "#F0DEB8",
-              fontSize: "2rem",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              lineHeight: 1.2,
-            }}
-          >
-            FarmTrack
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-sans)",
-              color: "#7A5840",
-              fontSize: "0.8125rem",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            Livestock Management
-          </p>
-
-          <div className="flex items-center justify-center gap-3 mt-1">
-            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.30)" }} />
-            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(196,144,48,0.45)" }} />
-            <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.30)" }} />
-          </div>
-        </div>
-
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Identifier */}
@@ -228,12 +234,12 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-      </div>
+      </motion.div>
 
       <footer
         className="mt-8 text-xs text-center"
         style={{
-          color: "#4A3020",
+          color: "#3A2A1A",
           fontFamily: "var(--font-sans)",
           zIndex: 10,
           position: "relative",
