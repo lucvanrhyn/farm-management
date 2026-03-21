@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,15 +18,15 @@ export default function LoginPage() {
 
     try {
       const result = await signIn("credentials", {
-        email,
+        identifier,
         password,
         redirect: false,
       });
 
       if (result?.error) {
-        setError("Incorrect email or password. Try again.");
+        setError("Incorrect email/username or password. Try again.");
       } else if (result?.ok) {
-        router.push("/home");
+        router.push("/farms");
       } else {
         setError("Sign in failed. Try again later.");
       }
@@ -37,6 +37,26 @@ export default function LoginPage() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    background: "rgba(15,9,3,0.70)",
+    border: "1px solid rgba(140,100,60,0.25)",
+    borderRadius: "10px",
+    padding: "0.625rem 0.875rem",
+    color: "#F0DEB8",
+    fontFamily: "var(--font-sans)",
+    fontSize: "0.9375rem",
+    outline: "none",
+    width: "100%",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: "var(--font-sans)",
+    color: "#8A6840",
+    fontSize: "0.75rem",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
@@ -46,7 +66,6 @@ export default function LoginPage() {
         backgroundPosition: "center",
       }}
     >
-      {/* Gradient overlay — darker than home for focus */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -56,7 +75,6 @@ export default function LoginPage() {
         }}
       />
 
-      {/* Login card */}
       <div
         className="relative w-full max-w-sm rounded-3xl px-8 py-10 flex flex-col gap-8"
         style={{
@@ -80,7 +98,7 @@ export default function LoginPage() {
               lineHeight: 1.2,
             }}
           >
-            Delta Livestock
+            FarmTrack
           </h1>
           <p
             style={{
@@ -91,10 +109,9 @@ export default function LoginPage() {
               textTransform: "uppercase",
             }}
           >
-            Brangus Cattle · Limpopo
+            Livestock Management
           </p>
 
-          {/* Decorative divider */}
           <div className="flex items-center justify-center gap-3 mt-1">
             <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.30)" }} />
             <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "rgba(196,144,48,0.45)" }} />
@@ -104,39 +121,20 @@ export default function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Email */}
+          {/* Identifier */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "#8A6840",
-                fontSize: "0.75rem",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-            >
-              Email address
+            <label htmlFor="identifier" style={labelStyle}>
+              Email or Username
             </label>
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="identifier"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              style={{
-                background: "rgba(15,9,3,0.70)",
-                border: "1px solid rgba(140,100,60,0.25)",
-                borderRadius: "10px",
-                padding: "0.625rem 0.875rem",
-                color: "#F0DEB8",
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.9375rem",
-                outline: "none",
-                width: "100%",
-              }}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="email or username"
+              style={inputStyle}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "rgba(196,144,48,0.55)";
                 e.currentTarget.style.boxShadow = "0 0 0 3px rgba(196,144,48,0.08)";
@@ -150,16 +148,7 @@ export default function LoginPage() {
 
           {/* Password */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="password"
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "#8A6840",
-                fontSize: "0.75rem",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-            >
+            <label htmlFor="password" style={labelStyle}>
               Password
             </label>
             <input
@@ -170,17 +159,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              style={{
-                background: "rgba(15,9,3,0.70)",
-                border: "1px solid rgba(140,100,60,0.25)",
-                borderRadius: "10px",
-                padding: "0.625rem 0.875rem",
-                color: "#F0DEB8",
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.9375rem",
-                outline: "none",
-                width: "100%",
-              }}
+              style={inputStyle}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "rgba(196,144,48,0.55)";
                 e.currentTarget.style.boxShadow = "0 0 0 3px rgba(196,144,48,0.08)";
@@ -251,7 +230,6 @@ export default function LoginPage() {
         </form>
       </div>
 
-      {/* Footer */}
       <footer
         className="mt-8 text-xs text-center"
         style={{
@@ -261,7 +239,7 @@ export default function LoginPage() {
           position: "relative",
         }}
       >
-        © {new Date().getFullYear()} Delta Livestock CC
+        © {new Date().getFullYear()} FarmTrack
       </footer>
     </div>
   );

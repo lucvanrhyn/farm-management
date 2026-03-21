@@ -1,6 +1,8 @@
 import {
   seedCamps,
   seedAnimals,
+  seedFarmSettings,
+  getCachedFarmSettings,
   getPendingObservations,
   markObservationSynced,
   markObservationFailed,
@@ -15,9 +17,10 @@ import type { Camp, Animal, AnimalSex } from './types';
 import type { PrismaAnimal } from './types';
 
 export async function refreshCachedData(): Promise<void> {
-  const [campsRes, animalsRes] = await Promise.all([
+  const [campsRes, animalsRes, farmRes] = await Promise.all([
     fetch('/api/camps'),
     fetch('/api/animals'),
+    fetch('/api/farm'),
   ]);
 
   if (campsRes.ok) {
@@ -42,6 +45,11 @@ export async function refreshCachedData(): Promise<void> {
       date_added: a.dateAdded,
     }));
     await seedAnimals(animals);
+  }
+
+  if (farmRes.ok) {
+    const farm: { farmName: string; breed: string } = await farmRes.json();
+    await seedFarmSettings({ farmName: farm.farmName, breed: farm.breed });
   }
 
   await setLastSyncedAt(new Date().toISOString());
@@ -81,6 +89,9 @@ export async function syncPendingObservations(): Promise<{ synced: number; faile
 
 async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean> {
   try {
+    const settings = await getCachedFarmSettings();
+    const breed = settings?.breed ?? 'Mixed';
+
     const res = await fetch('/api/animals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,7 +103,7 @@ async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean>
         currentCamp: animal.current_camp,
         motherId: animal.mother_id ?? null,
         dateAdded: animal.date_added,
-        breed: 'Brangus',
+        breed,
         status: 'Active',
       }),
     });
