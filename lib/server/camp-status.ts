@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { type PrismaClient } from "@prisma/client";
 import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 
 export interface LiveCampStatus {
@@ -17,7 +17,7 @@ export interface HealthObservation {
   observedAt: string; // ISO string
 }
 
-export async function getLatestCampConditions(): Promise<Map<string, LiveCampStatus>> {
+export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map<string, LiveCampStatus>> {
   const observations = await prisma.observation.findMany({
     where: { type: { in: ["camp_condition", "camp_check"] } },
     orderBy: { observedAt: "desc" },
@@ -55,7 +55,7 @@ export async function getLatestCampConditions(): Promise<Map<string, LiveCampSta
   return result;
 }
 
-export async function getRecentHealthObservations(limit = 8): Promise<HealthObservation[]> {
+export async function getRecentHealthObservations(prisma: PrismaClient, limit = 8): Promise<HealthObservation[]> {
   const rows = await prisma.observation.findMany({
     where: { type: "health_issue" },
     orderBy: { observedAt: "desc" },
@@ -79,13 +79,13 @@ export async function getRecentHealthObservations(limit = 8): Promise<HealthObse
   });
 }
 
-export async function countHealthIssuesSince(since: Date): Promise<number> {
+export async function countHealthIssuesSince(prisma: PrismaClient, since: Date): Promise<number> {
   return prisma.observation.count({
     where: { type: "health_issue", observedAt: { gte: since } },
   });
 }
 
-export async function countInspectedToday(): Promise<number> {
+export async function countInspectedToday(prisma: PrismaClient): Promise<number> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 

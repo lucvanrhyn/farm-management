@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForRequest } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 
@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
   if (!session || session.user?.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

@@ -1,12 +1,26 @@
 import AdminNav from "@/components/admin/AdminNav";
 import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp, PrismaAnimal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminAnimalsPage() {
+export default async function AdminAnimalsPage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
+  const { farmSlug } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) {
+    return (
+      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+        <p className="text-red-500">Farm not found.</p>
+      </div>
+    );
+  }
+
   const [animals, prismaCamps] = await Promise.all([
     prisma.animal.findMany({ orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
@@ -21,7 +35,7 @@ export default async function AdminAnimalsPage() {
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav active="/admin/animals" />
+      <AdminNav />
       <main className="flex-1 p-8">
         <div className="mb-6 flex items-start justify-between">
           <div>

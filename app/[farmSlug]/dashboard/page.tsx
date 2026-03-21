@@ -1,10 +1,18 @@
 import DashboardClient from "@/components/dashboard/DashboardClient";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
+  const { farmSlug } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return <p className="p-8 text-red-500">Farm not found.</p>;
+
   const [totalAnimals, animalGroups, prismaCamps] = await Promise.all([
     prisma.animal.count({ where: { status: "Active" } }),
     prisma.animal.groupBy({

@@ -20,10 +20,11 @@ type ModalType = "health" | "movement" | "calving" | "death" | "condition" | nul
 export default function CampInspectionPage({
   params,
 }: {
-  params: Promise<{ campId: string }>;
+  params: Promise<{ farmSlug: string; campId: string }>;
 }) {
-  const { campId } = use(params);
+  const { farmSlug, campId } = use(params);
   const decodedId = decodeURIComponent(campId);
+  const loggerRoot = `/${farmSlug}/logger`;
 
   const router = useRouter();
   const { data: session } = useSession();
@@ -63,7 +64,7 @@ export default function CampInspectionPage({
     await refreshCampsState();
     refreshPendingCount();
     setAllNormalDone(true);
-    setTimeout(() => router.push("/logger"), 1200);
+    setTimeout(() => router.push(loggerRoot), 1200);
   }
 
   async function handleHealthSubmit(data: { symptoms: string[]; severity: string; notes: string }) {
@@ -262,7 +263,7 @@ export default function CampInspectionPage({
       >
         <div className="flex items-center gap-3 px-4 py-4">
           <Link
-            href="/logger"
+            href={loggerRoot}
             className="w-10 h-10 flex items-center justify-center rounded-full text-lg shrink-0"
             style={{ backgroundColor: 'rgba(92, 61, 46, 0.6)', color: '#D2B48C' }}
           >

@@ -20,9 +20,9 @@ export async function GET(
     return NextResponse.redirect(new URL("/farms", process.env.NEXTAUTH_URL ?? "http://localhost:3001"));
   }
 
-  // Set the active farm cookie and send the user to /home
+  // Set the active farm cookie and send the user to their farm's home
   const response = NextResponse.redirect(
-    new URL("/home", process.env.NEXTAUTH_URL ?? "http://localhost:3001"),
+    new URL(`/${slug}/home`, process.env.NEXTAUTH_URL ?? "http://localhost:3001"),
   );
   response.cookies.set("active_farm_slug", slug, {
     httpOnly: true,

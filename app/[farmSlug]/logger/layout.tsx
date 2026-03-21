@@ -1,35 +1,32 @@
 'use client';
 
 import Image from 'next/image';
+import { useParams } from 'next/navigation';
 import { OfflineProvider } from '@/components/logger/OfflineProvider';
 import { useEffect, useRef } from 'react';
 import type { Camp } from '@/lib/types';
 
-// SW registration removed from here — it now lives in components/SWRegistrar.tsx
-// which is rendered at root layout level (app/layout.tsx), ensuring the service
-// worker activates on any page visit, not only when /logger is first opened.
-
 export default function LoggerLayout({ children }: { children: React.ReactNode }) {
+  const params = useParams();
+  const farmSlug = params.farmSlug as string;
   const warmedUp = useRef(false);
 
   useEffect(() => {
     // Pre-fetch all camp pages into the SW "pages" cache while online so they
     // load instantly offline — no manual prep required by the user.
-    // The SW's /logger/ URL-pattern rule intercepts these same-origin fetches
-    // and stores the responses so the navigate handler can serve them offline.
     if (warmedUp.current || !navigator.onLine) return;
     warmedUp.current = true;
     fetch("/api/camps")
       .then((r) => r.ok ? r.json() : [])
       .then((camps: Camp[]) => {
         camps.forEach((camp) => {
-          fetch(`/logger/${encodeURIComponent(camp.camp_id)}`, {
+          fetch(`/${farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`, {
             credentials: "same-origin",
           }).catch(() => {});
         });
       })
       .catch(() => {});
-  }, []);
+  }, [farmSlug]);
 
   return (
     <OfflineProvider>

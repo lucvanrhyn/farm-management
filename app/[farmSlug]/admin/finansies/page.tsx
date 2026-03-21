@@ -4,14 +4,22 @@ import { authOptions } from "@/lib/auth-options";
 import AdminNav from "@/components/admin/AdminNav";
 import FinansiesClient from "@/components/admin/FinansiesClient";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinansiesPage() {
+export default async function FinansiesPage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+
+  const { farmSlug } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return <p>Farm not found.</p>;
 
   // Seed categories once — use createMany only if truly empty to avoid race duplicates
   // The API route handles seeding too; this ensures SSR also has categories ready
@@ -34,7 +42,7 @@ export default async function FinansiesPage() {
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav active="/admin/finansies" />
+      <AdminNav />
       <main className="flex-1 p-8 space-y-2">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>

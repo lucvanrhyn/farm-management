@@ -1,12 +1,12 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { AnimatedHero } from "@/components/ui/animated-hero";
 
 const SECTIONS = [
   {
-    href: "/admin",
+    path: "/admin",
     label: "Admin",
     afrikaans: "Admin",
     icon: (
@@ -17,7 +17,7 @@ const SECTIONS = [
     description: "Animals, camps & data",
   },
   {
-    href: "/logger",
+    path: "/logger",
     label: "Logger",
     afrikaans: "Field Work",
     icon: (
@@ -28,7 +28,7 @@ const SECTIONS = [
     description: "Observations & movements",
   },
   {
-    href: "/dashboard",
+    path: "/dashboard",
     label: "Map",
     afrikaans: "Overview",
     icon: (
@@ -42,6 +42,8 @@ const SECTIONS = [
 
 export default function HomePage() {
   const router = useRouter();
+  const params = useParams();
+  const farmSlug = params.farmSlug as string;
 
   return (
     <div
@@ -71,8 +73,8 @@ export default function HomePage() {
         <div className="grid grid-cols-3 gap-4 w-full">
           {SECTIONS.map((section) => (
             <button
-              key={section.href}
-              onClick={() => router.push(section.href)}
+              key={section.path}
+              onClick={() => router.push(`/${farmSlug}${section.path}`)}
               className="group flex flex-col items-center gap-3 rounded-2xl px-4 py-6 transition-all duration-200"
               style={{
                 background: "rgba(5,3,1,0.52)",

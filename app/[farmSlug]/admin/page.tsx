@@ -1,6 +1,6 @@
 import AdminNav from "@/components/admin/AdminNav";
 import DangerZone from "@/components/admin/DangerZone";
-import { prisma } from "@/lib/prisma";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 import {
   getLatestCampConditions,
   getRecentHealthObservations,
@@ -11,7 +11,21 @@ import { PawPrint, Tent, ClipboardCheck, HeartPulse } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
+  const { farmSlug } = await params;
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) {
+    return (
+      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+        <p className="text-red-500">Farm not found.</p>
+      </div>
+    );
+  }
+
   const [totalAnimals, totalCamps] = await Promise.all([
     prisma.animal.count({ where: { status: "Active" } }),
     prisma.camp.count(),
@@ -21,10 +35,10 @@ export default async function AdminPage() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   const [healthIssuesThisWeek, inspectedToday, recentHealth, liveConditions] = await Promise.all([
-    countHealthIssuesSince(sevenDaysAgo),
-    countInspectedToday(),
-    getRecentHealthObservations(8),
-    getLatestCampConditions(),
+    countHealthIssuesSince(prisma, sevenDaysAgo),
+    countInspectedToday(prisma),
+    getRecentHealthObservations(prisma, 8),
+    getLatestCampConditions(prisma),
   ]);
 
   // Tally camps by grazing quality from live Prisma data
@@ -47,7 +61,7 @@ export default async function AdminPage() {
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav active="/admin" />
+      <AdminNav />
       <main className="flex-1 p-8">
         <div className="mb-6">
           <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default function AdminObservationsPage() {
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav active="/admin/observations" />
+      <AdminNav />
       <main className="flex-1 p-8">
         <div className="mb-6 flex items-start justify-between">
           <div>
