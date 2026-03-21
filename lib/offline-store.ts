@@ -57,7 +57,35 @@ function getDB(): Promise<IDBPDatabase> {
 export async function seedCamps(camps: Camp[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction('camps', 'readwrite');
-  await Promise.all(camps.map((c) => tx.store.put(c)));
+
+  // Read existing records to (a) preserve locally-set condition fields and (b) detect orphans
+  const existing = await tx.store.getAll();
+  const existingMap = new Map(existing.map((c) => [c.camp_id, c]));
+  const incomingIds = new Set(camps.map((c) => c.camp_id));
+
+  // Upsert each incoming camp, keeping any condition fields Dicky set locally (Bug B fix)
+  for (const camp of camps) {
+    const prev = existingMap.get(camp.camp_id);
+    const merged: Camp = prev
+      ? {
+          ...camp,
+          grazing_quality: prev.grazing_quality ?? camp.grazing_quality,
+          water_status: prev.water_status ?? camp.water_status,
+          fence_status: prev.fence_status ?? camp.fence_status,
+          last_inspected_at: prev.last_inspected_at ?? camp.last_inspected_at,
+          last_inspected_by: prev.last_inspected_by ?? camp.last_inspected_by,
+        }
+      : camp;
+    await tx.store.put(merged);
+  }
+
+  // Delete camps removed from the server so they don't persist in the logger (Bug A fix)
+  for (const key of existingMap.keys()) {
+    if (!incomingIds.has(key)) {
+      await tx.store.delete(key);
+    }
+  }
+
   await tx.done;
 }
 
@@ -69,7 +97,22 @@ export async function getCachedCamps(): Promise<Camp[]> {
 export async function seedAnimals(animals: Animal[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction('animals', 'readwrite');
-  await Promise.all(animals.map((a) => tx.store.put(a)));
+
+  // Read existing keys to detect orphans (Bug A fix)
+  const existingKeys = await tx.store.getAllKeys();
+  const incomingIds = new Set(animals.map((a) => a.animal_id));
+
+  for (const animal of animals) {
+    await tx.store.put(animal);
+  }
+
+  // Delete animals removed from the server so they don't persist in the logger (Bug A fix)
+  for (const key of existingKeys) {
+    if (!incomingIds.has(key as string)) {
+      await tx.store.delete(key);
+    }
+  }
+
   await tx.done;
 }
 
@@ -127,6 +170,27 @@ export async function getLastSyncedAt(): Promise<string | null> {
 export async function setLastSyncedAt(iso: string): Promise<void> {
   const db = await getDB();
   await db.put('metadata', { key: 'lastSyncedAt', value: iso });
+}
+
+export interface CachedFarmSettings {
+  farmName: string;
+  breed: string;
+}
+
+export async function seedFarmSettings(settings: CachedFarmSettings): Promise<void> {
+  const db = await getDB();
+  await db.put('metadata', { key: 'farmSettings', value: JSON.stringify(settings) });
+}
+
+export async function getCachedFarmSettings(): Promise<CachedFarmSettings | null> {
+  const db = await getDB();
+  const meta = await db.get('metadata', 'farmSettings');
+  if (!meta) return null;
+  try {
+    return JSON.parse((meta as { key: string; value: string }).value) as CachedFarmSettings;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateCampCondition(

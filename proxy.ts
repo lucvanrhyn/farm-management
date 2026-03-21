@@ -2,14 +2,23 @@ import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function proxy(req: NextRequest) {
-  // Farm selection page is public — no auth required
-  if (req.nextUrl.pathname === "/") {
+  const { pathname } = req.nextUrl;
+
+  // Farm select API must be accessible to authenticated users — checked inside the route handler itself
+  if (pathname.startsWith("/api/farms/") && pathname.endsWith("/select")) {
     return NextResponse.next();
   }
+
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
+
+  // Authenticated users hitting / get sent to /farms (universal entry point)
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/farms", req.url));
+  }
+
   return NextResponse.next();
 }
 

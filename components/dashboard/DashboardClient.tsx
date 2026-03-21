@@ -8,6 +8,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
+import TacticalMap from "./TacticalMap";
 import type { Camp } from "@/lib/types";
 
 // Leaflet must only render client-side
@@ -505,7 +506,17 @@ export default function DashboardClient({
       {/* ── Main content area ─────────────────────────────────────────── */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex" }}>
         <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          {(viewMode === "tactical" || viewMode === "schematic") && (
+          {viewMode === "tactical" && (
+            <TacticalMap
+              onCampClick={handleCampClick}
+              filterBy={filterBy}
+              selectedCampId={selectedCampId}
+              liveConditions={liveConditions}
+              camps={camps}
+              campAnimalCounts={campAnimalCounts}
+            />
+          )}
+          {viewMode === "schematic" && (
             <SchematicMap
               onCampClick={handleCampClick}
               filterBy={filterBy}
