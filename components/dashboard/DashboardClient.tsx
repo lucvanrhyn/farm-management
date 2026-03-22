@@ -537,35 +537,42 @@ export default function DashboardClient({
         </div>
 
         {/* ── Side panel (opened via "View Full Details") ─────────────── */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: 380,
-            transform: panelOpen ? "translateX(0)" : "translateX(100%)",
-            transition: "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)",
-            boxShadow: panelOpen ? "-8px 0 40px rgba(0,0,0,0.6)" : "none",
-            zIndex: 20,
-          }}
-        >
-          {selectedAnimalId ? (
-            <AnimalProfile
-              animalId={selectedAnimalId}
-              onClose={() => { setSelectedAnimalId(null); setSelectedCampId(null); }}
-              onBack={() => setSelectedAnimalId(null)}
-            />
-          ) : selectedCampId ? (
-            <CampDetailPanel
-              campId={selectedCampId}
-              camp={camps.find((c) => c.camp_id === selectedCampId)}
-              onClose={() => setSelectedCampId(null)}
-              onSelectAnimal={(id) => setSelectedAnimalId(id)}
-              liveCondition={liveConditions[selectedCampId]}
-            />
-          ) : null}
-        </div>
+        <AnimatePresence>
+          {panelOpen && (
+            <motion.div
+              key={selectedAnimalId ?? selectedCampId}
+              initial={{ x: 380, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 380, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 200, damping: 24 }}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: 380,
+                boxShadow: "-8px 0 40px rgba(0,0,0,0.6)",
+                zIndex: 20,
+              }}
+            >
+              {selectedAnimalId ? (
+                <AnimalProfile
+                  animalId={selectedAnimalId}
+                  onClose={() => { setSelectedAnimalId(null); setSelectedCampId(null); }}
+                  onBack={() => setSelectedAnimalId(null)}
+                />
+              ) : (
+                <CampDetailPanel
+                  campId={selectedCampId!}
+                  camp={camps.find((c) => c.camp_id === selectedCampId)}
+                  onClose={() => setSelectedCampId(null)}
+                  onSelectAnimal={(id) => setSelectedAnimalId(id)}
+                  liveCondition={liveConditions[selectedCampId!]}
+                />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

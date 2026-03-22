@@ -158,5 +158,6 @@ export interface PrismaAnimal {
   fatherId: string | null;
   notes: string | null;
   dateAdded: string;
+  deceasedAt: string | null;
   createdAt: string;
 }

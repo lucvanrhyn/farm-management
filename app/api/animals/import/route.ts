@@ -30,7 +30,7 @@ function normalizeCategory(raw: string): "Cow" | "Bull" | "Heifer" | "Calf" | "O
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "admin") {
+  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

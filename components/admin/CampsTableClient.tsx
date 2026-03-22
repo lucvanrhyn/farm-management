@@ -22,7 +22,7 @@ function grazingColor(g: string): { color: string; bg: string } {
   return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
 }
 
-export default function CampsTableClient({ rows }: { rows: CampRow[] }) {
+export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; farmSlug: string }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -143,7 +143,7 @@ export default function CampsTableClient({ rows }: { rows: CampRow[] }) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Link
-                          href={`/dashboard/camp/${camp.camp_id}`}
+                          href={`/${farmSlug}/dashboard/camp/${camp.camp_id}`}
                           className="text-xs transition-opacity hover:opacity-70"
                           style={{ color: "#8B6914" }}
                         >

@@ -1,6 +1,7 @@
 import AdminNav from "@/components/admin/AdminNav";
 import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
+import RecordBirthButton from "@/components/admin/RecordBirthButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp, PrismaAnimal } from "@/lib/types";
 
@@ -41,12 +42,15 @@ export default async function AdminAnimalsPage({
           <div>
             <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
             <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-              All active animals on the farm · {animals.length.toLocaleString()} animals
+              {animals.filter((a) => a.status !== "Deceased").length.toLocaleString()} active · {animals.filter((a) => a.status === "Deceased").length.toLocaleString()} deceased
             </p>
           </div>
-          <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
+          <div className="flex gap-2">
+            <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
+            <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
+          </div>
         </div>
-        <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} />
+        <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} />
       </main>
     </div>
   );
