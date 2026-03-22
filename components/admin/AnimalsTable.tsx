@@ -11,6 +11,7 @@ const PAGE_SIZE = 50;
 interface Props {
   animals: PrismaAnimal[];
   camps: Camp[];
+  farmSlug: string;
 }
 
 const farmInput =
@@ -18,7 +19,8 @@ const farmInput =
 const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
-export default function AnimalsTable({ animals, camps }: Props) {
+export default function AnimalsTable({ animals, camps, farmSlug }: Props) {
+  const [tab, setTab] = useState<"active" | "deceased">("active");
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -27,14 +29,18 @@ export default function AnimalsTable({ animals, camps }: Props) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
 
+  const activeAnimals = useMemo(() => animals.filter((a) => a.status !== "Deceased"), [animals]);
+  const deceasedAnimals = useMemo(() => animals.filter((a) => a.status === "Deceased"), [animals]);
+
   const filtered = useMemo(() => {
+    const source = tab === "deceased" ? deceasedAnimals : activeAnimals;
     const q = search.toLowerCase();
-    return animals
+    return source
       .filter((a) => {
         if (q && !a.animalId.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
         if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
         if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
-        if (statusFilter !== "all" && a.status !== statusFilter) return false;
+        if (tab === "active" && statusFilter !== "all" && a.status !== statusFilter) return false;
         return true;
       })
       .sort((a, b) => {
@@ -42,7 +48,7 @@ export default function AnimalsTable({ animals, camps }: Props) {
         const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [animals, search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
+  }, [tab, activeAnimals, deceasedAnimals, search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -68,6 +74,24 @@ export default function AnimalsTable({ animals, camps }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "#F0EBE4" }}>
+        {(["active", "deceased"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => { setTab(t); setPage(1); setSearch(""); setCampFilter("all"); setCategoryFilter("all"); setStatusFilter("all"); }}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+            style={
+              tab === t
+                ? { background: "#FFFFFF", color: "#1C1815", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+                : { color: "#9C8E7A" }
+            }
+          >
+            {t === "active" ? `Active / Sold (${activeAnimals.length.toLocaleString()})` : `Deceased (${deceasedAnimals.length.toLocaleString()})`}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <input
@@ -120,23 +144,25 @@ export default function AnimalsTable({ animals, camps }: Props) {
             </option>
           ))}
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className={farmSelect}
-          style={{
-            background: "#FFFFFF",
-            border: "1px solid #E0D5C8",
-            color: "#1C1815",
-          }}
-        >
-          <option value="all">All Statuses</option>
-          {statuses.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        {tab === "active" && (
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className={farmSelect}
+            style={{
+              background: "#FFFFFF",
+              border: "1px solid #E0D5C8",
+              color: "#1C1815",
+            }}
+          >
+            <option value="all">All Statuses</option>
+            {(["Active", "Sold"] as AnimalStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        )}
         <span className="ml-auto text-sm self-center" style={{ color: "#9C8E7A" }}>
           {filtered.length.toLocaleString()} animals found
         </span>
@@ -150,15 +176,10 @@ export default function AnimalsTable({ animals, camps }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
-              {([
-                ["animalId", "ID"],
-                ["category", "Category"],
-                ["sex", "Sex"],
-                ["dateOfBirth", "Age"],
-                ["currentCamp", "Camp"],
-                ["status", "Status"],
-                ["", ""],
-              ] as [string, string][]).map(([key, label]) => (
+              {(tab === "active"
+                ? [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ["status", "Status"], ["", ""]] as [string, string][]
+                : [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
+              ).map(([key, label]) => (
                 <th
                   key={key || "__actions"}
                   className={`text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${key ? "cursor-pointer select-none" : ""}`}
@@ -182,7 +203,7 @@ export default function AnimalsTable({ animals, camps }: Props) {
               >
                 <td className="px-3 py-2">
                   <Link
-                    href={`/admin/animals/${animal.animalId}`}
+                    href={`/${farmSlug}/admin/animals/${animal.animalId}`}
                     className="font-mono text-sm font-semibold transition-colors"
                     style={{ color: "#1C1815" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
@@ -204,7 +225,7 @@ export default function AnimalsTable({ animals, camps }: Props) {
                 </td>
                 <td className="px-3 py-2">
                   <Link
-                    href={`/dashboard/camp/${animal.currentCamp}`}
+                    href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
                     className="text-sm font-medium font-mono transition-colors"
                     style={{ color: "#6B5C4E" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
@@ -213,35 +234,30 @@ export default function AnimalsTable({ animals, camps }: Props) {
                     {animal.currentCamp}
                   </Link>
                 </td>
-                <td className="px-3 py-2">
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{
-                        background:
-                          animal.status === "Active" ? "#4A7C59"
-                          : animal.status === "Sold" ? "#9C8E7A"
-                          : "#8B3A3A",
-                      }}
-                    />
-                    <span
-                      className="text-xs"
-                      style={{
-                        color:
-                          animal.status === "Active" ? "#4A7C59"
-                          : animal.status === "Sold" ? "#9C8E7A"
-                          : "#8B3A3A",
-                      }}
-                    >
-                      {animal.status === "Active" ? "Active" : animal.status === "Sold" ? "Sold" : "Deceased"}
-                    </span>
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  {animal.status === "Active" && (
-                    <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
-                  )}
-                </td>
+                {tab === "active" ? (
+                  <>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: animal.status === "Active" ? "#4A7C59" : "#9C8E7A" }}
+                        />
+                        <span className="text-xs" style={{ color: animal.status === "Active" ? "#4A7C59" : "#9C8E7A" }}>
+                          {animal.status}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {animal.status === "Active" && (
+                        <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
+                      )}
+                    </td>
+                  </>
+                ) : (
+                  <td className="px-3 py-2 text-sm font-mono" style={{ color: "#8B3A3A" }}>
+                    {animal.deceasedAt ? new Date(animal.deceasedAt).toLocaleDateString("en-ZA") : "—"}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

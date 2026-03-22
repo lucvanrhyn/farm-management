@@ -103,7 +103,7 @@ export default function AnimalActions({ animalId, campId, variant = "detail" }: 
       const animalRes = await fetch(`/api/animals/${animalId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Deceased" }),
+        body: JSON.stringify({ status: "Deceased", deceasedAt: new Date(deathDate).toISOString() }),
       });
       if (!animalRes.ok) throw new Error("Animal update failed");
 

@@ -30,5 +30,5 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
     };
   });
 
-  return <CampsTableClient rows={rows} />;
+  return <CampsTableClient rows={rows} farmSlug={farmSlug} />;
 }
