@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useOffline } from "./OfflineProvider";
 import { getGrazingDot, relativeTime } from "@/lib/utils";
@@ -41,6 +41,7 @@ const itemVariants = {
 
 export default function CampSelector() {
   const router = useRouter();
+  const params = useParams<{ farmSlug: string }>();
   const { camps } = useOffline();
 
   if (camps.length === 0) {
@@ -70,7 +71,7 @@ export default function CampSelector() {
             key={camp.camp_id}
             variants={itemVariants}
             whileTap={{ scale: 0.95, transition: { type: "spring", stiffness: 400, damping: 30 } }}
-            onClick={() => router.push(`/logger/${encodeURIComponent(camp.camp_id)}`)}
+            onClick={() => router.push(`/${params.farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`)}
             className="relative rounded-2xl p-4 text-left flex flex-col gap-2 min-h-[96px]"
             style={{
               backgroundColor: 'rgba(250, 240, 220, 0.18)',
