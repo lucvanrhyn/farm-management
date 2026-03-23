@@ -12,6 +12,7 @@ import {
   Upload,
   BarChart3,
   Receipt,
+  HeartPulse,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 
@@ -19,7 +20,8 @@ const NAV_ITEMS = [
   { path: "/admin",              label: "Overview",      icon: LayoutDashboard, group: "Data"    },
   { path: "/admin/animals",      label: "Animals",       icon: PawPrint,        group: "Data"    },
   { path: "/admin/observations", label: "Observations",  icon: ClipboardList,   group: "Data"    },
-  { path: "/admin/camps",        label: "Camps",         icon: Tent,            group: "Data"    },
+  { path: "/admin/camps",         label: "Camps",         icon: Tent,            group: "Data"    },
+  { path: "/admin/reproduction",  label: "Reproduction",  icon: HeartPulse,      group: "Data"    },
   { path: "/admin/finansies",    label: "Finances",      icon: Receipt,         group: "Finance" },
   { path: "/admin/grafieke",     label: "Charts",        icon: BarChart3,       group: "Finance" },
   { path: "/admin/import",       label: "Import",        icon: Upload,          group: "Tools"   },
