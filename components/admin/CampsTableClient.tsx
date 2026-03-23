@@ -149,13 +149,6 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                         >
                           Performance →
                         </Link>
-                        <Link
-                          href={`/${farmSlug}/dashboard/camp/${camp.camp_id}`}
-                          className="text-xs transition-opacity hover:opacity-70"
-                          style={{ color: "#6B5C4E" }}
-                        >
-                          Map →
-                        </Link>
                         <button
                           onClick={() => handleDelete(camp.camp_id, camp.camp_name)}
                           disabled={isDeleting}

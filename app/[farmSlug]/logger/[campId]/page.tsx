@@ -29,7 +29,7 @@ export default function CampInspectionPage({
 
   const router = useRouter();
   const { data: session } = useSession();
-  const { isOnline, refreshPendingCount, refreshCampsState, camps } = useOffline();
+  const { isOnline, refreshPendingCount, refreshCampsState, camps, campsLoaded } = useOffline();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
@@ -208,7 +208,7 @@ export default function CampInspectionPage({
       fetch(`/api/animals/${selectedAnimalId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Deceased" }),
+        body: JSON.stringify({ status: "Deceased", deceasedAt: new Date().toISOString() }),
       }).catch(() => {/* will sync later */});
     }
     markAnimalFlagged(selectedAnimalId);
@@ -260,6 +260,14 @@ export default function CampInspectionPage({
     await refreshCampsState();
     refreshPendingCount();
     router.push(loggerRoot);
+  }
+
+  if (!campsLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p style={{ color: '#D2B48C' }}>Loading…</p>
+      </div>
+    );
   }
 
   if (!camp) {

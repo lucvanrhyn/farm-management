@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminNav from "@/components/admin/AdminNav";
 import DangerZone from "@/components/admin/DangerZone";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
@@ -83,6 +84,7 @@ export default async function AdminPage({
                 badgeText: "#4A7C59",
                 value: totalAnimals.toLocaleString(),
                 label: "Total Animals",
+                href: `/${farmSlug}/admin/animals`,
               },
               {
                 icon: Tent,
@@ -92,6 +94,7 @@ export default async function AdminPage({
                 badgeText: "#8B6914",
                 value: totalCamps,
                 label: "Total Camps",
+                href: `/${farmSlug}/admin/camps`,
               },
               {
                 icon: ClipboardCheck,
@@ -101,6 +104,7 @@ export default async function AdminPage({
                 badgeText: inspectedToday === totalCamps ? "#4A7C59" : "#8B6914",
                 value: `${inspectedToday}/${totalCamps}`,
                 label: "Inspections Today",
+                href: `/${farmSlug}/admin/observations`,
               },
               {
                 icon: HeartPulse,
@@ -110,11 +114,13 @@ export default async function AdminPage({
                 badgeText: healthIssuesThisWeek === 0 ? "#4A7C59" : healthIssuesThisWeek > 3 ? "#8B3A3A" : "#A0522D",
                 value: healthIssuesThisWeek,
                 label: "Health Issues · 7d",
+                href: `/${farmSlug}/admin/observations`,
               },
-            ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label }, i) => (
-              <div
+            ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label, href }, i) => (
+              <Link
                 key={label}
-                className="p-5"
+                href={href}
+                className="block p-5 transition-colors hover:bg-[#F5F2EE]"
                 style={{
                   borderRight: i < 3 ? "1px solid rgba(139,105,20,0.12)" : undefined,
                 }}
@@ -130,7 +136,7 @@ export default async function AdminPage({
                 </div>
                 <p className="text-3xl font-bold font-mono" style={{ color: "#1C1815" }}>{value}</p>
                 <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>{label}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
