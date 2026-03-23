@@ -7,6 +7,7 @@ interface AnimalChecklistProps {
   campId: string;
   onFlag: (animalId: string, type: ModalType) => void;
   animals?: Animal[];
+  flaggedIds?: Set<string>;
 }
 
 const ACTION_BUTTONS: { type: ModalType; icon: string; label: string; className: string }[] = [
@@ -26,7 +27,7 @@ function getCategoryChipDark(category: AnimalCategory): string {
   }
 }
 
-export default function AnimalChecklist({ campId, onFlag, animals: animalsProp }: AnimalChecklistProps) {
+export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, flaggedIds }: AnimalChecklistProps) {
   const animals = animalsProp ?? [];
 
   if (animals.length === 0) {
@@ -39,48 +40,62 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp }
 
   return (
     <div className="flex flex-col">
-      {animals.map((animal) => (
-        <div
-          key={animal.animal_id}
-          className="flex items-center gap-3 px-4 py-3.5 min-h-[68px]"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.25)' }}
-        >
-          {/* ID + category */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="font-mono font-bold text-sm"
-                style={{ color: '#F5F0E8' }}
-              >
-                {animal.animal_id}
-              </span>
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryChipDark(animal.category)}`}>
-                {getCategoryLabel(animal.category)}
-              </span>
+      {animals.map((animal) => {
+        const isFlagged = flaggedIds?.has(animal.animal_id) ?? false;
+        return (
+          <div
+            key={animal.animal_id}
+            className="flex items-center gap-3 px-4 py-3.5 min-h-[68px] transition-colors"
+            style={{
+              borderBottom: '1px solid rgba(92, 61, 46, 0.25)',
+              backgroundColor: isFlagged ? 'rgba(184, 115, 51, 0.08)' : undefined,
+            }}
+          >
+            {/* ID + category */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className="font-mono font-bold text-sm"
+                  style={{ color: '#F5F0E8' }}
+                >
+                  {animal.animal_id}
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryChipDark(animal.category)}`}>
+                  {getCategoryLabel(animal.category)}
+                </span>
+                {isFlagged && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded-full font-bold animate-fade-in"
+                    style={{ backgroundColor: 'rgba(184, 115, 51, 0.25)', color: '#F0A050' }}
+                  >
+                    ✓ flagged
+                  </span>
+                )}
+              </div>
+              {animal.name && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: 'rgba(210, 180, 140, 0.65)' }}>
+                  {animal.name}
+                </p>
+              )}
             </div>
-            {animal.name && (
-              <p className="text-xs mt-0.5 truncate" style={{ color: 'rgba(210, 180, 140, 0.65)' }}>
-                {animal.name}
-              </p>
-            )}
-          </div>
 
-          {/* Action pill buttons */}
-          <div className="flex items-center gap-1 shrink-0">
-            {ACTION_BUTTONS.map((btn) => (
-              <button
-                key={btn.type}
-                onClick={() => onFlag(animal.animal_id, btn.type)}
-                aria-label={btn.label}
-                className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className}`}
-              >
-                <span className="text-base leading-none">{btn.icon}</span>
-                <span className="text-[10px] leading-none">{btn.label}</span>
-              </button>
-            ))}
+            {/* Action pill buttons */}
+            <div className="flex items-center gap-1 shrink-0">
+              {ACTION_BUTTONS.map((btn) => (
+                <button
+                  key={btn.type}
+                  onClick={() => onFlag(animal.animal_id, btn.type)}
+                  aria-label={btn.label}
+                  className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className}`}
+                >
+                  <span className="text-base leading-none">{btn.icon}</span>
+                  <span className="text-[10px] leading-none">{btn.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

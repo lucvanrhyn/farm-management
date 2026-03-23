@@ -11,6 +11,7 @@ export type FilterMode = "grazing" | "water" | "density" | "days";
 
 interface Props {
   onCampClick: (campId: string) => void;
+  onViewDetails?: (campId: string) => void;
   filterBy: FilterMode;
   selectedCampId: string | null;
   liveConditions?: Record<string, LiveCampStatus>;
@@ -302,6 +303,7 @@ function ExpandedCampCard({
 
 export default function SchematicMap({
   onCampClick,
+  onViewDetails,
   filterBy,
   selectedCampId,
   liveConditions = {},
@@ -421,7 +423,7 @@ export default function SchematicMap({
                   animalCount={animalCount}
                   filterBy={filterBy}
                   liveCondition={liveCondition}
-                  onViewDetails={onCampClick}
+                  onViewDetails={onViewDetails ?? onCampClick}
                 />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "5px 7px 4px" }}>

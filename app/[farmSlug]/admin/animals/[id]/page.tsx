@@ -4,6 +4,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
+import AdminNav from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,9 @@ export default async function AnimalDetailPage({
   const camp = await prisma.camp.findFirst({ where: { campId: animal.currentCamp } });
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="flex min-h-screen bg-[#FAFAF8]">
+    <AdminNav />
+    <main className="flex-1 p-8 max-w-3xl space-y-6">
       {/* Back */}
       <Link
         href={`/${farmSlug}/admin/animals`}
@@ -167,6 +170,7 @@ export default async function AnimalDetailPage({
           </ol>
         )}
       </div>
+    </main>
     </div>
   );
 }

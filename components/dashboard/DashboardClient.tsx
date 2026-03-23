@@ -346,6 +346,10 @@ export default function DashboardClient({
     setSelectedCampId(campId);
   }
 
+  function handleViewDetails(campId: string) {
+    setSelectedCampId(campId);
+  }
+
   return (
     <div
       className="relative flex flex-col"
@@ -509,6 +513,7 @@ export default function DashboardClient({
           {viewMode === "tactical" && (
             <TacticalMap
               onCampClick={handleCampClick}
+              onViewDetails={handleViewDetails}
               filterBy={filterBy}
               selectedCampId={selectedCampId}
               liveConditions={liveConditions}
@@ -519,6 +524,7 @@ export default function DashboardClient({
           {viewMode === "schematic" && (
             <SchematicMap
               onCampClick={handleCampClick}
+              onViewDetails={handleViewDetails}
               filterBy={filterBy}
               selectedCampId={selectedCampId}
               liveConditions={liveConditions}

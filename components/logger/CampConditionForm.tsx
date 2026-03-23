@@ -6,6 +6,7 @@ import type { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 interface Props {
   campId: string;
   onClose: () => void;
+  onSkip?: () => void;
   onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; notes: string }) => void;
 }
 
@@ -102,7 +103,7 @@ const FENCE_OPTIONS: OptionCard<FenceStatus>[] = [
   { value: "Damaged", label: "Damaged", icon: "⚠️", color: "border-red-700 bg-red-900/40 text-red-300" },
 ];
 
-export default function CampConditionForm({ campId, onClose, onSubmit }: Props) {
+export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }: Props) {
   const [grazing, setGrazing] = useState<GrazingQuality>("Good");
   const [water, setWater] = useState<WaterStatus>("Full");
   const [fence, setFence] = useState<FenceStatus>("Intact");
@@ -147,6 +148,20 @@ export default function CampConditionForm({ campId, onClose, onSubmit }: Props) 
         >
           Submit Camp Report
         </button>
+
+        {onSkip && (
+          <button
+            onClick={onSkip}
+            className="w-full py-3 text-sm font-medium transition-colors rounded-2xl active:scale-95"
+            style={{
+              color: 'rgba(210, 180, 140, 0.78)',
+              backgroundColor: 'rgba(92, 61, 46, 0.2)',
+              border: '1px solid rgba(92, 61, 46, 0.3)',
+            }}
+          >
+            Skip for now →
+          </button>
+        )}
       </div>
     </BottomSheet>
   );
