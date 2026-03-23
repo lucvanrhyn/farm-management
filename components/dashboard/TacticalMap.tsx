@@ -34,6 +34,7 @@ function neonFor(label: string): string {
 
 interface Props {
   onCampClick: (campId: string) => void;
+  onViewDetails?: (campId: string) => void;
   filterBy: FilterMode;
   selectedCampId: string | null;
   liveConditions?: Record<string, LiveCampStatus>;
@@ -413,6 +414,7 @@ function TacticalExpandedCard({
 
 export default function TacticalMap({
   onCampClick,
+  onViewDetails,
   filterBy,
   selectedCampId,
   liveConditions = {},
@@ -581,7 +583,7 @@ export default function TacticalMap({
                   animalCount={animalCount}
                   filterBy={filterBy}
                   liveCondition={liveCondition}
-                  onViewDetails={onCampClick}
+                  onViewDetails={onViewDetails ?? onCampClick}
                 />
               ) : (
                 <div style={{

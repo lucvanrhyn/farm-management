@@ -33,6 +33,7 @@ export default function CampInspectionPage({
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
   const [animals, setAnimals] = useState<Animal[]>([]);
+  const [flaggedAnimalIds, setFlaggedAnimalIds] = useState<Set<string>>(new Set());
 
   const camp = camps.find((c) => c.camp_id === decodedId);
   // camps in IndexedDB may carry merged condition fields (grazing_quality etc.) from updateCampCondition
@@ -49,13 +50,18 @@ export default function CampInspectionPage({
     setActiveModal(type);
   }
 
-  async function handleAllNormal() {
+  function markAnimalFlagged(animalId: string) {
+    setFlaggedAnimalIds((prev) => new Set(prev).add(animalId));
+  }
+
+  async function handleCompleteVisit() {
     const now = new Date().toISOString();
     const loggedBy = session?.user?.name ?? "Logger";
+    const status = flaggedAnimalIds.size > 0 ? "flagged" : "normal";
     await queueObservation({
       type: "camp_check",
       camp_id: decodedId,
-      details: JSON.stringify({ status: "normal", logged_by: loggedBy }),
+      details: JSON.stringify({ status, logged_by: loggedBy }),
       created_at: now,
       synced_at: null,
       sync_status: "pending",
@@ -64,7 +70,7 @@ export default function CampInspectionPage({
     await refreshCampsState();
     refreshPendingCount();
     setAllNormalDone(true);
-    setTimeout(() => router.push(loggerRoot), 1200);
+    setActiveModal("condition");
   }
 
   async function handleHealthSubmit(data: { symptoms: string[]; severity: string; notes: string }) {
@@ -77,6 +83,7 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     setActiveModal(null);
   }
@@ -99,6 +106,7 @@ export default function CampInspectionPage({
         body: JSON.stringify({ currentCamp: data.destCampId }),
       }).catch(() => {/* will sync later */});
     }
+    markAnimalFlagged(data.animalId);
     refreshPendingCount();
     setActiveModal(null);
     // Refresh animal list so moved animal disappears
@@ -179,6 +187,7 @@ export default function CampInspectionPage({
       }
     }
 
+    markAnimalFlagged(data.animalId);
     refreshPendingCount();
     setActiveModal(null);
   }
@@ -201,6 +210,7 @@ export default function CampInspectionPage({
         body: JSON.stringify({ status: "Deceased" }),
       }).catch(() => {/* will sync later */});
     }
+    markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     setActiveModal(null);
     // Refresh animal list so deceased animal is removed from active list
@@ -233,7 +243,7 @@ export default function CampInspectionPage({
     });
     await refreshCampsState();
     refreshPendingCount();
-    setActiveModal(null);
+    router.push(loggerRoot);
   }
 
   if (!camp) {
@@ -303,11 +313,11 @@ export default function CampInspectionPage({
             className="w-full font-bold py-5 rounded-3xl text-base text-center"
             style={{ backgroundColor: 'rgba(44, 78, 44, 0.9)', color: '#A8D87A', border: '1px solid rgba(80, 140, 60, 0.4)' }}
           >
-            ✓ All normal recorded!
+            ✓ Visit recorded
           </div>
         ) : (
           <button
-            onClick={handleAllNormal}
+            onClick={handleCompleteVisit}
             className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
             style={{
               backgroundColor: '#B87333',
@@ -316,7 +326,11 @@ export default function CampInspectionPage({
             }}
           >
             <span className="text-xl">✓</span>
-            <span>All Normal — Camp Good</span>
+            <span>
+              {flaggedAnimalIds.size > 0
+                ? `Done — ${flaggedAnimalIds.size} animal${flaggedAnimalIds.size > 1 ? 's' : ''} flagged`
+                : 'All Normal — Camp Good'}
+            </span>
           </button>
         )}
       </div>
@@ -343,7 +357,7 @@ export default function CampInspectionPage({
             Tap icon to report
           </p>
         </div>
-        <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} />
+        <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} flaggedIds={flaggedAnimalIds} />
       </div>
 
       {/* Camp condition button — sticky at bottom */}
@@ -445,7 +459,8 @@ export default function CampInspectionPage({
       {activeModal === "condition" && (
         <CampConditionForm
           campId={decodedId}
-          onClose={() => setActiveModal(null)}
+          onClose={() => allNormalDone ? router.push(loggerRoot) : setActiveModal(null)}
+          onSkip={allNormalDone ? () => router.push(loggerRoot) : undefined}
           onSubmit={handleConditionSubmit}
         />
       )}
