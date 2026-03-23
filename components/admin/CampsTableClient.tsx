@@ -143,11 +143,18 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Link
-                          href={`/${farmSlug}/dashboard/camp/${camp.camp_id}`}
+                          href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
                           className="text-xs transition-opacity hover:opacity-70"
                           style={{ color: "#8B6914" }}
                         >
-                          View →
+                          Performance →
+                        </Link>
+                        <Link
+                          href={`/${farmSlug}/dashboard/camp/${camp.camp_id}`}
+                          className="text-xs transition-opacity hover:opacity-70"
+                          style={{ color: "#6B5C4E" }}
+                        >
+                          Map →
                         </Link>
                         <button
                           onClick={() => handleDelete(camp.camp_id, camp.camp_name)}

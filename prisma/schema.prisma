@@ -91,3 +91,14 @@ model Camp {
   notes        String?
   createdAt    DateTime @default(now())
 }
+
+model CampCoverReading {
+  id           String   @id @default(cuid())
+  campId       String
+  coverCategory String  // "Good" | "Fair" | "Poor"
+  kgDmPerHa    Float    // derived from category or manually set
+  useFactor    Float    @default(0.35)
+  recordedAt   String
+  recordedBy   String
+  notes        String?
+}

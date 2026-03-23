@@ -7,6 +7,7 @@ import HealthIssueForm from "@/components/logger/HealthIssueForm";
 import MovementForm from "@/components/logger/MovementForm";
 import CalvingForm from "@/components/logger/CalvingForm";
 import CampConditionForm from "@/components/logger/CampConditionForm";
+import ReproductionForm, { type ReproSubmitData } from "@/components/logger/ReproductionForm";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
 import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
@@ -15,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, AnimalSex, EaseOfBirth, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "condition" | null;
+type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | null;
 
 export default function CampInspectionPage({
   params,
@@ -215,6 +216,21 @@ export default function CampInspectionPage({
     setActiveModal(null);
     // Refresh animal list so deceased animal is removed from active list
     getAnimalsByCampCached(decodedId).then(setAnimals);
+  }
+
+  async function handleReproSubmit(data: ReproSubmitData) {
+    await queueObservation({
+      type: data.type,
+      camp_id: decodedId,
+      animal_id: selectedAnimalId,
+      details: JSON.stringify(data.details),
+      created_at: new Date().toISOString(),
+      synced_at: null,
+      sync_status: "pending",
+    });
+    markAnimalFlagged(selectedAnimalId);
+    refreshPendingCount();
+    setActiveModal(null);
   }
 
   async function handleConditionSubmit(data: {
@@ -455,6 +471,13 @@ export default function CampInspectionPage({
             </button>
           </div>
         </div>
+      )}
+      {activeModal === "reproduction" && (
+        <ReproductionForm
+          animalId={selectedAnimalId}
+          onClose={() => setActiveModal(null)}
+          onSubmit={handleReproSubmit}
+        />
       )}
       {activeModal === "condition" && (
         <CampConditionForm
