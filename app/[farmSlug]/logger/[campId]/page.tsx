@@ -117,10 +117,15 @@ export default function CampInspectionPage({
   async function handleCalvingSubmit(data: {
     animalId: string;
     campId: string;
+    calfAnimalId: string;
     calfName: string;
     calfSex: AnimalSex;
     calfAlive: boolean;
     easeOfBirth: EaseOfBirth;
+    fatherId: string | null;
+    dateOfBirth: string;
+    breed: string;
+    category: string;
     notes: string;
   }) {
     const now = new Date().toISOString();
@@ -138,18 +143,19 @@ export default function CampInspectionPage({
 
     // Create the new calf animal record if alive
     if (data.calfAlive) {
-      const tempId = `KALF-${Date.now()}`;
-      const today = now.split("T")[0];
       const calfPayload = {
-        animalId: tempId,
+        animalId: data.calfAnimalId,
         name: data.calfName || null,
         sex: data.calfSex,
-        category: "Calf",
+        category: data.category || "Calf",
         currentCamp: decodedId,
         motherId: data.animalId,
-        dateAdded: today,
-        breed: "Brangus",
+        fatherId: data.fatherId || null,
+        dateOfBirth: data.dateOfBirth,
+        dateAdded: data.dateOfBirth,
+        breed: data.breed || "Brangus",
         status: "Active",
+        notes: data.notes || null,
       };
 
       if (isOnline) {
@@ -163,26 +169,26 @@ export default function CampInspectionPage({
           if (!res.ok) throw new Error("POST failed");
         } catch {
           await queueAnimalCreate({
-            animal_id: tempId,
+            animal_id: data.calfAnimalId,
             name: data.calfName || undefined,
             sex: data.calfSex,
-            category: "Calf",
+            category: data.category || "Calf",
             current_camp: decodedId,
             mother_id: data.animalId,
-            date_added: today,
+            date_added: data.dateOfBirth,
             sync_status: "pending",
           });
         }
       } else {
         // Offline — queue for later sync
         await queueAnimalCreate({
-          animal_id: tempId,
+          animal_id: data.calfAnimalId,
           name: data.calfName || undefined,
           sex: data.calfSex,
-          category: "Calf",
+          category: data.category || "Calf",
           current_camp: decodedId,
           mother_id: data.animalId,
-          date_added: today,
+          date_added: data.dateOfBirth,
           sync_status: "pending",
         });
       }
@@ -428,6 +434,7 @@ export default function CampInspectionPage({
         <CalvingForm
           animalId={selectedAnimalId}
           campId={decodedId}
+          bulls={animals.filter((a) => a.category === "Bull").map((a) => ({ animalId: a.animal_id, name: a.name ?? null }))}
           onClose={() => setActiveModal(null)}
           onSubmit={handleCalvingSubmit}
         />
