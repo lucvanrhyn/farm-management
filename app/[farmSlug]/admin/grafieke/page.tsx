@@ -62,7 +62,7 @@ export default async function GrafiekePage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-[#1C1815]">Charts</h1>
           <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>

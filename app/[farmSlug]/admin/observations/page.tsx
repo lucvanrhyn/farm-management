@@ -8,7 +8,7 @@ export default function AdminObservationsPage() {
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8">
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
