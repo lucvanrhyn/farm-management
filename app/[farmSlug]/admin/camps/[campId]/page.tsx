@@ -155,7 +155,7 @@ export default async function CampDetailPage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-8 max-w-4xl">
+      <main className="flex-1 min-w-0 p-8 max-w-4xl">
         {/* Back */}
         <Link
           href={`/${farmSlug}/admin/camps`}
