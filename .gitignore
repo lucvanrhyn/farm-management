@@ -52,3 +52,11 @@ prisma/prisma/dev.db-journal
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright-cli snapshots & temp files
+.playwright-cli/
+.tmp/
+
+# stray screenshots
+*.png
+*.jpg
