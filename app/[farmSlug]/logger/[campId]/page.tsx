@@ -29,7 +29,7 @@ export default function CampInspectionPage({
 
   const router = useRouter();
   const { data: session } = useSession();
-  const { isOnline, refreshPendingCount, refreshCampsState, camps, campsLoaded } = useOffline();
+  const { isOnline, refreshPendingCount, refreshCampsState, camps, campsLoaded, syncNow } = useOffline();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
@@ -70,6 +70,7 @@ export default function CampInspectionPage({
     await updateCampCondition(decodedId, { last_inspected_at: now, last_inspected_by: loggedBy });
     await refreshCampsState();
     refreshPendingCount();
+    if (isOnline) syncNow();
     setAllNormalDone(true);
     setActiveModal("condition");
   }
@@ -86,6 +87,7 @@ export default function CampInspectionPage({
     });
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
+    if (isOnline) syncNow();
     setActiveModal(null);
   }
 
@@ -109,6 +111,7 @@ export default function CampInspectionPage({
     }
     markAnimalFlagged(data.animalId);
     refreshPendingCount();
+    if (isOnline) syncNow();
     setActiveModal(null);
     // Refresh animal list so moved animal disappears
     getAnimalsByCampCached(decodedId).then(setAnimals);
@@ -196,6 +199,7 @@ export default function CampInspectionPage({
 
     markAnimalFlagged(data.animalId);
     refreshPendingCount();
+    if (isOnline) syncNow();
     setActiveModal(null);
   }
 
@@ -219,6 +223,7 @@ export default function CampInspectionPage({
     }
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
+    if (isOnline) syncNow();
     setActiveModal(null);
     // Refresh animal list so deceased animal is removed from active list
     getAnimalsByCampCached(decodedId).then(setAnimals);
@@ -236,6 +241,7 @@ export default function CampInspectionPage({
     });
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
+    if (isOnline) syncNow();
     setActiveModal(null);
   }
 
@@ -265,6 +271,7 @@ export default function CampInspectionPage({
     });
     await refreshCampsState();
     refreshPendingCount();
+    if (isOnline) syncNow();
     router.push(loggerRoot);
   }
 
