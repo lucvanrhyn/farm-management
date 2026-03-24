@@ -57,7 +57,8 @@ function NavLink({
       <Link
         href={href}
         prefetch={false}
-        className="relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors"
+        title={label}
+        className="relative flex items-center justify-center md:justify-start gap-2.5 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-sm font-medium transition-colors"
         style={{
           color: isActive ? "#F5EBD4" : "rgba(210,180,140,0.85)",
           background: isActive ? "rgba(139,105,20,0.14)" : "transparent",
@@ -75,7 +76,7 @@ function NavLink({
           className="w-4 h-4 shrink-0"
           style={{ color: isActive ? "#8B6914" : "rgba(210,180,140,0.65)" }}
         />
-        <span>{label}</span>
+        <span className="hidden md:inline">{label}</span>
       </Link>
     </motion.div>
   );
@@ -99,12 +100,12 @@ export default function AdminNav() {
 
   return (
     <nav
-      className="w-52 shrink-0 min-h-screen p-3 flex flex-col"
+      className="w-12 md:w-52 shrink-0 min-h-screen p-2 md:p-3 flex flex-col"
       style={{ background: "#1A1510", borderRight: "1px solid rgba(139,105,20,0.15)" }}
     >
       {/* FarmTrack Wordmark */}
-      <div className="mb-5 px-1.5 pt-1">
-        <div className="flex items-center gap-2.5">
+      <div className="mb-5 px-1 md:px-1.5 pt-1">
+        <div className="flex items-center justify-center md:justify-start gap-2.5">
           <div
             className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold shrink-0"
             style={{
@@ -115,7 +116,7 @@ export default function AdminNav() {
           >
             FT
           </div>
-          <div>
+          <div className="hidden md:block">
             <p className="text-sm font-semibold leading-none" style={{ color: "#F5EBD4" }}>
               FarmTrack
             </p>
@@ -135,7 +136,7 @@ export default function AdminNav() {
         {groups.map((group) => (
           <div key={group.label}>
             <p
-              className="px-2.5 mb-1 text-[10px] uppercase tracking-widest font-semibold"
+              className="hidden md:block px-2.5 mb-1 text-[10px] uppercase tracking-widest font-semibold"
               style={{ color: "rgba(210,180,140,0.5)" }}
             >
               {group.label}

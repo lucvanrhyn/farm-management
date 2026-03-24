@@ -175,7 +175,7 @@ export default async function ReproductionPage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-8 max-w-5xl">
+      <main className="flex-1 p-4 md:p-8 max-w-5xl">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>

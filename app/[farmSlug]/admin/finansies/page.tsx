@@ -43,7 +43,7 @@ export default async function FinansiesPage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-8 space-y-2">
+      <main className="flex-1 p-4 md:p-8 space-y-2">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
           <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
