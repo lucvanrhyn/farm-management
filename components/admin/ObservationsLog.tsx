@@ -55,6 +55,11 @@ function parseDetails(raw: string): string {
       parts.push(`Symptoms: ${s}`);
     }
     if (obj.severity) parts.push(`Severity: ${obj.severity}`);
+    // camp_condition fields (DB stores as grazing/water/fence)
+    if (obj.grazing) parts.push(`Grazing: ${obj.grazing}`);
+    if (obj.water) parts.push(`Water: ${obj.water}`);
+    if (obj.fence) parts.push(`Fence: ${obj.fence}`);
+    // legacy field names
     if (obj.grazing_quality) parts.push(`Grazing: ${obj.grazing_quality}`);
     if (obj.water_status) parts.push(`Water: ${obj.water_status}`);
     if (obj.notes) parts.push(obj.notes);

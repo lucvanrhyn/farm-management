@@ -55,7 +55,7 @@ export default async function AnimalDetailPage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
     <AdminNav />
-    <main className="flex-1 p-8 max-w-3xl space-y-6">
+    <main className="flex-1 min-w-0 p-8 max-w-3xl space-y-6">
       {/* Back */}
       <Link
         href={`/${farmSlug}/admin/animals`}

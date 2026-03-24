@@ -63,7 +63,7 @@ export default async function AdminPage({
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
       <AdminNav />
-      <main className="flex-1 p-4 md:p-8">
+      <main className="flex-1 min-w-0 p-4 md:p-8">
         <div className="mb-6">
           <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>
           <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>{new Date().toISOString().split("T")[0]} · Farm Management</p>
@@ -74,7 +74,7 @@ export default async function AdminPage({
           className="rounded-2xl overflow-hidden mb-8"
           style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
         >
-          <div className="grid grid-cols-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4">
             {[
               {
                 icon: PawPrint,
@@ -120,7 +120,7 @@ export default async function AdminPage({
               <Link
                 key={label}
                 href={href}
-                className="block p-5 transition-colors hover:bg-[#F5F2EE]"
+                className="block p-3 sm:p-5 transition-colors hover:bg-[#F5F2EE]"
                 style={{
                   borderRight: i < 3 ? "1px solid rgba(139,105,20,0.12)" : undefined,
                 }}
@@ -134,7 +134,7 @@ export default async function AdminPage({
                     {badge}
                   </span>
                 </div>
-                <p className="text-3xl font-bold font-mono" style={{ color: "#1C1815" }}>{value}</p>
+                <p className="text-2xl sm:text-3xl font-bold font-mono" style={{ color: "#1C1815" }}>{value}</p>
                 <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>{label}</p>
               </Link>
             ))}
