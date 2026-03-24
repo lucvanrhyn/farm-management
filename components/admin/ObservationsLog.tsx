@@ -257,7 +257,7 @@ export default function ObservationsLog() {
 
         {/* Timeline list */}
         <div
-          className="rounded-2xl px-4 py-3"
+          className="rounded-2xl px-6 py-4"
           style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
         >
           {!loading && observations.length === 0 && (
@@ -265,47 +265,46 @@ export default function ObservationsLog() {
               No observations found.
             </p>
           )}
-          <div className="flex flex-col">
+          <div className="flex flex-col" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "5px" }}>
             {observations.map((obs) => {
               const badge = TYPE_BADGE[obs.type] ?? { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" };
               return (
                 <div
                   key={obs.id}
-                  className="flex items-start gap-3 pl-3 py-1.5 ml-1 transition-colors group"
-                  style={{ borderLeft: "2px solid rgba(122,92,30,0.25)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
+                  className="relative flex items-start gap-4 pl-6 py-2.5 transition-colors group rounded-lg -ml-px"
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.04)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
+                  {/* Timeline dot */}
+                  <div
+                    className="absolute left-0 top-[14px] w-2.5 h-2.5 rounded-full shrink-0 -translate-x-[6px]"
+                    style={{ background: badge.color, border: "2px solid #FFFFFF", boxShadow: `0 0 0 1px ${badge.color}` }}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono whitespace-nowrap" style={{ color: "#9C8E7A" }}>
-                        {obs.observedAt.split("T")[0]}
-                      </span>
                       <span
-                        className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+                        className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
                         style={{ background: badge.bg, color: badge.color }}
                       >
                         {TYPE_LABEL[obs.type] ?? obs.type}
                       </span>
-                      <span className="text-xs font-medium font-mono" style={{ color: "#6B5C4E" }}>
+                      <span className="text-xs font-semibold font-mono" style={{ color: "#1C1815" }}>
                         {obs.campId}
                       </span>
                       {obs.animalId && (
-                        <span className="text-xs font-mono" style={{ color: "#9C8E7A" }}>
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: "#F5F2EE", color: "#6B5C4E" }}>
                           {obs.animalId}
                         </span>
                       )}
-                      {obs.loggedBy && (
-                        <span className="text-xs" style={{ color: "#9C8E7A" }}>
-                          · {obs.loggedBy}
-                        </span>
-                      )}
                     </div>
-                    <p className="text-xs mt-0.5 truncate" style={{ color: "#9C8E7A" }}>
+                    <p className="text-xs mt-1 truncate" style={{ color: "#9C8E7A" }}>
                       {parseDetails(obs.details)}
                       {obs.editedAt && (
                         <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
                       )}
+                    </p>
+                    <p className="text-[10px] mt-0.5 font-mono" style={{ color: "#C4B8AA" }}>
+                      {obs.observedAt.split("T")[0]}{obs.loggedBy ? ` · ${obs.loggedBy}` : ""}
                     </p>
                   </div>
                   <button

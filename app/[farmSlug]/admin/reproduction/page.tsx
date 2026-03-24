@@ -428,11 +428,12 @@ export default async function ReproductionPage({
               No reproductive events recorded yet.
             </p>
           ) : (
-            <ol className="px-6 py-4 space-y-3">
+            <div className="px-6 py-4" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "29px" }}>
               {recentEvents.map((obs) => {
                 const det = parseDetails(obs.details);
                 const label = EVENT_LABELS[obs.type] ?? obs.type;
                 const campName = campMap.get(obs.campId) ?? obs.campId;
+                const dotColor = obs.type === "heat_detection" ? "#D47EB5" : obs.type === "insemination" ? "#8B6914" : "#4A7C59";
 
                 let subDetail = "";
                 if (obs.type === "heat_detection") {
@@ -441,35 +442,32 @@ export default async function ReproductionPage({
                   subDetail = det.method === "AI" ? "AI" : "Natural service";
                   if (det.bullId) subDetail += ` · ${det.bullId}`;
                 } else if (obs.type === "pregnancy_scan") {
-                  subDetail =
-                    det.result === "pregnant"
-                      ? "Pregnant"
-                      : det.result === "empty"
-                      ? "Empty"
-                      : "Uncertain — recheck";
+                  subDetail = det.result === "pregnant" ? "Pregnant" : det.result === "empty" ? "Empty" : "Uncertain — recheck";
                 }
 
                 return (
-                  <li key={obs.id} className="flex items-start gap-3 text-sm">
-                    <span className="text-base leading-tight mt-0.5 shrink-0">
-                      {label.split(" ")[0]}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium" style={{ color: "#1C1815" }}>
-                        {label.replace(/^[^ ]+ /, "")}
+                  <div key={obs.id} className="relative flex items-start gap-4 pl-5 py-2 -ml-px">
+                    <div
+                      className="absolute left-0 top-[11px] w-2.5 h-2.5 rounded-full -translate-x-[6px]"
+                      style={{ background: dotColor, border: "2px solid #FFFFFF", boxShadow: `0 0 0 1px ${dotColor}` }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium" style={{ color: "#1C1815" }}>
+                          {label.replace(/^[^ ]+ /, "")}
+                        </span>
                         {subDetail && (
-                          <span style={{ color: "#9C8E7A" }}> · {subDetail}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914" }}>
+                            {subDetail}
+                          </span>
                         )}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                      </div>
+                      <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
                         {formatDate(obs.observedAt)}
                         {obs.animalId && (
                           <>
                             {" · "}
-                            <Link
-                              href={`/${farmSlug}/admin/animals/${obs.animalId}`}
-                              className="font-mono hover:underline"
-                            >
+                            <Link href={`/${farmSlug}/admin/animals/${obs.animalId}`} className="hover:underline">
                               {obs.animalId}
                             </Link>
                           </>
@@ -478,10 +476,10 @@ export default async function ReproductionPage({
                         {obs.loggedBy && ` · ${obs.loggedBy}`}
                       </p>
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ol>
+            </div>
           )}
         </div>
       </main>
