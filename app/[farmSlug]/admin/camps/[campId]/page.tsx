@@ -100,10 +100,10 @@ export default async function CampDetailPage({
         orderBy: { observedAt: "desc" },
         select: { details: true, observedAt: true },
       }),
-      prisma.campCoverReading.findFirst({
+      prisma.campCoverReading?.findFirst({
         where: { campId },
         orderBy: { recordedAt: "desc" },
-      }),
+      }) ?? Promise.resolve(null),
     ]);
 
   // Category breakdown

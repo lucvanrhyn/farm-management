@@ -19,7 +19,7 @@ const DEFAULT_USE_FACTOR = 0.35;
 // Daily DMI per animal: 10 kg DM/LSU/day (SA DALRRD official standard)
 const DAILY_DMI_PER_HEAD = 10;
 
-export function calcDaysRemaining(
+function calcDaysRemaining(
   kgDmPerHa: number,
   sizeHectares: number,
   animalCount: number,

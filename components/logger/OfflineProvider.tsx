@@ -27,6 +27,7 @@ interface OfflineContextType {
   lastSyncedAt: string | null;
   syncResult: SyncResult | null;
   camps: Camp[];
+  campsLoaded: boolean;
   syncNow: () => Promise<void>;
   refreshData: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
@@ -48,6 +49,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
+  const [campsLoaded, setCampsLoaded] = useState(false);
   const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshPendingCount = useCallback(async () => {
@@ -114,6 +116,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // Load camps: paint instantly with cache, always pull fresh in background
     getCachedCamps().then((existing) => {
       if (existing.length > 0) setCamps(existing);
+      setCampsLoaded(true);
       refreshData();
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,6 +147,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         lastSyncedAt,
         syncResult,
         camps,
+        campsLoaded,
         syncNow,
         refreshData,
         refreshPendingCount,
