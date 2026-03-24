@@ -22,6 +22,7 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
       camp_id: camp.camp_id,
       camp_name: camp.camp_name,
       water_source: camp.water_source,
+      sizeHectares: camp.size_hectares,
       liveCount: countByCamp.get(camp.camp_id) ?? 0,
       grazing: live?.grazing_quality ?? "Fair",
       fence: live?.fence_status ?? "Intact",

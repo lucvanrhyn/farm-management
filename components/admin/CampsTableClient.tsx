@@ -8,6 +8,7 @@ export interface CampRow {
   camp_id: string;
   camp_name: string;
   water_source?: string;
+  sizeHectares?: number;
   liveCount: number;
   grazing: string;
   fence: string;
@@ -91,6 +92,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
               >
                 <th className="text-left px-4 py-3 font-semibold">Camp</th>
                 <th className="text-right px-4 py-3 font-semibold">Animals</th>
+                <th className="text-right px-4 py-3 font-semibold">LSU/ha</th>
                 <th className="text-left px-4 py-3 font-semibold">Water Source</th>
                 <th className="text-left px-4 py-3 font-semibold">Last Inspection</th>
                 <th className="text-left px-4 py-3 font-semibold">Grazing</th>
@@ -108,11 +110,22 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                     className="admin-row"
                     style={{ borderBottom: "1px solid #E0D5C8", opacity: isDeleting ? 0.5 : 1 }}
                   >
-                    <td className="px-4 py-3 font-semibold" style={{ color: "#1C1815" }}>
-                      {camp.camp_name}
+                    <td className="px-4 py-3 font-semibold">
+                      <Link
+                        href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
+                        className="transition-colors hover:text-[#8B6914]"
+                        style={{ color: "#1C1815" }}
+                      >
+                        {camp.camp_name}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-right font-mono" style={{ color: "#6B5C4E" }}>
                       {camp.liveCount}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs" style={{ color: "#9C8E7A" }}>
+                      {camp.sizeHectares && camp.sizeHectares > 0
+                        ? (camp.liveCount / camp.sizeHectares).toFixed(1)
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 capitalize" style={{ color: "#9C8E7A" }}>
                       {camp.water_source ?? "—"}

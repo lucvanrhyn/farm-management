@@ -184,36 +184,43 @@ export default async function AdminPage({
             style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
           >
             <h2
-              className="text-xs font-semibold uppercase tracking-wide mb-4"
+              className="text-xs font-semibold uppercase tracking-wide mb-3"
               style={{ color: "#9C8E7A" }}
             >
               Camp Status Summary
             </h2>
-            <div className="flex flex-col gap-3">
+            {/* Dot matrix — one dot per camp, coloured by grazing quality */}
+            <div className="flex flex-wrap gap-1.5 mb-4">
               {[
-                { label: "Good grazing",  quality: "Good",       dot: "#4A7C59" },
-                { label: "Fair grazing",  quality: "Fair",       dot: "#8B6914" },
-                { label: "Poor grazing",  quality: "Poor",       dot: "#A0522D" },
-                { label: "Overgrazed",    quality: "Overgrazed", dot: "#8B3A3A" },
-              ].map(({ label, quality, dot }) => {
-                const count = grazingCounts[quality] ?? 0;
-                const pct = Math.round((count / (totalCamps || 1)) * 100);
-                return (
-                  <div key={quality}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
-                      <span className="text-xs flex-1" style={{ color: "#6B5C4E" }}>{label}</span>
-                      <span className="text-xs font-mono font-semibold" style={{ color: "#1C1815" }}>{count}</span>
-                    </div>
-                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "#E0D5C8" }}>
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%`, background: dot }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                ...Array(grazingCounts.Good ?? 0).fill({ color: "#4A7C59", label: "Good" }),
+                ...Array(grazingCounts.Fair ?? 0).fill({ color: "#8B6914", label: "Fair" }),
+                ...Array(grazingCounts.Poor ?? 0).fill({ color: "#A0522D", label: "Poor" }),
+                ...Array(grazingCounts.Overgrazed ?? 0).fill({ color: "#8B3A3A", label: "Overgrazed" }),
+              ].map((item: { color: string; label: string }, i: number) => (
+                <div
+                  key={i}
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ background: item.color }}
+                  title={item.label}
+                />
+              ))}
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {[
+                { label: "Good",       color: "#4A7C59", quality: "Good"       },
+                { label: "Fair",       color: "#8B6914", quality: "Fair"       },
+                { label: "Poor",       color: "#A0522D", quality: "Poor"       },
+                { label: "Overgrazed", color: "#8B3A3A", quality: "Overgrazed" },
+              ].map(({ label, color, quality }) => (
+                <span key={quality} className="flex items-center gap-1.5 text-[11px]" style={{ color: "#9C8E7A" }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                  {label}
+                  <span className="font-mono font-semibold" style={{ color: "#1C1815" }}>
+                    {grazingCounts[quality] ?? 0}
+                  </span>
+                </span>
+              ))}
             </div>
           </div>
         </div>

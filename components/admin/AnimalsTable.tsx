@@ -76,20 +76,34 @@ export default function AnimalsTable({ animals, camps, farmSlug }: Props) {
     <div className="flex flex-col gap-4">
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "#F0EBE4" }}>
-        {(["active", "deceased"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => { setTab(t); setPage(1); setSearch(""); setCampFilter("all"); setCategoryFilter("all"); setStatusFilter("all"); }}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-            style={
-              tab === t
-                ? { background: "#FFFFFF", color: "#1C1815", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-                : { color: "#9C8E7A" }
-            }
-          >
-            {t === "active" ? `Active / Sold (${activeAnimals.length.toLocaleString()})` : `Deceased (${deceasedAnimals.length.toLocaleString()})`}
-          </button>
-        ))}
+        {(["active", "deceased"] as const).map((t) => {
+          const count = t === "active" ? activeAnimals.length : deceasedAnimals.length;
+          const isActive = tab === t;
+          return (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setPage(1); setSearch(""); setCampFilter("all"); setCategoryFilter("all"); setStatusFilter("all"); }}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+              style={
+                isActive
+                  ? { background: "#FFFFFF", color: "#1C1815", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+                  : { color: "#9C8E7A" }
+              }
+            >
+              {t === "active" ? "Active / Sold" : "Deceased"}
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
+                style={
+                  isActive
+                    ? { background: t === "active" ? "rgba(74,124,89,0.15)" : "rgba(192,87,76,0.12)", color: t === "active" ? "#4A7C59" : "#C0574C" }
+                    : { background: "rgba(156,142,122,0.15)", color: "#9C8E7A" }
+                }
+              >
+                {count.toLocaleString()}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
