@@ -19,6 +19,7 @@ export type ObservationType =
   | "animal_movement"
   | "health_issue"
   | "reproduction"
+  | "calving"
   | "death"
   | "treatment"
   | "camp_condition";
