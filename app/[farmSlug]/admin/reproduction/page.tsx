@@ -2,31 +2,11 @@ import Link from "next/link";
 import AdminNav from "@/components/admin/AdminNav";
 import MobKPICard from "@/components/admin/MobKPICard";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getReproStats } from "@/lib/server/reproduction-analytics";
 
 export const dynamic = "force-dynamic";
 
-// SA default gestation: 285 days (Bonsmara/Brangus/Nguni range 283–285d; 285 is safe midpoint)
 const GESTATION_DAYS = 285;
-
-type ScanResult = "pregnant" | "empty" | "uncertain";
-
-interface ReproObs {
-  id: string;
-  type: string;
-  animalId: string | null;
-  campId: string;
-  observedAt: Date;
-  loggedBy: string | null;
-  details: string;
-}
-
-function addDays(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
-function daysFromNow(date: Date): number {
-  return Math.round((date.getTime() - Date.now()) / 86_400_000);
-}
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -47,6 +27,20 @@ function parseDetails(raw: string): Record<string, string> {
   }
 }
 
+function pregnancyRateStatus(rate: number | null): "good" | "warning" | "alert" | "neutral" {
+  if (rate === null) return "neutral";
+  if (rate >= 85) return "good";
+  if (rate >= 70) return "warning";
+  return "alert";
+}
+
+function calvingIntervalStatus(days: number | null): "good" | "warning" | "alert" | "neutral" {
+  if (days === null) return "neutral";
+  if (days <= 365) return "good";
+  if (days <= 395) return "warning";
+  return "alert";
+}
+
 export default async function ReproductionPage({
   params,
 }: {
@@ -63,114 +57,27 @@ export default async function ReproductionPage({
     );
   }
 
+  const stats = await getReproStats(prisma);
+
+  // Fetch recent events (last 15) — includes heat/insem/scan/calving
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000);
+  const [recentEvents, allCamps] = await Promise.all([
+    prisma.observation.findMany({
+      where: {
+        type: { in: ["heat_detection", "insemination", "pregnancy_scan", "calving"] },
+        observedAt: { gte: twelveMonthsAgo },
+      },
+      orderBy: { observedAt: "desc" },
+      take: 15,
+      select: { id: true, type: true, animalId: true, campId: true, observedAt: true, loggedBy: true, details: true },
+    }),
+    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+  ]);
 
-  // Fetch all repro observations in last 12 months, latest first
-  const reproObs: ReproObs[] = await prisma.observation.findMany({
-    where: {
-      type: { in: ["heat_detection", "insemination", "pregnancy_scan"] },
-      observedAt: { gte: twelveMonthsAgo },
-    },
-    orderBy: { observedAt: "desc" },
-    select: {
-      id: true,
-      type: true,
-      animalId: true,
-      campId: true,
-      observedAt: true,
-      loggedBy: true,
-      details: true,
-    },
-  });
-
-  // Fetch all camps for name lookups
-  const allCamps = await prisma.camp.findMany({
-    select: { campId: true, campName: true },
-  });
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));
-
-  // ── KPI calculations ────────────────────────────────────────────────
-
-  // 1. Animals in heat (last 7 days) — unique animal IDs
-  const heatAnimalIds = new Set(
-    reproObs
-      .filter((o) => o.type === "heat_detection" && o.observedAt >= sevenDaysAgo && o.animalId)
-      .map((o) => o.animalId as string)
-  );
-
-  // 2. Inseminations in last 30 days
-  const inseminations30d = reproObs.filter(
-    (o) => o.type === "insemination" && o.observedAt >= thirtyDaysAgo
-  );
-
-  // 3. All inseminations in last 12 months → expected calving dates
-  const allInseminations = reproObs.filter((o) => o.type === "insemination" && o.animalId);
-
-  // Deduplicate: keep only the most recent insemination per animal
-  const latestInsemByAnimal = new Map<string, ReproObs>();
-  for (const obs of allInseminations) {
-    const aid = obs.animalId as string;
-    if (!latestInsemByAnimal.has(aid)) {
-      latestInsemByAnimal.set(aid, obs);
-    }
-  }
-
-  // Build upcoming calvings list (expected calving within next 90 days, or up to 7 days overdue)
-  const upcomingCalvings = Array.from(latestInsemByAnimal.values())
-    .map((obs) => {
-      const expectedCalving = addDays(obs.observedAt, GESTATION_DAYS);
-      const daysAway = daysFromNow(expectedCalving);
-      const det = parseDetails(obs.details);
-      return {
-        animalId: obs.animalId as string,
-        campId: obs.campId,
-        campName: campMap.get(obs.campId) ?? obs.campId,
-        insemDate: obs.observedAt,
-        method: det.method ?? "unknown",
-        bullId: det.bullId ?? null,
-        expectedCalving,
-        daysAway,
-      };
-    })
-    .filter((c) => c.daysAway >= -7 && c.daysAway <= 90)
-    .sort((a, b) => a.daysAway - b.daysAway);
-
-  // Expected calvings in next 30 days
-  const calvingsDue30d = upcomingCalvings.filter((c) => c.daysAway >= 0 && c.daysAway <= 30).length;
-
-  // 4. Pregnancy scan results — most recent scan per animal
-  const scanObs = reproObs.filter((o) => o.type === "pregnancy_scan" && o.animalId);
-  const latestScanByAnimal = new Map<string, ReproObs>();
-  for (const obs of scanObs) {
-    const aid = obs.animalId as string;
-    if (!latestScanByAnimal.has(aid)) {
-      latestScanByAnimal.set(aid, obs);
-    }
-  }
-
-  const scanCounts = { pregnant: 0, empty: 0, uncertain: 0 };
-  for (const obs of latestScanByAnimal.values()) {
-    const det = parseDetails(obs.details);
-    const result = (det.result ?? "uncertain") as ScanResult;
-    if (result in scanCounts) scanCounts[result]++;
-  }
-
-  // Scan conception rate = pregnant / (pregnant + empty) × 100
-  const scanTotal = scanCounts.pregnant + scanCounts.empty;
-  const conceptionRate = scanTotal > 0 ? Math.round((scanCounts.pregnant / scanTotal) * 100) : null;
-
-  // Recent events (last 15)
-  const recentEvents = reproObs.slice(0, 15);
-
-  const EVENT_LABELS: Record<string, string> = {
-    heat_detection: "🔥 Heat detected",
-    insemination: "💉 Insemination",
-    pregnancy_scan: "🔬 Pregnancy scan",
-  };
+  const totalEvents = stats.inHeat7d + stats.inseminations30d + stats.scanCounts.pregnant + stats.scanCounts.empty + stats.scanCounts.uncertain;
 
   return (
     <div className="flex min-h-screen bg-[#FAFAF8]">
@@ -182,55 +89,91 @@ export default async function ReproductionPage({
             Reproductive Performance
           </h1>
           <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-            {reproObs.length > 0
-              ? `${reproObs.length} events recorded · SA target: ≥80% conception rate`
-              : "No reproductive events recorded yet — log heat, insemination or scan events via the Logger"}
+            {totalEvents > 0
+              ? `SA benchmarks: ≥85% pregnancy rate · ≤365d calving interval`
+              : "No reproductive events recorded yet — log heat, insemination, scan or calving events via the Logger"}
           </p>
         </div>
 
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* KPI grid — Row 1: Rate KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <MobKPICard
-            label="In heat (7 days)"
-            value={heatAnimalIds.size}
-            sub={heatAnimalIds.size === 0 ? "No animals flagged" : "Animals showing oestrus"}
-            status={heatAnimalIds.size > 0 ? "warning" : "neutral"}
+            label="Pregnancy Rate"
+            value={stats.pregnancyRate !== null ? `${stats.pregnancyRate}%` : "—"}
+            sub={
+              stats.pregnancyRate === null
+                ? "Log calving events via Logger"
+                : stats.pregnancyRate >= 85
+                ? "SA target met (≥85%)"
+                : stats.pregnancyRate >= 70
+                ? "Below SA target (≥85%)"
+                : "Well below SA target"
+            }
+            status={pregnancyRateStatus(stats.pregnancyRate)}
+            icon="🔬"
+          />
+          <MobKPICard
+            label="Calving Rate"
+            value={stats.calvingRate !== null ? `${stats.calvingRate}%` : "—"}
+            sub={
+              stats.calvingRate === null
+                ? "Log calving events via Logger"
+                : stats.calvingRate >= 85
+                ? "SA target met (≥85%)"
+                : stats.calvingRate >= 70
+                ? "Below SA target (≥85%)"
+                : "Well below SA target"
+            }
+            status={pregnancyRateStatus(stats.calvingRate)}
+            icon="🐮"
+          />
+          <MobKPICard
+            label="Avg Calving Interval"
+            value={stats.avgCalvingIntervalDays !== null ? `${stats.avgCalvingIntervalDays}d` : "—"}
+            sub={
+              stats.avgCalvingIntervalDays === null
+                ? "Need ≥2 calvings per animal"
+                : stats.avgCalvingIntervalDays <= 365
+                ? "ARC target met (≤365d)"
+                : stats.avgCalvingIntervalDays <= 395
+                ? "Above ARC target (≤365d)"
+                : "Well above ARC target"
+            }
+            status={calvingIntervalStatus(stats.avgCalvingIntervalDays)}
+            icon="📅"
+          />
+        </div>
+
+        {/* KPI grid — Row 2: Activity KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <MobKPICard
+            label="In Heat (7 days)"
+            value={stats.inHeat7d}
+            sub={stats.inHeat7d === 0 ? "No animals flagged" : "Animals showing oestrus"}
+            status={stats.inHeat7d > 0 ? "warning" : "neutral"}
             icon="🔥"
           />
           <MobKPICard
             label="Inseminations (30 days)"
-            value={inseminations30d.length}
-            sub={inseminations30d.length === 0 ? "None recorded" : "Services logged"}
-            status={inseminations30d.length > 0 ? "good" : "neutral"}
+            value={stats.inseminations30d}
+            sub={stats.inseminations30d === 0 ? "None recorded" : "Services logged"}
+            status={stats.inseminations30d > 0 ? "good" : "neutral"}
             icon="💉"
           />
           <MobKPICard
-            label="Confirmed pregnant"
-            value={scanCounts.pregnant}
+            label="Calvings Due (30 days)"
+            value={stats.calvingsDue30d}
             sub={
-              conceptionRate !== null
-                ? `${conceptionRate}% scan conception rate${conceptionRate >= 80 ? " ✓" : " (target ≥80%)"}`
-                : "No scans recorded"
-            }
-            status={
-              conceptionRate === null ? "neutral" : conceptionRate >= 80 ? "good" : "warning"
-            }
-            icon="🔬"
-          />
-          <MobKPICard
-            label="Calvings due (30 days)"
-            value={calvingsDue30d}
-            sub={
-              upcomingCalvings.length === 0
+              stats.upcomingCalvings.length === 0
                 ? "No inseminations on record"
-                : `Based on insemination + ${GESTATION_DAYS}d gestation`
+                : `Based on scan/insem + ${GESTATION_DAYS}d gestation`
             }
-            status={calvingsDue30d > 0 ? "warning" : "neutral"}
-            icon="🐮"
+            status={stats.calvingsDue30d > 0 ? "warning" : "neutral"}
+            icon="🐄"
           />
         </div>
 
-        {/* Upcoming calvings */}
+        {/* Expected Calvings */}
         <div
           className="rounded-2xl border mb-6"
           style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
@@ -240,12 +183,12 @@ export default async function ReproductionPage({
               Expected Calvings
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-              Insemination date + {GESTATION_DAYS} days · showing next 90 days
+              Scan date (preferred) or insemination date + {GESTATION_DAYS} days · showing next 90 days
             </p>
           </div>
-          {upcomingCalvings.length === 0 ? (
+          {stats.upcomingCalvings.length === 0 ? (
             <p className="px-6 py-5 text-sm" style={{ color: "#9C8E7A" }}>
-              No upcoming calvings calculated. Log insemination events via the Logger to track
+              No upcoming calvings calculated. Log insemination or scan events via the Logger to track
               expected calving dates.
             </p>
           ) : (
@@ -258,14 +201,13 @@ export default async function ReproductionPage({
                   >
                     <th className="px-6 py-3 text-left">Animal</th>
                     <th className="px-4 py-3 text-left">Camp</th>
-                    <th className="px-4 py-3 text-left">Inseminated</th>
-                    <th className="px-4 py-3 text-left">Method</th>
+                    <th className="px-4 py-3 text-left">Source</th>
                     <th className="px-4 py-3 text-left">Expected Calving</th>
                     <th className="px-4 py-3 text-right">Days Away</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {upcomingCalvings.map((c) => {
+                  {stats.upcomingCalvings.map((c) => {
                     const urgency = calvingUrgency(c.daysAway);
                     return (
                       <tr
@@ -275,7 +217,7 @@ export default async function ReproductionPage({
                       >
                         <td className="px-6 py-3">
                           <Link
-                            href={`/${farmSlug}/admin/animals/${c.animalId}`}
+                            href={`/${farmSlug}/admin/animals/${c.animalId}?tab=reproduction`}
                             className="font-mono font-semibold hover:underline"
                             style={{ color: "#1C1815" }}
                           >
@@ -285,26 +227,16 @@ export default async function ReproductionPage({
                         <td className="px-4 py-3" style={{ color: "#6B5E50" }}>
                           {c.campName}
                         </td>
-                        <td className="px-4 py-3 tabular-nums" style={{ color: "#6B5E50" }}>
-                          {formatDate(c.insemDate)}
-                        </td>
                         <td className="px-4 py-3">
                           <span
                             className="text-xs px-2 py-0.5 rounded-full font-medium"
                             style={
-                              c.method === "AI"
-                                ? {
-                                    backgroundColor: "rgba(139,105,20,0.12)",
-                                    color: "#7A5C00",
-                                  }
-                                : {
-                                    backgroundColor: "rgba(92,61,46,0.1)",
-                                    color: "#6B5E50",
-                                  }
+                              c.source === "scan"
+                                ? { backgroundColor: "rgba(74,124,89,0.1)", color: "#3A6B49" }
+                                : { backgroundColor: "rgba(139,105,20,0.12)", color: "#7A5C00" }
                             }
                           >
-                            {c.method === "AI" ? "AI" : c.method === "natural" ? "Natural" : c.method}
-                            {c.bullId ? ` · ${c.bullId}` : ""}
+                            {c.source === "scan" ? "🔬 Scan" : "💉 Insem"}
                           </span>
                         </td>
                         <td className="px-4 py-3 tabular-nums" style={{ color: "#1C1815" }}>
@@ -335,7 +267,7 @@ export default async function ReproductionPage({
           )}
         </div>
 
-        {/* Scan results */}
+        {/* Pregnancy Scan Results */}
         <div
           className="rounded-2xl border mb-6"
           style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
@@ -345,7 +277,7 @@ export default async function ReproductionPage({
               Pregnancy Scan Results
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-              Most recent scan per animal · SA commercial target ≥80% conception rate
+              Most recent scan per animal · SA target ≥85% pregnancy rate
             </p>
           </div>
           <div className="px-6 py-5 grid grid-cols-3 gap-4">
@@ -380,7 +312,7 @@ export default async function ReproductionPage({
                 style={{ backgroundColor: item.bg, border: `1px solid ${item.border}` }}
               >
                 <p className="text-3xl font-bold tabular-nums" style={{ color: item.color }}>
-                  {scanCounts[item.key]}
+                  {stats.scanCounts[item.key]}
                 </p>
                 <p className="text-xs font-medium mt-1" style={{ color: item.color }}>
                   {item.label}
@@ -388,7 +320,7 @@ export default async function ReproductionPage({
               </div>
             ))}
           </div>
-          {conceptionRate !== null && (
+          {stats.conceptionRate !== null && (
             <div
               className="px-6 pb-5 pt-1 flex items-center gap-2"
               style={{ borderTop: "1px solid #F0EAE0" }}
@@ -399,21 +331,23 @@ export default async function ReproductionPage({
               <span
                 className="text-sm font-bold px-2 py-0.5 rounded-full"
                 style={
-                  conceptionRate >= 80
+                  stats.conceptionRate >= 85
                     ? { backgroundColor: "rgba(34,197,94,0.1)", color: "#166534" }
-                    : { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
+                    : stats.conceptionRate >= 70
+                    ? { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
+                    : { backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }
                 }
               >
-                {conceptionRate}%
+                {stats.conceptionRate}%
               </span>
               <span className="text-xs" style={{ color: "#9C8E7A" }}>
-                (target ≥80%)
+                (target ≥85%)
               </span>
             </div>
           )}
         </div>
 
-        {/* Recent events timeline */}
+        {/* Recent Events timeline */}
         <div
           className="rounded-2xl border"
           style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
@@ -428,12 +362,25 @@ export default async function ReproductionPage({
               No reproductive events recorded yet.
             </p>
           ) : (
-            <div className="px-6 py-4" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "29px" }}>
+            <div className="px-6 py-4 relative" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "29px" }}>
               {recentEvents.map((obs) => {
                 const det = parseDetails(obs.details);
-                const label = EVENT_LABELS[obs.type] ?? obs.type;
                 const campName = campMap.get(obs.campId) ?? obs.campId;
-                const dotColor = obs.type === "heat_detection" ? "#D47EB5" : obs.type === "insemination" ? "#8B6914" : "#4A7C59";
+
+                const DOT_COLORS: Record<string, string> = {
+                  heat_detection: "#D47EB5",
+                  insemination: "#8B6914",
+                  pregnancy_scan: "#4A7C59",
+                  calving: "#0D9488",
+                };
+                const EVENT_LABELS: Record<string, string> = {
+                  heat_detection: "Heat detected",
+                  insemination: "Insemination",
+                  pregnancy_scan: "Pregnancy scan",
+                  calving: "Calving",
+                };
+                const dotColor = DOT_COLORS[obs.type] ?? "#9C8E7A";
+                const label = EVENT_LABELS[obs.type] ?? obs.type;
 
                 let subDetail = "";
                 if (obs.type === "heat_detection") {
@@ -443,6 +390,9 @@ export default async function ReproductionPage({
                   if (det.bullId) subDetail += ` · ${det.bullId}`;
                 } else if (obs.type === "pregnancy_scan") {
                   subDetail = det.result === "pregnant" ? "Pregnant" : det.result === "empty" ? "Empty" : "Uncertain — recheck";
+                } else if (obs.type === "calving") {
+                  subDetail = det.calf_status === "live" ? "Live calf" : "Stillborn";
+                  if (det.calf_tag) subDetail += ` · ${det.calf_tag}`;
                 }
 
                 return (
@@ -454,10 +404,13 @@ export default async function ReproductionPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium" style={{ color: "#1C1815" }}>
-                          {label.replace(/^[^ ]+ /, "")}
+                          {label}
                         </span>
                         {subDetail && (
-                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914" }}>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914" }}
+                          >
                             {subDetail}
                           </span>
                         )}
@@ -467,7 +420,10 @@ export default async function ReproductionPage({
                         {obs.animalId && (
                           <>
                             {" · "}
-                            <Link href={`/${farmSlug}/admin/animals/${obs.animalId}`} className="hover:underline">
+                            <Link
+                              href={`/${farmSlug}/admin/animals/${obs.animalId}?tab=reproduction`}
+                              className="hover:underline"
+                            >
                               {obs.animalId}
                             </Link>
                           </>
