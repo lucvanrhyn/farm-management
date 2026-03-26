@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type ReproType = "heat_detection" | "insemination" | "pregnancy_scan";
+type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving";
 
 export interface ReproSubmitData {
   type: ReproType;
@@ -80,6 +80,12 @@ const TYPE_OPTIONS: { value: ReproType; label: string; icon: string; desc: strin
     icon: "🔬",
     desc: "Pregnancy diagnosis result",
   },
+  {
+    value: "calving",
+    label: "Calving",
+    icon: "🐮",
+    desc: "Dam calved — record calf outcome",
+  },
 ];
 
 const SELECTED_STYLE = {
@@ -108,6 +114,10 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
   const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain">("pregnant");
   const [scanNotes, setScanNotes] = useState("");
 
+  // Calving
+  const [calfStatus, setCalfStatus] = useState<"live" | "stillborn">("live");
+  const [calfTag, setCalfTag] = useState("");
+
   function handleTypeSelect(type: ReproType) {
     setSelectedType(type);
     setStep("details");
@@ -124,10 +134,16 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
         method: insemMethod,
         ...(bullId.trim() ? { bullId: bullId.trim() } : {}),
       };
-    } else {
+    } else if (selectedType === "pregnancy_scan") {
       details = {
         result: scanResult,
         ...(scanNotes.trim() ? { notes: scanNotes.trim() } : {}),
+      };
+    } else {
+      // calving
+      details = {
+        calf_status: calfStatus,
+        ...(calfTag.trim() ? { calf_tag: calfTag.trim() } : {}),
       };
     }
 
@@ -293,6 +309,54 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
               style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
             >
               Record Scan Result
+            </button>
+          </>
+        )}
+
+        {/* Step 2d: calving */}
+        {step === "details" && selectedType === "calving" && (
+          <>
+            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+              Calf outcome
+            </p>
+            {(
+              [
+                { value: "live" as const, label: "🐄  Live calf" },
+                { value: "stillborn" as const, label: "✗  Stillborn" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setCalfStatus(opt.value)}
+                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors"
+                style={calfStatus === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: "#D2B48C" }}>
+                Calf tag (optional)
+              </p>
+              <input
+                type="text"
+                value={calfTag}
+                onChange={(e) => setCalfTag(e.target.value)}
+                placeholder="e.g. CALF-2026-001"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
+                style={{
+                  backgroundColor: "rgba(26, 13, 5, 0.6)",
+                  border: "1px solid rgba(92, 61, 46, 0.5)",
+                  color: "#F5F0E8",
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSubmit}
+              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
+              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+            >
+              Record Calving
             </button>
           </>
         )}
