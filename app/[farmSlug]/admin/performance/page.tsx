@@ -1,6 +1,7 @@
 import AdminNav from "@/components/admin/AdminNav";
 import PerformanceTable from "@/components/admin/PerformanceTable";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { redirect } from "next/navigation";
@@ -18,14 +19,31 @@ export default async function PerformancePage({
 
   const camps = await prisma.camp.findMany({ orderBy: { campId: "asc" } });
   const rows = await Promise.all(camps.map(async (camp) => {
-    const [animalCount, latestCondition, latestCover] = await Promise.all([
-      prisma.animal.count({ where: { currentCamp: camp.campId, status: "Active" } }),
+    const [animalsByCategory, latestCondition, latestCover] = await Promise.all([
+      prisma.animal.groupBy({
+        by: ["category"],
+        where: { currentCamp: camp.campId, status: "Active" },
+        _count: { id: true },
+      }),
       prisma.observation.findFirst({ where: { campId: camp.campId, type: "camp_condition" }, orderBy: { observedAt: "desc" } }),
       prisma.campCoverReading.findFirst({ where: { campId: camp.campId }, orderBy: { recordedAt: "desc" } }),
     ]);
+
+    const animalCount = animalsByCategory.reduce((sum, r) => sum + r._count.id, 0);
     const density = camp.sizeHectares && camp.sizeHectares > 0
       ? (animalCount / camp.sizeHectares).toFixed(1) : null;
     const details = (latestCondition?.details as unknown) as Record<string, string> | null;
+
+    const daysGrazingRemaining =
+      latestCover && camp.sizeHectares && camp.sizeHectares > 0
+        ? calcDaysGrazingRemaining(
+            latestCover.kgDmPerHa,
+            latestCover.useFactor,
+            camp.sizeHectares,
+            animalsByCategory.map((r) => ({ category: r.category, count: r._count.id }))
+          )
+        : null;
+
     return {
       campId: camp.campId,
       campName: camp.campName,
@@ -36,7 +54,7 @@ export default async function PerformancePage({
       fenceStatus: details?.fence ?? null,
       lastInspection: latestCondition?.observedAt ? new Date(latestCondition.observedAt).toISOString().split("T")[0] : null,
       coverCategory: latestCover?.coverCategory ?? null,
-      coverReadingDate: latestCover?.recordedAt ? new Date(latestCover.recordedAt).toISOString().split("T")[0] : null,
+      daysGrazingRemaining: daysGrazingRemaining !== null ? Math.round(daysGrazingRemaining) : null,
     };
   }));
 
