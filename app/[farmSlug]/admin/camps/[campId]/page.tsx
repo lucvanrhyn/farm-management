@@ -295,6 +295,7 @@ export default async function CampDetailPage({
               latest={latestCoverReading}
               sizeHectares={camp.sizeHectares}
               animalCount={animalCount}
+              animalsByCategory={Object.entries(byCategory).map(([category, count]) => ({ category, count: count! }))}
             />
             <div
               className="rounded-2xl border p-5"
