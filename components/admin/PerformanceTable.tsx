@@ -12,6 +12,7 @@ export interface PerfRow {
   fenceStatus: string | null;
   lastInspection: string | null;
   coverCategory: string | null;
+  daysGrazingRemaining: number | null;
 }
 
 type SortKey = keyof PerfRow;
@@ -20,6 +21,12 @@ function grazingColor(g: string | null) {
   if (g === "Good") return { color: "#4A7C59", bg: "rgba(74,124,89,0.15)" };
   if (g === "Poor") return { color: "#A0522D", bg: "rgba(160,82,45,0.15)" };
   return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
+}
+
+function daysRemainingStyle(days: number) {
+  if (days < 7) return { color: "#C0574C", bg: "rgba(192,87,76,0.12)" };
+  if (days <= 14) return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
+  return { color: "#4A7C59", bg: "rgba(74,124,89,0.15)" };
 }
 
 export default function PerformanceTable({ rows, farmSlug }: { rows: PerfRow[]; farmSlug: string }) {
@@ -57,6 +64,7 @@ export default function PerformanceTable({ rows, farmSlug }: { rows: PerfRow[]; 
             <H k="grazingQuality" label="Grazing" />
             <H k="fenceStatus" label="Fence" />
             <H k="coverCategory" label="Cover" />
+            <H k="daysGrazingRemaining" label="Days Remaining" />
             <H k="lastInspection" label="Last Inspection" />
             <th className="px-4 py-3" />
           </tr>
@@ -85,6 +93,16 @@ export default function PerformanceTable({ rows, farmSlug }: { rows: PerfRow[]; 
                   ) : <span style={{ color: "#9C8E7A" }}>—</span>}
                 </td>
                 <td className="px-4 py-3 text-xs" style={{ color: "#6B5C4E" }}>{row.coverCategory ?? "—"}</td>
+                <td className="px-4 py-3">
+                  {row.daysGrazingRemaining !== null ? (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-xs font-mono font-medium"
+                      style={daysRemainingStyle(row.daysGrazingRemaining)}
+                    >
+                      {row.daysGrazingRemaining}d
+                    </span>
+                  ) : <span style={{ color: "#9C8E7A" }}>—</span>}
+                </td>
                 <td className="px-4 py-3 font-mono text-xs" style={{ color: "#9C8E7A" }}>{row.lastInspection ?? "Never"}</td>
                 <td className="px-4 py-3">
                   <Link href={`/${farmSlug}/admin/camps/${row.campId}`} className="text-xs transition-opacity hover:opacity-70" style={{ color: "#8B6914" }}>

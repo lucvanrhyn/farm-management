@@ -1,12 +1,5 @@
 import type { CampCoverReading } from "@prisma/client";
-
-const DEFAULT_USE_FACTOR = 0.35;
-const DAILY_DMI_PER_HEAD = 10;
-
-function calcDays(kgDmPerHa: number, sizeHa: number, headCount: number, useFactor: number): number | null {
-  if (headCount <= 0 || sizeHa <= 0) return null;
-  return Math.round((kgDmPerHa * sizeHa * useFactor) / (headCount * DAILY_DMI_PER_HEAD));
-}
+import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 
 function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
@@ -29,12 +22,17 @@ interface Props {
   latest: CampCoverReading | null;
   sizeHectares: number | null;
   animalCount: number;
+  animalsByCategory?: Array<{ category: string; count: number }>;
 }
 
-export default function PastureIntelligenceCard({ latest, sizeHectares, animalCount }: Props) {
+export default function PastureIntelligenceCard({ latest, sizeHectares, animalCount, animalsByCategory }: Props) {
   const daysRemaining =
     latest && sizeHectares
-      ? calcDays(latest.kgDmPerHa, sizeHectares, animalCount, latest.useFactor ?? DEFAULT_USE_FACTOR)
+      ? animalsByCategory
+        ? calcDaysGrazingRemaining(latest.kgDmPerHa, latest.useFactor, sizeHectares, animalsByCategory)
+        : animalCount > 0
+          ? Math.round((latest.kgDmPerHa * sizeHectares * latest.useFactor) / (animalCount * 10))
+          : null
       : null;
 
   const { text: statusText, bg: statusBg, label: statusLabel } = statusColors(daysRemaining);

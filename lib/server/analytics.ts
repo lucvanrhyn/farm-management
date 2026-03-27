@@ -229,6 +229,42 @@ export async function getDeathsAndSales(prisma: PrismaClient, months = 12): Prom
     .map(([month, { deaths, sales }]) => ({ month, deaths, sales }));
 }
 
+// ── Days Grazing Remaining ────────────────────────────────────────────────────
+
+export const LSU_EQUIVALENT: Record<string, number> = {
+  Cow: 1.0,
+  Bull: 1.5,
+  Heifer: 0.75,
+  Calf: 0.25,
+  Ox: 1.0,
+};
+
+/**
+ * Calculate days of grazing remaining in a camp.
+ *
+ * Formula (SA standard):
+ *   Effective FOO = kgDmPerHa × useFactor × sizeHectares
+ *   LSU           = Σ(count × LSU_EQUIVALENT[category])
+ *   Days          = Effective FOO ÷ (LSU × 10 kg DM/LSU/day)
+ *
+ * Returns null when LSU = 0, no size, or no cover reading.
+ */
+export function calcDaysGrazingRemaining(
+  kgDmPerHa: number,
+  useFactor: number,
+  sizeHectares: number,
+  animalsByCategory: Array<{ category: string; count: number }>
+): number | null {
+  if (sizeHectares <= 0 || kgDmPerHa <= 0) return null;
+  const lsu = animalsByCategory.reduce(
+    (sum, { category, count }) => sum + count * (LSU_EQUIVALENT[category] ?? 1.0),
+    0
+  );
+  if (lsu <= 0) return null;
+  const effectiveFoo = kgDmPerHa * useFactor * sizeHectares;
+  return effectiveFoo / (lsu * 10);
+}
+
 // ── Treatment Withdrawal Tracker ──────────────────────────────────────────────
 
 export interface WithdrawalRecord {
