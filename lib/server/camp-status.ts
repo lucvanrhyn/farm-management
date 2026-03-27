@@ -1,5 +1,6 @@
 import { type PrismaClient } from "@prisma/client";
 import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
+import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 
 export interface LiveCampStatus {
   grazing_quality: GrazingQuality;
@@ -83,6 +84,51 @@ export async function countHealthIssuesSince(prisma: PrismaClient, since: Date):
   return prisma.observation.count({
     where: { type: "health_issue", observedAt: { gte: since } },
   });
+}
+
+/**
+ * Returns the number of camps with <7 days of grazing remaining (LSU-based).
+ * Uses 3 batched queries — safe to call on the admin home page.
+ */
+export async function getLowGrazingCampCount(prisma: PrismaClient): Promise<number> {
+  const [camps, allCoverReadings, allAnimals] = await Promise.all([
+    prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
+    prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
+    prisma.animal.groupBy({
+      by: ["currentCamp", "category"],
+      where: { status: "Active" },
+      _count: { id: true },
+    }),
+  ]);
+
+  const latestCover = new Map<string, { kgDmPerHa: number; useFactor: number }>();
+  for (const r of allCoverReadings) {
+    if (!latestCover.has(r.campId)) {
+      latestCover.set(r.campId, { kgDmPerHa: r.kgDmPerHa, useFactor: r.useFactor });
+    }
+  }
+
+  const animalsByCamp = new Map<string, Array<{ category: string; count: number }>>();
+  for (const r of allAnimals) {
+    const campId = r.currentCamp ?? "";
+    if (!animalsByCamp.has(campId)) animalsByCamp.set(campId, []);
+    animalsByCamp.get(campId)!.push({ category: r.category, count: r._count.id });
+  }
+
+  let count = 0;
+  for (const camp of camps) {
+    if (!camp.sizeHectares) continue;
+    const cover = latestCover.get(camp.campId);
+    if (!cover) continue;
+    const days = calcDaysGrazingRemaining(
+      cover.kgDmPerHa,
+      cover.useFactor,
+      camp.sizeHectares,
+      animalsByCamp.get(camp.campId) ?? []
+    );
+    if (days !== null && days < 7) count++;
+  }
+  return count;
 }
 
 export async function countInspectedToday(prisma: PrismaClient): Promise<number> {
