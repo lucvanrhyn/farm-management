@@ -3,6 +3,7 @@ import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import RecordBirthButton from "@/components/admin/RecordBirthButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import type { Camp, PrismaAnimal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +23,13 @@ export default async function AdminAnimalsPage({
     );
   }
 
-  const [animals, prismaCamps] = await Promise.all([
+  const [animals, prismaCamps, withdrawalAnimals] = await Promise.all([
     prisma.animal.findMany({ orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    getAnimalsInWithdrawal(prisma),
   ]);
+
+  const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
 
   const camps: Camp[] = prismaCamps.map((c) => ({
     camp_id: c.campId,
@@ -50,7 +54,7 @@ export default async function AdminAnimalsPage({
             <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
           </div>
         </div>
-        <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} />
+        <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} withdrawalIds={withdrawalIds} />
       </main>
     </div>
   );

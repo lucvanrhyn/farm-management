@@ -265,6 +265,70 @@ export function calcDaysGrazingRemaining(
   return effectiveFoo / (lsu * 10);
 }
 
+// ── Pasture Growth Rate ───────────────────────────────────────────────────────
+
+export interface GrowthRateResult {
+  growthRateKgPerDay: number | null;   // null if <2 readings
+  projectedRecoveryDays: number | null;
+  currentKgDmPerHa: number | null;
+  readingCount: number;
+}
+
+/**
+ * Calculate pasture growth rate between the last two cover readings for a camp.
+ *
+ * Formula:
+ *   Growth Rate (kg DM/ha/day) = (current_kgDmPerHa − previous_kgDmPerHa) ÷ days_between
+ *   Projected recovery days    = (1500 − current_kgDmPerHa) ÷ growth_rate  (if rate > 0)
+ *
+ * Growth rate can be negative when grazing exceeds growth.
+ * Recovery target is "Medium" cover at 1500 kg DM/ha.
+ */
+export async function calcPastureGrowthRate(
+  prisma: PrismaClient,
+  campId: string
+): Promise<GrowthRateResult> {
+  const readings = await prisma.campCoverReading.findMany({
+    where: { campId },
+    orderBy: { recordedAt: "asc" },
+    select: { recordedAt: true, kgDmPerHa: true },
+  });
+
+  if (readings.length < 2) {
+    return {
+      growthRateKgPerDay: null,
+      projectedRecoveryDays: null,
+      currentKgDmPerHa: readings.length === 1 ? readings[0].kgDmPerHa : null,
+      readingCount: readings.length,
+    };
+  }
+
+  const prev = readings[readings.length - 2];
+  const curr = readings[readings.length - 1];
+
+  const prevDate = new Date(prev.recordedAt);
+  const currDate = new Date(curr.recordedAt);
+  const daysBetween = Math.max(
+    1,
+    Math.round((currDate.getTime() - prevDate.getTime()) / 86_400_000)
+  );
+
+  const growthRateKgPerDay = (curr.kgDmPerHa - prev.kgDmPerHa) / daysBetween;
+
+  const RECOVERY_TARGET_KG_DM_PER_HA = 1500;
+  const projectedRecoveryDays =
+    growthRateKgPerDay > 0 && curr.kgDmPerHa < RECOVERY_TARGET_KG_DM_PER_HA
+      ? Math.ceil((RECOVERY_TARGET_KG_DM_PER_HA - curr.kgDmPerHa) / growthRateKgPerDay)
+      : null;
+
+  return {
+    growthRateKgPerDay: Math.round(growthRateKgPerDay * 10) / 10,
+    projectedRecoveryDays,
+    currentKgDmPerHa: curr.kgDmPerHa,
+    readingCount: readings.length,
+  };
+}
+
 // ── Treatment Withdrawal Tracker ──────────────────────────────────────────────
 
 export interface WithdrawalRecord {

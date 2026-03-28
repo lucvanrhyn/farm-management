@@ -5,6 +5,8 @@ import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/util
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import AdminNav from "@/components/admin/AdminNav";
+import { getAnimalWeightData } from "@/lib/server/weight-analytics";
+import type { ADGResult, WeightRecord } from "@/lib/server/weight-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +63,146 @@ function reproBadgeStyle(type: string, details: Record<string, unknown>): { bg: 
   return REPRO_BADGE[type] ?? { bg: "rgba(156,142,122,0.12)", text: "#9C8E7A" };
 }
 
+// ── Weight & ADG helpers ────────────────────────────────────────────────────
+
+const ADG_BADGE: Record<"good" | "ok" | "poor", { bg: string; text: string; label: string }> = {
+  good: { bg: "rgba(74,124,89,0.12)",   text: "#2D6A4F", label: "Good (>0.9 kg/day)"  },
+  ok:   { bg: "rgba(180,110,20,0.12)",  text: "#8B6914", label: "OK (0.7–0.9 kg/day)" },
+  poor: { bg: "rgba(192,87,76,0.12)",   text: "#8B3A3A", label: "Poor (<0.7 kg/day)"  },
+};
+
+function WeightTab({ weightData }: { weightData: ADGResult }) {
+  const { latestWeight, adg, adgTrend, records } = weightData;
+  const reversedRecords = [...records].reverse();
+
+  return (
+    <div
+      className="rounded-2xl border p-5 space-y-5"
+      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+    >
+      <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+        Weight & ADG
+      </h2>
+
+      {/* Summary row */}
+      <div className="grid grid-cols-2 gap-4">
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+        >
+          <p className="text-xs mb-1" style={{ color: "#9C8E7A" }}>Latest Weight</p>
+          <p className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>
+            {latestWeight !== null ? `${latestWeight.toFixed(1)} kg` : "—"}
+          </p>
+        </div>
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+        >
+          <p className="text-xs mb-1" style={{ color: "#9C8E7A" }}>ADG (last interval)</p>
+          {adg !== null && adgTrend !== null ? (
+            <div className="space-y-1">
+              <p className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>
+                {adg >= 0 ? "+" : ""}{adg.toFixed(2)} kg/day
+              </p>
+              <span
+                className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: ADG_BADGE[adgTrend].bg, color: ADG_BADGE[adgTrend].text }}
+              >
+                {ADG_BADGE[adgTrend].label}
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: "#9C8E7A" }}>
+              {records.length === 0 ? "No data" : "Need 2+ readings"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* History table or empty state */}
+      {records.length === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl"
+          style={{ background: "#FAFAF8", border: "1px dashed #E0D5C8" }}
+        >
+          <p className="text-sm font-medium" style={{ color: "#9C8E7A" }}>No weight recordings yet.</p>
+          <p className="text-xs text-center max-w-xs" style={{ color: "#9C8E7A" }}>
+            Weighing sessions are recorded in the Logger. Once recorded they will appear here.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#9C8E7A" }}>
+            History ({records.length} sessions)
+          </p>
+          <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
+                  <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Date</th>
+                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Weight (kg)</th>
+                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>ADG vs prev</th>
+                  <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reversedRecords.map((rec: WeightRecord, idx: number) => {
+                  // Find the previous record (chronologically) in the original sorted array
+                  const originalIdx = records.findIndex((r) => r.id === rec.id);
+                  const prevRec = originalIdx > 0 ? records[originalIdx - 1] : null;
+                  let rowAdg: number | null = null;
+                  if (prevRec) {
+                    const days =
+                      (rec.observedAt.getTime() - prevRec.observedAt.getTime()) /
+                      (1000 * 60 * 60 * 24);
+                    rowAdg = days > 0 ? (rec.weightKg - prevRec.weightKg) / days : null;
+                  }
+                  const adgColor =
+                    rowAdg === null
+                      ? "#9C8E7A"
+                      : rowAdg > 0.9
+                      ? "#2D6A4F"
+                      : rowAdg >= 0.7
+                      ? "#8B6914"
+                      : "#8B3A3A";
+
+                  return (
+                    <tr
+                      key={rec.id}
+                      style={{
+                        borderBottom: idx < reversedRecords.length - 1 ? "1px solid #E0D5C8" : "none",
+                        background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
+                      }}
+                    >
+                      <td className="px-3 py-2.5 font-mono" style={{ color: "#1C1815" }}>
+                        {new Date(rec.observedAt).toLocaleDateString("en-ZA")}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-semibold font-mono" style={{ color: "#1C1815" }}>
+                        {rec.weightKg.toFixed(1)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: adgColor }}>
+                        {rowAdg !== null
+                          ? `${rowAdg >= 0 ? "+" : ""}${rowAdg.toFixed(2)}`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5" style={{ color: "#9C8E7A" }}>
+                        {rec.notes ?? ""}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default async function AnimalDetailPage({
   params,
   searchParams,
@@ -79,13 +221,14 @@ export default async function AnimalDetailPage({
   const animal = await prisma.animal.findUnique({ where: { animalId: id } });
   if (!animal) notFound();
 
-  const [observations, camp] = await Promise.all([
+  const [observations, camp, weightData] = await Promise.all([
     prisma.observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
       take: 200,
     }),
     prisma.camp.findFirst({ where: { campId: animal.currentCamp } }),
+    getAnimalWeightData(prisma, id),
   ]);
 
   // Partition observations by tab
@@ -394,20 +537,7 @@ export default async function AnimalDetailPage({
 
         {/* ── Tab: Weight & ADG ── */}
         {activeTab === "weight" && (
-          <div
-            className="rounded-2xl border p-5 flex flex-col items-center justify-center gap-3 min-h-[180px]"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-          >
-            <span
-              className="text-xs font-semibold px-3 py-1 rounded-full"
-              style={{ background: "rgba(156,142,122,0.12)", color: "#9C8E7A" }}
-            >
-              Coming in next update
-            </span>
-            <p className="text-xs text-center" style={{ color: "#9C8E7A" }}>
-              Weight sessions and Average Daily Gain (ADG) will be available once the weighing logger is released.
-            </p>
-          </div>
+          <WeightTab weightData={weightData} />
         )}
       </main>
     </div>

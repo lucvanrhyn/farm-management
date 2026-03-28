@@ -5,6 +5,7 @@ import MobKPICard from "@/components/admin/MobKPICard";
 import PastureIntelligenceCard from "@/components/admin/PastureIntelligenceCard";
 import CampCoverForm from "@/components/admin/CampCoverForm";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import type { AnimalCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -132,6 +133,17 @@ export default async function CampDetailPage({
       // malformed — ignore
     }
   }
+
+  // Cover history (last 5 readings) + growth rate
+  const [coverHistory, growthRate] = await Promise.all([
+    prisma.campCoverReading?.findMany({
+      where: { campId },
+      orderBy: { recordedAt: "desc" },
+      take: 5,
+      select: { id: true, recordedAt: true, coverCategory: true, kgDmPerHa: true },
+    }) ?? Promise.resolve([]),
+    calcPastureGrowthRate(prisma, campId),
+  ]);
 
   // Recent observations for timeline (last 10)
   const recentObs = await prisma.observation.findMany({
@@ -313,6 +325,102 @@ export default async function CampDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Pasture Trends */}
+        {coverHistory.length > 0 && (
+          <div
+            className="rounded-2xl border p-5 mb-6"
+            style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          >
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+              Pasture Trends
+            </h2>
+
+            {/* Growth rate stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+              {/* Current cover */}
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                  Current Cover
+                </p>
+                <p className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+                  {growthRate.currentKgDmPerHa !== null
+                    ? `${growthRate.currentKgDmPerHa.toLocaleString()} kg DM/ha`
+                    : "—"}
+                </p>
+              </div>
+
+              {/* Growth rate */}
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                  Growth Rate
+                </p>
+                {growthRate.growthRateKgPerDay !== null ? (
+                  <p
+                    className="text-lg font-semibold"
+                    style={{
+                      color: growthRate.growthRateKgPerDay >= 0 ? "#2E7D32" : "#C62828",
+                    }}
+                  >
+                    {growthRate.growthRateKgPerDay >= 0 ? "+" : ""}
+                    {growthRate.growthRateKgPerDay} kg DM/ha/day
+                  </p>
+                ) : (
+                  <p className="text-lg font-semibold" style={{ color: "#9C8E7A" }}>
+                    — (need 2+ readings)
+                  </p>
+                )}
+              </div>
+
+              {/* Recovery projection */}
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                  Days to Recovery (1 500 kg DM/ha)
+                </p>
+                <p className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+                  {growthRate.projectedRecoveryDays !== null
+                    ? `${growthRate.projectedRecoveryDays} days`
+                    : "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Cover history list */}
+            <p className="text-xs font-semibold mb-2" style={{ color: "#6B5E50" }}>
+              Recent Readings
+            </p>
+            <ol className="space-y-2">
+              {coverHistory.map((r) => {
+                const date = new Date(r.recordedAt).toLocaleDateString("en-ZA", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                });
+                const categoryColor =
+                  r.coverCategory === "Good"
+                    ? "#2E7D32"
+                    : r.coverCategory === "Fair"
+                    ? "#E65100"
+                    : "#C62828";
+                return (
+                  <li
+                    key={r.id}
+                    className="flex items-center justify-between text-sm py-1.5 border-b last:border-0"
+                    style={{ borderColor: "#F0E8DE" }}
+                  >
+                    <span style={{ color: "#1C1815" }}>{date}</span>
+                    <span className="font-medium" style={{ color: categoryColor }}>
+                      {r.coverCategory}
+                    </span>
+                    <span className="font-mono text-xs" style={{ color: "#6B5E50" }}>
+                      {r.kgDmPerHa.toLocaleString()} kg DM/ha
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
 
         {/* Recent activity timeline */}
         <div

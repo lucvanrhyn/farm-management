@@ -4,12 +4,22 @@ import { createClient } from "@libsql/client";
 import { cookies } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 
+// Cache Prisma clients per farm slug to avoid creating a new connection on every request.
+// Uses globalThis so the cache survives Next.js hot-reload in development.
+const globalForPrisma = globalThis as unknown as { farmClients?: Map<string, PrismaClient> };
+if (!globalForPrisma.farmClients) globalForPrisma.farmClients = new Map();
+
 export async function getPrismaForFarm(slug: string): Promise<PrismaClient | null> {
+  const cached = globalForPrisma.farmClients!.get(slug);
+  if (cached) return cached;
+
   const creds = await getFarmCreds(slug);
   if (!creds) return null;
   const libsql = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
   const adapter = new PrismaLibSQL(libsql);
-  return new PrismaClient({ adapter });
+  const client = new PrismaClient({ adapter });
+  globalForPrisma.farmClients!.set(slug, client);
+  return client;
 }
 
 // Reads active_farm_slug cookie and returns a scoped Prisma client.
