@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
-import AdminNav from "@/components/admin/AdminNav";
 import GrafiekeClient from "@/components/admin/GrafiekeClient";
 import type { FinancialMonthPoint, HerdCategoryCount, CampCoverRow } from "@/components/admin/GrafiekeClient";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
@@ -182,9 +181,7 @@ export default async function GrafiekePage({
   });
 
   return (
-    <div className="flex min-h-screen" style={{ background: "#1A1510" }}>
-      <AdminNav />
-      <main className="flex-1 min-w-0 p-4 md:p-8">
+    <div className="min-w-0 p-4 md:p-8" style={{ background: "#1A1510" }}>
         <div className="mb-8">
           <h1 className="text-2xl font-bold" style={{ color: "#F0DEB8" }}>Charts</h1>
           <p className="text-sm mt-1" style={{ color: "#9C8473" }}>
@@ -209,7 +206,6 @@ export default async function GrafiekePage({
             campCover,
           }}
         />
-      </main>
     </div>
   );
 }

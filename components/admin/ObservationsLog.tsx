@@ -14,6 +14,7 @@ const OBS_TYPES: { value: ObservationType | "all"; label: string }[] = [
   { value: "reproduction",    label: "Reproduction" },
   { value: "treatment",       label: "Treatment" },
   { value: "death",           label: "Death" },
+  { value: "weighing",        label: "Weighing" },
 ];
 
 const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
@@ -24,6 +25,7 @@ const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
   reproduction:    { color: "#D47EB5", bg: "rgba(212,126,181,0.15)" },
   treatment:       { color: "#D4904A", bg: "rgba(212,144,74,0.15)" },
   death:           { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" },
+  weighing:        { color: "#5BAD5E", bg: "rgba(91,173,94,0.15)" },
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -34,7 +36,17 @@ const TYPE_LABEL: Record<string, string> = {
   reproduction:    "Reproduction",
   treatment:       "Treatment",
   death:           "Death",
+  weighing:        "Weighing",
 };
+
+const TREATMENT_TYPES = ["Antibiotic", "Dip", "Deworming", "Vaccination", "Supplement", "Other"];
+const SYMPTOMS = ["Lame", "Thin", "Eye problem", "Wound", "Diarrhea", "Nasal discharge", "Bloated", "Not eating", "Other"];
+const SEVERITIES = ["mild", "moderate", "severe"];
+const GRAZING_QUALITY = ["Good", "Fair", "Poor", "Overgrazed"];
+const WATER_STATUS = ["Full", "Low", "Empty", "Broken"];
+const FENCE_STATUS = ["Intact", "Damaged"];
+const REPRODUCTION_EVENTS = ["heat", "insemination", "pregnancy_scan", "calving"];
+const DEATH_CAUSES = ["Unknown", "Redwater", "Heartwater", "Snake", "Old_age", "Birth_complications", "Other"];
 
 const lightSelect: React.CSSProperties = {
   background: "#FFFFFF",
@@ -46,24 +58,37 @@ const lightSelect: React.CSSProperties = {
   outline: "none",
 };
 
+const fieldInput: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E0D5C8",
+  color: "#1C1815",
+  borderRadius: "0.75rem",
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.875rem",
+  outline: "none",
+  width: "100%",
+};
+
 function parseDetails(raw: string): string {
   try {
     const obj = JSON.parse(raw);
     const parts: string[] = [];
+    if (obj.weight_kg) parts.push(`Weight: ${obj.weight_kg}kg`);
     if (obj.symptoms) {
       const s = Array.isArray(obj.symptoms) ? obj.symptoms.join(", ") : obj.symptoms;
       parts.push(`Symptoms: ${s}`);
     }
     if (obj.severity) parts.push(`Severity: ${obj.severity}`);
-    // camp_condition fields (DB stores as grazing/water/fence)
+    if (obj.treatmentType) parts.push(`Treatment: ${obj.treatmentType}`);
+    if (obj.product) parts.push(`Product: ${obj.product}`);
     if (obj.grazing) parts.push(`Grazing: ${obj.grazing}`);
     if (obj.water) parts.push(`Water: ${obj.water}`);
     if (obj.fence) parts.push(`Fence: ${obj.fence}`);
-    // legacy field names
     if (obj.grazing_quality) parts.push(`Grazing: ${obj.grazing_quality}`);
     if (obj.water_status) parts.push(`Water: ${obj.water_status}`);
-    if (obj.notes) parts.push(obj.notes);
+    if (obj.eventType) parts.push(`Event: ${obj.eventType}`);
     if (obj.cause) parts.push(`Cause: ${obj.cause}`);
+    if (obj.notes) parts.push(obj.notes);
     if (obj.drug) parts.push(`Medicine: ${obj.drug}`);
     if (obj.to_camp) parts.push(`To camp: ${obj.to_camp}`);
     return parts.join(" · ") || raw.slice(0, 120);
@@ -72,16 +97,303 @@ function parseDetails(raw: string): string {
   }
 }
 
+function safeParse(raw: string): Record<string, unknown> {
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+// ─── Per-type form field renderers ──────────────────────────────
+
+interface FieldProps {
+  details: Record<string, unknown>;
+  onChange: (key: string, value: unknown) => void;
+}
+
+function WeighingFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Weight (kg) *
+        <input
+          type="number"
+          step="0.1"
+          value={(details.weight_kg as number) ?? ""}
+          onChange={(e) => onChange("weight_kg", e.target.value ? parseFloat(e.target.value) : "")}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function TreatmentFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Treatment Type *
+        <select
+          value={(details.treatmentType as string) ?? ""}
+          onChange={(e) => onChange("treatmentType", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Product *
+        <input
+          type="text"
+          value={(details.product as string) ?? ""}
+          onChange={(e) => onChange("product", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Dose *
+        <input
+          type="text"
+          value={(details.dose as string) ?? ""}
+          onChange={(e) => onChange("dose", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Withdrawal Days
+        <input
+          type="number"
+          value={(details.withdrawalDays as number) ?? ""}
+          onChange={(e) => onChange("withdrawalDays", e.target.value ? parseInt(e.target.value) : "")}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function HealthIssueFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Symptom *
+        <select
+          value={(details.symptom as string) ?? (Array.isArray(details.symptoms) ? (details.symptoms as string[])[0] ?? "" : "")}
+          onChange={(e) => onChange("symptom", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {SYMPTOMS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Severity *
+        <select
+          value={(details.severity as string) ?? ""}
+          onChange={(e) => onChange("severity", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function CampConditionFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Grazing Quality *
+        <select
+          value={(details.grazingQuality as string) ?? (details.grazing as string) ?? (details.grazing_quality as string) ?? ""}
+          onChange={(e) => onChange("grazingQuality", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {GRAZING_QUALITY.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Water Status *
+        <select
+          value={(details.waterStatus as string) ?? (details.water as string) ?? (details.water_status as string) ?? ""}
+          onChange={(e) => onChange("waterStatus", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {WATER_STATUS.map((w) => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Fence Status *
+        <select
+          value={(details.fenceStatus as string) ?? (details.fence as string) ?? ""}
+          onChange={(e) => onChange("fenceStatus", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {FENCE_STATUS.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function ReproductionFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Event Type *
+        <select
+          value={(details.eventType as string) ?? ""}
+          onChange={(e) => onChange("eventType", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {REPRODUCTION_EVENTS.map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function DeathFields({ details, onChange }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Cause *
+        <select
+          value={(details.cause as string) ?? ""}
+          onChange={(e) => onChange("cause", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        >
+          <option value="">Select...</option>
+          {DEATH_CAUSES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        Notes
+        <input
+          type="text"
+          value={(details.notes as string) ?? ""}
+          onChange={(e) => onChange("notes", e.target.value)}
+          style={fieldInput}
+          className="mt-1 block"
+        />
+      </label>
+    </div>
+  );
+}
+
+function ReadOnlyDetails({ details }: { details: Record<string, unknown> }) {
+  return (
+    <pre
+      className="text-xs rounded-xl px-3 py-2 font-mono overflow-auto max-h-48"
+      style={{ background: "#F5F2EE", color: "#6B5C4E", border: "1px solid #E0D5C8" }}
+    >
+      {JSON.stringify(details, null, 2)}
+    </pre>
+  );
+}
+
+const EDITABLE_TYPES = new Set(["weighing", "treatment", "health_issue", "camp_condition", "reproduction", "death"]);
+
+function TypeFields({ type, details, onChange }: FieldProps & { type: string }) {
+  switch (type) {
+    case "weighing":       return <WeighingFields details={details} onChange={onChange} />;
+    case "treatment":      return <TreatmentFields details={details} onChange={onChange} />;
+    case "health_issue":   return <HealthIssueFields details={details} onChange={onChange} />;
+    case "camp_condition": return <CampConditionFields details={details} onChange={onChange} />;
+    case "reproduction":   return <ReproductionFields details={details} onChange={onChange} />;
+    case "death":          return <DeathFields details={details} onChange={onChange} />;
+    default:               return <ReadOnlyDetails details={details} />;
+  }
+}
+
+// ─── Edit Modal ─────────────────────────────────────────────────
+
 interface EditModalProps {
   obs: PrismaObservation;
   onClose: () => void;
   onSaved: (updated: PrismaObservation) => void;
+  onDeleted: (id: string) => void;
 }
 
-function EditModal({ obs, onClose, onSaved }: EditModalProps) {
-  const [value, setValue] = useState(obs.details);
+function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) {
+  const parsed = safeParse(obs.details);
+  const [details, setDetails] = useState<Record<string, unknown>>(parsed);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isEditable = EDITABLE_TYPES.has(obs.type);
+
+  function handleFieldChange(key: string, value: unknown) {
+    setDetails((prev) => ({ ...prev, [key]: value }));
+  }
 
   async function save() {
     setSaving(true);
@@ -90,7 +402,7 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
       const res = await fetch(`/api/observations/${obs.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ details: value }),
+        body: JSON.stringify({ details: JSON.stringify(details) }),
       });
       if (!res.ok) {
         const e = await res.json();
@@ -107,10 +419,33 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
     }
   }
 
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/observations/${obs.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const e = await res.json();
+        setError(e.error ?? "Delete failed");
+        return;
+      }
+      onDeleted(obs.id);
+      onClose();
+    } catch {
+      setError("Network error — try again");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
-        className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4"
+        className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <div className="flex items-center justify-between">
@@ -133,49 +468,63 @@ function EditModal({ obs, onClose, onSaved }: EditModalProps) {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "#9C8E7A" }}>Details (JSON)</label>
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            rows={6}
-            className="w-full rounded-xl px-3 py-2 text-sm font-mono focus:outline-none resize-none"
-            style={{
-              background: "#FFFFFF",
-              border: "1px solid #E0D5C8",
-              color: "#1C1815",
-            }}
-          />
+          <label className="block text-xs font-semibold mb-2" style={{ color: "#9C8E7A" }}>
+            {isEditable ? "Details" : "Details (read-only)"}
+          </label>
+          <TypeFields type={obs.type} details={details} onChange={handleFieldChange} />
         </div>
 
         {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-between gap-2">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-xl transition-colors"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
             style={{
-              color: "#6B5C4E",
-              border: "1px solid #E0D5C8",
-              background: "transparent",
+              color: confirmDelete ? "#FFFFFF" : "#C0574C",
+              border: "1px solid #C0574C",
+              background: confirmDelete ? "#C0574C" : "transparent",
             }}
           >
-            Cancel
+            {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
           </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
-            style={{ background: "#4A7C59", color: "#F5EBD4" }}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm rounded-xl transition-colors"
+              style={{
+                color: "#6B5C4E",
+                border: "1px solid #E0D5C8",
+                background: "transparent",
+              }}
+            >
+              Cancel
+            </button>
+            {isEditable && (
+              <button
+                onClick={save}
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
+                style={{ background: "#4A7C59", color: "#F5EBD4" }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-export default function ObservationsLog() {
+// ─── Main Component ─────────────────────────────────────────────
+
+interface ObservationsLogProps {
+  onDeleted?: () => void;
+}
+
+export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campFilter, setCampFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<ObservationType | "all">("all");
@@ -227,6 +576,11 @@ export default function ObservationsLog() {
     setObservations((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
   }
 
+  function handleDeleted(id: string) {
+    setObservations((prev) => prev.filter((o) => o.id !== id));
+    onDeleted?.();
+  }
+
   return (
     <>
       {editTarget && (
@@ -234,6 +588,7 @@ export default function ObservationsLog() {
           obs={editTarget}
           onClose={() => setEditTarget(null)}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
 

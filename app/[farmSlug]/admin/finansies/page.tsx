@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
-import AdminNav from "@/components/admin/AdminNav";
 import FinansiesClient from "@/components/admin/FinansiesClient";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
@@ -41,14 +40,13 @@ export default async function FinansiesPage({
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   return (
-    <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav />
-      <main className="flex-1 min-w-0 p-4 md:p-8 space-y-2">
+    <div className="min-w-0 p-4 md:p-8 space-y-2 bg-[#FAFAF8]">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
           <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
         </div>
         <FinansiesClient
+          farmSlug={farmSlug}
           initialTransactions={transactions.map((t) => ({
             ...t,
             amount: t.amount,
@@ -56,7 +54,6 @@ export default async function FinansiesPage({
           initialIncome={incomeCategories}
           initialExpense={expenseCategories}
         />
-      </main>
     </div>
   );
 }

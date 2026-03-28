@@ -4,6 +4,38 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForRequest } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const db = await getPrismaForRequest();
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
+
+  const { id } = await params;
+
+  try {
+    const existing = await prisma.observation.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    await prisma.observation.delete({ where: { id } });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/observations");
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[observations DELETE] DB error:", err);
+    return NextResponse.json({ error: "Failed to delete observation" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

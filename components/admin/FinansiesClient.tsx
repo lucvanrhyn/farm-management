@@ -23,12 +23,14 @@ interface Transaction {
 }
 
 interface Props {
+  farmSlug?: string;
   initialTransactions: Transaction[];
   initialIncome: Category[];
   initialExpense: Category[];
 }
 
 export default function FinansiesClient({
+  farmSlug,
   initialTransactions,
   initialIncome,
   initialExpense,
@@ -38,9 +40,14 @@ export default function FinansiesClient({
   const [expenseCategories, setExpenseCategories] = useState<Category[]>(initialExpense);
 
   const refreshTransactions = useCallback(async () => {
-    const res = await fetch("/api/transactions");
-    if (res.ok) setTransactions(await res.json());
-  }, []);
+    const url = farmSlug ? `/api/${farmSlug}/transactions` : "/api/transactions";
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      // Farm-scoped API wraps in { transactions, summary }; legacy returns array
+      setTransactions(Array.isArray(data) ? data : data.transactions);
+    }
+  }, [farmSlug]);
 
   const refreshCategories = useCallback(async () => {
     const res = await fetch("/api/transaction-categories");
