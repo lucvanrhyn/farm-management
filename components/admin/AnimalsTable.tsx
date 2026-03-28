@@ -12,6 +12,7 @@ interface Props {
   animals: PrismaAnimal[];
   camps: Camp[];
   farmSlug: string;
+  withdrawalIds?: Set<string>;
 }
 
 const farmInput =
@@ -19,7 +20,7 @@ const farmInput =
 const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
-export default function AnimalsTable({ animals, camps, farmSlug }: Props) {
+export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds }: Props) {
   const [tab, setTab] = useState<"active" | "deceased">("active");
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
@@ -216,15 +217,29 @@ export default function AnimalsTable({ animals, camps, farmSlug }: Props) {
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td className="px-3 py-2">
-                  <Link
-                    href={`/${farmSlug}/admin/animals/${animal.animalId}`}
-                    className="font-mono text-sm font-semibold transition-colors"
-                    style={{ color: "#1C1815" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#1C1815")}
-                  >
-                    {animal.animalId}
-                  </Link>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/${farmSlug}/admin/animals/${animal.animalId}`}
+                      className="font-mono text-sm font-semibold transition-colors"
+                      style={{ color: "#1C1815" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#1C1815")}
+                    >
+                      {animal.animalId}
+                    </Link>
+                    {withdrawalIds?.has(animal.animalId) && (
+                      <span
+                        className="text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0"
+                        style={{
+                          background: "rgba(196,144,48,0.15)",
+                          color: "#C49030",
+                          border: "1px solid rgba(196,144,48,0.3)",
+                        }}
+                      >
+                        In withdrawal
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getCategoryChipColor(animal.category)}`}>

@@ -10,8 +10,9 @@ import {
   countInspectedToday,
   getLowGrazingCampCount,
 } from "@/lib/server/camp-status";
-import { PawPrint, Tent, ClipboardCheck, HeartPulse, Skull, Baby } from "lucide-react";
+import { PawPrint, Tent, ClipboardCheck, HeartPulse, Skull, Baby, FlaskConical } from "lucide-react";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
+import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function AdminPage({
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [healthIssuesThisWeek, inspectedToday, recentHealth, liveConditions, lowGrazingCount, reproStats, deathsToday, birthsToday] = await Promise.all([
+  const [healthIssuesThisWeek, inspectedToday, recentHealth, liveConditions, lowGrazingCount, reproStats, deathsToday, birthsToday, withdrawalCount] = await Promise.all([
     countHealthIssuesSince(prisma, sevenDaysAgo),
     countInspectedToday(prisma),
     getRecentHealthObservations(prisma, 8),
@@ -50,6 +51,7 @@ export default async function AdminPage({
     getReproStats(prisma),
     prisma.observation.count({ where: { type: "death",    observedAt: { gte: todayStart } } }),
     prisma.observation.count({ where: { type: "calving",  observedAt: { gte: todayStart } } }),
+    getWithdrawalCount(prisma),
   ]);
 
   // Tally camps by grazing quality from live Prisma data
@@ -99,7 +101,7 @@ export default async function AdminPage({
           className="rounded-2xl overflow-hidden mb-8"
           style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
             {[
               {
                 icon: PawPrint,
@@ -161,13 +163,23 @@ export default async function AdminPage({
                 label: "Deaths Today",
                 href: `/${farmSlug}/admin/observations`,
               },
+              {
+                icon: FlaskConical,
+                iconColor: withdrawalCount > 0 ? "#C49030" : "#9C8E7A",
+                badge: withdrawalCount > 0 ? "Caution" : "All clear",
+                badgeColor: withdrawalCount > 0 ? "rgba(196,144,48,0.15)" : "rgba(156,142,122,0.12)",
+                badgeText: withdrawalCount > 0 ? "#C49030" : "#9C8E7A",
+                value: withdrawalCount,
+                label: "In Withdrawal",
+                href: `/${farmSlug}/admin/animals`,
+              },
             ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label, href }, i) => (
               <Link
                 key={label}
                 href={href}
                 className="block p-3 sm:p-5 transition-colors hover:bg-[#F5F2EE]"
                 style={{
-                  borderRight: i < 5 ? "1px solid rgba(139,105,20,0.12)" : undefined,
+                  borderRight: i < 6 ? "1px solid rgba(139,105,20,0.12)" : undefined,
                 }}
               >
                 <div className="flex items-center gap-2 mb-3">

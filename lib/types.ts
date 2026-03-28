@@ -22,7 +22,8 @@ export type ObservationType =
   | "calving"
   | "death"
   | "treatment"
-  | "camp_condition";
+  | "camp_condition"
+  | "weighing";
 
 export type TreatmentType =
   | "Vaccination"
