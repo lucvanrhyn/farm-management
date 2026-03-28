@@ -1,7 +1,7 @@
 import { getCategoryLabel } from "@/lib/utils";
 import { Animal, AnimalCategory } from "@/lib/types";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "reproduction";
+type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "weigh" | "treat";
 
 interface AnimalChecklistProps {
   campId: string;
@@ -12,6 +12,8 @@ interface AnimalChecklistProps {
 
 const ACTION_BUTTONS: { type: ModalType; icon: string; label: string; className: string }[] = [
   { type: "health",       icon: "🏥", label: "Health",  className: "text-amber-400 active:bg-amber-400/10" },
+  { type: "weigh",        icon: "⚖️", label: "Weigh",   className: "text-blue-400 active:bg-blue-400/10" },
+  { type: "treat",        icon: "💊", label: "Treat",   className: "text-green-400 active:bg-green-400/10" },
   { type: "movement",     icon: "➡️", label: "Move",    className: "text-sky-400 active:bg-sky-400/10" },
   { type: "calving",      icon: "🐄", label: "Calving", className: "text-violet-400 active:bg-violet-400/10" },
   { type: "reproduction", icon: "🔬", label: "Repro",   className: "text-pink-400 active:bg-pink-400/10" },

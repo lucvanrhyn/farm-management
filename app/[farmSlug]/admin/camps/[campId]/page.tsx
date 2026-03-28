@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import AdminNav from "@/components/admin/AdminNav";
 import MobKPICard from "@/components/admin/MobKPICard";
 import PastureIntelligenceCard from "@/components/admin/PastureIntelligenceCard";
 import CampCoverForm from "@/components/admin/CampCoverForm";
@@ -165,9 +164,7 @@ export default async function CampDetailPage({
   };
 
   return (
-    <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav />
-      <main className="flex-1 min-w-0 p-8 max-w-4xl">
+    <div className="min-w-0 p-8 max-w-4xl bg-[#FAFAF8]">
         {/* Back */}
         <Link
           href={`/${farmSlug}/admin/camps`}
@@ -475,7 +472,6 @@ export default async function CampDetailPage({
             </ol>
           )}
         </div>
-      </main>
     </div>
   );
 }

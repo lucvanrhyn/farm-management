@@ -7,6 +7,9 @@ import HealthIssueForm from "@/components/logger/HealthIssueForm";
 import MovementForm from "@/components/logger/MovementForm";
 import CalvingForm from "@/components/logger/CalvingForm";
 import CampConditionForm from "@/components/logger/CampConditionForm";
+import WeighingForm from "@/components/logger/WeighingForm";
+import TreatmentForm from "@/components/logger/TreatmentForm";
+import CampCoverLogForm from "@/components/logger/CampCoverLogForm";
 import ReproductionForm, { type ReproSubmitData } from "@/components/logger/ReproductionForm";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
@@ -16,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, AnimalSex, EaseOfBirth, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | null;
+type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | null;
 
 export default function CampInspectionPage({
   params,
@@ -46,7 +49,7 @@ export default function CampInspectionPage({
     getAnimalsByCampCached(decodedId).then(setAnimals);
   }, [decodedId]);
 
-  function handleFlag(animalId: string, type: Exclude<ModalType, "condition" | null>) {
+  function handleFlag(animalId: string, type: Exclude<ModalType, "condition" | "cover" | null>) {
     setSelectedAnimalId(animalId);
     setActiveModal(type);
   }
@@ -397,9 +400,9 @@ export default function CampInspectionPage({
         <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} flaggedIds={flaggedAnimalIds} />
       </div>
 
-      {/* Camp condition button — sticky at bottom */}
+      {/* Camp-level buttons — sticky at bottom */}
       <div
-        className="sticky bottom-0 px-4 py-3"
+        className="sticky bottom-0 px-4 py-3 flex flex-col gap-2"
         style={{
           backgroundColor: 'rgba(26, 13, 5, 0.75)',
           backdropFilter: 'blur(8px)',
@@ -407,6 +410,17 @@ export default function CampInspectionPage({
           borderTop: '1px solid rgba(92, 61, 46, 0.4)',
         }}
       >
+        <button
+          onClick={() => setActiveModal("cover")}
+          className="w-full font-semibold py-3.5 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 active:scale-95"
+          style={{
+            backgroundColor: 'rgba(92, 61, 46, 0.6)',
+            color: '#F5F0E8',
+            border: '1px solid rgba(139, 105, 20, 0.3)',
+          }}
+        >
+          <span>🌾</span> Record Cover
+        </button>
         <button
           onClick={() => setActiveModal("condition")}
           className="w-full font-semibold py-3.5 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 active:scale-95"
@@ -507,6 +521,41 @@ export default function CampInspectionPage({
           onClose={() => allNormalDone ? router.push(loggerRoot) : setActiveModal(null)}
           onSkip={allNormalDone ? () => router.push(loggerRoot) : undefined}
           onSubmit={handleConditionSubmit}
+        />
+      )}
+      {activeModal === "weigh" && (
+        <WeighingForm
+          animalId={selectedAnimalId}
+          animalTag={selectedAnimalId}
+          campId={decodedId}
+          farmSlug={farmSlug}
+          onSuccess={() => {
+            markAnimalFlagged(selectedAnimalId);
+            setActiveModal(null);
+          }}
+          onCancel={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === "treat" && (
+        <TreatmentForm
+          animalId={selectedAnimalId}
+          animalTag={selectedAnimalId}
+          campId={decodedId}
+          farmSlug={farmSlug}
+          onSuccess={() => {
+            markAnimalFlagged(selectedAnimalId);
+            setActiveModal(null);
+          }}
+          onCancel={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === "cover" && (
+        <CampCoverLogForm
+          campId={decodedId}
+          campName={camp.camp_name}
+          farmSlug={farmSlug}
+          onSuccess={() => setActiveModal(null)}
+          onCancel={() => setActiveModal(null)}
         />
       )}
     </div>

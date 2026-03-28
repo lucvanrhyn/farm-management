@@ -1,5 +1,4 @@
 import Link from "next/link";
-import AdminNav from "@/components/admin/AdminNav";
 import MobKPICard from "@/components/admin/MobKPICard";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
@@ -80,9 +79,7 @@ export default async function ReproductionPage({
   const totalEvents = stats.inHeat7d + stats.inseminations30d + stats.scanCounts.pregnant + stats.scanCounts.empty + stats.scanCounts.uncertain;
 
   return (
-    <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav />
-      <main className="flex-1 min-w-0 p-4 md:p-8 max-w-5xl">
+    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
@@ -438,7 +435,6 @@ export default async function ReproductionPage({
             </div>
           )}
         </div>
-      </main>
     </div>
   );
 }

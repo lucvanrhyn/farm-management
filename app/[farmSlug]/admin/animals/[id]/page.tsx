@@ -4,7 +4,6 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
-import AdminNav from "@/components/admin/AdminNav";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import type { ADGResult, WeightRecord } from "@/lib/server/weight-analytics";
 
@@ -241,9 +240,7 @@ export default async function AnimalDetailPage({
   const movementObs = observations.filter((o) => o.type === "animal_movement");
 
   return (
-    <div className="flex min-h-screen bg-[#FAFAF8]">
-      <AdminNav />
-      <main className="flex-1 min-w-0 p-4 md:p-8 max-w-3xl space-y-4">
+    <div className="min-w-0 p-4 md:p-8 max-w-3xl space-y-4 bg-[#FAFAF8]">
         {/* Back */}
         <Link
           href={`/${farmSlug}/admin/animals`}
@@ -539,7 +536,6 @@ export default async function AnimalDetailPage({
         {activeTab === "weight" && (
           <WeightTab weightData={weightData} />
         )}
-      </main>
     </div>
   );
 }
