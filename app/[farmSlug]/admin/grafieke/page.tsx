@@ -1,8 +1,10 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { authOptions } from "@/lib/auth-options";
 import GrafiekeClient from "@/components/admin/GrafiekeClient";
 import type { FinancialMonthPoint, HerdCategoryCount, CampCoverRow } from "@/components/admin/GrafiekeClient";
+import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 import {
@@ -16,6 +18,7 @@ import {
   getWithdrawalTracker,
   calcDaysGrazingRemaining,
 } from "@/lib/server/analytics";
+import { getHerdAdgTrend } from "@/lib/server/weight-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +50,24 @@ function buildLast6MonthKeys(): string[] {
 
 export default async function GrafiekePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const { farmSlug } = await params;
+  const sp = await searchParams;
+  const from = sp?.from;
+  const to = sp?.to;
+
+  const lookbackDays = from && to
+    ? Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000))
+    : 365;
+  const lookbackMonths = Math.max(1, Math.round(lookbackDays / 30));
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p>Farm not found.</p>;
 
@@ -73,13 +87,13 @@ export default async function GrafiekePage({
     activeAnimals,
     coverReadings,
   ] = await Promise.all([
-    getCampConditionTrend(prisma, 30),
-    getHealthIssuesByCamp(prisma, 30),
+    getCampConditionTrend(prisma, lookbackDays),
+    getHealthIssuesByCamp(prisma, lookbackDays),
     getHeadcountByCamp(prisma),
-    getInspectionHeatmap(prisma, 30),
-    getAnimalMovements(prisma, 30),
-    getCalvingTrend(prisma, 12),
-    getDeathsAndSales(prisma, 12),
+    getInspectionHeatmap(prisma, lookbackDays),
+    getAnimalMovements(prisma, lookbackDays),
+    getCalvingTrend(prisma, lookbackMonths),
+    getDeathsAndSales(prisma, lookbackMonths),
     getWithdrawalTracker(prisma),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     // Financial: last 6 months
@@ -106,6 +120,13 @@ export default async function GrafiekePage({
     size_hectares: c.sizeHectares ?? undefined,
     water_source: c.waterSource ?? undefined,
   }));
+
+  // ── Herd ADG trend (parallel-safe: depends only on camps which are now known) ─
+  const herdAdgTrend = await getHerdAdgTrend(
+    prisma,
+    prismaCamps.map((c) => ({ campId: c.campId, campName: c.campName })),
+    lookbackDays,
+  );
 
   // ── Financial trend (last 6 months) ───────────────────────────────────────
   const monthKeys = buildLast6MonthKeys();
@@ -182,11 +203,16 @@ export default async function GrafiekePage({
 
   return (
     <div className="min-w-0 p-4 md:p-8" style={{ background: "#1A1510" }}>
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "#F0DEB8" }}>Charts</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8473" }}>
-            Analytics overview · Farm Management
-          </p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#F0DEB8" }}>Charts</h1>
+            <p className="text-sm mt-1" style={{ color: "#9C8473" }}>
+              Analytics overview · Farm Management
+            </p>
+          </div>
+          <Suspense fallback={<div className="h-9" />}>
+            <DateRangePicker defaultDays={365} />
+          </Suspense>
         </div>
         <GrafiekeClient
           camps={camps}
@@ -199,6 +225,7 @@ export default async function GrafiekePage({
             calvings,
             attrition,
             withdrawals,
+            herdAdgTrend,
           }}
           finansieleData={{
             financialTrend,
