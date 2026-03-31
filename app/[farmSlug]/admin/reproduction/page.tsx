@@ -1,7 +1,12 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import MobKPICard from "@/components/admin/MobKPICard";
+import UpcomingCalvingsTable from "@/components/admin/UpcomingCalvingsTable";
+import ExportButton from "@/components/admin/ExportButton";
+import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
+import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +47,13 @@ function calvingIntervalStatus(days: number | null): "good" | "warning" | "alert
 
 export default async function ReproductionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
   const { farmSlug } = await params;
+  const { from, to } = searchParams ? await searchParams : {};
   const prisma = await getPrismaForFarm(farmSlug);
 
   if (!prisma) {
@@ -59,14 +67,20 @@ export default async function ReproductionPage({
   const stats = await getReproStats(prisma);
 
   // Fetch recent events (last 15) — includes heat/insem/scan/calving
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+  // Default to 12 months when no date range is selected
+  const defaultFrom = new Date();
+  defaultFrom.setFullYear(defaultFrom.getFullYear() - 1);
+  const fromDate = from ? new Date(from) : defaultFrom;
+  const toDate = to ? new Date(to) : undefined;
+
+  const observedAtFilter: Record<string, unknown> = { gte: fromDate };
+  if (toDate) observedAtFilter.lte = toDate;
 
   const [recentEvents, allCamps] = await Promise.all([
     prisma.observation.findMany({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan", "calving"] },
-        observedAt: { gte: twelveMonthsAgo },
+        observedAt: observedAtFilter,
       },
       orderBy: { observedAt: "desc" },
       take: 15,
@@ -76,21 +90,34 @@ export default async function ReproductionPage({
   ]);
 
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));
-  const totalEvents = stats.inHeat7d + stats.inseminations30d + stats.scanCounts.pregnant + stats.scanCounts.empty + stats.scanCounts.uncertain;
+  const totalEvents = stats.inHeat7d + stats.inseminations30d + stats.scanCounts.pregnant + stats.scanCounts.empty + stats.scanCounts.uncertain + stats.daysOpen.length;
 
   return (
     <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
-            Reproductive Performance
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-            {totalEvents > 0
-              ? `SA benchmarks: ≥85% pregnancy rate · ≤365d calving interval`
-              : "No reproductive events recorded yet — log heat, insemination, scan or calving events via the Logger"}
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+              Reproductive Performance
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+              {totalEvents > 0
+                ? `SA benchmarks: ≥85% pregnancy rate · ≤365d calving interval · >22% per 21-day cycle · <90d days open`
+                : "No reproductive events recorded yet — log heat, insemination, scan or calving events via the Logger"}
+            </p>
+          </div>
+          <ExportButton farmSlug={farmSlug} exportType="calvings" label="Export" />
         </div>
+
+        {/* Date range filter */}
+        <div className="mb-6">
+          <Suspense fallback={<div className="h-9" />}>
+            <DateRangePicker defaultDays={365} />
+          </Suspense>
+        </div>
+
+        {/* Upcoming Calvings — shown at top for immediate visibility */}
+        <UpcomingCalvingsTable calvings={stats.upcomingCalvings} />
 
         {/* KPI grid — Row 1: Rate KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -138,6 +165,50 @@ export default async function ReproductionPage({
             }
             status={calvingIntervalStatus(stats.avgCalvingIntervalDays)}
             icon="📅"
+          />
+        </div>
+
+        {/* KPI grid — Row 1b: Weaning + Days Open KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <MobKPICard
+            label="Weaning Rate"
+            value={stats.weaningRate !== null ? `${stats.weaningRate}%` : "—"}
+            sub={
+              stats.weaningRate === null
+                ? "Log calving events via Logger"
+                : stats.weaningRate >= 80
+                ? "SA target met (≥80%)"
+                : stats.weaningRate >= 65
+                ? "Below SA target (≥80%)"
+                : "Well below SA target"
+            }
+            status={
+              stats.weaningRate === null ? "neutral"
+              : stats.weaningRate >= 80 ? "good"
+              : stats.weaningRate >= 65 ? "warning"
+              : "alert"
+            }
+            icon="🐂"
+          />
+          <MobKPICard
+            label="Avg Days Open"
+            value={stats.avgDaysOpen !== null ? `${stats.avgDaysOpen}d` : "—"}
+            sub={
+              stats.avgDaysOpen === null
+                ? "Need calving + scan records"
+                : stats.avgDaysOpen <= 90
+                ? "SA target met (<90d)"
+                : stats.avgDaysOpen <= 120
+                ? "Above SA target (<90d)"
+                : "Well above SA target — investigate"
+            }
+            status={
+              stats.avgDaysOpen === null ? "neutral"
+              : stats.avgDaysOpen <= 90 ? "good"
+              : stats.avgDaysOpen <= 120 ? "warning"
+              : "alert"
+            }
+            icon="📆"
           />
         </div>
 
@@ -343,6 +414,108 @@ export default async function ReproductionPage({
             </div>
           )}
         </div>
+
+        {/* 21-Day Pregnancy Rate by Cycle */}
+        <div
+          className="rounded-2xl border mb-6"
+          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        >
+          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+              21-Day Pregnancy Rate — by Cycle
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+              Confirmed pregnancies per 21-day estrus window · SA target: &gt;22% per cycle
+            </p>
+          </div>
+          <div className="px-6 py-4">
+            <PregnancyRateCycleChart cycles={stats.pregnancyRateByCycle} />
+          </div>
+        </div>
+
+        {/* Days Open table */}
+        {stats.daysOpen.length > 0 && (
+          <div
+            className="rounded-2xl border mb-6"
+            style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          >
+            <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+                Days Open — Per Animal
+              </h2>
+              <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                Days from calving to confirmed conception · SA target: &lt;90 days
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}
+                  >
+                    <th className="px-6 py-3 text-left">Animal</th>
+                    <th className="px-4 py-3 text-left">Last Calving</th>
+                    <th className="px-4 py-3 text-left">Conception Date</th>
+                    <th className="px-4 py-3 text-right">Days Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.daysOpen
+                    .sort((a, b) => (b.daysOpen ?? 9999) - (a.daysOpen ?? 9999))
+                    .map((row) => (
+                      <tr
+                        key={row.animalId}
+                        className="border-b last:border-0"
+                        style={{ borderColor: "#F0EAE0" }}
+                      >
+                        <td className="px-6 py-3">
+                          <Link
+                            href={`/${farmSlug}/admin/animals/${row.animalId}?tab=reproduction`}
+                            className="font-mono font-semibold hover:underline"
+                            style={{ color: "#1C1815" }}
+                          >
+                            {row.animalId}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums" style={{ color: "#6B5E50" }}>
+                          {formatDate(row.calvingDate)}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums" style={{ color: "#6B5E50" }}>
+                          {row.conceptionDate ? formatDate(row.conceptionDate) : (
+                            <span style={{ color: "#C0574C", fontStyle: "italic" }}>No return to service</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {row.daysOpen !== null ? (
+                            <span
+                              className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full"
+                              style={
+                                row.daysOpen <= 90
+                                  ? { backgroundColor: "rgba(34,197,94,0.1)", color: "#166534" }
+                                  : row.daysOpen <= 120
+                                  ? { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
+                                  : { backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }
+                              }
+                            >
+                              {row.daysOpen}d
+                            </span>
+                          ) : (
+                            <span
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }}
+                            >
+                              Open
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Recent Events timeline */}
         <div
