@@ -13,18 +13,44 @@ import {
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
-import type { Camp, Animal, AnimalSex } from './types';
+import type { Camp, Animal, AnimalSex, GrazingQuality, WaterStatus, FenceStatus } from './types';
 import type { PrismaAnimal } from './types';
 
+interface ServerCampCondition {
+  grazing_quality: GrazingQuality;
+  water_status: WaterStatus;
+  fence_status: FenceStatus;
+  last_inspected_at: string;
+  last_inspected_by: string | null;
+}
+
 export async function refreshCachedData(): Promise<void> {
-  const [campsRes, animalsRes, farmRes] = await Promise.all([
+  const [campsRes, animalsRes, farmRes, statusRes] = await Promise.all([
     fetch('/api/camps'),
     fetch('/api/animals'),
     fetch('/api/farm'),
+    fetch('/api/camps/status'),
   ]);
 
   if (campsRes.ok) {
     const camps: Camp[] = await campsRes.json();
+
+    // Merge server-authoritative condition data so camp colors survive a sync cycle.
+    // /api/camps/status returns the latest camp_condition observation per camp.
+    if (statusRes.ok) {
+      const statusMap: Record<string, ServerCampCondition> = await statusRes.json();
+      for (const camp of camps) {
+        const serverCondition = statusMap[camp.camp_id];
+        if (serverCondition) {
+          camp.grazing_quality = serverCondition.grazing_quality;
+          camp.water_status = serverCondition.water_status;
+          camp.fence_status = serverCondition.fence_status;
+          camp.last_inspected_at = serverCondition.last_inspected_at;
+          camp.last_inspected_by = serverCondition.last_inspected_by ?? undefined;
+        }
+      }
+    }
+
     await seedCamps(camps);
   }
 

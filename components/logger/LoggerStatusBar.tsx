@@ -46,7 +46,7 @@ export function LoggerStatusBar() {
         {/* Right: last synced + action buttons */}
         <div className="flex items-center gap-3">
           <span style={{ color: 'rgba(210, 180, 140, 0.7)' }}>
-            {formatRelativeTime(lastSyncedAt)}
+            Synced: {formatRelativeTime(lastSyncedAt)}
           </span>
           {isOnline && pendingCount > 0 && (
             <button

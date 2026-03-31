@@ -86,10 +86,10 @@ export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, o
     setError("");
     try {
       const detailsObj: Record<string, unknown> = {
-        treatmentType,
+        treatment_type: treatmentType,
         product: product.trim(),
         dose: dose.trim(),
-        withdrawalDays,
+        withdrawal_days: withdrawalDays,
       };
       if (notes.trim()) detailsObj.notes = notes.trim();
 

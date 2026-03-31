@@ -16,6 +16,13 @@ interface Transaction {
   date: string;
   description: string;
   animalId: string | null;
+  saleType?: string | null;
+  counterparty?: string | null;
+  quantity?: number | null;
+  avgMassKg?: number | null;
+  fees?: number | null;
+  transportCost?: number | null;
+  animalIds?: string | null;
 }
 
 interface Props {
@@ -25,6 +32,8 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
 }
+
+const LIVESTOCK_CATEGORIES = ["Animal Sales", "Animal Purchases"];
 
 const fieldStyle: React.CSSProperties = {
   background: "#FFFFFF",
@@ -52,10 +61,30 @@ export default function TransactionModal({
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
   const [date, setDate] = useState(transaction?.date ?? new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState(transaction?.description ?? "");
+
+  // Livestock fields
+  const [saleType, setSaleType] = useState<"auction" | "private" | "">(
+    (transaction?.saleType as "auction" | "private") ?? "private"
+  );
+  const [counterparty, setCounterparty] = useState(transaction?.counterparty ?? "");
+  const [quantity, setQuantity] = useState(
+    transaction?.quantity != null ? String(transaction.quantity) : ""
+  );
+  const [avgMassKg, setAvgMassKg] = useState(
+    transaction?.avgMassKg != null ? String(transaction.avgMassKg) : ""
+  );
+  const [fees, setFees] = useState(
+    transaction?.fees != null ? String(transaction.fees) : ""
+  );
+  const [transportCost, setTransportCost] = useState(
+    transaction?.transportCost != null ? String(transaction.transportCost) : ""
+  );
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const categories = type === "income" ? incomeCategories : expenseCategories;
+  const isLivestock = LIVESTOCK_CATEGORIES.includes(category);
 
   useEffect(() => {
     const valid = categories.some((c) => c.name === category);
@@ -73,10 +102,36 @@ export default function TransactionModal({
     try {
       const url = isEdit ? `/api/transactions/${transaction!.id}` : "/api/transactions";
       const method = isEdit ? "PATCH" : "POST";
+
+      const payload: Record<string, unknown> = {
+        type,
+        category,
+        amount: parseFloat(amount),
+        date,
+        description,
+      };
+
+      if (isLivestock) {
+        payload.saleType = saleType || "private";
+        payload.counterparty = counterparty || null;
+        payload.quantity = quantity ? parseInt(quantity, 10) : null;
+        payload.avgMassKg = avgMassKg ? parseFloat(avgMassKg) : null;
+        payload.transportCost = transportCost ? parseFloat(transportCost) : null;
+        payload.fees = saleType === "auction" && fees ? parseFloat(fees) : null;
+      } else {
+        // Clear livestock fields when switching away from livestock category
+        payload.saleType = null;
+        payload.counterparty = null;
+        payload.quantity = null;
+        payload.avgMassKg = null;
+        payload.fees = null;
+        payload.transportCost = null;
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, category, amount: parseFloat(amount), date, description }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Request failed");
       onSaved();
@@ -90,7 +145,7 @@ export default function TransactionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
       <div
-        className="rounded-2xl w-full max-w-md p-6 space-y-4"
+        className="rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <h2 className="text-lg font-bold" style={{ color: "#1C1815" }}>
@@ -175,6 +230,98 @@ export default function TransactionModal({
               style={fieldStyle}
             />
           </div>
+
+          {/* Livestock Details — shown only for Animal Sales / Animal Purchases */}
+          {isLivestock && (
+            <div
+              className="space-y-3 rounded-xl p-4"
+              style={{ background: "rgba(74,124,89,0.05)", border: "1px solid rgba(74,124,89,0.2)" }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#4A7C59" }}>
+                Livestock Details
+              </p>
+
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Sale Type</label>
+                <select
+                  value={saleType}
+                  onChange={(e) => setSaleType(e.target.value as "auction" | "private")}
+                  style={{ ...fieldStyle, colorScheme: "light" }}
+                >
+                  <option value="private">Private Sale</option>
+                  <option value="auction">Auction</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>
+                  {category === "Animal Sales" ? "Buyer Name" : "Seller Name"}
+                </label>
+                <input
+                  type="text"
+                  placeholder={category === "Animal Sales" ? "Buyer name..." : "Seller name..."}
+                  value={counterparty}
+                  onChange={(e) => setCounterparty(e.target.value)}
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Number of Animals</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="0"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Avg Mass (kg)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="0.0"
+                    value={avgMassKg}
+                    onChange={(e) => setAvgMassKg(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Transport Cost (R)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={transportCost}
+                  onChange={(e) => setTransportCost(e.target.value)}
+                  style={fieldStyle}
+                />
+              </div>
+
+              {saleType === "auction" && (
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Auction Fees (R)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={fees}
+                    onChange={(e) => setFees(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-sm" style={{ color: "#C0574C" }}>{error}</p>}
 

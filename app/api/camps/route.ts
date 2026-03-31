@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const { prisma } = db;
 
   const body = await req.json();
-  const { campId, campName, sizeHectares, waterSource, notes } = body;
+  const { campId, campName, sizeHectares, waterSource, notes, geojson } = body;
 
   if (!campId || !campName) {
     return NextResponse.json({ error: "campId and campName are required" }, { status: 400 });
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
       sizeHectares: sizeHectares ? Number(sizeHectares) : null,
       waterSource: waterSource || null,
       notes: notes || null,
+      geojson: geojson || null,
     },
   });
 

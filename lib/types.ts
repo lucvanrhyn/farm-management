@@ -23,7 +23,10 @@ export type ObservationType =
   | "death"
   | "treatment"
   | "camp_condition"
-  | "weighing";
+  | "weighing"
+  | "heat_detection"
+  | "insemination"
+  | "pregnancy_scan";
 
 export type TreatmentType =
   | "Vaccination"

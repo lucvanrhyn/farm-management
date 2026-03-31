@@ -69,9 +69,30 @@ const fieldInput: React.CSSProperties = {
   width: "100%",
 };
 
-function parseDetails(raw: string): string {
+function parseDetails(raw: string, type?: string): string {
   try {
     const obj = JSON.parse(raw);
+    // Animal movement gets a dedicated human-readable format
+    if (type === "animal_movement") {
+      const animalId = obj.animalId ?? obj.animal_id ?? "?";
+      const src = obj.sourceCampId ?? obj.source_camp_id ?? "?";
+      const dest = obj.destCampId ?? obj.dest_camp_id ?? "?";
+      return `${animalId} moved: ${src} → ${dest}`;
+    }
+    // Camp check: status field
+    if (type === "camp_check") {
+      const status = obj.status ?? obj.outcome ?? "Normal";
+      return `Status: ${status}`;
+    }
+    // Calving: outcome + calf details
+    if (type === "calving") {
+      const parts: string[] = [];
+      if (obj.outcome) parts.push(`Outcome: ${obj.outcome}`);
+      if (obj.calfSex ?? obj.sex) parts.push(`Sex: ${obj.calfSex ?? obj.sex}`);
+      if (obj.calfAnimalId ?? obj.calf_animal_id) parts.push(`Calf ID: ${obj.calfAnimalId ?? obj.calf_animal_id}`);
+      if (obj.notes) parts.push(obj.notes);
+      return parts.join(" · ") || "Calving recorded";
+    }
     const parts: string[] = [];
     if (obj.weight_kg) parts.push(`Weight: ${obj.weight_kg}kg`);
     if (obj.symptoms) {
@@ -658,7 +679,7 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
                       )}
                     </div>
                     <p className="text-xs mt-1 truncate" style={{ color: "#9C8E7A" }}>
-                      {parseDetails(obs.details)}
+                      {parseDetails(obs.details, obs.type)}
                       {obs.editedAt && (
                         <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
                       )}

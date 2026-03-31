@@ -4,11 +4,14 @@ import type { ReactNode } from "react";
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
 import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
@@ -53,11 +56,43 @@ function formatMonth(ym: string): string {
   return `${months[parseInt(month, 10) - 1]} ${year?.slice(2)}`;
 }
 
+// Build per-camp line series for the herd ADG chart
+function buildHerdAdgSeries(herdAdgTrend: GrafiekeData["herdAdgTrend"]) {
+  // Collect all unique dates and camp names
+  const dateSet = new Set<string>();
+  const campSet = new Set<string>();
+  for (const pt of herdAdgTrend) {
+    dateSet.add(pt.weighDate);
+    campSet.add(pt.campName);
+  }
+  const dates = Array.from(dateSet).sort();
+  const campNames = Array.from(campSet);
+
+  // Build one row per date with each camp's avg ADG as a column
+  const rows: Record<string, string | number>[] = dates.map((date) => {
+    const row: Record<string, string | number> = { date: date.slice(5) }; // MM-DD label
+    for (const campName of campNames) {
+      const pt = herdAdgTrend.find((p) => p.weighDate === date && p.campName === campName);
+      if (pt) row[campName] = pt.avgAdg;
+    }
+    return row;
+  });
+
+  return { rows, campNames };
+}
+
+// Distinct colours for up to 10 camps
+const CAMP_COLORS = [
+  "#4A7C59", "#8B6914", "#C0574C", "#3b82f6", "#a855f7",
+  "#f97316", "#06b6d4", "#84cc16", "#f43f5e", "#64748b",
+];
+
 export default function DiereTab({ data }: { data: GrafiekeData }) {
-  const { calvings, attrition, withdrawals } = data;
+  const { calvings, attrition, withdrawals, herdAdgTrend } = data;
 
   const calvingChartData = calvings.map((c) => ({ ...c, month: formatMonth(c.month) }));
   const attritionChartData = attrition.map((a) => ({ ...a, month: formatMonth(a.month) }));
+  const { rows: herdAdgRows, campNames } = buildHerdAdgSeries(herdAdgTrend);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -97,7 +132,51 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
         )}
       </ChartCard>
 
-      {/* 3. Withdrawal Tracker — full width */}
+      {/* 3. Herd ADG Trend — full width */}
+      <div className="xl:col-span-2">
+        <ChartCard title="Herd ADG Trend" subtitle="Average daily gain per camp over time (last 12 months)">
+          {herdAdgTrend.length === 0 ? (
+            <Empty message="No weighing records found — log weighing sessions via the Logger" />
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={herdAdgRows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                <XAxis dataKey="date" tick={tickStyle} />
+                <YAxis
+                  tick={tickStyle}
+                  tickFormatter={(v: number) => `${v} kg/d`}
+                  width={60}
+                  domain={["auto", "auto"]}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v, name) => [typeof v === "number" ? `${v.toFixed(2)} kg/day` : String(v), String(name)]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
+                <ReferenceLine
+                  y={0.7}
+                  stroke="#C0574C"
+                  strokeDasharray="4 3"
+                  label={{ value: "Poor doer threshold (0.7)", position: "insideTopRight", fill: "#C0574C", fontSize: 9 }}
+                />
+                {campNames.map((name, i) => (
+                  <Line
+                    key={name}
+                    type="monotone"
+                    dataKey={name}
+                    stroke={CAMP_COLORS[i % CAMP_COLORS.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* 4. Withdrawal Tracker — full width */}
       <div className="xl:col-span-2">
         <ChartCard title="Treatment Withdrawal Period" subtitle="Animals not yet cleared for market">
           {withdrawals.length === 0 ? (

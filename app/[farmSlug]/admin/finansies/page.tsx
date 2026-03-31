@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { authOptions } from "@/lib/auth-options";
 import FinansiesClient from "@/components/admin/FinansiesClient";
-import FinancialAnalyticsPanel from "@/components/admin/FinancialAnalyticsPanel";
+import FinancialAnalyticsPanelLazy from "@/components/admin/FinancialAnalyticsPanelLazy";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ExportButton from "@/components/admin/ExportButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
@@ -61,7 +61,7 @@ export default async function FinansiesPage({
           initialExpense={expenseCategories}
         />
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
-          <FinancialAnalyticsPanel farmSlug={farmSlug} />
+          <FinancialAnalyticsPanelLazy farmSlug={farmSlug} />
         </Suspense>
     </div>
   );

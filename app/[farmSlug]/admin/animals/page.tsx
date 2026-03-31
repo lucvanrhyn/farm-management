@@ -1,6 +1,7 @@
 import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import RecordBirthButton from "@/components/admin/RecordBirthButton";
+import ExportButton from "@/components/admin/ExportButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import type { Camp, PrismaAnimal } from "@/lib/types";
@@ -46,7 +47,8 @@ export default async function AdminAnimalsPage({
               {animals.filter((a) => a.status !== "Deceased").length.toLocaleString()} active · {animals.filter((a) => a.status === "Deceased").length.toLocaleString()} deceased
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <ExportButton farmSlug={farmSlug} exportType="animals" />
             <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
             <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
           </div>

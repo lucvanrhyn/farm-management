@@ -10,6 +10,10 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+const LSU_FACTOR: Record<string, number> = {
+  Cow: 1.0, Bull: 1.2, Heifer: 0.7, Calf: 0.3, Ox: 1.1,
+};
+
 export default async function PerformancePage({
   params,
   searchParams,
@@ -27,79 +31,118 @@ export default async function PerformancePage({
   const fromDate = from ? new Date(from) : undefined;
   const toDate = to ? new Date(to) : undefined;
 
-  const camps = await prisma.camp.findMany({ orderBy: { campId: "asc" } });
-  const rows = await Promise.all(
-    camps.map(async (camp) => {
-      const conditionWhere: Record<string, unknown> = {
-        campId: camp.campId,
-        type: "camp_condition",
-      };
-      if (fromDate) conditionWhere.observedAt = { gte: fromDate, ...(toDate && { lte: toDate }) };
-      else if (toDate) conditionWhere.observedAt = { lte: toDate };
+  // Build shared date filter clauses
+  const observedAtFilter: Record<string, unknown> = {};
+  if (fromDate) observedAtFilter.gte = fromDate;
+  if (toDate) observedAtFilter.lte = toDate;
+  const hasDateFilter = fromDate || toDate;
 
-      const coverWhere: Record<string, unknown> = { campId: camp.campId };
-      if (fromDate) coverWhere.recordedAt = { gte: fromDate, ...(toDate && { lte: toDate }) };
-      else if (toDate) coverWhere.recordedAt = { lte: toDate };
+  // ── Batch-fetch ALL data in 3 parallel queries ────────────────────────────
+  const [camps, animalsByCategory, allConditions, allCoverReadings] = await Promise.all([
+    prisma.camp.findMany({ orderBy: { campId: "asc" } }),
 
-      const [animalsByCategory, latestCondition, latestCover] = await Promise.all([
-        prisma.animal.groupBy({
-          by: ["category"],
-          where: { currentCamp: camp.campId, status: "Active" },
-          _count: { id: true },
-        }),
-        prisma.observation.findFirst({ where: conditionWhere, orderBy: { observedAt: "desc" } }),
-        prisma.campCoverReading.findFirst({ where: coverWhere, orderBy: { recordedAt: "desc" } }),
-      ]);
-
-      const animalCount = animalsByCategory.reduce((sum, r) => sum + r._count.id, 0);
-      const LSU_FACTOR: Record<string, number> = {
-        Cow: 1.0, Bull: 1.2, Heifer: 0.7, Calf: 0.3, Ox: 1.1,
-      };
-      const totalLSU = animalsByCategory.reduce(
-        (sum, r) => sum + r._count.id * (LSU_FACTOR[r.category] ?? 1.0),
-        0,
-      );
-      const density =
-        camp.sizeHectares && camp.sizeHectares > 0
-          ? (totalLSU / camp.sizeHectares).toFixed(2)
-          : null;
-
-      let details: Record<string, string> | null = null;
-      if (latestCondition?.details) {
-        try {
-          details = JSON.parse(latestCondition.details) as Record<string, string>;
-        } catch {
-          // malformed details — leave as null
-        }
-      }
-
-      const daysGrazingRemaining =
-        latestCover && camp.sizeHectares && camp.sizeHectares > 0
-          ? calcDaysGrazingRemaining(
-              latestCover.kgDmPerHa,
-              latestCover.useFactor,
-              camp.sizeHectares,
-              animalsByCategory.map((r) => ({ category: r.category, count: r._count.id })),
-            )
-          : null;
-
-      return {
-        campId: camp.campId,
-        campName: camp.campName,
-        sizeHectares: camp.sizeHectares,
-        animalCount,
-        stockingDensity: density,
-        grazingQuality: details?.grazing ?? null,
-        fenceStatus: details?.fence ?? null,
-        lastInspection: latestCondition?.observedAt
-          ? new Date(latestCondition.observedAt).toISOString().split("T")[0]
-          : null,
-        coverCategory: latestCover?.coverCategory ?? null,
-        daysGrazingRemaining:
-          daysGrazingRemaining !== null ? Math.round(daysGrazingRemaining) : null,
-      };
+    // All active animals grouped by camp + category
+    prisma.animal.groupBy({
+      by: ["currentCamp", "category"],
+      where: { status: "Active" },
+      _count: { id: true },
     }),
-  );
+
+    // Latest camp_condition observation per camp (within date range if provided)
+    prisma.observation.findMany({
+      where: {
+        type: "camp_condition",
+        ...(hasDateFilter && { observedAt: observedAtFilter }),
+      },
+      select: { campId: true, observedAt: true, details: true },
+      orderBy: { observedAt: "desc" },
+    }),
+
+    // Latest cover reading per camp (within date range if provided)
+    prisma.campCoverReading.findMany({
+      where: hasDateFilter ? { recordedAt: observedAtFilter } : undefined,
+      orderBy: { recordedAt: "desc" },
+    }),
+  ]);
+
+  // ── Join in JS ─────────────────────────────────────────────────────────────
+
+  // Index animals by campId
+  const animalsByCamp = new Map<string, Array<{ category: string; count: number }>>();
+  for (const row of animalsByCategory) {
+    const campId = row.currentCamp ?? "";
+    if (!campId) continue;
+    const existing = animalsByCamp.get(campId) ?? [];
+    animalsByCamp.set(campId, [...existing, { category: row.category, count: row._count.id }]);
+  }
+
+  // Index latest condition per camp (results are desc by observedAt — first wins)
+  const latestConditionByCamp = new Map<string, typeof allConditions[number]>();
+  for (const obs of allConditions) {
+    if (obs.campId && !latestConditionByCamp.has(obs.campId)) {
+      latestConditionByCamp.set(obs.campId, obs);
+    }
+  }
+
+  // Index latest cover reading per camp (results are desc by recordedAt — first wins)
+  const latestCoverByCamp = new Map<string, typeof allCoverReadings[number]>();
+  for (const reading of allCoverReadings) {
+    if (!latestCoverByCamp.has(reading.campId)) {
+      latestCoverByCamp.set(reading.campId, reading);
+    }
+  }
+
+  // Assemble per-camp rows
+  const rows = camps.map((camp) => {
+    const campAnimals = animalsByCamp.get(camp.campId) ?? [];
+    const latestCondition = latestConditionByCamp.get(camp.campId) ?? null;
+    const latestCover = latestCoverByCamp.get(camp.campId) ?? null;
+
+    const animalCount = campAnimals.reduce((sum, r) => sum + r.count, 0);
+    const totalLSU = campAnimals.reduce(
+      (sum, r) => sum + r.count * (LSU_FACTOR[r.category] ?? 1.0),
+      0,
+    );
+    const density =
+      camp.sizeHectares && camp.sizeHectares > 0
+        ? (totalLSU / camp.sizeHectares).toFixed(2)
+        : null;
+
+    let details: Record<string, string> | null = null;
+    if (latestCondition?.details) {
+      try {
+        details = JSON.parse(latestCondition.details) as Record<string, string>;
+      } catch {
+        // malformed details — leave as null
+      }
+    }
+
+    const daysGrazingRemaining =
+      latestCover && camp.sizeHectares && camp.sizeHectares > 0
+        ? calcDaysGrazingRemaining(
+            latestCover.kgDmPerHa,
+            latestCover.useFactor,
+            camp.sizeHectares,
+            campAnimals,
+          )
+        : null;
+
+    return {
+      campId: camp.campId,
+      campName: camp.campName,
+      sizeHectares: camp.sizeHectares,
+      animalCount,
+      stockingDensity: density,
+      grazingQuality: details?.grazing ?? null,
+      fenceStatus: details?.fence ?? null,
+      lastInspection: latestCondition?.observedAt
+        ? new Date(latestCondition.observedAt).toISOString().split("T")[0]
+        : null,
+      coverCategory: latestCover?.coverCategory ?? null,
+      daysGrazingRemaining:
+        daysGrazingRemaining !== null ? Math.round(daysGrazingRemaining) : null,
+    };
+  });
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">

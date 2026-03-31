@@ -19,14 +19,16 @@ export interface HealthObservation {
 }
 
 export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map<string, LiveCampStatus>> {
+  // Use distinct on campId with descending observedAt to get only the latest
+  // observation per camp — avoids fetching the entire historical table.
   const observations = await prisma.observation.findMany({
     where: { type: { in: ["camp_condition", "camp_check"] } },
     orderBy: { observedAt: "desc" },
+    distinct: ["campId"],
   });
 
   const result = new Map<string, LiveCampStatus>();
   for (const obs of observations) {
-    if (result.has(obs.campId)) continue;
     let details: Record<string, string> = {};
     try {
       details = JSON.parse(obs.details);
@@ -90,7 +92,7 @@ export async function countHealthIssuesSince(prisma: PrismaClient, since: Date):
  * Returns the number of camps with <7 days of grazing remaining (LSU-based).
  * Uses 3 batched queries — safe to call on the admin home page.
  */
-export async function getLowGrazingCampCount(prisma: PrismaClient): Promise<number> {
+export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays = 7): Promise<number> {
   const [camps, allCoverReadings, allAnimals] = await Promise.all([
     prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
     prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
@@ -126,7 +128,7 @@ export async function getLowGrazingCampCount(prisma: PrismaClient): Promise<numb
       camp.sizeHectares,
       animalsByCamp.get(camp.campId) ?? []
     );
-    if (days !== null && days < 7) count++;
+    if (days !== null && days < warningDays) count++;
   }
   return count;
 }

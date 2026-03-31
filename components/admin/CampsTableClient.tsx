@@ -23,10 +23,77 @@ function grazingColor(g: string): { color: string; bg: string } {
   return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
 }
 
+interface EditForm {
+  campName: string;
+  sizeHectares: string;
+  waterSource: string;
+  notes: string;
+}
+
+const FIELD_STYLE = {
+  background: "#FAFAF8", border: "1px solid #D8CFC4", borderRadius: 8,
+  color: "#1C1815", fontSize: 13, padding: "6px 10px", width: "100%", outline: "none",
+} as const;
+
+const LABEL_STYLE: React.CSSProperties = {
+  display: "block", fontSize: 11, fontWeight: 600, color: "#6B5C4E",
+  marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em",
+};
+
 export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; farmSlug: string }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "", notes: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function openEdit(row: CampRow) {
+    setEditForm({
+      campName: row.camp_name,
+      sizeHectares: row.sizeHectares !== undefined ? String(row.sizeHectares) : "",
+      waterSource: row.water_source ?? "",
+      notes: "",
+    });
+    setEditError(null);
+    setEditing(row.camp_id);
+  }
+
+  function setField(field: keyof EditForm) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setEditForm((f) => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const body: Record<string, unknown> = { campName: editForm.campName.trim() };
+      body.sizeHectares = editForm.sizeHectares ? parseFloat(editForm.sizeHectares) : null;
+      body.waterSource = editForm.waterSource.trim() || null;
+      body.notes = editForm.notes.trim() || null;
+
+      const res = await fetch(`/api/camps/${editing}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        setEditError(data.error ?? "Failed to update camp.");
+        return;
+      }
+
+      setEditing(null);
+      router.refresh();
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function handleDelete(campId: string, campName: string) {
     if (!window.confirm(`Delete camp "${campName}"? This cannot be undone.`)) return;
@@ -34,7 +101,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
     try {
       const res = await fetch(`/api/camps/${campId}`, { method: "DELETE" });
       if (!res.ok) {
-        const { error } = await res.json();
+        const { error } = await res.json() as { error?: string };
         alert(error ?? "Failed to delete camp.");
       } else {
         router.refresh();
@@ -50,7 +117,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
     try {
       const res = await fetch("/api/camps/reset", { method: "DELETE" });
       if (!res.ok) {
-        const { error } = await res.json();
+        const { error } = await res.json() as { error?: string };
         alert(error ?? "Failed to remove camps.");
       } else {
         router.refresh();
@@ -62,6 +129,100 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
 
   return (
     <div>
+      {/* Edit modal */}
+      {editing !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(28,24,21,0.6)", backdropFilter: "blur(2px)" }}
+        >
+          <form
+            onSubmit={handleEditSubmit}
+            className="w-full max-w-md rounded-2xl p-6 space-y-4"
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+                Edit Camp — <span className="font-mono">{editing}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="text-lg leading-none transition-opacity hover:opacity-60"
+                style={{ color: "#9C8E7A" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label style={LABEL_STYLE}>Camp Name *</label>
+                <input
+                  required
+                  value={editForm.campName}
+                  onChange={setField("campName")}
+                  style={FIELD_STYLE}
+                />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Size (ha)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editForm.sizeHectares}
+                  onChange={setField("sizeHectares")}
+                  placeholder="e.g. 45.5"
+                  style={FIELD_STYLE}
+                />
+              </div>
+              <div>
+                <label style={LABEL_STYLE}>Water Source</label>
+                <input
+                  value={editForm.waterSource}
+                  onChange={setField("waterSource")}
+                  placeholder="e.g. Borehole"
+                  style={FIELD_STYLE}
+                />
+              </div>
+              <div className="col-span-2">
+                <label style={LABEL_STYLE}>Notes</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={setField("notes")}
+                  rows={2}
+                  placeholder="Optional notes"
+                  style={{ ...FIELD_STYLE, resize: "vertical" }}
+                />
+              </div>
+            </div>
+
+            {editError && (
+              <p className="text-xs" style={{ color: "#C0574C" }}>{editError}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ background: "#4A7C59", color: "#FFFFFF" }}
+              >
+                {editSaving ? "Saving…" : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
+                style={{ background: "#F0EBE3", color: "#6B5C4E" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {rows.length > 0 && (
         <div className="flex justify-end mb-3">
           <button
@@ -162,6 +323,13 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                         >
                           Performance →
                         </Link>
+                        <button
+                          onClick={() => openEdit(camp)}
+                          className="text-xs transition-opacity hover:opacity-70"
+                          style={{ color: "#4A7C59" }}
+                        >
+                          Edit
+                        </button>
                         <button
                           onClick={() => handleDelete(camp.camp_id, camp.camp_name)}
                           disabled={isDeleting}
