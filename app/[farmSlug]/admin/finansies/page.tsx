@@ -1,8 +1,11 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { authOptions } from "@/lib/auth-options";
 import FinansiesClient from "@/components/admin/FinansiesClient";
+import FinancialAnalyticsPanel from "@/components/admin/FinancialAnalyticsPanel";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
+import ExportButton from "@/components/admin/ExportButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 
@@ -43,7 +46,10 @@ export default async function FinansiesPage({
     <div className="min-w-0 p-4 md:p-8 space-y-2 bg-[#FAFAF8]">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
-          <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
+          <div className="flex items-center gap-2">
+            <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
+            <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
+          </div>
         </div>
         <FinansiesClient
           farmSlug={farmSlug}
@@ -54,6 +60,9 @@ export default async function FinansiesPage({
           initialIncome={incomeCategories}
           initialExpense={expenseCategories}
         />
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <FinancialAnalyticsPanel farmSlug={farmSlug} />
+        </Suspense>
     </div>
   );
 }
