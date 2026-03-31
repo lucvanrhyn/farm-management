@@ -1,8 +1,27 @@
 "use client";
 
-import { MapContainer, TileLayer } from "react-leaflet";
+import { useRef, useState, useCallback, useEffect } from "react";
+import Map, {
+  GeolocateControl,
+  NavigationControl,
+  ScaleControl,
+  Source,
+  Layer,
+  Popup,
+  useControl,
+  type MapRef,
+  type LayerProps,
+} from "react-map-gl/mapbox";
+import type { MapMouseEvent } from "mapbox-gl";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import area from "@turf/area";
+import "mapbox-gl/dist/mapbox-gl.css";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+
 import type { Camp, CampStats } from "@/lib/types";
-import CampPolygon from "./CampPolygon";
+import DrawCampModal from "./DrawCampModal";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CampData {
   camp: Camp;
@@ -10,82 +29,525 @@ export interface CampData {
   grazing: string;
 }
 
+interface PopupInfo {
+  campId: string;
+  campName: string;
+  grazing: string;
+  animalCount: number;
+  longitude: number;
+  latitude: number;
+}
+
+interface DrawnBoundary {
+  geojson: string;
+  hectares: number;
+}
+
 interface Props {
   campData: CampData[];
   onCampClick: (campId: string) => void;
+  className?: string;
+  drawMode?: boolean;
+  onBoundaryDrawn?: (campId: string | null, geojson: string, hectares: number) => void;
 }
 
-export default function FarmMap({ campData, onCampClick }: Props) {
-  return (
-    <div style={{ position: "relative", height: "100%", width: "100%" }}>
-      <MapContainer
-        center={[-25.5, 28.5]}
-        zoom={13}
-        style={{ height: "100%", width: "100%", background: "#1A1510" }}
-        zoomControl={true}
-      >
-        {/* ESRI World Imagery — satellite tiles, no API key required */}
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-          maxZoom={19}
-        />
-        {campData.map(({ camp, stats, grazing }) => (
-          <CampPolygon
-            key={camp.camp_id}
-            camp={camp}
-            stats={stats}
-            grazing={grazing}
-            onClick={onCampClick}
-          />
-        ))}
-      </MapContainer>
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-      {/* Draw Camp Boundaries — disabled placeholder */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 24,
-          right: 16,
-          zIndex: 1000,
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+
+const GRAZING_COLORS: Record<string, string> = {
+  Good:       "#22c55e",
+  Fair:       "#eab308",
+  Poor:       "#f97316",
+  Overgrazed: "#ef4444",
+};
+
+const DEFAULT_FALLBACK_COLOR = "#94a3b8";
+
+// ── GeoJSON builder ───────────────────────────────────────────────────────────
+
+function buildCampGeoJSON(campData: CampData[]): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+
+  for (const { camp, stats, grazing } of campData) {
+    if (!camp.geojson) continue;
+    try {
+      const parsed = JSON.parse(camp.geojson) as GeoJSON.Geometry;
+      features.push({
+        type: "Feature",
+        geometry: parsed,
+        properties: {
+          campId: camp.camp_id,
+          campName: camp.camp_name,
+          grazing,
+          animalCount: stats.total,
+          color: GRAZING_COLORS[grazing] ?? DEFAULT_FALLBACK_COLOR,
+        },
+      });
+    } catch {
+      // skip malformed geojson
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+// ── Layer styles ──────────────────────────────────────────────────────────────
+
+const fillLayer: LayerProps = {
+  id: "camp-fill",
+  type: "fill",
+  paint: {
+    "fill-color": ["get", "color"],
+    "fill-opacity": 0.35,
+  },
+};
+
+const outlineLayer: LayerProps = {
+  id: "camp-outline",
+  type: "line",
+  paint: {
+    "line-color": ["get", "color"],
+    "line-width": 2,
+    "line-opacity": 0.85,
+  },
+};
+
+const labelLayer: LayerProps = {
+  id: "camp-label",
+  type: "symbol",
+  layout: {
+    "text-field": ["get", "campName"],
+    "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+    "text-size": 12,
+    "text-anchor": "center",
+    "text-allow-overlap": false,
+  },
+  paint: {
+    "text-color": "#ffffff",
+    "text-halo-color": "rgba(0,0,0,0.7)",
+    "text-halo-width": 1.5,
+  },
+};
+
+// ── DrawControl wrapper (useControl hook) ─────────────────────────────────────
+
+interface DrawControlProps {
+  onDrawCreate: (e: { features: GeoJSON.Feature[] }) => void;
+  onDrawDelete: () => void;
+  enabled: boolean;
+}
+
+function DrawControl({ onDrawCreate, onDrawDelete, enabled }: DrawControlProps) {
+  const drawRef = useRef<MapboxDraw | null>(null);
+
+  useControl(
+    () => {
+      const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: { polygon: true, trash: true },
+        defaultMode: enabled ? "draw_polygon" : "simple_select",
+      });
+      drawRef.current = draw;
+      return draw;
+    },
+    ({ map }) => {
+      map.on("draw.create", onDrawCreate);
+      map.on("draw.delete", onDrawDelete);
+    },
+    ({ map }) => {
+      map.off("draw.create", onDrawCreate);
+      map.off("draw.delete", onDrawDelete);
+    },
+    { position: "top-left" }
+  );
+
+  // Switch mode when enabled changes
+  useEffect(() => {
+    if (!drawRef.current) return;
+    if (enabled) {
+      drawRef.current.changeMode("draw_polygon");
+    } else {
+      drawRef.current.changeMode("simple_select");
+    }
+  }, [enabled]);
+
+  return null;
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export default function FarmMap({ campData, onCampClick, className, drawMode = false, onBoundaryDrawn }: Props) {
+  const mapRef = useRef<MapRef>(null);
+  const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawnBoundary, setDrawnBoundary] = useState<DrawnBoundary | null>(null);
+  const [showDrawModal, setShowDrawModal] = useState(false);
+
+  const geojsonData = buildCampGeoJSON(campData);
+  const campsWithoutBoundary = campData
+    .filter((d) => !d.camp.geojson)
+    .map((d) => ({ id: d.camp.camp_id, name: d.camp.camp_name }));
+
+  // ── Map load: terrain + atmosphere + flyover ──────────────────────────────
+
+  const handleMapLoad = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    // Add terrain DEM
+    map.addSource("mapbox-dem", {
+      type: "raster-dem",
+      url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+      tileSize: 512,
+    });
+    map.setTerrain({ source: "mapbox-dem", exaggeration: 1.2 });
+
+    // Sky atmosphere layer
+    map.addLayer({
+      id: "sky",
+      type: "sky",
+      paint: {
+        "sky-type": "atmosphere",
+        "sky-atmosphere-sun": [0.0, 0.0],
+        "sky-atmosphere-sun-intensity": 15,
+      },
+    } as Parameters<typeof map.addLayer>[0]);
+
+    // Globe flyover to farm
+    map.flyTo({
+      center: [-25.5, 28.5],
+      zoom: 14,
+      pitch: 55,
+      bearing: -20,
+      duration: 3000,
+    });
+  }, []);
+
+  // ── Camp polygon click ────────────────────────────────────────────────────
+
+  const handleCampClick = useCallback(
+    (e: MapMouseEvent) => {
+      const features = e.features;
+      if (!features || features.length === 0) return;
+
+      const feature = features[0];
+      const props = feature.properties;
+      if (!props) return;
+
+      // Compute click point center from feature bounding box (approximate)
+      const geometry = feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon;
+      let lng = e.lngLat.lng;
+      let lat = e.lngLat.lat;
+
+      if (geometry.type === "Polygon") {
+        const coords = geometry.coordinates[0];
+        if (coords && coords.length > 0) {
+          const sumLng = coords.reduce((s, c) => s + (c[0] ?? 0), 0);
+          const sumLat = coords.reduce((s, c) => s + (c[1] ?? 0), 0);
+          lng = sumLng / coords.length;
+          lat = sumLat / coords.length;
+        }
+      }
+
+      setPopupInfo({
+        campId: String(props.campId),
+        campName: String(props.campName),
+        grazing: String(props.grazing),
+        animalCount: Number(props.animalCount),
+        longitude: lng,
+        latitude: lat,
+      });
+
+      onCampClick(String(props.campId));
+    },
+    [onCampClick]
+  );
+
+  // ── Draw handlers ─────────────────────────────────────────────────────────
+
+  const handleDrawCreate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+    const feature = e.features[0];
+    if (!feature || !feature.geometry) return;
+
+    const featureCollection: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [feature],
+    };
+
+    const areaM2 = area(featureCollection);
+    const hectares = parseFloat((areaM2 / 10000).toFixed(2));
+    const geojson = JSON.stringify(feature.geometry);
+
+    setDrawnBoundary({ geojson, hectares });
+    setIsDrawing(false);
+    setShowDrawModal(true);
+  }, []);
+
+  const handleDrawDelete = useCallback(() => {
+    setDrawnBoundary(null);
+    setShowDrawModal(false);
+  }, []);
+
+  const handleModalConfirm = useCallback(
+    (campId: string | null) => {
+      if (!drawnBoundary) return;
+      setShowDrawModal(false);
+      setDrawnBoundary(null);
+      onBoundaryDrawn?.(campId, drawnBoundary.geojson, drawnBoundary.hectares);
+    },
+    [drawnBoundary, onBoundaryDrawn]
+  );
+
+  const handleModalCancel = useCallback(() => {
+    setShowDrawModal(false);
+    setDrawnBoundary(null);
+    // Clear the drawn polygon from the map
+    const map = mapRef.current?.getMap();
+    if (map) {
+      // The draw control manages its own state; mode change will reset
+    }
+  }, []);
+
+  return (
+    <div style={{ position: "relative", height: "100%", width: "100%" }} className={className}>
+      <Map
+        ref={mapRef}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        initialViewState={{
+          longitude: 28.5,
+          latitude: -25.5,
+          zoom: 2,
+          pitch: 0,
+          bearing: 0,
         }}
+        style={{ width: "100%", height: "100%" }}
+        mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
+        projection="globe"
+        onLoad={handleMapLoad}
+        interactiveLayerIds={["camp-fill"]}
+        onClick={handleCampClick}
       >
-        <button
-          disabled
-          title="Coming soon — Draw GPS boundaries for each camp"
+        {/* Controls */}
+        <GeolocateControl position="bottom-right" />
+        <NavigationControl position="bottom-right" />
+        <ScaleControl position="bottom-left" />
+
+        {/* Camp polygon layers */}
+        {geojsonData.features.length > 0 && (
+          <Source id="camps" type="geojson" data={geojsonData}>
+            <Layer {...fillLayer} />
+            <Layer {...outlineLayer} />
+            <Layer {...labelLayer} />
+          </Source>
+        )}
+
+        {/* Draw control (mounted when drawMode prop is true) */}
+        {drawMode && (
+          <DrawControl
+            onDrawCreate={handleDrawCreate}
+            onDrawDelete={handleDrawDelete}
+            enabled={isDrawing}
+          />
+        )}
+
+        {/* Popup on camp click */}
+        {popupInfo && (
+          <Popup
+            longitude={popupInfo.longitude}
+            latitude={popupInfo.latitude}
+            anchor="bottom"
+            onClose={() => setPopupInfo(null)}
+            closeButton={false}
+            maxWidth="220px"
+          >
+            <CampPopupContent
+              campId={popupInfo.campId}
+              campName={popupInfo.campName}
+              grazing={popupInfo.grazing}
+              animalCount={popupInfo.animalCount}
+            />
+          </Popup>
+        )}
+      </Map>
+
+      {/* Draw button (only shown when drawMode prop is true) */}
+      {drawMode && (
+        <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            borderRadius: 8,
-            fontSize: 12,
-            fontFamily: "var(--font-sans)",
-            fontWeight: 500,
-            background: "rgba(36,28,20,0.88)",
-            border: "1px solid rgba(140,100,60,0.25)",
-            color: "rgba(210,180,140,0.4)",
-            cursor: "not-allowed",
-            backdropFilter: "blur(6px)",
+            position: "absolute",
+            bottom: 24,
+            right: 120,
+            zIndex: 10,
           }}
         >
-          <span style={{ fontSize: 14 }}>✦</span>
-          Draw Camp Boundaries
+          <button
+            onClick={() => setIsDrawing((v) => !v)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              fontWeight: 500,
+              background: isDrawing
+                ? "rgba(34,197,94,0.2)"
+                : "rgba(36,28,20,0.88)",
+              border: isDrawing
+                ? "1px solid rgba(34,197,94,0.5)"
+                : "1px solid rgba(140,100,60,0.35)",
+              color: isDrawing ? "#22c55e" : "#D2B48C",
+              cursor: "pointer",
+              backdropFilter: "blur(6px)",
+              transition: "all 0.2s",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>✦</span>
+            {isDrawing ? "Drawing… (click to cancel)" : "Draw Camp Boundary"}
+          </button>
+        </div>
+      )}
+
+      {/* Draw modal */}
+      {showDrawModal && drawnBoundary && (
+        <DrawCampModal
+          hectares={drawnBoundary.hectares}
+          campsWithoutBoundary={campsWithoutBoundary}
+          onConfirm={handleModalConfirm}
+          onCancel={handleModalCancel}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Popup content (plain React, no Leaflet) ───────────────────────────────────
+
+const POPUP_COLORS: Record<string, string> = {
+  Good:       "#4ade80",
+  Fair:       "#fbbf24",
+  Poor:       "#fb923c",
+  Overgrazed: "#f87171",
+};
+
+const POPUP_BG: Record<string, string> = {
+  Good:       "rgba(74,222,128,0.1)",
+  Fair:       "rgba(251,191,36,0.1)",
+  Poor:       "rgba(251,146,60,0.1)",
+  Overgrazed: "rgba(248,113,113,0.1)",
+};
+
+function CampPopupContent({
+  campId,
+  campName,
+  grazing,
+  animalCount,
+}: {
+  campId: string;
+  campName: string;
+  grazing: string;
+  animalCount: number;
+}) {
+  const color = POPUP_COLORS[grazing] ?? "#fbbf24";
+  const bg    = POPUP_BG[grazing]    ?? "rgba(251,191,36,0.1)";
+
+  return (
+    <div
+      style={{
+        background: "#1E1710",
+        border: "1px solid rgba(139,105,20,0.3)",
+        borderRadius: "14px",
+        padding: "14px 16px",
+        color: "#F5EBD4",
+        minWidth: "180px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+      }}
+    >
+      <p
+        style={{
+          fontWeight: 700,
+          fontSize: "15px",
+          marginBottom: "8px",
+          fontFamily: "var(--font-display, serif)",
+          color: "#F5EBD4",
+        }}
+      >
+        {campName}
+      </p>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            padding: "4px 10px",
+            borderRadius: 8,
+            background: "rgba(255,248,235,0.06)",
+            border: "1px solid rgba(210,180,140,0.15)",
+            minWidth: 56,
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#F5EBD4", lineHeight: 1.2 }}>
+            {animalCount}
+          </span>
           <span
             style={{
               fontSize: 9,
-              padding: "1px 5px",
-              borderRadius: 4,
-              background: "rgba(139,105,20,0.2)",
-              color: "#8B6914",
-              letterSpacing: "0.05em",
+              color: "rgba(210,180,140,0.6)",
               textTransform: "uppercase",
+              letterSpacing: "0.06em",
             }}
           >
-            Coming Soon
+            animals
           </span>
-        </button>
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            background: bg,
+            color,
+            border: `1px solid ${color}44`,
+            borderRadius: 8,
+            fontSize: "11px",
+            padding: "4px 10px",
+            fontWeight: 600,
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: color,
+              display: "inline-block",
+            }}
+          />
+          {grazing}
+        </div>
       </div>
+
+      <a
+        href={`/logger/${encodeURIComponent(campId)}`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: "11px",
+          color: "#8B6914",
+          fontWeight: 600,
+          textDecoration: "none",
+          padding: "4px 0",
+          letterSpacing: "0.02em",
+        }}
+      >
+        Log now →
+      </a>
     </div>
   );
 }

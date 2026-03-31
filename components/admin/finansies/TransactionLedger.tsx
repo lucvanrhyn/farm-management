@@ -18,7 +18,16 @@ interface Transaction {
   date: string;
   description: string;
   animalId: string | null;
+  saleType?: string | null;
+  counterparty?: string | null;
+  quantity?: number | null;
+  avgMassKg?: number | null;
+  fees?: number | null;
+  transportCost?: number | null;
+  animalIds?: string | null;
 }
+
+const LIVESTOCK_CATEGORIES = ["Animal Sales", "Animal Purchases"];
 
 interface Props {
   transactions: Transaction[];
@@ -181,7 +190,21 @@ export default function TransactionLedger({
                     </span>
                   </td>
                   <td className="px-4 py-3" style={{ color: "#6B5C4E" }}>{tx.category}</td>
-                  <td className="px-4 py-3 max-w-xs truncate" style={{ color: "#9C8E7A" }}>{tx.description}</td>
+                  <td className="px-4 py-3 max-w-xs" style={{ color: "#9C8E7A" }}>
+                    <span className="truncate block">{tx.description}</span>
+                    {LIVESTOCK_CATEGORIES.includes(tx.category) && (
+                      (tx.saleType || tx.quantity != null || tx.avgMassKg != null || tx.counterparty)
+                    ) && (
+                      <span className="text-xs mt-0.5 block" style={{ color: "#9C8E7A" }}>
+                        {[
+                          tx.saleType ? (tx.saleType === "auction" ? "Auction" : "Private") : null,
+                          tx.quantity != null ? `${tx.quantity} animals` : null,
+                          tx.avgMassKg != null ? `avg ${tx.avgMassKg}kg` : null,
+                          tx.counterparty ?? null,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {tx.animalId && (
                       <Link

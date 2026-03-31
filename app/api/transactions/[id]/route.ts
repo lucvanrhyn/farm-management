@@ -19,7 +19,17 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { type, category, amount, date, description, animalId, campId, reference } = body;
+  const {
+    type, category, amount, date, description, animalId, campId, reference,
+    saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
+  } = body;
+
+  if (saleType != null && saleType !== "auction" && saleType !== "private") {
+    return NextResponse.json(
+      { error: "saleType must be 'auction' or 'private'" },
+      { status: 400 }
+    );
+  }
 
   const data: Record<string, unknown> = {};
   if (type !== undefined) data.type = type;
@@ -30,6 +40,13 @@ export async function PATCH(
   if (animalId !== undefined) data.animalId = animalId;
   if (campId !== undefined) data.campId = campId;
   if (reference !== undefined) data.reference = reference;
+  if (saleType !== undefined) data.saleType = saleType ?? null;
+  if (counterparty !== undefined) data.counterparty = counterparty ?? null;
+  if (quantity !== undefined) data.quantity = quantity != null ? parseInt(quantity, 10) : null;
+  if (avgMassKg !== undefined) data.avgMassKg = avgMassKg != null ? parseFloat(avgMassKg) : null;
+  if (fees !== undefined) data.fees = fees != null ? parseFloat(fees) : null;
+  if (transportCost !== undefined) data.transportCost = transportCost != null ? parseFloat(transportCost) : null;
+  if (animalIds !== undefined) data.animalIds = animalIds ?? null;
 
   const transaction = await prisma.transaction.update({
     where: { id },

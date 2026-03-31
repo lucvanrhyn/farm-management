@@ -76,11 +76,21 @@ export async function POST(
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
 
   const body = await req.json();
-  const { type, category, amount, description, date, campId, animalId, reference } = body;
+  const {
+    type, category, amount, description, date, campId, animalId, reference,
+    saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
+  } = body;
 
   if (!type || !category || amount == null || !date) {
     return NextResponse.json(
       { error: "type, category, amount, date required" },
+      { status: 400 },
+    );
+  }
+
+  if (saleType != null && saleType !== "auction" && saleType !== "private") {
+    return NextResponse.json(
+      { error: "saleType must be 'auction' or 'private'" },
       { status: 400 },
     );
   }
@@ -96,6 +106,13 @@ export async function POST(
       animalId: animalId ?? null,
       reference: reference ?? null,
       createdBy: session.user?.email ?? null,
+      saleType: saleType ?? null,
+      counterparty: counterparty ?? null,
+      quantity: quantity != null ? parseInt(quantity, 10) : null,
+      avgMassKg: avgMassKg != null ? parseFloat(avgMassKg) : null,
+      fees: fees != null ? parseFloat(fees) : null,
+      transportCost: transportCost != null ? parseFloat(transportCost) : null,
+      animalIds: animalIds ?? null,
     },
   });
 

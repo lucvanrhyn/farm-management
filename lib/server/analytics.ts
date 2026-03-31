@@ -170,17 +170,13 @@ export interface CalvingPoint {
 
 export async function getCalvingTrend(prisma: PrismaClient, months = 12): Promise<CalvingPoint[]> {
   const rows = await prisma.observation.findMany({
-    where: { type: "reproduction", observedAt: { gte: monthsAgo(months) } },
-    select: { observedAt: true, details: true },
+    where: { type: "calving", observedAt: { gte: monthsAgo(months) } },
+    select: { observedAt: true },
     orderBy: { observedAt: "asc" },
   });
 
   const byMonth = new Map<string, number>();
   for (const row of rows) {
-    let details: Record<string, string> = {};
-    try { details = JSON.parse(row.details); } catch { /* skip */ }
-    const event = (details.event ?? "").toLowerCase();
-    if (!event.includes("calv")) continue;
     const key = toMonthString(new Date(row.observedAt));
     byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
   }
@@ -367,7 +363,7 @@ export async function getWithdrawalTracker(prisma: PrismaClient): Promise<Withdr
       id: row.id,
       animalId: row.animalId,
       campId: row.campId,
-      drug: String(details.drug ?? details.treatment ?? "Onbekend"),
+      drug: String(details.product ?? details.drug ?? details.treatment ?? "Onbekend"),
       daysRemaining,
       observedAt: toDateString(observedAt),
     });

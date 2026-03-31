@@ -25,20 +25,16 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Leaflet z-index fix — prevents map controls overlapping slide-in panels */
-.leaflet-pane { z-index: 1 !important; }
-.leaflet-control { z-index: 2 !important; }
-.leaflet-top, .leaflet-bottom { z-index: 2 !important; }
+/* Mapbox GL z-index fix — prevents map controls overlapping slide-in panels */
+.mapboxgl-ctrl { z-index: 2 !important; }
 
-/* Dark Leaflet popup styling */
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
+/* Remove default Mapbox popup chrome — we render our own styled content */
+.mapboxgl-popup-content {
   background: transparent !important;
   box-shadow: none !important;
+  padding: 0 !important;
 }
-.leaflet-popup-content {
-  margin: 0 !important;
-}
+.mapboxgl-popup-tip { display: none !important; }
 
 /* Glowing card animations — farm palette (rust → gold → leather) */
 @keyframes border-follow {

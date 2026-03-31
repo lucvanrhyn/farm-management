@@ -3,16 +3,8 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 
-const FARMS = [
-  {
-    id: "trio-b",
-    name: "Trio B Boerdery",
-    subtitle: "Brangus · Limpopo",
-    location: "Limpopo, South Africa",
-    stats: "978 animals · 19 camps",
-    href: "/login",
-  },
-];
+// Farm cards are now generic — each farm's identity is shown after login
+// based on the authenticated user's assigned farms from the meta database.
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -99,7 +91,7 @@ export function FarmSelectPage() {
               lineHeight: 1.15,
             }}
           >
-            Choose Your Farm
+            Farm Management
           </motion.h1>
 
           <motion.p
@@ -112,7 +104,7 @@ export function FarmSelectPage() {
               textShadow: "0 1px 10px rgba(0,0,0,0.7)",
             }}
           >
-            Click on your farm to sign in
+            Sign in to access your farm dashboard
           </motion.p>
 
           {/* Decorative rule */}
@@ -123,16 +115,55 @@ export function FarmSelectPage() {
           </motion.div>
         </div>
 
-        {/* Farm cards grid — 1 card now, grows to 2-3 */}
+        {/* Sign-in CTA */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.32, }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-3xl justify-items-center"
+          transition={{ duration: 0.6, delay: 0.32 }}
+          className="flex justify-center"
         >
-          {FARMS.map((farm, i) => (
-            <FarmCard key={farm.id} farm={farm} delay={0.38 + i * 0.08} />
-          ))}
+          <Link
+            href="/login"
+            className="group flex items-center gap-3 px-8 py-4 rounded-2xl transition-all duration-300"
+            style={{
+              background: "rgba(5,3,1,0.55)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+              border: "1px solid rgba(196,144,48,0.28)",
+              boxShadow: "0 8px 40px rgba(0,0,0,0.45)",
+              textDecoration: "none",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.border = "1px solid rgba(196,144,48,0.6)";
+              (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.border = "1px solid rgba(196,144,48,0.28)";
+              (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                color: "#F0DEB8",
+                fontSize: "1.0625rem",
+                fontWeight: 600,
+                letterSpacing: "0.04em",
+              }}
+            >
+              Sign In to FarmTrack
+            </span>
+            <svg
+              className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              style={{ color: "#C49030" }}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
         </motion.div>
       </main>
 
@@ -154,151 +185,3 @@ export function FarmSelectPage() {
   );
 }
 
-/* ── Farm Card ── */
-
-type Farm = (typeof FARMS)[number];
-
-function FarmCard({ farm, delay }: { farm: Farm; delay: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, delay, }}
-      className="group w-full max-w-xs"
-    >
-      <Link
-        href={farm.href}
-        className="flex flex-col gap-5 rounded-2xl px-7 py-7 relative overflow-hidden transition-all duration-300"
-        style={{
-          background: "rgba(5,3,1,0.55)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          border: "1px solid rgba(196,144,48,0.18)",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.45)",
-          textDecoration: "none",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
-          (e.currentTarget as HTMLElement).style.border = "1px solid rgba(196,144,48,0.55)";
-          (e.currentTarget as HTMLElement).style.boxShadow =
-            "0 16px 56px rgba(0,0,0,0.55), 0 0 0 1px rgba(196,144,48,0.20), 0 0 32px rgba(196,144,48,0.12)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-          (e.currentTarget as HTMLElement).style.border = "1px solid rgba(196,144,48,0.18)";
-          (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 40px rgba(0,0,0,0.45)";
-        }}
-      >
-        {/* Corner accent */}
-        <div
-          className="absolute top-0 right-0 w-16 h-16 pointer-events-none"
-          style={{
-            background: "radial-gradient(circle at top right, rgba(196,144,48,0.12) 0%, transparent 70%)",
-          }}
-        />
-
-        {/* Farm identity */}
-        <div className="flex flex-col gap-1.5">
-          {/* Location pill */}
-          <div className="flex items-center gap-1.5 mb-1">
-            <svg
-              className="w-3 h-3 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              style={{ color: "#7A5838" }}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
-              />
-            </svg>
-            <span
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "#6A4828",
-                fontSize: "0.6875rem",
-                letterSpacing: "0.07em",
-                textTransform: "uppercase",
-              }}
-            >
-              {farm.location}
-            </span>
-          </div>
-
-          <h2
-            style={{
-              fontFamily: "var(--font-display)",
-              color: "#F0DEB8",
-              fontSize: "1.3125rem",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              lineHeight: 1.2,
-              textShadow: "0 1px 8px rgba(0,0,0,0.6)",
-            }}
-          >
-            {farm.name}
-          </h2>
-
-          <p
-            style={{
-              fontFamily: "var(--font-sans)",
-              color: "#8A6840",
-              fontSize: "0.8125rem",
-              letterSpacing: "0.04em",
-            }}
-          >
-            {farm.subtitle}
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: "1px", background: "rgba(196,144,48,0.12)" }} />
-
-        {/* Stats row */}
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            color: "#5A3E28",
-            fontSize: "0.75rem",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {farm.stats}
-        </p>
-
-        {/* CTA */}
-        <div className="flex items-center justify-between">
-          <span
-            style={{
-              fontFamily: "var(--font-sans)",
-              color: "#C49030",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-            }}
-          >
-            Sign In
-          </span>
-          <svg
-            className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            style={{ color: "#C49030" }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </div>
-      </Link>
-    </motion.div>
-  );
-}

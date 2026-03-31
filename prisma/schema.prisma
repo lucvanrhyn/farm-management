@@ -30,6 +30,9 @@ model Observation {
   editedAt      DateTime?
   editHistory   String?
   attachmentUrl String?
+
+  @@index([type, campId, observedAt], name: "idx_obs_type_camp_date")
+  @@index([type, animalId, observedAt], name: "idx_obs_type_animal_date")
 }
 
 model Animal {
@@ -48,20 +51,33 @@ model Animal {
   dateAdded   String
   deceasedAt  String?
   createdAt   DateTime @default(now())
+
+  @@index([currentCamp, status], name: "idx_animal_camp_status")
+  @@index([status], name: "idx_animal_status")
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  type        String
-  category    String
-  amount      Float
-  date        String
-  description String
-  animalId    String?
-  campId      String?
-  reference   String?
-  createdBy   String?
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  type          String
+  category      String
+  amount        Float
+  date          String
+  description   String
+  animalId      String?
+  campId        String?
+  reference     String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  // Livestock purchase/sale fields
+  saleType      String?  // "auction" | "private"
+  counterparty  String?  // buyer or seller name
+  quantity      Int?     // number of animals in batch
+  avgMassKg     Float?   // average mass at transaction (kg)
+  fees          Float?   // auction fees / commission
+  transportCost Float?   // transport cost
+  animalIds     String?  // JSON array of animal IDs for batch transactions
+
+  @@index([date], name: "idx_transaction_date")
 }
 
 model TransactionCategory {
@@ -73,12 +89,17 @@ model TransactionCategory {
 }
 
 model FarmSettings {
-  id                  String   @id @default("singleton")
-  alertThresholdHours Int      @default(48)
-  farmName            String   @default("My Farm")
-  breed               String   @default("Mixed")
-  updatedAt           DateTime @updatedAt
-  updatedBy           String?
+  id                       String   @id @default("singleton")
+  alertThresholdHours      Int      @default(48)
+  farmName                 String   @default("My Farm")
+  breed                    String   @default("Mixed")
+  updatedAt                DateTime @updatedAt
+  updatedBy                String?
+  // Configurable thresholds
+  adgPoorDoerThreshold     Float    @default(0.7)   // kg/day below which animal is a poor doer
+  calvingAlertDays         Int      @default(14)    // days before expected calving to alert
+  daysOpenLimit            Int      @default(365)   // max acceptable days open for a cow
+  campGrazingWarningDays   Int      @default(7)     // days grazing remaining to trigger camp warning
 }
 
 model Camp {
@@ -101,4 +122,6 @@ model CampCoverReading {
   recordedAt   String
   recordedBy   String
   notes        String?
+
+  @@index([campId, recordedAt], name: "idx_cover_camp_date")
 }

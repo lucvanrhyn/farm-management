@@ -61,6 +61,10 @@ export default function AnimalActions({ animalId, campId, variant = "detail" }: 
           description: [buyer ? `Buyer: ${buyer}` : null, saleNotes || null]
             .filter(Boolean).join(" · ") || `Sale: ${animalId}`,
           animalId,
+          saleType: "private",
+          counterparty: buyer || null,
+          quantity: 1,
+          animalIds: JSON.stringify([animalId]),
         }),
       });
       if (!txRes.ok) throw new Error("Transaction failed");

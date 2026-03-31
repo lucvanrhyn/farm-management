@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import KampeTab from "@/components/admin/charts/KampeTab";
-import DiereTab from "@/components/admin/charts/DiereTab";
-import FinansieleTab from "@/components/admin/charts/FinansieleTab";
+import dynamic from "next/dynamic";
+
+const ChartSkeleton = () => (
+  <div className="flex flex-col gap-4">
+    {Array.from({ length: 3 }).map((_, i) => (
+      <div key={i} className="rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.05)", height: 200 }} />
+    ))}
+  </div>
+);
+
+const KampeTab = dynamic(() => import("@/components/admin/charts/KampeTab"), {
+  ssr: false,
+  loading: ChartSkeleton,
+});
+const DiereTab = dynamic(() => import("@/components/admin/charts/DiereTab"), {
+  ssr: false,
+  loading: ChartSkeleton,
+});
+const FinansieleTab = dynamic(() => import("@/components/admin/charts/FinansieleTab"), {
+  ssr: false,
+  loading: ChartSkeleton,
+});
 import type { Camp } from "@/lib/types";
 import type {
   ConditionTrendPoint,
@@ -15,6 +34,7 @@ import type {
   AttritionPoint,
   WithdrawalRecord,
 } from "@/lib/server/analytics";
+import type { HerdAdgPoint } from "@/lib/server/weight-analytics";
 
 // ── Analytics data passed from the server page ────────────────────────────────
 
@@ -27,6 +47,7 @@ export interface GrafiekeData {
   calvings: CalvingPoint[];
   attrition: AttritionPoint[];
   withdrawals: WithdrawalRecord[];
+  herdAdgTrend: HerdAdgPoint[];
 }
 
 // ── Financial / herd / camp-cover data ───────────────────────────────────────

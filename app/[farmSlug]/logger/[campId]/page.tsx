@@ -138,7 +138,7 @@ export default function CampInspectionPage({
 
     // Queue the calving observation (offline-safe)
     await queueObservation({
-      type: "reproduction",
+      type: "calving",
       camp_id: decodedId,
       animal_id: data.animalId,
       details: JSON.stringify(data),
@@ -294,9 +294,10 @@ export default function CampInspectionPage({
     );
   }
 
-  const grazingQuality = campWithCondition?.grazing_quality ?? "Fair";
-  const grazingDot = getGrazingDot(grazingQuality);
-  const grazingBadge = getGrazingTailwindBg(grazingQuality);
+  // Use grey when no condition has ever been recorded; do not default to "Fair"
+  const grazingQuality = campWithCondition?.grazing_quality ?? null;
+  const grazingDot = grazingQuality ? getGrazingDot(grazingQuality) : "bg-gray-500";
+  const grazingBadge = grazingQuality ? getGrazingTailwindBg(grazingQuality) : "bg-gray-800/50 text-gray-400";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -333,7 +334,7 @@ export default function CampInspectionPage({
           <div className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-full ${grazingDot}`} />
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${grazingBadge}`}>
-              {grazingQuality}
+              {grazingQuality ?? "No data"}
             </span>
           </div>
         </div>

@@ -63,7 +63,8 @@ export default function CampSelector() {
     >
       {camps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
-        const dotColor = getGrazingDot(camp.grazing_quality ?? "Fair");
+        // Use grey dot when no condition has ever been recorded; do not default to "Fair"
+        const dotColor = camp.grazing_quality ? getGrazingDot(camp.grazing_quality) : "bg-gray-500";
         const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Never";
 
         return (

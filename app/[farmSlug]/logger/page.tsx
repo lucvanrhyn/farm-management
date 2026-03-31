@@ -2,6 +2,7 @@ import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import { getSession } from "@/lib/auth";
+import { getPrismaForFarm } from "@/lib/farm-prisma";
 
 function getTodayLabel(): string {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -12,10 +13,19 @@ function getTodayLabel(): string {
   }).format(new Date())
 }
 
-export default async function LoggerPage() {
+export default async function LoggerPage({
+  params,
+}: {
+  params: Promise<{ farmSlug: string }>;
+}) {
+  const { farmSlug } = await params;
   const todayLabel = getTodayLabel();
   const session = await getSession();
   const loggerName = session?.user?.name ?? "Logger";
+
+  const prisma = await getPrismaForFarm(farmSlug);
+  const farmSettings = prisma ? await prisma.farmSettings.findFirst() : null;
+  const farmName = farmSettings?.farmName ?? "FarmTrack";
 
   return (
     <div className="min-h-screen">
@@ -35,7 +45,7 @@ export default async function LoggerPage() {
               className="text-2xl font-bold leading-tight"
               style={{ fontFamily: 'var(--font-display)', color: '#1A1510' }}
             >
-              Trio B
+              {farmName}
             </h1>
             <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Select a camp</p>
           </div>

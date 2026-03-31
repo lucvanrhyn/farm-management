@@ -49,11 +49,21 @@ export async function POST(request: NextRequest) {
   const { prisma } = db;
 
   const body = await request.json();
-  const { type, category, amount, date, description, animalId, campId, reference } = body;
+  const {
+    type, category, amount, date, description, animalId, campId, reference,
+    saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
+  } = body;
 
   if (!type || !category || amount == null || !date) {
     return NextResponse.json(
       { error: "type, category, amount, date required" },
+      { status: 400 }
+    );
+  }
+
+  if (saleType != null && saleType !== "auction" && saleType !== "private") {
+    return NextResponse.json(
+      { error: "saleType must be 'auction' or 'private'" },
       { status: 400 }
     );
   }
@@ -69,6 +79,13 @@ export async function POST(request: NextRequest) {
       campId: campId ?? null,
       reference: reference ?? null,
       createdBy: session.user?.email ?? null,
+      saleType: saleType ?? null,
+      counterparty: counterparty ?? null,
+      quantity: quantity != null ? parseInt(quantity, 10) : null,
+      avgMassKg: avgMassKg != null ? parseFloat(avgMassKg) : null,
+      fees: fees != null ? parseFloat(fees) : null,
+      transportCost: transportCost != null ? parseFloat(transportCost) : null,
+      animalIds: animalIds ?? null,
     },
   });
 

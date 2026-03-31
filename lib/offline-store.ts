@@ -63,17 +63,22 @@ export async function seedCamps(camps: Camp[]): Promise<void> {
   const existingMap = new Map(existing.map((c) => [c.camp_id, c]));
   const incomingIds = new Set(camps.map((c) => c.camp_id));
 
-  // Upsert each incoming camp, keeping any condition fields Dicky set locally (Bug B fix)
+  // Upsert each incoming camp.
+  // If the incoming camp already carries server-authoritative condition fields
+  // (merged in by refreshCachedData → /api/camps/status), those win.
+  // If the incoming camp has no condition data (server didn't provide any for this
+  // camp), fall back to whatever was already in IDB so local observations are
+  // not silently wiped on every refresh.
   for (const camp of camps) {
     const prev = existingMap.get(camp.camp_id);
     const merged: Camp = prev
       ? {
           ...camp,
-          grazing_quality: prev.grazing_quality ?? camp.grazing_quality,
-          water_status: prev.water_status ?? camp.water_status,
-          fence_status: prev.fence_status ?? camp.fence_status,
-          last_inspected_at: prev.last_inspected_at ?? camp.last_inspected_at,
-          last_inspected_by: prev.last_inspected_by ?? camp.last_inspected_by,
+          grazing_quality: camp.grazing_quality ?? prev.grazing_quality,
+          water_status: camp.water_status ?? prev.water_status,
+          fence_status: camp.fence_status ?? prev.fence_status,
+          last_inspected_at: camp.last_inspected_at ?? prev.last_inspected_at,
+          last_inspected_by: camp.last_inspected_by ?? prev.last_inspected_by,
         }
       : camp;
     await tx.store.put(merged);
