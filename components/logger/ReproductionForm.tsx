@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving";
 
 export interface ReproSubmitData {
   type: ReproType;
   details: Record<string, string>;
+  photoBlob: Blob | null;
 }
 
 interface Props {
@@ -102,6 +104,7 @@ const DEFAULT_STYLE = {
 export default function ReproductionForm({ animalId, onClose, onSubmit }: Props) {
   const [step, setStep] = useState<"type" | "details">("type");
   const [selectedType, setSelectedType] = useState<ReproType | null>(null);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   // Heat detection
   const [heatMethod, setHeatMethod] = useState<"visual" | "scratch_card">("visual");
@@ -147,7 +150,7 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
       };
     }
 
-    onSubmit({ type: selectedType, details });
+    onSubmit({ type: selectedType, details, photoBlob });
   }
 
   const title =
@@ -359,6 +362,11 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
               Record Calving
             </button>
           </>
+        )}
+
+        {/* Photo capture — shown on the details step */}
+        {step === "details" && (
+          <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
         )}
 
         {/* Back link when on details step */}

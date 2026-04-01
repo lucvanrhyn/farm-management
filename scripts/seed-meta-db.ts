@@ -121,6 +121,7 @@ async function createTables() {
       turso_url        TEXT NOT NULL,
       turso_auth_token TEXT NOT NULL,
       logo_url         TEXT,
+      tier             TEXT NOT NULL DEFAULT 'advanced',
       created_at       TEXT NOT NULL
     );
 
@@ -150,8 +151,8 @@ async function seedUsers() {
 
 async function seedFarm() {
   await client.execute({
-    sql: `INSERT OR IGNORE INTO farms (id, slug, display_name, turso_url, turso_auth_token, logo_url, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT OR IGNORE INTO farms (id, slug, display_name, turso_url, turso_auth_token, logo_url, tier, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       FARM.id,
       FARM.slug,
@@ -159,6 +160,7 @@ async function seedFarm() {
       FARM.tursoUrl,
       FARM.tursoAuthToken,
       FARM.logoUrl,
+      'advanced',
       new Date().toISOString(),
     ],
   });

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
   animalId: string;
@@ -51,6 +53,7 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   async function submit() {
     const weight = parseFloat(weightKg);
@@ -78,8 +81,14 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
         setError(e.error ?? "Failed to save — try again");
         return;
       }
+      const resData = await res.json().catch(() => ({}));
+      if (photoBlob && resData.id) {
+        // Queue photo linked to the server observation id for sync
+        await queuePhoto(resData.id, photoBlob).catch(() => {/* non-fatal */});
+      }
       setWeightKg("");
       setNotes("");
+      setPhotoBlob(null);
       onSuccess();
     } catch {
       setError("Network error — try again");
@@ -112,6 +121,8 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
             }}
           />
         </div>
+
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         <div>
           <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>

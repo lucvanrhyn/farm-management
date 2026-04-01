@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
   campId: string;
@@ -79,6 +81,7 @@ export default function CampCoverLogForm({ campId, campName, farmSlug, onSuccess
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   async function submit() {
     if (!coverCategory) return;
@@ -99,8 +102,14 @@ export default function CampCoverLogForm({ campId, campName, farmSlug, onSuccess
         setError(e.error ?? "Failed to save — try again");
         return;
       }
+      const resData = await res.json().catch(() => ({}));
+      const recordId = resData.reading?.id ?? resData.id;
+      if (photoBlob && recordId) {
+        await queuePhoto(String(recordId), photoBlob).catch(() => {/* non-fatal */});
+      }
       setCoverCategory(null);
       setNotes("");
+      setPhotoBlob(null);
       onSuccess();
     } catch {
       setError("Network error — try again");
@@ -142,6 +151,8 @@ export default function CampCoverLogForm({ campId, campName, farmSlug, onSuccess
             })}
           </div>
         </div>
+
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         <div>
           <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>

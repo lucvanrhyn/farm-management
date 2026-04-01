@@ -1,5 +1,9 @@
+import { Suspense } from "react";
 import AddCampForm from "@/components/admin/AddCampForm";
 import CampsTable from "@/components/admin/CampsTable";
+import CampAnalyticsSection from "@/components/admin/CampAnalyticsSection";
+import PerformanceSection from "@/components/admin/PerformanceSection";
+import CampsTabBar from "@/components/admin/CampsTabBar";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 
@@ -7,10 +11,17 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminCampsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ tab?: string; from?: string; to?: string }>;
 }) {
   const { farmSlug } = await params;
+  const sp = await searchParams;
+  const activeTab = sp?.tab ?? "camps";
+  const from = sp?.from;
+  const to = sp?.to;
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
@@ -32,12 +43,30 @@ export default async function AdminCampsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#1C1815]">Camp Management</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>{camps.length} camps · status and last inspections</p>
-        </div>
-        <AddCampForm />
-        <CampsTable camps={camps} farmSlug={farmSlug} />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#1C1815]">Camps</h1>
+        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+          {camps.length} camps · management and performance
+        </p>
+      </div>
+
+      <CampsTabBar activeTab={activeTab} farmSlug={farmSlug} />
+
+      {activeTab === "camps" && (
+        <>
+          <AddCampForm />
+          <CampsTable camps={camps} farmSlug={farmSlug} />
+          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+            <CampAnalyticsSection farmSlug={farmSlug} />
+          </Suspense>
+        </>
+      )}
+
+      {activeTab === "performance" && (
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <PerformanceSection farmSlug={farmSlug} from={from} to={to} />
+        </Suspense>
+      )}
     </div>
   );
 }

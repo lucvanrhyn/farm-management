@@ -13,7 +13,7 @@ import CampCoverLogForm from "@/components/logger/CampCoverLogForm";
 import ReproductionForm, { type ReproSubmitData } from "@/components/logger/ReproductionForm";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
-import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
+import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, queuePhoto, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -78,32 +78,36 @@ export default function CampInspectionPage({
     setActiveModal("condition");
   }
 
-  async function handleHealthSubmit(data: { symptoms: string[]; severity: string; notes: string }) {
-    await queueObservation({
+  async function handleHealthSubmit(data: { symptoms: string[]; severity: string; notes: string; photoBlob: Blob | null }) {
+    const { photoBlob, ...obsData } = data;
+    const localId = await queueObservation({
       type: "health_issue",
       camp_id: decodedId,
       animal_id: selectedAnimalId,
-      details: JSON.stringify(data),
+      details: JSON.stringify(obsData),
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",
     });
+    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     if (isOnline) syncNow();
     setActiveModal(null);
   }
 
-  async function handleMovementSubmit(data: { animalId: string; sourceCampId: string; destCampId: string }) {
-    await queueObservation({
+  async function handleMovementSubmit(data: { animalId: string; sourceCampId: string; destCampId: string; photoBlob: Blob | null }) {
+    const { photoBlob, ...obsData } = data;
+    const localId = await queueObservation({
       type: "animal_movement",
       camp_id: decodedId,
       animal_id: data.animalId,
-      details: JSON.stringify(data),
+      details: JSON.stringify(obsData),
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",
     });
+    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
     await updateAnimalCamp(data.animalId, data.destCampId);
     if (navigator.onLine) {
       fetch(`/api/animals/${data.animalId}`, {
@@ -133,19 +137,22 @@ export default function CampInspectionPage({
     breed: string;
     category: string;
     notes: string;
+    photoBlob: Blob | null;
   }) {
+    const { photoBlob, ...obsData } = data;
     const now = new Date().toISOString();
 
     // Queue the calving observation (offline-safe)
-    await queueObservation({
+    const localId = await queueObservation({
       type: "calving",
       camp_id: decodedId,
       animal_id: data.animalId,
-      details: JSON.stringify(data),
+      details: JSON.stringify(obsData),
       created_at: now,
       synced_at: null,
       sync_status: "pending",
     });
+    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
 
     // Create the new calf animal record if alive
     if (data.calfAlive) {
@@ -233,7 +240,7 @@ export default function CampInspectionPage({
   }
 
   async function handleReproSubmit(data: ReproSubmitData) {
-    await queueObservation({
+    const localId = await queueObservation({
       type: data.type,
       camp_id: decodedId,
       animal_id: selectedAnimalId,
@@ -242,6 +249,7 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    if (data.photoBlob) await queuePhoto(localId, data.photoBlob).catch(() => {/* non-fatal */});
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     if (isOnline) syncNow();
@@ -254,17 +262,20 @@ export default function CampInspectionPage({
     water: WaterStatus;
     fence: FenceStatus;
     notes: string;
+    photoBlob: Blob | null;
   }) {
+    const { photoBlob, ...obsData } = data;
     const now = new Date().toISOString();
     const loggedBy = session?.user?.name ?? "Logger";
-    await queueObservation({
+    const localId = await queueObservation({
       type: "camp_condition",
       camp_id: decodedId,
-      details: JSON.stringify({ ...data, logged_by: loggedBy }),
+      details: JSON.stringify({ ...obsData, logged_by: loggedBy }),
       created_at: now,
       synced_at: null,
       sync_status: "pending",
     });
+    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
     await updateCampCondition(decodedId, {
       grazing_quality: data.grazing,
       water_status: data.water,

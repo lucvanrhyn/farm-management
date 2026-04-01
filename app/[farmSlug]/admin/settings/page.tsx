@@ -29,6 +29,14 @@ export default async function SettingsPage({
     calvingAlertDays: raw?.calvingAlertDays ?? 14,
     daysOpenLimit: raw?.daysOpenLimit ?? 365,
     campGrazingWarningDays: raw?.campGrazingWarningDays ?? 7,
+    targetStockingRate: raw?.targetStockingRate ?? null,
+    latitude: raw?.latitude ?? null,
+    longitude: raw?.longitude ?? null,
+    breedingSeasonStart: raw?.breedingSeasonStart ?? "",
+    breedingSeasonEnd: raw?.breedingSeasonEnd ?? "",
+    weaningDate: raw?.weaningDate ?? "",
+    vaccinationCalendarNotes: raw?.vaccinationCalendarNotes ?? "",
+    openaiApiKeyConfigured: !!(raw?.openaiApiKey),
   };
 
   return (
@@ -38,7 +46,7 @@ export default async function SettingsPage({
           Farm Settings
         </h1>
         <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Thresholds and farm configuration
+          Thresholds, location, breeding calendar, and integrations
         </p>
       </div>
 

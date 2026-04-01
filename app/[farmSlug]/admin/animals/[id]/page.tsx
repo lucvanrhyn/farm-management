@@ -8,6 +8,8 @@ import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import type { ADGResult, WeightRecord } from "@/lib/server/weight-analytics";
 import WeightTrendChart from "@/components/admin/charts/WeightTrendChart";
 import type { WeightPoint } from "@/components/admin/charts/WeightTrendChart";
+import { getCostPerAnimal } from "@/lib/server/financial-analytics";
+import AnimalInvestment from "@/components/admin/AnimalInvestment";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,7 @@ const TABS = [
   { key: "health",        label: "Health" },
   { key: "movement",      label: "Movement" },
   { key: "weight",        label: "Weight & ADG" },
+  { key: "investment",    label: "Investment" },
 ] as const;
 
 type TabKey = typeof TABS[number]["key"];
@@ -321,7 +324,7 @@ export default async function AnimalDetailPage({
   const animal = await prisma.animal.findUnique({ where: { animalId: id } });
   if (!animal) notFound();
 
-  const [observations, camp, weightData] = await Promise.all([
+  const [observations, camp, weightData, investmentData] = await Promise.all([
     prisma.observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
@@ -329,6 +332,7 @@ export default async function AnimalDetailPage({
     }),
     prisma.camp.findFirst({ where: { campId: animal.currentCamp } }),
     getAnimalWeightData(prisma, id),
+    getCostPerAnimal(prisma, id),
   ]);
 
   // Partition observations by tab
@@ -636,6 +640,11 @@ export default async function AnimalDetailPage({
         {/* ── Tab: Weight & ADG ── */}
         {activeTab === "weight" && (
           <WeightTab weightData={weightData} />
+        )}
+
+        {/* ── Tab: Investment ── */}
+        {activeTab === "investment" && (
+          <AnimalInvestment data={investmentData.totalCost > 0 ? investmentData : null} />
         )}
     </div>
   );

@@ -10,29 +10,27 @@ import {
   PawPrint,
   Tent,
   Upload,
-  BarChart3,
   Receipt,
   HeartPulse,
-  TrendingUp,
   Settings,
   FileDown,
-  Trophy,
+  CheckSquare,
+  Dna,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 
 const NAV_ITEMS = [
-  { path: "/admin",              label: "Overview",      icon: LayoutDashboard, group: "Data"    },
-  { path: "/admin/animals",      label: "Animals",       icon: PawPrint,        group: "Data"    },
-  { path: "/admin/observations", label: "Observations",  icon: ClipboardList,   group: "Data"    },
-  { path: "/admin/camps",         label: "Camps",         icon: Tent,            group: "Data"    },
-  { path: "/admin/performance",   label: "Performance",   icon: TrendingUp,      group: "Data"    },
-  { path: "/admin/league",        label: "League",        icon: Trophy,          group: "Data"    },
-  { path: "/admin/reproduction",  label: "Reproduction",  icon: HeartPulse,      group: "Data"    },
-  { path: "/admin/finansies",    label: "Finances",      icon: Receipt,         group: "Finance" },
-  { path: "/admin/grafieke",     label: "Charts",        icon: BarChart3,       group: "Finance" },
-  { path: "/admin/import",       label: "Import",        icon: Upload,          group: "Tools"   },
-  { path: "/admin/reports",     label: "Reports",       icon: FileDown,        group: "Tools"   },
-  { path: "/admin/settings",    label: "Settings",      icon: Settings,        group: "Tools"   },
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
+  { path: "/admin/animals",      label: "Animals",      icon: PawPrint,        group: "Data"    },
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
+  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
+  { path: "/admin/reproduction", label: "Reproduction", icon: HeartPulse,      group: "Data"    },
+  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
+  { path: "/admin/breeding-ai",  label: "Breeding AI",  icon: Dna,             group: "Data"    },
+  { path: "/admin/finansies",    label: "Finances",     icon: Receipt,         group: "Finance" },
+  { path: "/admin/import",       label: "Import",       icon: Upload,          group: "Tools"   },
+  { path: "/admin/reports",      label: "Reports",      icon: FileDown,        group: "Tools"   },
+  { path: "/admin/settings",     label: "Settings",     icon: Settings,        group: "Tools"   },
 ];
 
 const GROUP_ORDER = ["Data", "Finance", "Tools"];

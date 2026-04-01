@@ -2,7 +2,7 @@ import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
 const DB_NAME = 'trio-b-offline-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export interface PendingObservation {
   local_id?: number;
@@ -48,6 +48,16 @@ function getDB(): Promise<IDBPDatabase> {
       if (oldVersion < 2) {
         if (!db.objectStoreNames.contains('pending_animal_creates')) {
           db.createObjectStore('pending_animal_creates', { keyPath: 'local_id', autoIncrement: true });
+        }
+      }
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('pending_photos')) {
+          const photosStore = db.createObjectStore('pending_photos', { keyPath: 'local_id', autoIncrement: true });
+          photosStore.createIndex('by_observation', 'observation_local_id', { unique: false });
+          photosStore.createIndex('by_sync_status', 'sync_status', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('tasks')) {
+          db.createObjectStore('tasks', { keyPath: 'id' });
         }
       }
     },
@@ -260,4 +270,43 @@ export async function markAnimalCreateFailed(localId: number): Promise<void> {
   if (rec) {
     await db.put('pending_animal_creates', { ...rec, sync_status: 'failed' });
   }
+}
+
+// ── Pending Photos (offline photo capture) ───────────────────────────────────
+
+export interface PendingPhoto {
+  local_id?: number;
+  observation_local_id: string | number;
+  blob: Blob;
+  sync_status: 'pending' | 'synced' | 'failed';
+}
+
+export async function queuePhoto(observationLocalId: string | number, blob: Blob): Promise<number> {
+  const db = await getDB();
+  return db.add('pending_photos', {
+    observation_local_id: observationLocalId,
+    blob,
+    sync_status: 'pending',
+  }) as Promise<number>;
+}
+
+export async function getPendingPhotos(): Promise<PendingPhoto[]> {
+  const db = await getDB();
+  const all = await db.getAll('pending_photos');
+  return all.filter((p) => p.sync_status === 'pending' || p.sync_status === 'failed');
+}
+
+export async function markPhotoSynced(localId: number): Promise<void> {
+  const db = await getDB();
+  const photo = await db.get('pending_photos', localId);
+  if (photo) {
+    await db.put('pending_photos', { ...photo, sync_status: 'synced' });
+  }
+}
+
+export async function getPhotoForObservation(observationLocalId: string | number): Promise<Blob | null> {
+  const db = await getDB();
+  const results = await db.getAllFromIndex('pending_photos', 'by_observation', observationLocalId);
+  const pending = results.find((p) => p.sync_status === 'pending' || p.sync_status === 'failed');
+  return pending?.blob ?? null;
 }

@@ -13,7 +13,7 @@ export default async function DashboardPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="p-8 text-red-500">Farm not found.</p>;
 
-  const [totalAnimals, animalGroups, prismaCamps] = await Promise.all([
+  const [totalAnimals, animalGroups, prismaCamps, farmSettings] = await Promise.all([
     prisma.animal.count({ where: { status: "Active" } }),
     prisma.animal.groupBy({
       by: ["currentCamp"],
@@ -21,6 +21,7 @@ export default async function DashboardPage({
       _count: { _all: true },
     }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }),
   ]);
 
   const campAnimalCounts: Record<string, number> = {};
@@ -35,5 +36,13 @@ export default async function DashboardPage({
     water_source: c.waterSource ?? undefined,
   }));
 
-  return <DashboardClient totalAnimals={totalAnimals} campAnimalCounts={campAnimalCounts} camps={camps} />;
+  return (
+    <DashboardClient
+      totalAnimals={totalAnimals}
+      campAnimalCounts={campAnimalCounts}
+      camps={camps}
+      latitude={farmSettings?.latitude ?? null}
+      longitude={farmSettings?.longitude ?? null}
+    />
+  );
 }

@@ -15,7 +15,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { Camp } from "@/lib/types";
-import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
+import type { GrafiekeData } from "@/components/admin/charts/chart-types";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Cow: "#C4A030",

@@ -9,6 +9,8 @@ import {
   getPendingAnimalCreates,
   markAnimalCreateSynced,
   markAnimalCreateFailed,
+  getPendingPhotos,
+  markPhotoSynced,
   setLastSyncedAt,
   PendingObservation,
   PendingAnimalCreate,
@@ -81,28 +83,36 @@ export async function refreshCachedData(): Promise<void> {
   await setLastSyncedAt(new Date().toISOString());
 }
 
-async function uploadObservation(obs: PendingObservation): Promise<boolean> {
+async function uploadObservation(obs: PendingObservation): Promise<string | null> {
   try {
     const res = await fetch('/api/observations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(obs),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    return (data.id as string) ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-export async function syncPendingObservations(): Promise<{ synced: number; failed: number }> {
+export async function syncPendingObservations(): Promise<{
+  synced: number;
+  failed: number;
+  localToServerId: Map<number, string>;
+}> {
   const pending = await getPendingObservations();
   let synced = 0;
   let failed = 0;
+  const localToServerId = new Map<number, string>();
 
   for (const obs of pending) {
-    const ok = await uploadObservation(obs);
-    if (ok) {
+    const serverId = await uploadObservation(obs);
+    if (serverId) {
       await markObservationSynced(obs.local_id!);
+      localToServerId.set(obs.local_id!, serverId);
       synced++;
     } else {
       await markObservationFailed(obs.local_id!);
@@ -110,7 +120,7 @@ export async function syncPendingObservations(): Promise<{ synced: number; faile
     }
   }
 
-  return { synced, failed };
+  return { synced, failed, localToServerId };
 }
 
 async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean> {
@@ -158,11 +168,47 @@ export async function syncPendingAnimals(): Promise<{ synced: number; failed: nu
   return { synced, failed };
 }
 
+async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<void> {
+  const pendingPhotos = await getPendingPhotos();
+  for (const photo of pendingPhotos) {
+    try {
+      const formData = new FormData();
+      formData.append('file', photo.blob, `photo-${photo.local_id}.jpg`);
+      const res = await fetch('/api/photos/upload', { method: 'POST', body: formData });
+      if (!res.ok) continue;
+
+      const { url } = await res.json();
+
+      // Resolve the server observation ID from the local_id map
+      const observationLocalId = photo.observation_local_id;
+      const serverId =
+        typeof observationLocalId === 'number'
+          ? localToServerId.get(observationLocalId)
+          : undefined;
+
+      if (serverId) {
+        const patchRes = await fetch(`/api/observations/${serverId}/attachment`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachmentUrl: url }),
+        });
+        // If the PATCH fails, don't mark as synced — retry on next sync cycle
+        if (!patchRes.ok) continue;
+      }
+
+      await markPhotoSynced(photo.local_id!);
+    } catch (e) {
+      console.error('Photo sync failed', e);
+    }
+  }
+}
+
 export async function syncAndRefresh(): Promise<{ synced: number; failed: number }> {
   const [obsResult, animalsResult] = await Promise.all([
     syncPendingObservations(),
     syncPendingAnimals(),
   ]);
+  await syncPendingPhotos(obsResult.localToServerId);
   await refreshCachedData(); // now server is up to date before we pull
   return {
     synced: obsResult.synced + animalsResult.synced,

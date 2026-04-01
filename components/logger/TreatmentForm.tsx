@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
   animalId: string;
@@ -74,6 +76,7 @@ export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, o
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     setWithdrawalDays(DEFAULT_WITHDRAWAL_DAYS[treatmentType]);
@@ -109,11 +112,16 @@ export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, o
         setError(e.error ?? "Failed to save — try again");
         return;
       }
+      const resData = await res.json().catch(() => ({}));
+      if (photoBlob && resData.id) {
+        await queuePhoto(resData.id, photoBlob).catch(() => {/* non-fatal */});
+      }
       setTreatmentType("Antibiotic");
       setProduct("");
       setDose("");
       setWithdrawalDays(DEFAULT_WITHDRAWAL_DAYS["Antibiotic"]);
       setNotes("");
+      setPhotoBlob(null);
       onSuccess();
     } catch {
       setError("Network error — try again");
@@ -206,6 +214,9 @@ export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, o
             }}
           />
         </div>
+
+        {/* Photo */}
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {/* Notes */}
         <div>

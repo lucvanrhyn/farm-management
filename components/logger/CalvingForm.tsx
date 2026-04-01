@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AnimalSex, EaseOfBirth } from "@/lib/types";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Bull {
   animalId: string;
@@ -26,6 +27,7 @@ interface Props {
     breed: string;
     category: string;
     notes: string;
+    photoBlob: Blob | null;
   }) => void;
 }
 
@@ -146,6 +148,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [breed, setBreed] = useState("Brangus");
   const [category, setCategory] = useState("Calf");
   const [notes, setNotes] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   function submit() {
     if (!calfAnimalId.trim()) {
@@ -166,6 +169,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         breed: breed || "Brangus",
         category: category || "Calf",
         notes,
+        photoBlob,
       });
     } else {
       alert(`Calving recorded for ${animalId} in camp ${campId}\nCalf ID: ${calfAnimalId}\nSex: ${calfSex}\nAlive: ${calfAlive ? "Yes" : "No"}\nEase: ${ease}`);
@@ -292,6 +296,9 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
             <option value="Bull Calf">Bull Calf</option>
           </select>
         </div>
+
+        {/* Photo */}
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {/* Notes */}
         <div>

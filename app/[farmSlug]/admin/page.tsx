@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import DashboardContent from "@/components/admin/DashboardContent";
+import WeatherWidget from "@/components/dashboard/WeatherWidget";
 
 export const dynamic = "force-dynamic";
 
@@ -79,14 +80,27 @@ export default async function AdminPage({
     );
   }
 
+  const farmSettings = await prisma.farmSettings.findFirst({
+    select: { latitude: true, longitude: true },
+  });
+
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
       {/* Header — renders immediately */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          {new Date().toISOString().split("T")[0]} · Farm Management
-        </p>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>
+          <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+            {new Date().toISOString().split("T")[0]} · Farm Management
+          </p>
+        </div>
+        {/* Weather widget in admin header */}
+        <div className="sm:max-w-sm w-full">
+          <WeatherWidget
+            latitude={farmSettings?.latitude ?? null}
+            longitude={farmSettings?.longitude ?? null}
+          />
+        </div>
       </div>
 
       {/* Data-dependent content streams in once ready */}

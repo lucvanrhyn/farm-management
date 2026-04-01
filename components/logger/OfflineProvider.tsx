@@ -9,6 +9,7 @@ import {
   useRef,
   ReactNode,
 } from 'react';
+import { openDB } from 'idb';
 import { getPendingCount, getLastSyncedAt, getCachedCamps } from '@/lib/offline-store';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
@@ -20,6 +21,18 @@ interface SyncResult {
   timestamp: number;
 }
 
+// Minimal Task shape for the logger view — full type lives server-side
+export interface CachedTask {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  dueDate: string;
+  assignedTo: string;
+  campId?: string | null;
+  description?: string | null;
+}
+
 interface OfflineContextType {
   isOnline: boolean;
   syncStatus: SyncStatus;
@@ -28,6 +41,7 @@ interface OfflineContextType {
   syncResult: SyncResult | null;
   camps: Camp[];
   campsLoaded: boolean;
+  tasks: CachedTask[];
   syncNow: () => Promise<void>;
   refreshData: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
@@ -42,6 +56,18 @@ export function useOffline() {
   return ctx;
 }
 
+// Read tasks from IndexedDB if the tasks store exists (added in DB v3 by another agent).
+// Returns an empty array if the store is not present yet so the UI degrades gracefully.
+async function getCachedTasks(): Promise<CachedTask[]> {
+  try {
+    const db = await openDB('trio-b-offline-db');
+    if (!db.objectStoreNames.contains('tasks')) return [];
+    return db.getAll('tasks') as Promise<CachedTask[]>;
+  } catch {
+    return [];
+  }
+}
+
 export function OfflineProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
@@ -50,6 +76,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campsLoaded, setCampsLoaded] = useState(false);
+  const [tasks, setTasks] = useState<CachedTask[]>([]);
   const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshPendingCount = useCallback(async () => {
@@ -119,6 +146,9 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       setCampsLoaded(true);
       refreshData();
     });
+
+    // Load tasks from IndexedDB if available (tasks store added in DB v3)
+    getCachedTasks().then(setTasks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshPendingCount]);
 
@@ -148,6 +178,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         syncResult,
         camps,
         campsLoaded,
+        tasks,
         syncNow,
         refreshData,
         refreshPendingCount,
