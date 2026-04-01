@@ -18,6 +18,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
   }
 
+  // Verify the requesting user has access to this specific farm
+  const userFarms = (session.user as { farms?: Array<{ slug: string }> }).farms ?? [];
+  if (!userFarms.some((f) => f.slug === farmSlug)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return NextResponse.json({ error: "Farm not found" }, { status: 404 });
@@ -33,6 +39,15 @@ export async function GET(req: NextRequest) {
     calvingAlertDays: settings?.calvingAlertDays ?? 14,
     daysOpenLimit: settings?.daysOpenLimit ?? 365,
     campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
+    targetStockingRate: settings?.targetStockingRate ?? null,
+    latitude: settings?.latitude ?? null,
+    longitude: settings?.longitude ?? null,
+    breedingSeasonStart: settings?.breedingSeasonStart ?? null,
+    breedingSeasonEnd: settings?.breedingSeasonEnd ?? null,
+    weaningDate: settings?.weaningDate ?? null,
+    vaccinationCalendarNotes: settings?.vaccinationCalendarNotes ?? null,
+    // Never return the actual API key — only indicate whether one is configured
+    openaiApiKeyConfigured: !!(settings?.openaiApiKey),
   });
 }
 
@@ -47,6 +62,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
   }
 
+  // Verify the requesting user has access to this specific farm
+  const userFarms = (session.user as { farms?: Array<{ slug: string }> }).farms ?? [];
+  if (!userFarms.some((f) => f.slug === farmSlug)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return NextResponse.json({ error: "Farm not found" }, { status: 404 });
@@ -59,8 +80,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Validate numeric fields are positive numbers when present
-  const numericFields = [
+  // Validate required numeric fields are positive numbers when present
+  const positiveNumericFields = [
     "alertThresholdHours",
     "adgPoorDoerThreshold",
     "calvingAlertDays",
@@ -68,12 +89,25 @@ export async function PATCH(req: NextRequest) {
     "campGrazingWarningDays",
   ] as const;
 
-  for (const field of numericFields) {
+  for (const field of positiveNumericFields) {
     if (field in body) {
       const val = body[field];
       if (typeof val !== "number" || isNaN(val) || val <= 0) {
         return NextResponse.json(
           { error: `${field} must be a positive number` },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
+  // Validate optional nullable coordinates when present
+  for (const field of ["latitude", "longitude"] as const) {
+    if (field in body && body[field] !== null) {
+      const val = body[field];
+      if (typeof val !== "number" || isNaN(val)) {
+        return NextResponse.json(
+          { error: `${field} must be a number or null` },
           { status: 400 }
         );
       }
@@ -88,6 +122,14 @@ export async function PATCH(req: NextRequest) {
     calvingAlertDays?: number;
     daysOpenLimit?: number;
     campGrazingWarningDays?: number;
+    targetStockingRate?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    breedingSeasonStart?: string | null;
+    breedingSeasonEnd?: string | null;
+    weaningDate?: string | null;
+    vaccinationCalendarNotes?: string | null;
+    openaiApiKey?: string | null;
   } = {};
 
   if (typeof body.farmName === "string" && body.farmName.trim()) {
@@ -111,6 +153,50 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.campGrazingWarningDays === "number") {
     updateData.campGrazingWarningDays = Math.round(body.campGrazingWarningDays);
   }
+  if ("targetStockingRate" in body) {
+    updateData.targetStockingRate =
+      typeof body.targetStockingRate === "number" ? body.targetStockingRate : null;
+  }
+  if ("latitude" in body) {
+    updateData.latitude = typeof body.latitude === "number" ? body.latitude : null;
+  }
+  if ("longitude" in body) {
+    updateData.longitude = typeof body.longitude === "number" ? body.longitude : null;
+  }
+  if ("breedingSeasonStart" in body) {
+    updateData.breedingSeasonStart =
+      typeof body.breedingSeasonStart === "string" && body.breedingSeasonStart.trim()
+        ? body.breedingSeasonStart.trim()
+        : null;
+  }
+  if ("breedingSeasonEnd" in body) {
+    updateData.breedingSeasonEnd =
+      typeof body.breedingSeasonEnd === "string" && body.breedingSeasonEnd.trim()
+        ? body.breedingSeasonEnd.trim()
+        : null;
+  }
+  if ("weaningDate" in body) {
+    updateData.weaningDate =
+      typeof body.weaningDate === "string" && body.weaningDate.trim()
+        ? body.weaningDate.trim()
+        : null;
+  }
+  if ("vaccinationCalendarNotes" in body) {
+    updateData.vaccinationCalendarNotes =
+      typeof body.vaccinationCalendarNotes === "string"
+        ? body.vaccinationCalendarNotes
+        : null;
+  }
+  if ("openaiApiKey" in body) {
+    if (body.openaiApiKey === null) {
+      // Explicit null = user wants to clear the key
+      updateData.openaiApiKey = null;
+    } else if (typeof body.openaiApiKey === "string" && body.openaiApiKey.trim()) {
+      // Non-empty string = user is setting a new key
+      updateData.openaiApiKey = body.openaiApiKey.trim();
+    }
+    // Empty string = leave existing key unchanged (blank field on form = no change)
+  }
 
   const updated = await prisma.farmSettings.upsert({
     where: { id: "singleton" },
@@ -124,6 +210,14 @@ export async function PATCH(req: NextRequest) {
       calvingAlertDays: updateData.calvingAlertDays ?? 14,
       daysOpenLimit: updateData.daysOpenLimit ?? 365,
       campGrazingWarningDays: updateData.campGrazingWarningDays ?? 7,
+      targetStockingRate: updateData.targetStockingRate ?? null,
+      latitude: updateData.latitude ?? null,
+      longitude: updateData.longitude ?? null,
+      breedingSeasonStart: updateData.breedingSeasonStart ?? null,
+      breedingSeasonEnd: updateData.breedingSeasonEnd ?? null,
+      weaningDate: updateData.weaningDate ?? null,
+      vaccinationCalendarNotes: updateData.vaccinationCalendarNotes ?? null,
+      openaiApiKey: updateData.openaiApiKey ?? null,
     },
   });
 

@@ -90,6 +90,7 @@ model TransactionCategory {
 
 model FarmSettings {
   id                       String   @id @default("singleton")
+  tier                     String   @default("advanced")
   alertThresholdHours      Int      @default(48)
   farmName                 String   @default("My Farm")
   breed                    String   @default("Mixed")
@@ -100,6 +101,15 @@ model FarmSettings {
   calvingAlertDays         Int      @default(14)    // days before expected calving to alert
   daysOpenLimit            Int      @default(365)   // max acceptable days open for a cow
   campGrazingWarningDays   Int      @default(7)     // days grazing remaining to trigger camp warning
+  // Location and farm settings
+  latitude                 Float?
+  longitude                Float?
+  targetStockingRate       Float?
+  breedingSeasonStart      String?
+  breedingSeasonEnd        String?
+  weaningDate              String?
+  vaccinationCalendarNotes String?
+  openaiApiKey             String?
 }
 
 model Camp {
@@ -124,4 +134,22 @@ model CampCoverReading {
   notes        String?
 
   @@index([campId, recordedAt], name: "idx_cover_camp_date")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  campId      String?
+  animalId    String?
+  assignedTo  String
+  createdBy   String
+  dueDate     String
+  status      String   @default("pending")
+  priority    String   @default("normal")
+  completedAt String?
+  createdAt   DateTime @default(now())
+
+  @@index([assignedTo, status, dueDate], name: "idx_task_assignee_status_date")
+  @@index([dueDate, status], name: "idx_task_date_status")
 }

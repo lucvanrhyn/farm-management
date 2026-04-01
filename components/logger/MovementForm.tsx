@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useOffline } from "@/components/logger/OfflineProvider";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Props {
   animalId: string;
   sourceCampId: string;
   onClose: () => void;
-  onSubmit?: (data: { animalId: string; sourceCampId: string; destCampId: string }) => void;
+  onSubmit?: (data: { animalId: string; sourceCampId: string; destCampId: string; photoBlob: Blob | null }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -48,12 +49,13 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
 export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit }: Props) {
   const { camps } = useOffline();
   const [destCampId, setDestCampId] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const destinations = camps.filter((c) => c.camp_id !== sourceCampId);
 
   function submit() {
     if (!destCampId) return;
     if (onSubmit) {
-      onSubmit({ animalId, sourceCampId, destCampId });
+      onSubmit({ animalId, sourceCampId, destCampId, photoBlob });
     } else {
       alert(`Animal ${animalId} moved from ${sourceCampId} to ${destCampId}`);
       onClose();
@@ -73,6 +75,8 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
         >
           Current camp: <span className="font-bold" style={{ color: '#F5F0E8' }}>{sourceCampId}</span>
         </div>
+
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         <div>
           <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>Move to camp</p>

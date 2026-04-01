@@ -28,11 +28,13 @@ export interface UserFarm {
   displayName: string;
   role: string;
   logoUrl: string | null;
+  tier: string;
 }
 
 export interface FarmCreds {
   tursoUrl: string;
   tursoAuthToken: string;
+  tier: string;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ export async function getUserByIdentifier(identifier: string): Promise<MetaUser 
 export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {
   const client = getMetaClient();
   const result = await client.execute({
-    sql: `SELECT f.slug, f.display_name, fu.role, f.logo_url
+    sql: `SELECT f.slug, f.display_name, fu.role, f.logo_url, f.tier
           FROM farm_users fu
           JOIN farms f ON f.id = fu.farm_id
           WHERE fu.user_id = ?
@@ -73,19 +75,21 @@ export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {
     displayName: row.display_name as string,
     role: row.role as string,
     logoUrl: row.logo_url as string | null,
+    tier: row.tier as string,
   }));
 }
 
 export async function getFarmCreds(farmSlug: string): Promise<FarmCreds | null> {
   const client = getMetaClient();
   const result = await client.execute({
-    sql: `SELECT turso_url, turso_auth_token FROM farms WHERE slug = ? LIMIT 1`,
+    sql: `SELECT turso_url, turso_auth_token, tier FROM farms WHERE slug = ? LIMIT 1`,
     args: [farmSlug],
   });
   if (result.rows.length === 0) return null;
   return {
     tursoUrl: result.rows[0].turso_url as string,
     tursoAuthToken: result.rows[0].turso_auth_token as string,
+    tier: result.rows[0].tier as string,
   };
 }
 

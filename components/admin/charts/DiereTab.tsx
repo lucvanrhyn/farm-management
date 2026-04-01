@@ -14,7 +14,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
-import type { GrafiekeData } from "@/components/admin/GrafiekeClient";
+import type { GrafiekeData } from "@/components/admin/charts/chart-types";
 
 const cardStyle = {
   background: "#FFFFFF",

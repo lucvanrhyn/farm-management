@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 const SYMPTOMS = [
   "Lame",
@@ -24,7 +25,7 @@ interface Props {
   animalId: string;
   campId: string;
   onClose: () => void;
-  onSubmit?: (data: { symptoms: string[]; severity: string; notes: string }) => void;
+  onSubmit?: (data: { symptoms: string[]; severity: string; notes: string; photoBlob: Blob | null }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -69,6 +70,7 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [severity, setSeverity] = useState("mild");
   const [notes, setNotes] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   function toggleSymptom(s: string) {
     setSelectedSymptoms((prev) =>
@@ -78,7 +80,7 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
 
   function submit() {
     if (onSubmit) {
-      onSubmit({ symptoms: selectedSymptoms, severity, notes });
+      onSubmit({ symptoms: selectedSymptoms, severity, notes, photoBlob });
     } else {
       alert(`Health report submitted for ${animalId}\nSymptoms: ${selectedSymptoms.join(", ") || "None"}\nSeverity: ${severity}`);
       onClose();
@@ -131,6 +133,9 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
             ))}
           </div>
         </div>
+
+        {/* Photo */}
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {/* Notes */}
         <div>

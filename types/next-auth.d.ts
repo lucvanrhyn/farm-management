@@ -6,6 +6,7 @@ export interface SessionFarm {
   displayName: string;
   role: string;
   logoUrl: string | null;
+  tier: string;
 }
 
 declare module 'next-auth' {

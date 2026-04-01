@@ -11,7 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import type { FinansieleData } from "@/components/admin/GrafiekeClient";
+import type { FinansieleData } from "@/components/admin/charts/chart-types";
 
 // ── Shared styles (dark/amber design language) ────────────────────────────────
 

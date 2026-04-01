@@ -1,6 +1,7 @@
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
+import { TodaysTasks } from "@/components/logger/TodaysTasks";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 
@@ -65,6 +66,8 @@ export default async function LoggerPage({
         {/* Offline status bar */}
         <LoggerStatusBar />
       </div>
+
+      <TodaysTasks />
 
       <CampSelector />
 

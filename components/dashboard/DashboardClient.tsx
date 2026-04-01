@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import dynamic from "next/dynamic";
@@ -8,7 +9,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import CampDetailPanel from "./CampDetailPanel";
 import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
-import TacticalMap from "./TacticalMap";
+import WeatherWidget from "./WeatherWidget";
 import type { Camp } from "@/lib/types";
 
 // Leaflet must only render client-side
@@ -32,7 +33,7 @@ const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ViewMode = "tactical" | "schematic" | "satellite";
+export type ViewMode = "schematic" | "satellite";
 
 // ─── Date helper ──────────────────────────────────────────────────────────────
 
@@ -201,55 +202,14 @@ function getGreeting(): string {
 function ViewToggle({
   value,
   onChange,
-  dark,
 }: {
   value: ViewMode;
   onChange: (v: ViewMode) => void;
-  dark?: boolean;
 }) {
   const views: { id: ViewMode; label: string }[] = [
-    { id: "tactical",  label: "Tactical"  },
     { id: "schematic", label: "Schematic" },
     { id: "satellite", label: "Satellite" },
   ];
-
-  if (dark) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          borderRadius: 8,
-          border: "1px solid rgba(74,222,128,0.2)",
-          background: "rgba(74,222,128,0.04)",
-          padding: 2,
-          gap: 1,
-        }}
-      >
-        {views.map((v) => (
-          <button
-            key={v.id}
-            onClick={() => onChange(v.id)}
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              fontSize: 11,
-              fontFamily: "var(--font-sans)",
-              fontWeight: 500,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              border: "none",
-              transition: "background 0.15s, color 0.15s",
-              background: value === v.id ? "rgba(74,222,128,0.15)" : "transparent",
-              color: value === v.id ? "#4ade80" : "rgba(74,222,128,0.35)",
-            }}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div
@@ -293,12 +253,17 @@ export default function DashboardClient({
   totalAnimals,
   campAnimalCounts,
   camps,
+  latitude,
+  longitude,
 }: {
   totalAnimals: number;
   campAnimalCounts: Record<string, number>;
   camps: Camp[];
+  latitude?: number | null;
+  longitude?: number | null;
 }) {
-  const [viewMode, setViewMode]                 = useState<ViewMode>("tactical");
+  const router = useRouter();
+  const [viewMode, setViewMode]                 = useState<ViewMode>("schematic");
   const [filterBy, setFilterBy]                 = useState<FilterMode>("grazing");
   // Zoom state — driven by map clicks
   const [zoomedCampId, setZoomedCampId]         = useState<string | null>(null);
@@ -324,8 +289,7 @@ export default function DashboardClient({
     setZoomedCampId(null);
   }, [viewMode]);
 
-  const panelOpen  = selectedCampId !== null || selectedAnimalId !== null;
-  const isTactical = viewMode === "tactical";
+  const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
   const today = new Date().toDateString();
   const inspectedToday = Object.values(liveConditions).filter(
@@ -335,11 +299,21 @@ export default function DashboardClient({
     (c) => c.grazing_quality === "Poor" || c.fence_status !== "Intact"
   ).length;
 
-  const campData = camps.map((camp) => ({
-    camp,
-    stats: { total: campAnimalCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
-    grazing: liveConditions[camp.camp_id]?.grazing_quality ?? "Fair",
-  }));
+  const campData = camps.map((camp) => {
+    const cond = liveConditions[camp.camp_id];
+    const lastDate = cond?.last_inspected_at ? new Date(cond.last_inspected_at) : null;
+    const daysSince = lastDate ? Math.floor((Date.now() - lastDate.getTime()) / 86_400_000) : undefined;
+
+    return {
+      camp,
+      stats: { total: campAnimalCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
+      grazing: cond?.grazing_quality ?? "Fair",
+      waterStatus: cond?.water_status,
+      fenceStatus: cond?.fence_status,
+      lastInspected: cond?.last_inspected_at,
+      daysSinceInspection: daysSince,
+    };
+  });
 
   function handleCampClick(campId: string) {
     setZoomedCampId(campId);
@@ -350,10 +324,42 @@ export default function DashboardClient({
     setSelectedCampId(campId);
   }
 
+  const handleBoundaryDrawn = useCallback(
+    async (campId: string | null, geojson: string, hectares: number) => {
+      try {
+        if (campId) {
+          // Assign boundary to existing camp
+          await fetch(`/api/camps/${encodeURIComponent(campId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ geojson, sizeHectares: hectares }),
+          });
+        } else {
+          // Create new camp — campId generated from name
+          const name = `Camp ${camps.length + 1}`;
+          await fetch("/api/camps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              campId: name.toLowerCase().replace(/\s+/g, "-"),
+              campName: name,
+              sizeHectares: hectares,
+              geojson,
+            }),
+          });
+        }
+        router.refresh();
+      } catch {
+        // Silently handle — user will see stale data until next refresh
+      }
+    },
+    [camps.length, router]
+  );
+
   return (
     <div
       className="relative flex flex-col"
-      style={{ height: "100svh", background: isTactical ? "#070B0F" : "#1A1510" }}
+      style={{ height: "100svh", background: "#1A1510" }}
     >
       {/* ── Top bar ──────────────────────────────────────────────────── */}
       <div
@@ -364,11 +370,10 @@ export default function DashboardClient({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 16px",
-          background: isTactical ? "#070B0F" : "#FFFFFF",
-          borderBottom: `1px solid ${isTactical ? "rgba(74,222,128,0.12)" : "rgba(0,0,0,0.1)"}`,
+          background: "#FFFFFF",
+          borderBottom: "1px solid rgba(0,0,0,0.1)",
           gap: 12,
           zIndex: 30,
-          transition: "background 0.3s, border-color 0.3s",
         }}
       >
         {/* Logotype */}
@@ -378,39 +383,24 @@ export default function DashboardClient({
               style={{
                 fontFamily: "var(--font-dm-serif)",
                 fontSize: 20,
-                color: isTactical ? "#4ade80" : "#1A1510",
+                color: "#1A1510",
                 lineHeight: 1,
-                transition: "color 0.3s",
               }}
             >
               FarmTrack
             </span>
-            {isTactical && (
-              <span
-                style={{
-                  fontSize: 9,
-                  color: "rgba(74,222,128,0.5)",
-                  fontFamily: "var(--font-sans)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                TACTICAL
-              </span>
-            )}
           </div>
           <div
             style={{
               fontSize: 9,
-              color: isTactical ? "rgba(74,222,128,0.35)" : "rgba(26,21,16,0.45)",
+              color: "rgba(26,21,16,0.45)",
               fontFamily: "var(--font-sans)",
               letterSpacing: "0.06em",
               textTransform: "uppercase",
               marginTop: 2,
-              transition: "color 0.3s",
             }}
           >
-            {isTactical ? "COMMAND · PRECISION AGRICULTURE" : `Map Center · ${getTodayShort()}`}
+            {`Map Center · ${getTodayShort()}`}
           </div>
         </div>
 
@@ -421,22 +411,27 @@ export default function DashboardClient({
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
           style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
         >
-          <StatChip label="Total Animals"   value={totalAnimals}                        dark={isTactical} />
-          <StatChip label="Inspected"       value={`${inspectedToday}/${camps.length}`} dark={isTactical} />
-          <StatChip label="Active Alerts"   value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} dark={isTactical} />
-          <StatChip label="Outstanding Obs" value={alertCount}                          dark={isTactical} />
+          <StatChip label="Total Animals"   value={totalAnimals}                        />
+          <StatChip label="Inspected"       value={`${inspectedToday}/${camps.length}`} />
+          <StatChip label="Active Alerts"   value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} />
+          <StatChip label="Outstanding Obs" value={alertCount}                          />
         </motion.div>
+
+        {/* Weather widget */}
+        <div style={{ flexShrink: 0, maxWidth: 380 }}>
+          <WeatherWidget latitude={latitude} longitude={longitude} />
+        </div>
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {(viewMode === "schematic" || viewMode === "tactical") && (
+          {viewMode === "schematic" && (
             <select
               value={filterBy}
               onChange={(e) => setFilterBy(e.target.value as FilterMode)}
               style={{
-                background: isTactical ? "rgba(74,222,128,0.06)" : "rgba(0,0,0,0.04)",
-                border: `1px solid ${isTactical ? "rgba(74,222,128,0.2)" : "rgba(0,0,0,0.12)"}`,
-                color: isTactical ? "#4ade80" : "#1A1510",
+                background: "rgba(0,0,0,0.04)",
+                border: "1px solid rgba(0,0,0,0.12)",
+                color: "#1A1510",
                 borderRadius: 8,
                 padding: "4px 8px",
                 fontSize: 11,
@@ -452,75 +447,53 @@ export default function DashboardClient({
               ))}
             </select>
           )}
-          <ViewToggle value={viewMode} onChange={setViewMode} dark={isTactical} />
+          <ViewToggle value={viewMode} onChange={setViewMode} />
           <SignOutButton />
         </div>
       </div>
 
-      {/* ── Morning briefing strip (hidden in Tactical) ───────────────── */}
-      <AnimatePresence>
-        {viewMode !== "tactical" && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 24 }}
-            style={{ flexShrink: 0, overflow: "hidden" }}
-          >
-            <div
-              style={{
-                padding: "6px 16px",
-                background: "#1A1510",
-                borderBottom: "1px solid rgba(139,105,20,0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 12, color: "rgba(210,180,140,0.7)", fontFamily: "var(--font-sans)" }}>
-                {getGreeting()} — {getTodayShort()}
-              </span>
-              {alertCount > 0 && (
-                <span style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  fontSize: 11,
-                  color: "#B03030",
-                  fontWeight: 600,
-                  fontFamily: "var(--font-sans)",
-                }}>
-                  <span style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "#B03030",
-                    display: "inline-block",
-                    animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
-                  }} />
-                  {alertCount} open alert{alertCount !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          </motion.div>
+      {/* ── Morning briefing strip ────────────────────────────────────── */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "6px 16px",
+          background: "#1A1510",
+          borderBottom: "1px solid rgba(139,105,20,0.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 12, color: "rgba(210,180,140,0.7)", fontFamily: "var(--font-sans)" }}>
+          {getGreeting()} — {getTodayShort()}
+        </span>
+        {alertCount > 0 && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 11,
+            color: "#B03030",
+            fontWeight: 600,
+            fontFamily: "var(--font-sans)",
+          }}>
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#B03030",
+              display: "inline-block",
+              animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
+            }} />
+            {alertCount} open alert{alertCount !== 1 ? "s" : ""}
+          </span>
         )}
-      </AnimatePresence>
+      </div>
 
       {/* ── Main content area ─────────────────────────────────────────── */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex" }}>
         <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          {viewMode === "tactical" && (
-            <TacticalMap
-              onCampClick={handleCampClick}
-              onViewDetails={handleViewDetails}
-              filterBy={filterBy}
-              selectedCampId={selectedCampId}
-              liveConditions={liveConditions}
-              camps={camps}
-              campAnimalCounts={campAnimalCounts}
-            />
-          )}
           {viewMode === "schematic" && (
             <SchematicMap
               onCampClick={handleCampClick}
@@ -537,6 +510,7 @@ export default function DashboardClient({
               <FarmMap
                 campData={campData}
                 onCampClick={handleCampClick}
+                onBoundaryDrawn={handleBoundaryDrawn}
               />
             </div>
           )}

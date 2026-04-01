@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import type { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
+import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Props {
   campId: string;
   onClose: () => void;
   onSkip?: () => void;
-  onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; notes: string }) => void;
+  onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; notes: string; photoBlob: Blob | null }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -108,10 +109,11 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
   const [water, setWater] = useState<WaterStatus>("Full");
   const [fence, setFence] = useState<FenceStatus>("Intact");
   const [notes, setNotes] = useState("");
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   function submit() {
     if (onSubmit) {
-      onSubmit({ campId, grazing, water, fence, notes });
+      onSubmit({ campId, grazing, water, fence, notes, photoBlob });
     } else {
       alert(`Camp ${campId} condition recorded:\nGrazing: ${grazing}\nWater: ${water}\nFence: ${fence}`);
       onClose();
@@ -124,6 +126,8 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
         <CardGroup label="Grazing condition" options={GRAZING_OPTIONS} value={grazing} onChange={setGrazing} />
         <CardGroup label="Water status" options={WATER_OPTIONS} value={water} onChange={setWater} />
         <CardGroup label="Fence" options={FENCE_OPTIONS} value={fence} onChange={setFence} />
+
+        <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         <div>
           <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notes (optional)</p>

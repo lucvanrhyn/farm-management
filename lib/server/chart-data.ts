@@ -1,12 +1,9 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
-import { authOptions } from "@/lib/auth-options";
-import GrafiekeClient from "@/components/admin/GrafiekeClient";
-import type { FinancialMonthPoint, HerdCategoryCount, CampCoverRow } from "@/components/admin/GrafiekeClient";
-import DateRangePicker from "@/components/admin/DateRangePicker";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
-import type { Camp } from "@/lib/types";
+/**
+ * Shared chart data types and fetching logic extracted from the old grafieke page.
+ * Used by camps, animals, and finansies pages to embed analytics sections.
+ */
+
+import type { PrismaClient } from "@prisma/client";
 import {
   getCampConditionTrend,
   getHealthIssuesByCamp,
@@ -20,7 +17,33 @@ import {
 } from "@/lib/server/analytics";
 import { getHerdAdgTrend } from "@/lib/server/weight-analytics";
 
-export const dynamic = "force-dynamic";
+// ── Re-exported types (formerly in GrafiekeClient) ────────────────────────────
+
+export interface FinancialMonthPoint {
+  month: string;   // YYYY-MM
+  income: number;
+  expense: number;
+}
+
+export interface HerdCategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface CampCoverRow {
+  campId: string;
+  campName: string;
+  coverCategory: string;
+  kgDmPerHa: number;
+  recordedAt: string;
+  daysGrazingRemaining: number | null;
+}
+
+export interface FinansieleData {
+  financialTrend: FinancialMonthPoint[];
+  herdComposition: HerdCategoryCount[];
+  campCover: CampCoverRow[];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,7 +56,7 @@ function monthsAgoString(n: number): string {
 }
 
 function toMonthString(dateStr: string): string {
-  return dateStr.slice(0, 7); // works for ISO "YYYY-MM-DD..." strings
+  return dateStr.slice(0, 7);
 }
 
 function buildLast6MonthKeys(): string[] {
@@ -46,32 +69,10 @@ function buildLast6MonthKeys(): string[] {
   return result;
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Camp + Animal analytics data ──────────────────────────────────────────────
 
-export default async function GrafiekePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ farmSlug: string }>;
-  searchParams?: Promise<{ from?: string; to?: string }>;
-}) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
-  const { farmSlug } = await params;
-  const sp = await searchParams;
-  const from = sp?.from;
-  const to = sp?.to;
-
-  const lookbackDays = from && to
-    ? Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000))
-    : 365;
+export async function fetchCampAnalyticsData(prisma: PrismaClient, lookbackDays = 365) {
   const lookbackMonths = Math.max(1, Math.round(lookbackDays / 30));
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return <p>Farm not found.</p>;
-
-  const cutoffMonth = monthsAgoString(6);
 
   const [
     conditionTrend,
@@ -83,9 +84,6 @@ export default async function GrafiekePage({
     attrition,
     withdrawals,
     prismaCamps,
-    rawTransactions,
-    activeAnimals,
-    coverReadings,
   ] = await Promise.all([
     getCampConditionTrend(prisma, lookbackDays),
     getHealthIssuesByCamp(prisma, lookbackDays),
@@ -96,39 +94,53 @@ export default async function GrafiekePage({
     getDeathsAndSales(prisma, lookbackMonths),
     getWithdrawalTracker(prisma),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-    // Financial: last 6 months
-    prisma.transaction.findMany({
-      where: { date: { gte: `${cutoffMonth}-01` } },
-      select: { type: true, amount: true, date: true },
-    }),
-    // Herd composition: active animals
-    prisma.animal.groupBy({
-      by: ["category"],
-      where: { status: "Active" },
-      _count: { id: true },
-    }),
-    // Camp cover readings: latest per camp
-    prisma.campCoverReading.findMany({
-      orderBy: { recordedAt: "desc" },
-    }),
   ]);
 
-  // ── Map camps ──────────────────────────────────────────────────────────────
-  const camps: Camp[] = prismaCamps.map((c) => ({
-    camp_id: c.campId,
-    camp_name: c.campName,
-    size_hectares: c.sizeHectares ?? undefined,
-    water_source: c.waterSource ?? undefined,
-  }));
-
-  // ── Herd ADG trend (parallel-safe: depends only on camps which are now known) ─
   const herdAdgTrend = await getHerdAdgTrend(
     prisma,
     prismaCamps.map((c) => ({ campId: c.campId, campName: c.campName })),
     lookbackDays,
   );
 
-  // ── Financial trend (last 6 months) ───────────────────────────────────────
+  return {
+    conditionTrend,
+    healthByCamp,
+    headcount,
+    heatmap,
+    movements,
+    calvings,
+    attrition,
+    withdrawals,
+    herdAdgTrend,
+    prismaCamps,
+  };
+}
+
+// ── Financial analytics data ──────────────────────────────────────────────────
+
+export async function fetchFinancialAnalyticsData(
+  prisma: PrismaClient,
+  prismaCamps: Array<{ campId: string; campName: string; sizeHectares: number | null }>,
+  headcount: Array<{ campId: string; category: string; count: number }>,
+): Promise<FinansieleData> {
+  const cutoffMonth = monthsAgoString(6);
+
+  const [rawTransactions, activeAnimals, coverReadings] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { date: { gte: `${cutoffMonth}-01` } },
+      select: { type: true, amount: true, date: true },
+    }),
+    prisma.animal.groupBy({
+      by: ["category"],
+      where: { status: "Active" },
+      _count: { id: true },
+    }),
+    prisma.campCoverReading.findMany({
+      orderBy: { recordedAt: "desc" },
+    }),
+  ]);
+
+  // Financial trend
   const monthKeys = buildLast6MonthKeys();
   const financialMap = new Map<string, { income: number; expense: number }>();
   for (const mk of monthKeys) financialMap.set(mk, { income: 0, expense: 0 });
@@ -149,14 +161,13 @@ export default async function GrafiekePage({
     return { month: mk, income: entry.income, expense: entry.expense };
   });
 
-  // ── Herd composition ───────────────────────────────────────────────────────
+  // Herd composition
   const herdComposition: HerdCategoryCount[] = activeAnimals.map((r) => ({
     category: r.category,
     count: r._count.id,
   }));
 
-  // ── Camp cover with days grazing remaining ─────────────────────────────────
-  // Use only the latest reading per campId
+  // Camp cover
   const latestCoverByCamp = new Map<string, typeof coverReadings[number]>();
   for (const r of coverReadings) {
     if (!latestCoverByCamp.has(r.campId)) {
@@ -164,7 +175,6 @@ export default async function GrafiekePage({
     }
   }
 
-  // Build animalsByCategory per camp from headcount data
   const animalsByCampCategory = new Map<string, Array<{ category: string; count: number }>>();
   for (const row of headcount) {
     const existing = animalsByCampCategory.get(row.campId) ?? [];
@@ -181,7 +191,7 @@ export default async function GrafiekePage({
       r.kgDmPerHa,
       r.useFactor,
       sizeHectares,
-      animalsByCategory
+      animalsByCategory,
     );
     return {
       campId: r.campId,
@@ -193,7 +203,6 @@ export default async function GrafiekePage({
     };
   });
 
-  // Sort by days remaining ascending (nulls last)
   campCover.sort((a, b) => {
     if (a.daysGrazingRemaining === null && b.daysGrazingRemaining === null) return 0;
     if (a.daysGrazingRemaining === null) return 1;
@@ -201,38 +210,5 @@ export default async function GrafiekePage({
     return a.daysGrazingRemaining - b.daysGrazingRemaining;
   });
 
-  return (
-    <div className="min-w-0 p-4 md:p-8" style={{ background: "#1A1510" }}>
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#F0DEB8" }}>Charts</h1>
-            <p className="text-sm mt-1" style={{ color: "#9C8473" }}>
-              Analytics overview · Farm Management
-            </p>
-          </div>
-          <Suspense fallback={<div className="h-9" />}>
-            <DateRangePicker defaultDays={365} />
-          </Suspense>
-        </div>
-        <GrafiekeClient
-          camps={camps}
-          data={{
-            conditionTrend,
-            healthByCamp,
-            headcount,
-            heatmap,
-            movements,
-            calvings,
-            attrition,
-            withdrawals,
-            herdAdgTrend,
-          }}
-          finansieleData={{
-            financialTrend,
-            herdComposition,
-            campCover,
-          }}
-        />
-    </div>
-  );
+  return { financialTrend, herdComposition, campCover };
 }

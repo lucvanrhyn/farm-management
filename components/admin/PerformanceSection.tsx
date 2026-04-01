@@ -4,51 +4,39 @@ import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { redirect } from "next/navigation";
-
-export const dynamic = "force-dynamic";
+import type { PerfRow } from "@/components/admin/PerformanceTable";
 
 const LSU_FACTOR: Record<string, number> = {
   Cow: 1.0, Bull: 1.2, Heifer: 0.7, Calf: 0.3, Ox: 1.1,
 };
 
-export default async function PerformancePage({
-  params,
-  searchParams,
+export default async function PerformanceSection({
+  farmSlug,
+  from,
+  to,
 }: {
-  params: Promise<{ farmSlug: string }>;
-  searchParams?: Promise<{ from?: string; to?: string }>;
+  farmSlug: string;
+  from?: string;
+  to?: string;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  const { farmSlug } = await params;
-  const { from, to } = searchParams ? await searchParams : {};
   const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return <p>Farm not found</p>;
+  if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
 
   const fromDate = from ? new Date(from) : undefined;
   const toDate = to ? new Date(to) : undefined;
 
-  // Build shared date filter clauses
   const observedAtFilter: Record<string, unknown> = {};
   if (fromDate) observedAtFilter.gte = fromDate;
   if (toDate) observedAtFilter.lte = toDate;
   const hasDateFilter = fromDate || toDate;
 
-  // ── Batch-fetch ALL data in 3 parallel queries ────────────────────────────
   const [camps, animalsByCategory, allConditions, allCoverReadings] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campId: "asc" } }),
-
-    // All active animals grouped by camp + category
     prisma.animal.groupBy({
       by: ["currentCamp", "category"],
       where: { status: "Active" },
       _count: { id: true },
     }),
-
-    // Latest camp_condition observation per camp (within date range if provided)
     prisma.observation.findMany({
       where: {
         type: "camp_condition",
@@ -57,17 +45,12 @@ export default async function PerformancePage({
       select: { campId: true, observedAt: true, details: true },
       orderBy: { observedAt: "desc" },
     }),
-
-    // Latest cover reading per camp (within date range if provided)
     prisma.campCoverReading.findMany({
       where: hasDateFilter ? { recordedAt: observedAtFilter } : undefined,
       orderBy: { recordedAt: "desc" },
     }),
   ]);
 
-  // ── Join in JS ─────────────────────────────────────────────────────────────
-
-  // Index animals by campId
   const animalsByCamp = new Map<string, Array<{ category: string; count: number }>>();
   for (const row of animalsByCategory) {
     const campId = row.currentCamp ?? "";
@@ -76,7 +59,6 @@ export default async function PerformancePage({
     animalsByCamp.set(campId, [...existing, { category: row.category, count: row._count.id }]);
   }
 
-  // Index latest condition per camp (results are desc by observedAt — first wins)
   const latestConditionByCamp = new Map<string, typeof allConditions[number]>();
   for (const obs of allConditions) {
     if (obs.campId && !latestConditionByCamp.has(obs.campId)) {
@@ -84,7 +66,6 @@ export default async function PerformancePage({
     }
   }
 
-  // Index latest cover reading per camp (results are desc by recordedAt — first wins)
   const latestCoverByCamp = new Map<string, typeof allCoverReadings[number]>();
   for (const reading of allCoverReadings) {
     if (!latestCoverByCamp.has(reading.campId)) {
@@ -92,8 +73,7 @@ export default async function PerformancePage({
     }
   }
 
-  // Assemble per-camp rows
-  const rows = camps.map((camp) => {
+  const rows: PerfRow[] = camps.map((camp) => {
     const campAnimals = animalsByCamp.get(camp.campId) ?? [];
     const latestCondition = latestConditionByCamp.get(camp.campId) ?? null;
     const latestCover = latestCoverByCamp.get(camp.campId) ?? null;
@@ -145,14 +125,11 @@ export default async function PerformancePage({
   });
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-[#1C1815]">Performance</h1>
-          <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-            {camps.length} camps · stocking density, grazing, pasture cover
-          </p>
-        </div>
+    <div>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <p className="text-xs font-mono mt-1" style={{ color: "#9C8E7A" }}>
+          {camps.length} camps · stocking density, grazing, pasture cover
+        </p>
         <ExportButton farmSlug={farmSlug} exportType="camps" label="Export" />
       </div>
       <div className="mb-4">
