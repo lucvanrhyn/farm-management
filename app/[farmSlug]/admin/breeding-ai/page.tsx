@@ -7,6 +7,8 @@ import {
   detectInbreedingRisk,
 } from "@/lib/server/breeding-analytics";
 import BreedingDashboard from "@/components/admin/BreedingDashboard";
+import { getFarmCreds } from "@/lib/meta-db";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
 export default async function BreedingAIPage({
   params,
@@ -14,6 +16,12 @@ export default async function BreedingAIPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Breeding AI" />;
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
 
   if (!prisma) {

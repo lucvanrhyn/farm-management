@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
+import type { FarmTier } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +73,11 @@ export default async function AdminPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
-  const prisma = await getPrismaForFarm(farmSlug);
+  const [prisma, creds] = await Promise.all([
+    getPrismaForFarm(farmSlug),
+    getFarmCreds(farmSlug),
+  ]);
+  const tier = (creds?.tier ?? "advanced") as FarmTier;
   if (!prisma) {
     return (
       <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
@@ -113,7 +119,7 @@ export default async function AdminPage({
           </>
         }
       >
-        <DashboardContent farmSlug={farmSlug} prisma={prisma} />
+        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} />
       </Suspense>
     </div>
   );

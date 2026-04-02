@@ -1,8 +1,25 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
-const DB_NAME = 'trio-b-offline-db';
 const DB_VERSION = 3;
+
+// Multi-tenant: each farm gets its own IndexedDB so switching farms in the
+// same browser never leaks data across tenants.
+let _activeFarmSlug: string | null = null;
+
+export function setActiveFarmSlug(slug: string): void {
+  _activeFarmSlug = slug;
+}
+
+function getDBName(): string {
+  if (_activeFarmSlug) return `farmtrack-${_activeFarmSlug}`;
+  // Fallback: extract from URL path (e.g. /my-farm/logger → "my-farm")
+  if (typeof window !== 'undefined') {
+    const seg = window.location.pathname.split('/')[1];
+    if (seg) return `farmtrack-${seg}`;
+  }
+  return 'farmtrack-offline-db';
+}
 
 export interface PendingObservation {
   local_id?: number;
@@ -28,7 +45,7 @@ export interface PendingAnimalCreate {
 }
 
 function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
+  return openDB(getDBName(), DB_VERSION, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
         if (!db.objectStoreNames.contains('camps')) {

@@ -9,8 +9,9 @@ import {
   useRef,
   ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import { openDB } from 'idb';
-import { getPendingCount, getLastSyncedAt, getCachedCamps } from '@/lib/offline-store';
+import { getPendingCount, getLastSyncedAt, getCachedCamps, setActiveFarmSlug } from '@/lib/offline-store';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 
@@ -56,11 +57,11 @@ export function useOffline() {
   return ctx;
 }
 
-// Read tasks from IndexedDB if the tasks store exists (added in DB v3 by another agent).
+// Read tasks from IndexedDB if the tasks store exists (added in DB v3).
 // Returns an empty array if the store is not present yet so the UI degrades gracefully.
-async function getCachedTasks(): Promise<CachedTask[]> {
+async function getCachedTasks(farmSlug: string): Promise<CachedTask[]> {
   try {
-    const db = await openDB('trio-b-offline-db');
+    const db = await openDB(`farmtrack-${farmSlug}`);
     if (!db.objectStoreNames.contains('tasks')) return [];
     return db.getAll('tasks') as Promise<CachedTask[]>;
   } catch {
@@ -69,6 +70,8 @@ async function getCachedTasks(): Promise<CachedTask[]> {
 }
 
 export function OfflineProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const farmSlug = pathname.split('/')[1] || '';
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [pendingCount, setPendingCount] = useState(0);
@@ -133,8 +136,11 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     }
   }, [syncStatus, refreshPendingCount]);
 
-  // Initialize on mount
+  // Initialize on mount — set farm slug for IndexedDB isolation BEFORE any DB calls
   useEffect(() => {
+    if (!farmSlug) return;
+    setActiveFarmSlug(farmSlug);
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsOnline(navigator.onLine);
     refreshPendingCount();
@@ -148,9 +154,9 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     });
 
     // Load tasks from IndexedDB if available (tasks store added in DB v3)
-    getCachedTasks().then(setTasks);
+    getCachedTasks(farmSlug).then(setTasks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshPendingCount]);
+  }, [farmSlug, refreshPendingCount]);
 
   // Online/offline listeners
   useEffect(() => {

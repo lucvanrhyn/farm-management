@@ -105,3 +105,122 @@ export async function userHasFarmAccess(userId: string, farmSlug: string): Promi
   });
   return result.rows.length > 0;
 }
+
+export async function getUserByEmail(email: string): Promise<MetaUser | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id, email, username, password_hash, name
+          FROM users WHERE email = ? LIMIT 1`,
+    args: [email],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    username: row.username as string,
+    passwordHash: row.password_hash as string,
+    name: row.name as string | null,
+  };
+}
+
+export async function getFarmBySlug(slug: string): Promise<{ id: string; slug: string } | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id, slug FROM farms WHERE slug = ? LIMIT 1`,
+    args: [slug],
+  });
+  if (result.rows.length === 0) return null;
+  return {
+    id: result.rows[0].id as string,
+    slug: result.rows[0].slug as string,
+  };
+}
+
+// ── Write operations (registration / provisioning) ──────────────────────────
+
+export async function createUser(
+  id: string,
+  email: string,
+  username: string,
+  passwordHash: string,
+  name: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [id, email, username, passwordHash, name, new Date().toISOString()],
+  });
+}
+
+export async function createFarm(
+  id: string,
+  slug: string,
+  displayName: string,
+  tursoUrl: string,
+  tursoAuthToken: string,
+  tier: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `INSERT INTO farms (id, slug, display_name, turso_url, turso_auth_token, tier, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, displayName, tursoUrl, tursoAuthToken, tier, new Date().toISOString()],
+  });
+}
+
+export async function createFarmUser(
+  userId: string,
+  farmId: string,
+  role: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `INSERT INTO farm_users (user_id, farm_id, role) VALUES (?, ?, ?)`,
+    args: [userId, farmId, role],
+  });
+}
+
+// ── Email verification helpers ──────────────────────────────────────────────
+
+export async function setVerificationToken(
+  userId: string,
+  token: string,
+  expiresAt: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE users SET verification_token = ?, verification_expires = ? WHERE id = ?`,
+    args: [token, expiresAt, userId],
+  });
+}
+
+export async function verifyUserEmail(token: string): Promise<{ userId: string } | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id FROM users
+          WHERE verification_token = ?
+            AND verification_expires > ?
+          LIMIT 1`,
+    args: [token, new Date().toISOString()],
+  });
+  if (result.rows.length === 0) return null;
+
+  const userId = result.rows[0].id as string;
+  await client.execute({
+    sql: `UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?`,
+    args: [userId],
+  });
+  return { userId };
+}
+
+export async function isEmailVerified(userId: string): Promise<boolean> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT email_verified FROM users WHERE id = ? LIMIT 1`,
+    args: [userId],
+  });
+  if (result.rows.length === 0) return false;
+  return (result.rows[0].email_verified as number) === 1;
+}

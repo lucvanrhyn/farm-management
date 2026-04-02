@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 export function SignOutButton() {
   const router = useRouter();
   const pathname = usePathname();
-  // pathname is e.g. "/trio-b-boerdery/logger" — first segment is the farmSlug
+  // pathname is e.g. "/my-farm/logger" — first segment is the farmSlug
   const farmSlug = pathname.split("/")[1];
 
   return (

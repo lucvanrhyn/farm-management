@@ -7,6 +7,8 @@ import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
+import { getFarmCreds } from "@/lib/meta-db";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,12 @@ export default async function ReproductionPage({
 }) {
   const { farmSlug } = await params;
   const { from, to } = searchParams ? await searchParams : {};
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Reproductive Performance" />;
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
 
   if (!prisma) {

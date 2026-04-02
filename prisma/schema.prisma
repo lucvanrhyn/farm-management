@@ -90,7 +90,6 @@ model TransactionCategory {
 
 model FarmSettings {
   id                       String   @id @default("singleton")
-  tier                     String   @default("advanced")
   alertThresholdHours      Int      @default(48)
   farmName                 String   @default("My Farm")
   breed                    String   @default("Mixed")

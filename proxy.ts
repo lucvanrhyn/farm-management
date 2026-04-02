@@ -14,6 +14,16 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
+  // Enforce tenant isolation: verify user has access to the farm in the URL
+  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger)/);
+  if (farmRouteMatch) {
+    const farmSlug = farmRouteMatch[1];
+    const farms = token.farms as Array<{ slug: string }>;
+    if (!farms.some((f) => f.slug === farmSlug)) {
+      return NextResponse.redirect(new URL("/farms", req.url));
+    }
+  }
+
   // Authenticated users hitting / get sent to /farms (universal entry point)
   if (pathname === "/") {
     return NextResponse.redirect(new URL("/farms", req.url));

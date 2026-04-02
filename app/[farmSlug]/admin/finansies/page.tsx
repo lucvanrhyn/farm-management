@@ -10,6 +10,8 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ExportButton from "@/components/admin/ExportButton";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
+import { getFarmCreds } from "@/lib/meta-db";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,12 @@ export default async function FinansiesPage({
   if (!session) redirect("/login");
 
   const { farmSlug } = await params;
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Finance" />;
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p>Farm not found.</p>;
 
