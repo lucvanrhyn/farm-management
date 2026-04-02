@@ -13,16 +13,24 @@ export async function GET() {
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
 
-  const [settings, animalCount, campCount] = await Promise.all([
-    prisma.farmSettings.findFirst(),
-    prisma.animal.count({ where: { status: "Active" } }),
-    prisma.camp.count(),
-  ]);
+  try {
+    const [settings, animalCount, campCount] = await Promise.all([
+      prisma.farmSettings.findFirst(),
+      prisma.animal.count({ where: { status: "Active" } }),
+      prisma.camp.count(),
+    ]);
 
-  return NextResponse.json({
-    farmName: settings?.farmName ?? "My Farm",
-    breed: settings?.breed ?? "Mixed",
-    animalCount,
-    campCount,
-  });
+    return NextResponse.json({
+      farmName: settings?.farmName ?? "My Farm",
+      breed: settings?.breed ?? "Mixed",
+      animalCount,
+      campCount,
+    });
+  } catch (err) {
+    console.error("[GET /api/farm] query failed:", err);
+    return NextResponse.json(
+      { error: "Failed to load farm data" },
+      { status: 500 },
+    );
+  }
 }
