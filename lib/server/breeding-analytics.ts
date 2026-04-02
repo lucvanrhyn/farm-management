@@ -65,6 +65,7 @@ export async function getBreedingSnapshot(
   void farmSlug;
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000);
+  const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
   const sixtyDaysFromNow = new Date(Date.now() + 60 * 86_400_000);
   const thirtyDaysFromNow = new Date(Date.now() + 30 * 86_400_000);
 
@@ -84,7 +85,7 @@ export async function getBreedingSnapshot(
     prisma.observation.findMany({
       where: {
         type: "pregnancy_scan",
-        observedAt: { gte: ninetyDaysAgo },
+        observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
       orderBy: { observedAt: "desc" },
@@ -101,8 +102,8 @@ export async function getBreedingSnapshot(
     }),
   ]);
 
-  // Bulls: male animals
-  const bulls = allAnimals.filter((a) => a.sex === "Male");
+  // Bulls: only animals with category "Bull" (excludes male calves/weaners)
+  const bulls = allAnimals.filter((a) => a.category === "Bull");
   const bullsInService = bulls.length;
 
   // Latest scan per animal
@@ -264,7 +265,7 @@ export async function suggestPairings(
 ): Promise<PairingSuggestion[]> {
   void farmSlug;
 
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000);
+  const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
 
   const [allAnimals, recentScans] = await Promise.all([
     prisma.animal.findMany({
@@ -282,7 +283,7 @@ export async function suggestPairings(
     prisma.observation.findMany({
       where: {
         type: "pregnancy_scan",
-        observedAt: { gte: ninetyDaysAgo },
+        observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
       orderBy: { observedAt: "desc" },
@@ -300,7 +301,7 @@ export async function suggestPairings(
     }
   }
 
-  const bulls = allAnimals.filter((a) => a.sex === "Male");
+  const bulls = allAnimals.filter((a) => a.category === "Bull");
   const openCows = allAnimals.filter((a) => {
     if (a.sex !== "Female") return false;
     if (a.category !== "Cow" && a.category !== "Heifer") return false;

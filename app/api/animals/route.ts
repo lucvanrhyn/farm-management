@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // LOGGER role may create calf records (calving observation flow). ADMIN required for all else.
+  const role = session.user?.role?.toUpperCase();
+  if (role !== "ADMIN" && role !== "LOGGER") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -42,7 +47,7 @@ export async function POST(req: NextRequest) {
   const { prisma } = db;
 
   const body = await req.json();
-  const { animalId, name, sex, dateOfBirth, breed, category, currentCamp, status, motherId, fatherId, notes } = body;
+  const { animalId, name, sex, dateOfBirth, breed, category, currentCamp, status, motherId, fatherId } = body;
 
   if (!animalId || !sex || !category || !currentCamp) {
     return NextResponse.json({ error: "Missing required fields: animalId, sex, category, currentCamp" }, { status: 400 });
@@ -60,7 +65,6 @@ export async function POST(req: NextRequest) {
       status: status ?? "Active",
       motherId: motherId ?? null,
       fatherId: fatherId ?? null,
-      notes: notes ?? null,
       dateAdded: new Date().toISOString().split("T")[0],
     },
   });
