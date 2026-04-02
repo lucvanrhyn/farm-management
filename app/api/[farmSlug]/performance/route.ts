@@ -15,10 +15,10 @@ export async function GET(
   const { farmSlug } = await params;
 
   // Verify the authenticated user has access to the requested farm
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug,
-  );
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const farms = session.user?.farms as SessionFarm[] | undefined;
+  const farm = farms?.find((f) => f.slug === farmSlug);
+  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (farm.tier === "basic") return NextResponse.json({ error: "Advanced plan required" }, { status: 403 });
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });

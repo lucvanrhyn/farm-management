@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { getPrismaForRequest } from "@/lib/farm-prisma";
+import { getPrismaWithAuth } from "@/lib/farm-prisma";
 
 export async function PATCH(
   req: NextRequest,
@@ -14,7 +14,7 @@ export async function PATCH(
 
   const { id } = await params;
 
-  const db = await getPrismaForRequest();
+  const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
 
@@ -71,7 +71,7 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const db = await getPrismaForRequest();
+  const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
 

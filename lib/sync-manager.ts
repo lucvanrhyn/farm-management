@@ -39,21 +39,24 @@ export async function refreshCachedData(): Promise<void> {
 
     // Merge server-authoritative condition data so camp colors survive a sync cycle.
     // /api/camps/status returns the latest camp_condition observation per camp.
+    let mergedCamps = camps;
     if (statusRes.ok) {
       const statusMap: Record<string, ServerCampCondition> = await statusRes.json();
-      for (const camp of camps) {
+      mergedCamps = camps.map((camp) => {
         const serverCondition = statusMap[camp.camp_id];
-        if (serverCondition) {
-          camp.grazing_quality = serverCondition.grazing_quality;
-          camp.water_status = serverCondition.water_status;
-          camp.fence_status = serverCondition.fence_status;
-          camp.last_inspected_at = serverCondition.last_inspected_at;
-          camp.last_inspected_by = serverCondition.last_inspected_by ?? undefined;
-        }
-      }
+        if (!serverCondition) return camp;
+        return {
+          ...camp,
+          grazing_quality: serverCondition.grazing_quality,
+          water_status: serverCondition.water_status,
+          fence_status: serverCondition.fence_status,
+          last_inspected_at: serverCondition.last_inspected_at,
+          last_inspected_by: serverCondition.last_inspected_by ?? undefined,
+        };
+      });
     }
 
-    await seedCamps(camps);
+    await seedCamps(mergedCamps);
   }
 
   if (animalsRes.ok) {

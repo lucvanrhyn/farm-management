@@ -106,12 +106,15 @@ const client = createClient({
 async function createTables() {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
-      id           TEXT PRIMARY KEY,
-      email        TEXT UNIQUE NOT NULL,
-      username     TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      name         TEXT,
-      created_at   TEXT NOT NULL
+      id                    TEXT PRIMARY KEY,
+      email                 TEXT UNIQUE NOT NULL,
+      username              TEXT UNIQUE NOT NULL,
+      password_hash         TEXT NOT NULL,
+      name                  TEXT,
+      email_verified        INTEGER NOT NULL DEFAULT 0,
+      verification_token    TEXT,
+      verification_expires  TEXT,
+      created_at            TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS farms (
@@ -141,8 +144,8 @@ async function seedUsers() {
   for (const user of USERS) {
     const passwordHash = hashSync(user.password, 12);
     await client.execute({
-      sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, email_verified, created_at)
+            VALUES (?, ?, ?, ?, ?, 1, ?)`,
       args: [user.id, user.email, user.username, passwordHash, user.name, new Date().toISOString()],
     });
     console.log(`User '${user.username}' — inserted (or already exists).`);

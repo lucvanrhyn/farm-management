@@ -23,10 +23,13 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { farmSlug } = await params;
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
+  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find(
     (f) => f.slug === farmSlug,
   );
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (farm.tier === "basic") {
+    return NextResponse.json({ error: "Breeding AI requires an Advanced plan" }, { status: 403 });
+  }
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });

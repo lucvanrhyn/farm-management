@@ -25,17 +25,23 @@ import {
   ClipboardList,
   FileDown,
   BarChart2,
+  Lock,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
 import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
+import type { FarmTier } from "@/lib/tier";
 
 interface Props {
   farmSlug: string;
   prisma: PrismaClient;
+  tier: FarmTier;
 }
 
-export default async function DashboardContent({ farmSlug, prisma }: Props) {
+export default async function DashboardContent({ farmSlug, prisma, tier }: Props) {
+  const isBasic = tier === "basic";
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -227,7 +233,7 @@ export default async function DashboardContent({ farmSlug, prisma }: Props) {
               label: "Poor Doers",
               href: `/${farmSlug}/admin/animals`,
             },
-            {
+            ...(!isBasic ? [{
               icon: Banknote,
               iconColor: mtdBalance < 0 ? "#C0574C" : "#4A7C59",
               badge: "Finance · MTD",
@@ -236,7 +242,7 @@ export default async function DashboardContent({ farmSlug, prisma }: Props) {
               value: mtdFormatted,
               label: "Revenue · MTD",
               href: `/${farmSlug}/admin/finansies`,
-            },
+            }] : []),
           ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label, href }, i) => (
             <Link
               key={label}
@@ -269,60 +275,98 @@ export default async function DashboardContent({ farmSlug, prisma }: Props) {
 
       {/* Bottom grid — 4 cards */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        {/* Reproductive Overview */}
-        <div
-          className="rounded-xl p-4 flex flex-col"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-        >
-          <h2
-            className="text-xs font-semibold uppercase tracking-wide mb-3"
-            style={{ color: "#9C8E7A" }}
+        {/* Reproductive Overview — locked for basic tier */}
+        {isBasic ? (
+          <div
+            className="rounded-xl p-4 flex flex-col"
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
           >
-            Reproductive Overview
-          </h2>
-          {reproStats.inseminations30d === 0 && reproStats.inHeat7d === 0 && reproStats.calvingsDue30d === 0 ? (
-            <p className="text-xs flex-1" style={{ color: "#9C8E7A" }}>No reproductive events recorded yet.</p>
-          ) : (
-            <div className="flex-1">
-              {reproStats.pregnancyRate !== null && reproStats.pregnancyRate < 70 && (
-                <div
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 mb-3"
-                  style={{ background: "rgba(180,110,20,0.10)", border: "1px solid rgba(180,110,20,0.25)" }}
-                >
-                  <span className="text-xs">⚠</span>
-                  <p className="text-xs font-medium" style={{ color: "#A07010" }}>Below SA target (&lt;70%)</p>
-                </div>
-              )}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "#9C8E7A" }}>Pregnancy Rate</span>
-                  <span className="text-sm font-bold font-mono" style={{ color: reproStats.pregnancyRate === null ? "#9C8E7A" : reproStats.pregnancyRate >= 85 ? "#4A7C59" : reproStats.pregnancyRate >= 70 ? "#8B6914" : "#8B3A3A" }}>
-                    {reproStats.pregnancyRate !== null ? `${reproStats.pregnancyRate}%` : "—"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
-                  <span className="text-xs" style={{ color: "#9C8E7A" }}>Calvings Due · 30d</span>
-                  <span className="text-sm font-bold font-mono" style={{ color: reproStats.calvingsDue30d > 0 ? "#8B6914" : "#1C1815" }}>
-                    {reproStats.calvingsDue30d}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
-                  <span className="text-xs" style={{ color: "#9C8E7A" }}>In Heat · 7d</span>
-                  <span className="text-sm font-bold font-mono" style={{ color: "#1C1815" }}>
-                    {reproStats.inHeat7d}
-                  </span>
+            <div className="flex items-center gap-2 mb-3">
+              <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: "#8B6914" }} />
+              <h2
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: "#9C8E7A" }}
+              >
+                Advanced Features
+              </h2>
+            </div>
+            <p className="text-xs mb-4 flex-1" style={{ color: "#6B5E50" }}>
+              Upgrade to unlock Reproductive Analytics, Financial Tracking, and detailed Performance reports.
+            </p>
+            <div className="flex flex-col gap-2">
+              <a
+                href="mailto:contact@example.com"
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.25)" }}
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Contact us to upgrade
+              </a>
+              <a
+                href="tel:+27000000000"
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ color: "#9C8E7A", border: "1px solid #E0D5C8" }}
+              >
+                <Phone className="w-3.5 h-3.5" />
+                +27 000 000 0000
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="rounded-xl p-4 flex flex-col"
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          >
+            <h2
+              className="text-xs font-semibold uppercase tracking-wide mb-3"
+              style={{ color: "#9C8E7A" }}
+            >
+              Reproductive Overview
+            </h2>
+            {reproStats.inseminations30d === 0 && reproStats.inHeat7d === 0 && reproStats.calvingsDue30d === 0 ? (
+              <p className="text-xs flex-1" style={{ color: "#9C8E7A" }}>No reproductive events recorded yet.</p>
+            ) : (
+              <div className="flex-1">
+                {reproStats.pregnancyRate !== null && reproStats.pregnancyRate < 70 && (
+                  <div
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 mb-3"
+                    style={{ background: "rgba(180,110,20,0.10)", border: "1px solid rgba(180,110,20,0.25)" }}
+                  >
+                    <span className="text-xs">⚠</span>
+                    <p className="text-xs font-medium" style={{ color: "#A07010" }}>Below SA target (&lt;70%)</p>
+                  </div>
+                )}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: "#9C8E7A" }}>Pregnancy Rate</span>
+                    <span className="text-sm font-bold font-mono" style={{ color: reproStats.pregnancyRate === null ? "#9C8E7A" : reproStats.pregnancyRate >= 85 ? "#4A7C59" : reproStats.pregnancyRate >= 70 ? "#8B6914" : "#8B3A3A" }}>
+                      {reproStats.pregnancyRate !== null ? `${reproStats.pregnancyRate}%` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
+                    <span className="text-xs" style={{ color: "#9C8E7A" }}>Calvings Due · 30d</span>
+                    <span className="text-sm font-bold font-mono" style={{ color: reproStats.calvingsDue30d > 0 ? "#8B6914" : "#1C1815" }}>
+                      {reproStats.calvingsDue30d}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
+                    <span className="text-xs" style={{ color: "#9C8E7A" }}>In Heat · 7d</span>
+                    <span className="text-sm font-bold font-mono" style={{ color: "#1C1815" }}>
+                      {reproStats.inHeat7d}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <Link
-            href={`/${farmSlug}/admin/reproduction`}
-            className="mt-4 text-xs font-medium text-right block transition-opacity hover:opacity-70"
-            style={{ color: "#8B6914" }}
-          >
-            View Reproduction →
-          </Link>
-        </div>
+            )}
+            <Link
+              href={`/${farmSlug}/admin/reproduction`}
+              className="mt-4 text-xs font-medium text-right block transition-opacity hover:opacity-70"
+              style={{ color: "#8B6914" }}
+            >
+              View Reproduction →
+            </Link>
+          </div>
+        )}
 
         {/* Recent Health Incidents */}
         <div
@@ -434,11 +478,11 @@ export default async function DashboardContent({ farmSlug, prisma }: Props) {
                 label: "View Reports",
                 href: `/${farmSlug}/admin/reports`,
               },
-              {
+              ...(!isBasic ? [{
                 icon: BarChart2,
                 label: "Camp Performance",
                 href: `/${farmSlug}/admin/performance`,
-              },
+              }] : []),
             ].map(({ icon: Icon, label, href }) => (
               <Link
                 key={label}

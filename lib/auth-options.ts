@@ -1,7 +1,7 @@
 import { type NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compareSync } from 'bcryptjs';
-import { getUserByIdentifier, getFarmsForUser } from './meta-db';
+import { getUserByIdentifier, getFarmsForUser, isEmailVerified } from './meta-db';
 import type { SessionFarm } from '../types/next-auth';
 
 export const authOptions: NextAuthOptions = {
@@ -20,6 +20,10 @@ export const authOptions: NextAuthOptions = {
 
           const valid = compareSync(credentials.password, user.passwordHash);
           if (!valid) return null;
+
+          // Reject login if email not verified
+          const verified = await isEmailVerified(user.id);
+          if (!verified) return null;
 
           const farms = await getFarmsForUser(user.id);
 

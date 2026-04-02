@@ -3,6 +3,7 @@ import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 import { cookies } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
+import type { Session } from "next-auth";
 
 // Cache Prisma clients per farm slug to avoid creating a new connection on every request.
 // Uses globalThis so the cache survives Next.js hot-reload in development.
@@ -33,4 +34,22 @@ export async function getPrismaForRequest(): Promise<
   const prisma = await getPrismaForFarm(slug);
   if (!prisma) return { error: "Farm not found", status: 404 };
   return { prisma, slug };
+}
+
+// Same as getPrismaForRequest but also verifies the user has access to the
+// farm selected by the cookie. Use this in all API routes.
+export async function getPrismaWithAuth(
+  session: Session,
+): Promise<
+  { prisma: PrismaClient; slug: string } | { error: string; status: number }
+> {
+  const result = await getPrismaForRequest();
+  if ("error" in result) return result;
+
+  const farms = session.user?.farms as Array<{ slug: string }> | undefined;
+  if (!farms?.some((f) => f.slug === result.slug)) {
+    return { error: "Forbidden", status: 403 };
+  }
+
+  return result;
 }

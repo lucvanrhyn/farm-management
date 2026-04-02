@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -234,6 +235,24 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        {/* Register link */}
+        <p
+          style={{
+            fontFamily: "var(--font-sans)",
+            color: "#6A4E30",
+            fontSize: "0.8125rem",
+            textAlign: "center",
+          }}
+        >
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/register"
+            style={{ color: "#8A6840", textDecoration: "underline" }}
+          >
+            Register
+          </Link>
+        </p>
       </motion.div>
 
       <footer

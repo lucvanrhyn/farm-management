@@ -51,7 +51,7 @@ const serwist = new Serwist({
         plugins: [
           // Only cache 200 OK responses — prevents a 302 redirect to /login
           // (e.g. from an expired JWT) from being stored and served offline,
-          // which would leave Dicky stuck on a non-functional login form.
+          // which would leave the user stuck on a non-functional login form.
           new CacheableResponsePlugin({ statuses: [200] }),
           new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 }),
         ],
@@ -79,7 +79,7 @@ const serwist = new Serwist({
     {
       matcher: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
       handler: new CacheFirst({
-        cacheName: "trio-b-images",
+        cacheName: "farmtrack-images",
         plugins: [
           new ExpirationPlugin({ maxEntries: 64, maxAgeSeconds: 30 * 24 * 60 * 60 }),
         ],
@@ -89,7 +89,7 @@ const serwist = new Serwist({
     {
       matcher: /\/geojson\//i,
       handler: new CacheFirst({
-        cacheName: "trio-b-geojson",
+        cacheName: "farmtrack-geojson",
         plugins: [
           new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 7 * 24 * 60 * 60 }),
         ],
