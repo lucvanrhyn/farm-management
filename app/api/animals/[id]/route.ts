@@ -29,18 +29,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const role = session.user?.role?.toUpperCase();
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
 
   const { id } = await params;
-  const body = await req.json();
+  const body = await req.json() as Record<string, unknown>;
 
-  const allowed = ["name", "sex", "dateOfBirth", "breed", "category", "currentCamp", "status", "motherId", "fatherId", "notes", "deceasedAt"];
+  // LOGGER role may only update the fields needed for field logging:
+  // status + deceasedAt (death recording), currentCamp (movement recording).
+  const LOGGER_ALLOWED = new Set(["status", "deceasedAt", "currentCamp"]);
+  if (role === "LOGGER") {
+    const hasDisallowedKeys = Object.keys(body).some((k) => !LOGGER_ALLOWED.has(k));
+    if (hasDisallowedKeys) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } else if (role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const allowed = ["name", "sex", "dateOfBirth", "breed", "category", "currentCamp", "status", "motherId", "fatherId", "registrationNumber", "deceasedAt"];
   const update: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) update[key] = body[key];
