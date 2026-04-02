@@ -23,6 +23,15 @@ export async function getPrismaForFarm(slug: string): Promise<PrismaClient | nul
   return client;
 }
 
+/**
+ * Evict a cached Prisma client for a farm slug.
+ * Call this when a query fails with a 401 (expired token) so the next
+ * request fetches fresh credentials from the meta DB.
+ */
+export function evictFarmClient(slug: string): void {
+  globalForPrisma.farmClients!.delete(slug);
+}
+
 // Reads active_farm_slug cookie and returns a scoped Prisma client.
 // Returns { error, status } if the cookie is missing or the farm is not found.
 export async function getPrismaForRequest(): Promise<
