@@ -27,7 +27,13 @@ export async function GET() {
       campCount,
     });
   } catch (err) {
-    console.error("[GET /api/farm] query failed:", err);
+    const e = err as Record<string, unknown>;
+    console.error("[GET /api/farm] query failed:", {
+      message: e?.message,
+      code: e?.code,
+      meta: e?.meta,
+      name: e?.name,
+    });
     return NextResponse.json(
       { error: "Failed to load farm data" },
       { status: 500 },
