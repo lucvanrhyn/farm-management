@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -60,12 +61,17 @@ export default function HomePage() {
   const router = useRouter();
   const params = useParams();
   const farmSlug = params.farmSlug as string;
+  const [heroImage, setHeroImage] = useState("/farm-hero.jpg");
+
+  const handleHeroImage = (url: string) => {
+    if (url.startsWith("/")) setHeroImage(url);
+  };
 
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
       style={{
-        backgroundImage: 'url("/farm-hero.jpg")',
+        backgroundImage: `url("${heroImage}")`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
@@ -83,7 +89,7 @@ export default function HomePage() {
       {/* Content */}
       <div className="relative w-full max-w-2xl flex flex-col items-center gap-10" style={{ zIndex: 10 }}>
         {/* Hero */}
-        <AnimatedHero />
+        <AnimatedHero onHeroImageLoad={handleHeroImage} />
 
         {/* Section cards */}
         <div className="grid grid-cols-3 gap-4 w-full">

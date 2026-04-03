@@ -7,20 +7,73 @@ import type { Session } from "next-auth";
 
 // Cache Prisma clients per farm slug to avoid creating a new connection on every request.
 // Uses globalThis so the cache survives Next.js hot-reload in development.
-const globalForPrisma = globalThis as unknown as { farmClients?: Map<string, PrismaClient> };
+const globalForPrisma = globalThis as unknown as {
+  farmClients?: Map<string, PrismaClient>;
+  lastValidated?: Map<string, number>;
+  inflightCreation?: Map<string, Promise<PrismaClient | null>>;
+};
 if (!globalForPrisma.farmClients) globalForPrisma.farmClients = new Map();
+if (!globalForPrisma.lastValidated) globalForPrisma.lastValidated = new Map();
+if (!globalForPrisma.inflightCreation) globalForPrisma.inflightCreation = new Map();
+
+const VALIDATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+function isTokenExpiredError(err: unknown): boolean {
+  const msg = String((err as Record<string, unknown>)?.message ?? "");
+  const code = String((err as Record<string, unknown>)?.code ?? "");
+  // Turso/libSQL wraps 401 responses as SERVER_ERROR with "401" in the message
+  if (code === "SERVER_ERROR" && (msg.includes("401") || msg.toLowerCase().includes("unauthorized"))) return true;
+  return false;
+}
+
+async function createFarmClient(slug: string): Promise<PrismaClient | null> {
+  // Deduplicate concurrent creation requests for the same slug
+  const inflight = globalForPrisma.inflightCreation!.get(slug);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const creds = await getFarmCreds(slug);
+    if (!creds) return null;
+    const libsql = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
+    const adapter = new PrismaLibSQL(libsql);
+    const client = new PrismaClient({ adapter });
+    globalForPrisma.farmClients!.set(slug, client);
+    globalForPrisma.lastValidated!.set(slug, Date.now());
+    return client;
+  })();
+
+  globalForPrisma.inflightCreation!.set(slug, promise);
+  try {
+    return await promise;
+  } finally {
+    globalForPrisma.inflightCreation!.delete(slug);
+  }
+}
 
 export async function getPrismaForFarm(slug: string): Promise<PrismaClient | null> {
   const cached = globalForPrisma.farmClients!.get(slug);
-  if (cached) return cached;
+  if (cached) {
+    const now = Date.now();
+    const lastCheck = globalForPrisma.lastValidated!.get(slug) ?? 0;
+    if (now - lastCheck > VALIDATION_INTERVAL_MS) {
+      try {
+        await cached.$queryRawUnsafe("SELECT 1");
+        globalForPrisma.lastValidated!.set(slug, now);
+      } catch (err) {
+        // Update timestamp on any error to prevent probe storms on transient failures
+        globalForPrisma.lastValidated!.set(slug, now);
+        if (isTokenExpiredError(err)) {
+          console.warn(`[farm-prisma] Token expired for "${slug}", evicting cached client`);
+          evictFarmClient(slug);
+          return createFarmClient(slug);
+        }
+        throw err;
+      }
+    }
+    return cached;
+  }
 
-  const creds = await getFarmCreds(slug);
-  if (!creds) return null;
-  const libsql = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
-  const adapter = new PrismaLibSQL(libsql);
-  const client = new PrismaClient({ adapter });
-  globalForPrisma.farmClients!.set(slug, client);
-  return client;
+  return createFarmClient(slug);
 }
 
 /**
@@ -30,6 +83,7 @@ export async function getPrismaForFarm(slug: string): Promise<PrismaClient | nul
  */
 export function evictFarmClient(slug: string): void {
   globalForPrisma.farmClients!.delete(slug);
+  globalForPrisma.lastValidated!.delete(slug);
 }
 
 // Reads active_farm_slug cookie and returns a scoped Prisma client.

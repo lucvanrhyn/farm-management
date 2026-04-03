@@ -511,6 +511,8 @@ export default function DashboardClient({
                 campData={campData}
                 onCampClick={handleCampClick}
                 onBoundaryDrawn={handleBoundaryDrawn}
+                latitude={latitude}
+                longitude={longitude}
               />
             </div>
           )}

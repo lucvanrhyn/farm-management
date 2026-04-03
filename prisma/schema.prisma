@@ -36,21 +36,21 @@ model Observation {
 }
 
 model Animal {
-  id          String   @id @default(cuid())
-  animalId    String   @unique
-  name        String?
-  sex         String
-  dateOfBirth String?
-  breed       String   @default("Brangus")
-  category    String
-  currentCamp String
-  status      String   @default("Active")
-  motherId    String?
-  fatherId    String?
-  notes       String?
-  dateAdded   String
-  deceasedAt  String?
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(cuid())
+  animalId           String   @unique
+  name               String?
+  sex                String
+  dateOfBirth        String?
+  breed              String   @default("Brangus")
+  category           String
+  currentCamp        String
+  status             String   @default("Active")
+  motherId           String?
+  fatherId           String?
+  registrationNumber String?
+  dateAdded          String
+  deceasedAt         String?
+  createdAt          DateTime @default(now())
 
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
@@ -107,8 +107,8 @@ model FarmSettings {
   breedingSeasonStart      String?
   breedingSeasonEnd        String?
   weaningDate              String?
-  vaccinationCalendarNotes String?
   openaiApiKey             String?
+  heroImageUrl             String?  @default("/farm-hero.jpg")
 }
 
 model Camp {
@@ -118,7 +118,6 @@ model Camp {
   sizeHectares Float?
   waterSource  String?
   geojson      String?
-  notes        String?
   createdAt    DateTime @default(now())
 }
 
@@ -130,7 +129,6 @@ model CampCoverReading {
   useFactor    Float    @default(0.35)
   recordedAt   String
   recordedBy   String
-  notes        String?
 
   @@index([campId, recordedAt], name: "idx_cover_camp_date")
 }
