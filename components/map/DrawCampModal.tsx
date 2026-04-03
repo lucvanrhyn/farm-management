@@ -5,7 +5,7 @@ import { useState } from "react";
 interface Props {
   hectares: number;
   campsWithoutBoundary: { id: string; name: string }[];
-  onConfirm: (campId: string | null) => void;
+  onConfirm: (campId: string | null, campName?: string) => void;
   onCancel: () => void;
 }
 
@@ -25,9 +25,7 @@ export default function DrawCampModal({
 
   function handleConfirm() {
     if (mode === "new") {
-      // null campId signals "create new camp with this boundary + name"
-      // The parent component handles the actual API call
-      onConfirm(null);
+      onConfirm(null, newName.trim());
     } else {
       onConfirm(selectedId || null);
     }

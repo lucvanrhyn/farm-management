@@ -34,6 +34,7 @@ export default async function DashboardPage({
     camp_name: c.campName,
     size_hectares: c.sizeHectares ?? undefined,
     water_source: c.waterSource ?? undefined,
+    geojson: c.geojson ?? undefined,
   }));
 
   return (

@@ -15,6 +15,7 @@ import Map, {
 import type { MapMouseEvent } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import area from "@turf/area";
+import { useParams } from "next/navigation";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
@@ -60,7 +61,7 @@ interface Props {
   drawMode?: boolean;
   overlayMode?: OverlayMode;
   onOverlayChange?: (mode: OverlayMode) => void;
-  onBoundaryDrawn?: (campId: string | null, geojson: string, hectares: number) => void;
+  onBoundaryDrawn?: (campId: string | null, geojson: string, hectares: number, campName?: string) => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -377,11 +378,11 @@ export default function FarmMap({
   }, []);
 
   const handleModalConfirm = useCallback(
-    (campId: string | null) => {
+    (campId: string | null, campName?: string) => {
       if (!drawnBoundary) return;
       setShowDrawModal(false);
       setDrawnBoundary(null);
-      onBoundaryDrawn?.(campId, drawnBoundary.geojson, drawnBoundary.hectares);
+      onBoundaryDrawn?.(campId, drawnBoundary.geojson, drawnBoundary.hectares, campName);
     },
     [drawnBoundary, onBoundaryDrawn]
   );
@@ -499,6 +500,36 @@ export default function FarmMap({
         ))}
       </div>
 
+      {/* Drawing instructions banner */}
+      {isDrawing && (
+        <div
+          style={{
+            position: "absolute",
+            top: 56,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 20px",
+            borderRadius: 12,
+            background: "rgba(26,21,16,0.92)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(34,197,94,0.4)",
+            color: "#F5EBD4",
+            fontSize: 13,
+            fontFamily: "var(--font-sans)",
+            fontWeight: 500,
+            boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ color: "#22c55e", fontSize: 16 }}>&#9678;</span>
+          <span>Click to place points. <strong style={{ color: "#22c55e" }}>Double-click</strong> the last point to finish.</span>
+        </div>
+      )}
+
       {/* Draw button — always visible on satellite map */}
       <div
         style={{
@@ -532,7 +563,7 @@ export default function FarmMap({
           }}
         >
           <span style={{ fontSize: 14 }}>✦</span>
-          {isDrawing ? "Drawing… (click to cancel)" : "Draw Camp Boundary"}
+          {isDrawing ? "Cancel Drawing" : "Draw Camp Boundary"}
         </button>
       </div>
 
@@ -619,6 +650,8 @@ function CampPopupContent({
   fenceStatus: string;
   daysSinceInspection: number | null;
 }) {
+  const params = useParams();
+  const farmSlug = params?.farmSlug as string | undefined;
   return (
     <div
       style={{
@@ -685,17 +718,31 @@ function CampPopupContent({
       </div>
 
       {/* Action links */}
-      <div style={{ display: "flex", gap: 12 }}>
-        <a
-          href={`/logger/${encodeURIComponent(campId)}`}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            fontSize: 11, color: "#8B6914", fontWeight: 600,
-            textDecoration: "none", letterSpacing: "0.02em",
-          }}
-        >
-          Log now &rarr;
-        </a>
+      <div style={{ display: "flex", gap: 16 }}>
+        {farmSlug && (
+          <a
+            href={`/${encodeURIComponent(farmSlug)}/dashboard/camp/${encodeURIComponent(campId)}`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 11, color: "#D2B48C", fontWeight: 600,
+              textDecoration: "none", letterSpacing: "0.02em",
+            }}
+          >
+            View Details &rarr;
+          </a>
+        )}
+        {farmSlug && (
+          <a
+            href={`/${encodeURIComponent(farmSlug)}/logger/${encodeURIComponent(campId)}`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 11, color: "#8B6914", fontWeight: 600,
+              textDecoration: "none", letterSpacing: "0.02em",
+            }}
+          >
+            Log now &rarr;
+          </a>
+        )}
       </div>
     </div>
   );

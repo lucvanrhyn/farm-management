@@ -325,7 +325,7 @@ export default function DashboardClient({
   }
 
   const handleBoundaryDrawn = useCallback(
-    async (campId: string | null, geojson: string, hectares: number) => {
+    async (campId: string | null, geojson: string, hectares: number, campName?: string) => {
       try {
         if (campId) {
           // Assign boundary to existing camp
@@ -335,8 +335,8 @@ export default function DashboardClient({
             body: JSON.stringify({ geojson, sizeHectares: hectares }),
           });
         } else {
-          // Create new camp — campId generated from name
-          const name = `Camp ${camps.length + 1}`;
+          // Create new camp — use provided name or fallback
+          const name = campName || `Camp ${camps.length + 1}`;
           await fetch("/api/camps", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
