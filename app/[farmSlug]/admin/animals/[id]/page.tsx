@@ -247,7 +247,6 @@ function WeightTab({ weightData }: { weightData: ADGResult }) {
                   <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Date</th>
                   <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Weight (kg)</th>
                   <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>ADG vs prev</th>
-                  <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -288,9 +287,6 @@ function WeightTab({ weightData }: { weightData: ADGResult }) {
                         {rowAdg !== null
                           ? `${rowAdg >= 0 ? "+" : ""}${rowAdg.toFixed(2)}`
                           : "—"}
-                      </td>
-                      <td className="px-3 py-2.5" style={{ color: "#9C8E7A" }}>
-                        {rec.notes ?? ""}
                       </td>
                     </tr>
                   );
@@ -455,10 +451,10 @@ export default async function AnimalDetailPage({
                   </Link>
                 </div>
               )}
-              {animal.notes && (
+              {animal.registrationNumber && (
                 <div className="col-span-2 md:col-span-3">
-                  <p className="text-xs" style={{ color: "#9C8E7A" }}>Notes</p>
-                  <p style={{ color: "#1C1815" }}>{animal.notes}</p>
+                  <p className="text-xs" style={{ color: "#9C8E7A" }}>Studbook Nr</p>
+                  <p className="font-mono" style={{ color: "#1C1815" }}>{animal.registrationNumber}</p>
                 </div>
               )}
             </div>
@@ -520,9 +516,7 @@ export default async function AnimalDetailPage({
                             Calf tag: <span className="font-mono">{String(d.calf_tag)}</span>
                           </p>
                         )}
-                        {d.notes && (
-                          <p className="text-xs" style={{ color: "#9C8E7A" }}>{String(d.notes)}</p>
-                        )}
+
                         <p className="text-[11px] mt-0.5" style={{ color: "#9C8E7A" }}>
                           {date} · Camp: {obs.campId}
                         </p>
@@ -582,9 +576,7 @@ export default async function AnimalDetailPage({
                         {d.severity && (
                           <p className="text-xs" style={{ color: "#9C8E7A" }}>Severity: {String(d.severity)}</p>
                         )}
-                        {d.notes && (
-                          <p className="text-xs" style={{ color: "#9C8E7A" }}>{String(d.notes)}</p>
-                        )}
+
                         <p className="text-[11px] mt-0.5" style={{ color: "#9C8E7A" }}>
                           {date} · Camp: {obs.campId}
                         </p>
@@ -624,9 +616,7 @@ export default async function AnimalDetailPage({
                         <p className="text-xs font-medium font-mono" style={{ color: "#1C1815" }}>
                           {String(d.from_camp ?? "?")} → {String(d.to_camp ?? "?")}
                         </p>
-                        {d.notes && (
-                          <p className="text-xs" style={{ color: "#9C8E7A" }}>{String(d.notes)}</p>
-                        )}
+
                         <p className="text-[11px] mt-0.5" style={{ color: "#9C8E7A" }}>{date}</p>
                       </div>
                     </li>
