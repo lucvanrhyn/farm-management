@@ -27,7 +27,6 @@ interface EditForm {
   campName: string;
   sizeHectares: string;
   waterSource: string;
-  notes: string;
 }
 
 const FIELD_STYLE = {
@@ -45,7 +44,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "", notes: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -54,7 +53,6 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       campName: row.camp_name,
       sizeHectares: row.sizeHectares !== undefined ? String(row.sizeHectares) : "",
       waterSource: row.water_source ?? "",
-      notes: "",
     });
     setEditError(null);
     setEditing(row.camp_id);
@@ -74,7 +72,6 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       const body: Record<string, unknown> = { campName: editForm.campName.trim() };
       body.sizeHectares = editForm.sizeHectares ? parseFloat(editForm.sizeHectares) : null;
       body.waterSource = editForm.waterSource.trim() || null;
-      body.notes = editForm.notes.trim() || null;
 
       const res = await fetch(`/api/camps/${editing}`, {
         method: "PATCH",
@@ -183,16 +180,6 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                   onChange={setField("waterSource")}
                   placeholder="e.g. Borehole"
                   style={FIELD_STYLE}
-                />
-              </div>
-              <div className="col-span-2">
-                <label style={LABEL_STYLE}>Notes</label>
-                <textarea
-                  value={editForm.notes}
-                  onChange={setField("notes")}
-                  rows={2}
-                  placeholder="Optional notes"
-                  style={{ ...FIELD_STYLE, resize: "vertical" }}
                 />
               </div>
             </div>

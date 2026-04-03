@@ -78,7 +78,7 @@ export default function CampInspectionPage({
     setActiveModal("condition");
   }
 
-  async function handleHealthSubmit(data: { symptoms: string[]; severity: string; notes: string; photoBlob: Blob | null }) {
+  async function handleHealthSubmit(data: { symptoms: string[]; severity: string; photoBlob: Blob | null }) {
     const { photoBlob, ...obsData } = data;
     const localId = await queueObservation({
       type: "health_issue",
@@ -136,7 +136,6 @@ export default function CampInspectionPage({
     dateOfBirth: string;
     breed: string;
     category: string;
-    notes: string;
     photoBlob: Blob | null;
   }) {
     const { photoBlob, ...obsData } = data;
@@ -168,7 +167,6 @@ export default function CampInspectionPage({
         dateAdded: data.dateOfBirth,
         breed: data.breed || "Brangus",
         status: "Active",
-        notes: data.notes || null,
       };
 
       if (isOnline) {
@@ -261,7 +259,6 @@ export default function CampInspectionPage({
     grazing: GrazingQuality;
     water: WaterStatus;
     fence: FenceStatus;
-    notes: string;
     photoBlob: Blob | null;
   }) {
     const { photoBlob, ...obsData } = data;

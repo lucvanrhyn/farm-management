@@ -50,7 +50,6 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
 
 export default function WeighingForm({ animalId, animalTag, campId, farmSlug, onSuccess, onCancel }: Props) {
   const [weightKg, setWeightKg] = useState("");
-  const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -63,7 +62,6 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
     setError("");
     try {
       const detailsObj: Record<string, unknown> = { weight_kg: weight };
-      if (notes.trim()) detailsObj.notes = notes.trim();
 
       const res = await fetch(`/api/observations`, {
         method: "POST",
@@ -87,7 +85,6 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
         await queuePhoto(resData.id, photoBlob).catch(() => {/* non-fatal */});
       }
       setWeightKg("");
-      setNotes("");
       setPhotoBlob(null);
       onSuccess();
     } catch {
@@ -123,24 +120,6 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
         </div>
 
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
-
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>
-            Notes (optional)
-          </p>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="Additional notes..."
-            className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
-            style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
-            }}
-          />
-        </div>
 
         {error && (
           <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>

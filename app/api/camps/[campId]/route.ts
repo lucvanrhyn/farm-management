@@ -25,7 +25,6 @@ export async function PATCH(
     campName?: string;
     sizeHectares?: number | null;
     waterSource?: string | null;
-    notes?: string | null;
     geojson?: string | null;
   };
 
@@ -35,7 +34,6 @@ export async function PATCH(
       ...(body.campName !== undefined && { campName: body.campName }),
       ...(body.sizeHectares !== undefined && { sizeHectares: body.sizeHectares }),
       ...(body.waterSource !== undefined && { waterSource: body.waterSource }),
-      ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.geojson !== undefined && { geojson: body.geojson }),
     },
   });

@@ -125,11 +125,6 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
             </span>
           )}
         </p>
-        {latest.notes && (
-          <p className="text-xs italic" style={{ color: "#9C8E7A" }}>
-            "{latest.notes}"
-          </p>
-        )}
       </div>
 
       {/* Stale reading warning */}

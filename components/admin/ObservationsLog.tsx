@@ -90,7 +90,6 @@ function parseDetails(raw: string, type?: string): string {
       if (obj.outcome) parts.push(`Outcome: ${obj.outcome}`);
       if (obj.calfSex ?? obj.sex) parts.push(`Sex: ${obj.calfSex ?? obj.sex}`);
       if (obj.calfAnimalId ?? obj.calf_animal_id) parts.push(`Calf ID: ${obj.calfAnimalId ?? obj.calf_animal_id}`);
-      if (obj.notes) parts.push(obj.notes);
       return parts.join(" · ") || "Calving recorded";
     }
     const parts: string[] = [];
@@ -109,7 +108,6 @@ function parseDetails(raw: string, type?: string): string {
     if (obj.water_status) parts.push(`Water: ${obj.water_status}`);
     if (obj.eventType) parts.push(`Event: ${obj.eventType}`);
     if (obj.cause) parts.push(`Cause: ${obj.cause}`);
-    if (obj.notes) parts.push(obj.notes);
     if (obj.drug) parts.push(`Medicine: ${obj.drug}`);
     if (obj.to_camp) parts.push(`To camp: ${obj.to_camp}`);
     return parts.join(" · ") || raw.slice(0, 120);
@@ -139,16 +137,6 @@ function WeighingFields({ details, onChange }: FieldProps) {
           step="0.1"
           value={(details.weight_kg as number) ?? ""}
           onChange={(e) => onChange("weight_kg", e.target.value ? parseFloat(e.target.value) : "")}
-          style={fieldInput}
-          className="mt-1 block"
-        />
-      </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
           style={fieldInput}
           className="mt-1 block"
         />
@@ -202,16 +190,6 @@ function TreatmentFields({ details, onChange }: FieldProps) {
           className="mt-1 block"
         />
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
-          style={fieldInput}
-          className="mt-1 block"
-        />
-      </label>
     </div>
   );
 }
@@ -242,16 +220,6 @@ function HealthIssueFields({ details, onChange }: FieldProps) {
           <option value="">Select...</option>
           {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-      </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
-          style={fieldInput}
-          className="mt-1 block"
-        />
       </label>
     </div>
   );
@@ -296,16 +264,6 @@ function CampConditionFields({ details, onChange }: FieldProps) {
           {FENCE_STATUS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
-          style={fieldInput}
-          className="mt-1 block"
-        />
-      </label>
     </div>
   );
 }
@@ -325,16 +283,6 @@ function ReproductionFields({ details, onChange }: FieldProps) {
           {REPRODUCTION_EVENTS.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
-          style={fieldInput}
-          className="mt-1 block"
-        />
-      </label>
     </div>
   );
 }
@@ -353,16 +301,6 @@ function DeathFields({ details, onChange }: FieldProps) {
           <option value="">Select...</option>
           {DEATH_CAUSES.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-      </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-        Notes
-        <input
-          type="text"
-          value={(details.notes as string) ?? ""}
-          onChange={(e) => onChange("notes", e.target.value)}
-          style={fieldInput}
-          className="mt-1 block"
-        />
       </label>
     </div>
   );

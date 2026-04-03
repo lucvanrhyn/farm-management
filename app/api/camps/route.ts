@@ -34,7 +34,6 @@ export async function GET() {
     size_hectares: camp.sizeHectares,
     water_source: camp.waterSource,
     geojson: camp.geojson,
-    notes: camp.notes,
     animal_count: countByCamp[camp.campId] ?? 0,
   }));
 
@@ -52,7 +51,7 @@ export async function POST(req: NextRequest) {
   const { prisma } = db;
 
   const body = await req.json();
-  const { campId, campName, sizeHectares, waterSource, notes, geojson } = body;
+  const { campId, campName, sizeHectares, waterSource, geojson } = body;
 
   if (!campId || !campName) {
     return NextResponse.json({ error: "campId and campName are required" }, { status: 400 });
@@ -69,7 +68,6 @@ export async function POST(req: NextRequest) {
       campName,
       sizeHectares: sizeHectares ? Number(sizeHectares) : null,
       waterSource: waterSource || null,
-      notes: notes || null,
       geojson: geojson || null,
     },
   });

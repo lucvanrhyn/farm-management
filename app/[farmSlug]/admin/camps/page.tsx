@@ -38,7 +38,6 @@ export default async function AdminCampsPage({
     size_hectares: c.sizeHectares ?? undefined,
     water_source: c.waterSource ?? undefined,
     geojson: c.geojson ?? undefined,
-    notes: c.notes ?? undefined,
   }));
 
   return (

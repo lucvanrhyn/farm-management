@@ -13,7 +13,7 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      email: string;
+      email: string | null;
       username: string;
       name?: string | null;
       role: string;          // role on the most recently selected farm (kept for backward compat)

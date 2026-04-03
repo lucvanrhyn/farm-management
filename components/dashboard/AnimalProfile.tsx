@@ -167,13 +167,13 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                 <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.fatherId}</p>
               </div>
             )}
-            {animal.notes && (
+            {animal.registrationNumber && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
-                <p className="text-xs font-semibold text-white mb-1">Notes</p>
-                <p className="text-sm" style={{ color: textMuted }}>{animal.notes}</p>
+                <p className="text-xs font-semibold text-white mb-1">Registration No.</p>
+                <p className="text-sm font-mono" style={{ color: textMuted }}>{animal.registrationNumber}</p>
               </div>
             )}
-            {!animal.motherId && !animal.fatherId && !animal.notes && (
+            {!animal.motherId && !animal.fatherId && !animal.registrationNumber && (
               <p className="text-sm text-center py-6" style={{ color: textMuted }}>No additional information.</p>
             )}
           </div>

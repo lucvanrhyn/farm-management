@@ -115,7 +115,6 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
 
   // Pregnancy scan
   const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain">("pregnant");
-  const [scanNotes, setScanNotes] = useState("");
 
   // Calving
   const [calfStatus, setCalfStatus] = useState<"live" | "stillborn">("live");
@@ -140,7 +139,6 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
     } else if (selectedType === "pregnancy_scan") {
       details = {
         result: scanResult,
-        ...(scanNotes.trim() ? { notes: scanNotes.trim() } : {}),
       };
     } else {
       // calving
@@ -289,23 +287,6 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
                 {opt.label}
               </button>
             ))}
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: "#D2B48C" }}>
-                Notes (optional)
-              </p>
-              <textarea
-                value={scanNotes}
-                onChange={(e) => setScanNotes(e.target.value)}
-                rows={2}
-                placeholder="Any additional observations..."
-                className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
-                style={{
-                  backgroundColor: "rgba(26, 13, 5, 0.6)",
-                  border: "1px solid rgba(92, 61, 46, 0.5)",
-                  color: "#F5F0E8",
-                }}
-              />
-            </div>
             <button
               onClick={handleSubmit}
               className="w-full font-bold py-4 rounded-2xl text-base mt-2"

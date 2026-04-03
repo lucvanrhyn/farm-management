@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 
 const headers = [
-  ["animal_id", "name", "sex", "date_of_birth", "breed", "category", "current_camp", "status", "mother_id", "father_id", "notes", "date_added"]
+  ["animal_id", "name", "sex", "date_of_birth", "breed", "category", "current_camp", "status", "mother_id", "father_id", "registration_number", "date_added"]
 ];
 
 const ws = XLSX.utils.aoa_to_sheet(headers);

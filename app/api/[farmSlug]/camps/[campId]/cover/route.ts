@@ -97,7 +97,7 @@ export async function POST(
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
 
   const body = await req.json();
-  const { coverCategory, kgDmPerHaOverride, notes } = body;
+  const { coverCategory, kgDmPerHaOverride } = body;
 
   if (!coverCategory || !["Good", "Fair", "Poor"].includes(coverCategory)) {
     return NextResponse.json({ error: "coverCategory must be Good, Fair, or Poor" }, { status: 400 });
@@ -126,7 +126,6 @@ export async function POST(
       useFactor: DEFAULT_USE_FACTOR,
       recordedAt: new Date().toISOString(),
       recordedBy: session.user?.name ?? session.user?.email ?? "Unknown",
-      notes: notes ?? null,
     },
   });
 

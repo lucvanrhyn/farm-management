@@ -55,7 +55,7 @@ export interface Animal {
   status: AnimalStatus;
   mother_id?: string;          // animal_id of mother
   father_id?: string;          // animal_id of sire
-  notes?: string;
+  registration_number?: string; // SA Studbook or breed society number
   date_added: string;          // ISO date string
 }
 
@@ -65,7 +65,6 @@ export interface Camp {
   size_hectares?: number;
   water_source?: string;       // "borehole" | "dam" | "river" | "trough"
   geojson?: string;            // GeoJSON polygon coordinates (stringified)
-  notes?: string;
   // Live condition fields — populated from IndexedDB after logger observations
   grazing_quality?: GrazingQuality;
   water_status?: WaterStatus;
@@ -98,7 +97,6 @@ export interface CalvingRecord {
   ease_of_birth: EaseOfBirth;
   bull_id?: string;
   camp_id: string;
-  notes?: string;
 }
 
 export interface Treatment {
@@ -111,7 +109,6 @@ export interface Treatment {
   withdrawal_days?: number;
   withdrawal_clear_date?: string;  // ISO date string (timestamp + withdrawal_days)
   administered_by: string;
-  notes?: string;
 }
 
 export interface DailyCampLog {
@@ -124,7 +121,6 @@ export interface DailyCampLog {
   water_status?: WaterStatus;
   fence_status?: FenceStatus;
   rainfall_mm?: number;
-  notes?: string;
 }
 
 export interface CampStats {
@@ -161,7 +157,7 @@ export interface PrismaAnimal {
   status: AnimalStatus;
   motherId: string | null;
   fatherId: string | null;
-  notes: string | null;
+  registrationNumber: string | null;
   dateAdded: string;
   deceasedAt: string | null;
   createdAt: string;

@@ -72,7 +72,6 @@ export async function refreshCachedData(): Promise<void> {
       status: a.status,
       mother_id: a.motherId ?? undefined,
       father_id: a.fatherId ?? undefined,
-      notes: a.notes ?? undefined,
       date_added: a.dateAdded,
     }));
     await seedAnimals(animals);

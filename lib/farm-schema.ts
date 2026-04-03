@@ -46,7 +46,7 @@ CREATE TABLE "Animal" (
     "status" TEXT NOT NULL DEFAULT 'Active',
     "motherId" TEXT,
     "fatherId" TEXT,
-    "notes" TEXT,
+    "registrationNumber" TEXT,
     "dateAdded" TEXT NOT NULL,
     "deceasedAt" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -101,7 +101,6 @@ CREATE TABLE "FarmSettings" (
     "breedingSeasonStart" TEXT,
     "breedingSeasonEnd" TEXT,
     "weaningDate" TEXT,
-    "vaccinationCalendarNotes" TEXT,
     "openaiApiKey" TEXT
 );
 
@@ -113,7 +112,6 @@ CREATE TABLE "Camp" (
     "sizeHectares" REAL,
     "waterSource" TEXT,
     "geojson" TEXT,
-    "notes" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -125,8 +123,7 @@ CREATE TABLE "CampCoverReading" (
     "kgDmPerHa" REAL NOT NULL,
     "useFactor" REAL NOT NULL DEFAULT 0.35,
     "recordedAt" TEXT NOT NULL,
-    "recordedBy" TEXT NOT NULL,
-    "notes" TEXT
+    "recordedBy" TEXT NOT NULL
 );
 
 -- CreateTable

@@ -21,9 +21,12 @@ export const authOptions: NextAuthOptions = {
           const valid = compareSync(credentials.password, user.passwordHash);
           if (!valid) return null;
 
-          // Reject login if email not verified
-          const verified = await isEmailVerified(user.id);
-          if (!verified) return null;
+          // Users without email (e.g. LOGGER role) are auto-verified at creation
+          // Only check email verification for users who have an email address
+          if (user.email) {
+            const verified = await isEmailVerified(user.id);
+            if (!verified) return null;
+          }
 
           const farms = await getFarmsForUser(user.id);
 

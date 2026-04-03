@@ -26,7 +26,6 @@ interface Props {
     dateOfBirth: string;
     breed: string;
     category: string;
-    notes: string;
     photoBlob: Blob | null;
   }) => void;
 }
@@ -147,7 +146,6 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [dateOfBirth, setDateOfBirth] = useState(today);
   const [breed, setBreed] = useState("Brangus");
   const [category, setCategory] = useState("Calf");
-  const [notes, setNotes] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   function submit() {
@@ -168,7 +166,6 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         dateOfBirth,
         breed: breed || "Brangus",
         category: category || "Calf",
-        notes,
         photoBlob,
       });
     } else {
@@ -299,23 +296,6 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
 
         {/* Photo */}
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
-
-        {/* Notes */}
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notes (optional)</p>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Any additional information..."
-            className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
-            style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
-            }}
-          />
-        </div>
 
         <button
           onClick={submit}

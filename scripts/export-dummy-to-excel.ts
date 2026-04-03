@@ -61,7 +61,7 @@ interface AnimalRow {
   status: string;
   mother_id: string;
   father_id: string;
-  notes: string;
+  registration_number: string;
   date_added: string;
 }
 
@@ -97,7 +97,7 @@ function generateAnimals(): AnimalRow[] {
           status: "Active",
           mother_id: "",
           father_id: "",
-          notes: "",
+          registration_number: "",
           date_added: "2024-01-15",
         });
       }
@@ -113,7 +113,7 @@ const worksheet = XLSX.utils.json_to_sheet(animals, {
   header: [
     "animal_id", "name", "sex", "date_of_birth", "breed",
     "category", "current_camp", "status", "mother_id", "father_id",
-    "notes", "date_added",
+    "registration_number", "date_added",
   ],
 });
 
@@ -129,7 +129,7 @@ worksheet["!cols"] = [
   { wch: 10 }, // status
   { wch: 10 }, // mother_id
   { wch: 10 }, // father_id
-  { wch: 30 }, // notes
+  { wch: 30 }, // registration_number
   { wch: 12 }, // date_added
 ];
 

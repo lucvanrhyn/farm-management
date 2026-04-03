@@ -73,7 +73,7 @@ async function main() {
           status: resolvedStatus,
           motherId: String(row.mother_id ?? "").trim() || null,
           fatherId: String(row.father_id ?? "").trim() || null,
-          notes: String(row.notes ?? "").trim() || null,
+
           dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
         },
         create: {
@@ -87,7 +87,7 @@ async function main() {
           status: resolvedStatus,
           motherId: String(row.mother_id ?? "").trim() || null,
           fatherId: String(row.father_id ?? "").trim() || null,
-          notes: String(row.notes ?? "").trim() || null,
+
           dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
         },
       });
