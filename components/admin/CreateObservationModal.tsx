@@ -214,10 +214,6 @@ export default function CreateObservationModal({
                     className="mt-1 block"
                   />
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
-                </label>
               </div>
             )}
 
@@ -242,10 +238,6 @@ export default function CreateObservationModal({
                   Withdrawal Days
                   <input type="number" value={(details.withdrawalDays as number) ?? ""} onChange={(e) => handleFieldChange("withdrawalDays", e.target.value ? parseInt(e.target.value) : "")} style={fieldInput} className="mt-1 block" />
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
-                </label>
               </div>
             )}
 
@@ -264,10 +256,6 @@ export default function CreateObservationModal({
                     <option value="">Select...</option>
                     {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
-                </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
                 </label>
               </div>
             )}
@@ -295,10 +283,6 @@ export default function CreateObservationModal({
                     {FENCE_STATUS.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
-                </label>
               </div>
             )}
 
@@ -311,10 +295,6 @@ export default function CreateObservationModal({
                     {REPRODUCTION_EVENTS.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
-                </label>
               </div>
             )}
 
@@ -326,25 +306,6 @@ export default function CreateObservationModal({
                     <option value="">Select...</option>
                     {DEATH_CAUSES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
-                </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <input type="text" value={(details.notes as string) ?? ""} onChange={(e) => handleFieldChange("notes", e.target.value)} style={fieldInput} className="mt-1 block" />
-                </label>
-              </div>
-            )}
-
-            {(selectedType === "camp_check" || selectedType === "animal_movement" || selectedType === "calving") && (
-              <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                  Notes
-                  <textarea
-                    value={(details.notes as string) ?? ""}
-                    onChange={(e) => handleFieldChange("notes", e.target.value)}
-                    rows={3}
-                    style={fieldInput}
-                    className="mt-1 block resize-none"
-                  />
                 </label>
               </div>
             )}

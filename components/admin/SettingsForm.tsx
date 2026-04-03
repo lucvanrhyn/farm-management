@@ -20,7 +20,6 @@ export interface FarmSettingsData {
   breedingSeasonStart: string;
   breedingSeasonEnd: string;
   weaningDate: string;
-  vaccinationCalendarNotes: string;
   // AI Integration — key is never returned from server; only whether one is configured
   openaiApiKeyConfigured: boolean;
 }
@@ -301,17 +300,6 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             placeholder="MM-DD"
             className={inputCls}
             style={inputStyle}
-            onFocus={focusStyle}
-            onBlur={blurStyle}
-          />
-        </FieldRow>
-        <FieldRow label="Vaccination Calendar Notes" description="General notes for the farm's vaccination schedule.">
-          <textarea
-            value={values.vaccinationCalendarNotes}
-            onChange={(e) => handleText("vaccinationCalendarNotes", e.target.value)}
-            rows={4}
-            className={inputCls}
-            style={{ ...inputStyle, resize: "vertical" }}
             onFocus={focusStyle}
             onBlur={blurStyle}
           />

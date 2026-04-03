@@ -29,7 +29,7 @@ describe('POST /api/observations', () => {
       type: 'health_check',
       camp_id: 'A',
       animal_id: 'brangus-001',
-      details: JSON.stringify({ status: 'healthy', notes: 'looks good' }),
+      details: JSON.stringify({ status: 'healthy' }),
       created_at: '2026-03-13T21:00:00.000Z',
     };
 

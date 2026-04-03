@@ -35,7 +35,6 @@ export default function AddCampForm() {
     campName: "",
     sizeHectares: "",
     waterSource: "",
-    notes: "",
   });
 
   function set(field: keyof typeof form) {
@@ -54,7 +53,6 @@ export default function AddCampForm() {
       };
       if (form.sizeHectares) body.sizeHectares = parseFloat(form.sizeHectares);
       if (form.waterSource) body.waterSource = form.waterSource.trim();
-      if (form.notes) body.notes = form.notes.trim();
 
       const res = await fetch("/api/camps", {
         method: "POST",
@@ -68,7 +66,7 @@ export default function AddCampForm() {
         return;
       }
 
-      setForm({ campId: "", campName: "", sizeHectares: "", waterSource: "", notes: "" });
+      setForm({ campId: "", campName: "", sizeHectares: "", waterSource: "" });
       setOpen(false);
       router.refresh();
     } finally {
@@ -136,17 +134,6 @@ export default function AddCampForm() {
                 style={FIELD_STYLE}
               />
             </div>
-          </div>
-
-          <div className="mt-4">
-            <label style={LABEL_STYLE}>Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={set("notes")}
-              rows={2}
-              placeholder="Optional notes"
-              style={{ ...FIELD_STYLE, resize: "vertical" }}
-            />
           </div>
 
           {error && (

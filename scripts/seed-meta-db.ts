@@ -107,7 +107,7 @@ async function createTables() {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id                    TEXT PRIMARY KEY,
-      email                 TEXT UNIQUE NOT NULL,
+      email                 TEXT UNIQUE,
       username              TEXT UNIQUE NOT NULL,
       password_hash         TEXT NOT NULL,
       name                  TEXT,

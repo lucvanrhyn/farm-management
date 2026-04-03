@@ -35,7 +35,6 @@ export default async function SettingsPage({
     breedingSeasonStart: raw?.breedingSeasonStart ?? "",
     breedingSeasonEnd: raw?.breedingSeasonEnd ?? "",
     weaningDate: raw?.weaningDate ?? "",
-    vaccinationCalendarNotes: raw?.vaccinationCalendarNotes ?? "",
     openaiApiKeyConfigured: !!(raw?.openaiApiKey),
   };
 

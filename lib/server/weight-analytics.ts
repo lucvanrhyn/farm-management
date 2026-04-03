@@ -5,7 +5,6 @@ export interface WeightRecord {
   id: string;
   observedAt: Date;
   weightKg: number;
-  notes?: string;
 }
 
 export interface ADGResult {
@@ -33,9 +32,9 @@ export interface HerdAdgPoint {
   avgAdg: number;
 }
 
-function parseWeightDetails(raw: string): { weight_kg?: number; notes?: string } {
+function parseWeightDetails(raw: string): { weight_kg?: number } {
   try {
-    return JSON.parse(raw) as { weight_kg?: number; notes?: string };
+    return JSON.parse(raw) as { weight_kg?: number };
   } catch {
     return {};
   }
@@ -65,7 +64,6 @@ export async function getAnimalWeightData(
         id: obs.id,
         observedAt: obs.observedAt,
         weightKg: details.weight_kg,
-        notes: details.notes,
       },
     ];
   });

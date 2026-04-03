@@ -14,7 +14,7 @@ export interface HealthObservation {
   id: string;
   animalId: string | null;
   campId: string;
-  details: { symptoms?: string[]; severity?: string; notes?: string };
+  details: { symptoms?: string[]; severity?: string };
   observedAt: string; // ISO string
 }
 

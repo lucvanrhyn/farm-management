@@ -17,7 +17,7 @@ function getMetaClient(): Client {
 
 export interface MetaUser {
   id: string;
-  email: string;
+  email: string | null;
   username: string;
   passwordHash: string;
   name: string | null;
@@ -53,7 +53,7 @@ export async function getUserByIdentifier(identifier: string): Promise<MetaUser 
   const row = result.rows[0];
   return {
     id: row.id as string,
-    email: row.email as string,
+    email: (row.email as string) || null,
     username: row.username as string,
     passwordHash: row.password_hash as string,
     name: row.name as string | null,
@@ -117,7 +117,7 @@ export async function getUserByEmail(email: string): Promise<MetaUser | null> {
   const row = result.rows[0];
   return {
     id: row.id as string,
-    email: row.email as string,
+    email: (row.email as string) || null,
     username: row.username as string,
     passwordHash: row.password_hash as string,
     name: row.name as string | null,
@@ -141,16 +141,20 @@ export async function getFarmBySlug(slug: string): Promise<{ id: string; slug: s
 
 export async function createUser(
   id: string,
-  email: string,
+  email: string | null,
   username: string,
   passwordHash: string,
   name: string,
+  preVerified = false,
 ): Promise<void> {
   const client = getMetaClient();
+  // No email → auto-verified. preVerified=true for admin-provisioned users.
+  // Self-service registrations (email present, preVerified=false) require email confirmation.
+  const emailVerified = !email || preVerified ? 1 : 0;
   await client.execute({
-    sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, email, username, passwordHash, name, new Date().toISOString()],
+    sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, email_verified, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, email, username, passwordHash, name, emailVerified, new Date().toISOString()],
   });
 }
 

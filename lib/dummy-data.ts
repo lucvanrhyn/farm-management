@@ -37,29 +37,29 @@ function makePolygon(col: number, row: number): string {
 
 export const CAMPS: Camp[] = [
   // Row 0
-  { camp_id: "I-1", camp_name: "I-1", size_hectares: 245, water_source: "borehole", geojson: makePolygon(0, 0), notes: "Main breeding camp" },
+  { camp_id: "I-1", camp_name: "I-1", size_hectares: 245, water_source: "borehole", geojson: makePolygon(0, 0) },
   { camp_id: "I-3", camp_name: "I-3", size_hectares: 210, water_source: "borehole", geojson: makePolygon(1, 0) },
   { camp_id: "A", camp_name: "A", size_hectares: 180, water_source: "dam", geojson: makePolygon(2, 0) },
-  { camp_id: "B", camp_name: "B", size_hectares: 195, water_source: "trough", geojson: makePolygon(3, 0), notes: "Water trough needs monitoring" },
+  { camp_id: "B", camp_name: "B", size_hectares: 195, water_source: "trough", geojson: makePolygon(3, 0) },
   // Row 1
   { camp_id: "C", camp_name: "C", size_hectares: 155, water_source: "borehole", geojson: makePolygon(0, 1) },
   { camp_id: "D", camp_name: "D", size_hectares: 140, water_source: "borehole", geojson: makePolygon(1, 1) },
   { camp_id: "Teerlings", camp_name: "Teerlings", size_hectares: 120, water_source: "dam", geojson: makePolygon(2, 1) },
   { camp_id: "Sirkel", camp_name: "Sirkel", size_hectares: 130, water_source: "borehole", geojson: makePolygon(3, 1) },
   // Row 2
-  { camp_id: "Bulle", camp_name: "Bulle", size_hectares: 80, water_source: "borehole", geojson: makePolygon(0, 2), notes: "Bull camp — check fence regularly" },
-  { camp_id: "H", camp_name: "H", size_hectares: 170, water_source: "trough", geojson: makePolygon(1, 2), notes: "Trough level low — monitor" },
-  { camp_id: "Uithoek", camp_name: "Uithoek", size_hectares: 160, water_source: "river", geojson: makePolygon(2, 2), notes: "Far camp — check every 2 days" },
+  { camp_id: "Bulle", camp_name: "Bulle", size_hectares: 80, water_source: "borehole", geojson: makePolygon(0, 2) },
+  { camp_id: "H", camp_name: "H", size_hectares: 170, water_source: "trough", geojson: makePolygon(1, 2) },
+  { camp_id: "Uithoek", camp_name: "Uithoek", size_hectares: 160, water_source: "river", geojson: makePolygon(2, 2) },
   { camp_id: "Wildskamp", camp_name: "Wildskamp", size_hectares: 115, water_source: "borehole", geojson: makePolygon(3, 2) },
   // Row 3
   { camp_id: "Bloukom", camp_name: "Bloukom", size_hectares: 190, water_source: "dam", geojson: makePolygon(0, 3) },
-  { camp_id: "Ben se Huis", camp_name: "Ben se Huis", size_hectares: 100, water_source: "trough", geojson: makePolygon(1, 3), notes: "Trough fed by solar pump" },
+  { camp_id: "Ben se Huis", camp_name: "Ben se Huis", size_hectares: 100, water_source: "trough", geojson: makePolygon(1, 3) },
   { camp_id: "Everlyn", camp_name: "Everlyn", size_hectares: 175, water_source: "borehole", geojson: makePolygon(2, 3) },
-  { camp_id: "Praalhoek", camp_name: "Praalhoek", size_hectares: 145, water_source: "river", geojson: makePolygon(3, 3), notes: "River pump broken — urgent" },
+  { camp_id: "Praalhoek", camp_name: "Praalhoek", size_hectares: 145, water_source: "river", geojson: makePolygon(3, 3) },
   // Row 4
   { camp_id: "Praalhoek Verse", camp_name: "Praalhoek Verse", size_hectares: 110, water_source: "borehole", geojson: makePolygon(0, 4) },
   { camp_id: "B4", camp_name: "B4", size_hectares: 75, water_source: "borehole", geojson: makePolygon(1, 4) },
-  { camp_id: "B1", camp_name: "B1", size_hectares: 60, water_source: "borehole", geojson: makePolygon(2, 4), notes: "Overgrazed — rotate urgently" },
+  { camp_id: "B1", camp_name: "B1", size_hectares: 60, water_source: "borehole", geojson: makePolygon(2, 4) },
 ];
 
 // ============================================================
@@ -243,7 +243,7 @@ export const CALVING_RECORDS: CalvingRecord[] = [
   { calving_id: "CALV-001", timestamp: "2026-02-20T06:30:00", mother_id: "KO-015", calf_id: "SK-159", calf_sex: "Female", calf_alive: true, ease_of_birth: "Unassisted", bull_id: "BU-003", camp_id: "I-1" },
   { calving_id: "CALV-002", timestamp: "2026-02-18T07:00:00", mother_id: "KO-042", calf_id: "SK-160", calf_sex: "Male", calf_alive: true, ease_of_birth: "Assisted", bull_id: "BU-007", camp_id: "I-3" },
   { calving_id: "CALV-003", timestamp: "2026-02-15T05:45:00", mother_id: "KO-088", calf_id: "SK-161", calf_sex: "Female", calf_alive: true, ease_of_birth: "Unassisted", camp_id: "A" },
-  { calving_id: "CALV-004", timestamp: "2026-02-12T08:15:00", mother_id: "KO-110", calf_id: "SK-162", calf_sex: "Male", calf_alive: false, ease_of_birth: "Difficult", camp_id: "B", notes: "Stillborn — umbilical cord complication" },
+  { calving_id: "CALV-004", timestamp: "2026-02-12T08:15:00", mother_id: "KO-110", calf_id: "SK-162", calf_sex: "Male", calf_alive: false, ease_of_birth: "Difficult", camp_id: "B" },
   { calving_id: "CALV-005", timestamp: "2026-02-10T06:00:00", mother_id: "KO-225", calf_id: "SK-163", calf_sex: "Female", calf_alive: true, ease_of_birth: "Unassisted", bull_id: "BU-001", camp_id: "H" },
   { calving_id: "CALV-006", timestamp: "2026-02-08T07:30:00", mother_id: "KO-310", calf_id: "SK-164", calf_sex: "Male", calf_alive: true, ease_of_birth: "Unassisted", camp_id: "Everlyn" },
   { calving_id: "CALV-007", timestamp: "2026-02-05T05:30:00", mother_id: "KO-007", calf_id: "SK-165", calf_sex: "Female", calf_alive: true, ease_of_birth: "Assisted", camp_id: "I-1" },
@@ -267,14 +267,14 @@ export const TREATMENTS: Treatment[] = [
   { treatment_id: "TRT-003", timestamp: "2026-02-20T08:00:00", animal_id: "BU-004", treatment_type: "Supplement", product_name: "Rumevite", dosage: "Free choice", administered_by: "Dicky" },
   { treatment_id: "TRT-004", timestamp: "2026-02-15T10:00:00", animal_id: "KO-225", treatment_type: "Supplement", product_name: "Multimin", dosage: "5ml IM", administered_by: "Dicky" },
   { treatment_id: "TRT-005", timestamp: "2026-02-10T09:00:00", animal_id: "KO-310", treatment_type: "Antibiotic", product_name: "Penicillin", dosage: "6ml IM", withdrawal_days: 14, withdrawal_clear_date: "2026-02-24", administered_by: "Dicky" },
-  { treatment_id: "TRT-006", timestamp: "2026-02-01T08:00:00", animal_id: "KO-007", treatment_type: "Vaccination", product_name: "Covexin 8", dosage: "2ml SC", administered_by: "Luc", notes: "Annual booster" },
+  { treatment_id: "TRT-006", timestamp: "2026-02-01T08:00:00", animal_id: "KO-007", treatment_type: "Vaccination", product_name: "Covexin 8", dosage: "2ml SC", administered_by: "Luc" },
   { treatment_id: "TRT-007", timestamp: "2026-02-01T08:00:00", animal_id: "KO-042", treatment_type: "Vaccination", product_name: "Covexin 8", dosage: "2ml SC", administered_by: "Luc" },
   { treatment_id: "TRT-008", timestamp: "2026-01-28T09:00:00", animal_id: "KO-180", treatment_type: "Deworming", product_name: "Ivomec", dosage: "8ml SC", withdrawal_days: 35, withdrawal_clear_date: "2026-03-04", administered_by: "Dicky" },
   { treatment_id: "TRT-009", timestamp: "2026-01-20T10:00:00", animal_id: "KO-095", treatment_type: "Antibiotic", product_name: "Terramycin", dosage: "5ml IM", withdrawal_days: 28, withdrawal_clear_date: "2026-02-17", administered_by: "Dicky" },
-  { treatment_id: "TRT-010", timestamp: "2026-01-15T08:30:00", animal_id: "SK-045", treatment_type: "Dip", product_name: "Triatix", dosage: "200L dip bath", administered_by: "Dicky", notes: "Tick treatment" },
+  { treatment_id: "TRT-010", timestamp: "2026-01-15T08:30:00", animal_id: "SK-045", treatment_type: "Dip", product_name: "Triatix", dosage: "200L dip bath", administered_by: "Dicky" },
   { treatment_id: "TRT-011", timestamp: "2026-01-10T09:00:00", animal_id: "KO-241", treatment_type: "Supplement", product_name: "Multimin", dosage: "5ml IM", administered_by: "Dicky" },
-  { treatment_id: "TRT-012", timestamp: "2025-12-20T08:00:00", animal_id: "BU-001", treatment_type: "Vaccination", product_name: "Vibrin", dosage: "2ml SC", administered_by: "Luc", notes: "Pre-breeding vaccination" },
+  { treatment_id: "TRT-012", timestamp: "2025-12-20T08:00:00", animal_id: "BU-001", treatment_type: "Vaccination", product_name: "Vibrin", dosage: "2ml SC", administered_by: "Luc" },
   { treatment_id: "TRT-013", timestamp: "2025-12-20T08:00:00", animal_id: "BU-007", treatment_type: "Vaccination", product_name: "Vibrin", dosage: "2ml SC", administered_by: "Luc" },
   { treatment_id: "TRT-014", timestamp: "2025-12-15T10:00:00", animal_id: "KO-055", treatment_type: "Deworming", product_name: "Ivomec Plus", dosage: "10ml SC", withdrawal_days: 35, withdrawal_clear_date: "2026-01-19", administered_by: "Dicky" },
-  { treatment_id: "TRT-015", timestamp: "2025-12-10T08:30:00", animal_id: "VS-015", treatment_type: "Vaccination", product_name: "Brucella RB51", dosage: "2ml SC", administered_by: "Luc", notes: "One-time vaccination" },
+  { treatment_id: "TRT-015", timestamp: "2025-12-10T08:30:00", animal_id: "VS-015", treatment_type: "Vaccination", product_name: "Brucella RB51", dosage: "2ml SC", administered_by: "Luc" },
 ];

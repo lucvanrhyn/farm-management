@@ -8,7 +8,7 @@ interface Props {
   campId: string;
   onClose: () => void;
   onSkip?: () => void;
-  onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; notes: string; photoBlob: Blob | null }) => void;
+  onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; photoBlob: Blob | null }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -108,12 +108,11 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
   const [grazing, setGrazing] = useState<GrazingQuality>("Good");
   const [water, setWater] = useState<WaterStatus>("Full");
   const [fence, setFence] = useState<FenceStatus>("Intact");
-  const [notes, setNotes] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   function submit() {
     if (onSubmit) {
-      onSubmit({ campId, grazing, water, fence, notes, photoBlob });
+      onSubmit({ campId, grazing, water, fence, photoBlob });
     } else {
       alert(`Camp ${campId} condition recorded:\nGrazing: ${grazing}\nWater: ${water}\nFence: ${fence}`);
       onClose();
@@ -128,22 +127,6 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
         <CardGroup label="Fence" options={FENCE_OPTIONS} value={fence} onChange={setFence} />
 
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
-
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Notes (optional)</p>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Any additional remarks..."
-            className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
-            style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
-            }}
-          />
-        </div>
 
         <button
           onClick={submit}

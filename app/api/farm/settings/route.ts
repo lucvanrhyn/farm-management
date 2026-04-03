@@ -45,7 +45,6 @@ export async function GET(req: NextRequest) {
     breedingSeasonStart: settings?.breedingSeasonStart ?? null,
     breedingSeasonEnd: settings?.breedingSeasonEnd ?? null,
     weaningDate: settings?.weaningDate ?? null,
-    vaccinationCalendarNotes: settings?.vaccinationCalendarNotes ?? null,
     // Never return the actual API key — only indicate whether one is configured
     openaiApiKeyConfigured: !!(settings?.openaiApiKey),
   });
@@ -128,7 +127,6 @@ export async function PATCH(req: NextRequest) {
     breedingSeasonStart?: string | null;
     breedingSeasonEnd?: string | null;
     weaningDate?: string | null;
-    vaccinationCalendarNotes?: string | null;
     openaiApiKey?: string | null;
   } = {};
 
@@ -181,12 +179,6 @@ export async function PATCH(req: NextRequest) {
         ? body.weaningDate.trim()
         : null;
   }
-  if ("vaccinationCalendarNotes" in body) {
-    updateData.vaccinationCalendarNotes =
-      typeof body.vaccinationCalendarNotes === "string"
-        ? body.vaccinationCalendarNotes
-        : null;
-  }
   if ("openaiApiKey" in body) {
     if (body.openaiApiKey === null) {
       // Explicit null = user wants to clear the key
@@ -216,7 +208,6 @@ export async function PATCH(req: NextRequest) {
       breedingSeasonStart: updateData.breedingSeasonStart ?? null,
       breedingSeasonEnd: updateData.breedingSeasonEnd ?? null,
       weaningDate: updateData.weaningDate ?? null,
-      vaccinationCalendarNotes: updateData.vaccinationCalendarNotes ?? null,
       openaiApiKey: updateData.openaiApiKey ?? null,
     },
   });

@@ -59,7 +59,6 @@ interface Props {
 
 export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCount, onSaved }: Props) {
   const [selected, setSelected] = useState<CategoryId | null>(null);
-  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -78,7 +77,7 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
       const res = await fetch(`/api/${farmSlug}/camps/${campId}/cover`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coverCategory: selected, notes: notes.trim() || undefined }),
+        body: JSON.stringify({ coverCategory: selected }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -172,16 +171,6 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
           </p>
         </div>
       )}
-
-      {/* Notes */}
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes (optional)"
-        rows={2}
-        className="w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2"
-        style={{ borderColor: "#E0D5C8", background: "#FFFFFF", color: "#1C1815" }}
-      />
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 

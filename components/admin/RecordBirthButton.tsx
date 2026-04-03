@@ -22,7 +22,6 @@ export default function RecordBirthButton({ animals, camps }: Props) {
   const [camp, setCamp] = useState(camps[0]?.camp_id ?? "");
   const [motherId, setMotherId] = useState("");
   const [fatherId, setFatherId] = useState("");
-  const [notes, setNotes] = useState("");
 
   const females = animals.filter((a) => a.sex === "Female" && a.status === "Active");
   const males = animals.filter((a) => a.sex === "Male" && a.status === "Active");
@@ -35,7 +34,6 @@ export default function RecordBirthButton({ animals, camps }: Props) {
     setCamp(camps[0]?.camp_id ?? "");
     setMotherId("");
     setFatherId("");
-    setNotes("");
     setError("");
   }
 
@@ -57,7 +55,6 @@ export default function RecordBirthButton({ animals, camps }: Props) {
           dateOfBirth: dob,
           motherId: motherId || null,
           fatherId: fatherId || null,
-          notes: notes || null,
           status: "Active",
         }),
       });
@@ -213,19 +210,6 @@ export default function RecordBirthButton({ animals, camps }: Props) {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className={labelCls} style={{ color: "#6B5C4E" }}>Notes (optional)</label>
-                <textarea
-                  placeholder="Birth weight, complications, observations…"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className={inputCls + " resize-none"}
-                  style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
-                />
               </div>
 
               {error && <p className="text-sm" style={{ color: "#8B3A3A" }}>{error}</p>}
