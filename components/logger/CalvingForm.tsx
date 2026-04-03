@@ -27,6 +27,8 @@ interface Props {
     breed: string;
     category: string;
     photoBlob: Blob | null;
+    calvingDifficulty: number;
+    birthWeight: number | null;
   }) => void;
 }
 
@@ -134,6 +136,14 @@ function TextInput({
   );
 }
 
+const CALVING_DIFFICULTY_OPTIONS: { value: string; label: string }[] = [
+  { value: "1", label: "1 — No assistance" },
+  { value: "2", label: "2 — Minor hand assistance" },
+  { value: "3", label: "3 — Mechanical pull" },
+  { value: "4", label: "4 — C-section" },
+  { value: "5", label: "5 — Abnormal presentation" },
+];
+
 export default function CalvingForm({ animalId, campId, bulls = [], onClose, onSubmit }: Props) {
   const today = new Date().toISOString().split("T")[0];
 
@@ -147,6 +157,8 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [breed, setBreed] = useState("Brangus");
   const [category, setCategory] = useState("Calf");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [calvingDifficulty, setCalvingDifficulty] = useState("1");
+  const [birthWeight, setBirthWeight] = useState("");
 
   function submit() {
     if (!calfAnimalId.trim()) {
@@ -167,6 +179,8 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         breed: breed || "Brangus",
         category: category || "Calf",
         photoBlob,
+        calvingDifficulty: parseInt(calvingDifficulty, 10),
+        birthWeight: birthWeight ? parseFloat(birthWeight) : null,
       });
     } else {
       alert(`Calving recorded for ${animalId} in camp ${campId}\nCalf ID: ${calfAnimalId}\nSex: ${calfSex}\nAlive: ${calfAlive ? "Yes" : "No"}\nEase: ${ease}`);
@@ -292,6 +306,46 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
             <option value="Heifer">Heifer</option>
             <option value="Bull Calf">Bull Calf</option>
           </select>
+        </div>
+
+        {/* Calving difficulty */}
+        <div>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Calving difficulty</p>
+          <select
+            value={calvingDifficulty}
+            onChange={(e) => setCalvingDifficulty(e.target.value)}
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+            style={{
+              backgroundColor: 'rgba(26, 13, 5, 0.6)',
+              border: '1px solid rgba(92, 61, 46, 0.5)',
+              color: '#F5F0E8',
+            }}
+          >
+            {CALVING_DIFFICULTY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Birth weight */}
+        <div>
+          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Birth weight (kg, optional)</p>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            max="80"
+            value={birthWeight}
+            onChange={(e) => setBirthWeight(e.target.value)}
+            placeholder="e.g. 32"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
+            style={{
+              backgroundColor: 'rgba(26, 13, 5, 0.6)',
+              border: '1px solid rgba(92, 61, 46, 0.5)',
+              color: '#F5F0E8',
+            }}
+          />
         </div>
 
         {/* Photo */}

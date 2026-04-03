@@ -2,6 +2,15 @@
 import type { PrismaClient } from "@prisma/client";
 
 const GESTATION_DAYS = 285;
+const MAX_PAIRINGS = 30;
+const COI_HARD_LIMIT = 0.0625; // 6.25% — skip entirely
+const COI_SOFT_LIMIT = 0.03125; // 3.125% — start penalizing
+const HIGH_BIRTH_WEIGHT_KG = 38;
+const MAX_PEDIGREE_DEPTH = 3;
+
+// ============================================================
+// Interfaces
+// ============================================================
 
 export interface BreedingSnapshot {
   bullsInService: number;
@@ -23,12 +32,30 @@ export interface InbreedingRisk {
   relatedTag: string;
 }
 
+export interface TraitProfile {
+  birthWeight: number | null;
+  calvingDifficultyAvg: number | null;
+  bcsLatest: number | null;
+  temperamentLatest: number | null;
+  scrotalCirc: number | null;
+  offspringCount: number;
+}
+
 export interface PairingSuggestion {
   bullId: string;
   bullTag: string;
   cowId: string;
   cowTag: string;
+  score: number;
+  coi: number;
   reason: string;
+  riskFlags: string[];
+  traitBreakdown?: {
+    growth: number | null;
+    fertility: number | null;
+    calvingEase: number | null;
+    temperament: number | null;
+  };
 }
 
 interface AnimalRow {
@@ -40,6 +67,10 @@ interface AnimalRow {
   motherId: string | null;
   fatherId: string | null;
 }
+
+// ============================================================
+// Utility helpers
+// ============================================================
 
 function parseDetails(raw: string): Record<string, string> {
   try {
@@ -57,11 +88,18 @@ function daysFromNow(date: Date): number {
   return Math.round((date.getTime() - Date.now()) / 86_400_000);
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+// ============================================================
+// Breeding Snapshot (unchanged logic)
+// ============================================================
+
 export async function getBreedingSnapshot(
   prisma: PrismaClient,
   farmSlug: string,
 ): Promise<BreedingSnapshot> {
-  // Suppress unused variable — farmSlug reserved for future multi-tenant filtering
   void farmSlug;
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000);
@@ -102,11 +140,9 @@ export async function getBreedingSnapshot(
     }),
   ]);
 
-  // Bulls: only animals with category "Bull" (excludes male calves/weaners)
   const bulls = allAnimals.filter((a) => a.category === "Bull");
   const bullsInService = bulls.length;
 
-  // Latest scan per animal
   const latestScanByAnimal = new Map<string, { result: string; observedAt: Date }>();
   for (const obs of recentPregnancyScans) {
     if (!obs.animalId) continue;
@@ -119,24 +155,20 @@ export async function getBreedingSnapshot(
     }
   }
 
-  // Pregnant cows: latest scan result = "pregnant"
   const pregnantAnimalIds = new Set<string>();
   for (const [id, scan] of latestScanByAnimal.entries()) {
     if (scan.result === "pregnant") pregnantAnimalIds.add(id);
   }
   const pregnantCows = pregnantAnimalIds.size;
 
-  // Open cows: female animals not currently pregnant
   const femaleCows = allAnimals.filter(
     (a) => a.sex === "Female" && (a.category === "Cow" || a.category === "Heifer"),
   );
   const openCows = femaleCows.filter((a) => !pregnantAnimalIds.has(a.id)).length;
 
-  // Build calving timeline from pregnant scans + inseminations
   const calendarEntries: Array<{ animalId: string; animalTag: string; expectedDate: string }> = [];
   const animalTagMap = new Map(allAnimals.map((a) => [a.id, a.animalId]));
 
-  // From inseminations: estimate expected calving
   const latestInsemByAnimal = new Map<string, Date>();
   for (const obs of recentInseminations) {
     if (!obs.animalId) continue;
@@ -183,6 +215,10 @@ export async function getBreedingSnapshot(
   };
 }
 
+// ============================================================
+// Inbreeding Detection
+// ============================================================
+
 export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
   const risks: InbreedingRisk[] = [];
   const animalMap = new Map(animals.map((a) => [a.id, a]));
@@ -192,7 +228,6 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
     for (let j = i + 1; j < animals.length; j++) {
       const b = animals[j];
 
-      // Parent-offspring
       if (
         (a.motherId && a.motherId === b.id) ||
         (a.fatherId && a.fatherId === b.id) ||
@@ -209,7 +244,6 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
         continue;
       }
 
-      // Full siblings: same mother AND same father (both non-null)
       if (
         a.motherId &&
         a.fatherId &&
@@ -226,7 +260,6 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
         continue;
       }
 
-      // Shared grandparent: check if a's parents share lineage with b's parents
       const aParents = [a.motherId, a.fatherId].filter(Boolean) as string[];
       const bParents = [b.motherId, b.fatherId].filter(Boolean) as string[];
 
@@ -237,7 +270,9 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
         if (p?.fatherId) aGrandparents.add(p.fatherId);
       }
 
+      let hasShared = false;
       for (const pid of bParents) {
+        if (hasShared) break;
         const p = animalMap.get(pid);
         const bGrandparents = [p?.motherId, p?.fatherId].filter(Boolean) as string[];
         for (const gp of bGrandparents) {
@@ -249,6 +284,7 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
               relatedAnimalId: b.id,
               relatedTag: b.animalId,
             });
+            hasShared = true;
             break;
           }
         }
@@ -258,6 +294,338 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
 
   return risks;
 }
+
+// ============================================================
+// COI Calculation — Wright's Path Method (up to 3 generations)
+// ============================================================
+
+/**
+ * Calculate coefficient of inbreeding for a hypothetical offspring of animalA x animalB.
+ * Uses Wright's path method, tracing all paths through common ancestors up to MAX_PEDIGREE_DEPTH.
+ */
+export function calculateCOI(
+  animalA: AnimalRow,
+  animalB: AnimalRow,
+  allAnimals: AnimalRow[],
+): number {
+  const animalMap = new Map(allAnimals.map((a) => [a.id, a]));
+
+  // Build ancestor maps: id -> set of paths (each path = list of IDs from animal to ancestor)
+  function getAncestors(
+    animalId: string,
+    depth: number,
+    currentPath: string[],
+  ): Map<string, string[][]> {
+    const result = new Map<string, string[][]>();
+    if (depth === 0) return result;
+
+    const animal = animalMap.get(animalId);
+    if (!animal) return result;
+
+    const parentIds = [animal.motherId, animal.fatherId].filter(Boolean) as string[];
+
+    for (const parentId of parentIds) {
+      const newPath = [...currentPath, parentId];
+
+      // Add this parent as an ancestor
+      const existing = result.get(parentId) ?? [];
+      result.set(parentId, [...existing, newPath]);
+
+      // Recurse for deeper ancestors
+      const deeper = getAncestors(parentId, depth - 1, newPath);
+      for (const [ancestorId, paths] of deeper.entries()) {
+        const existingPaths = result.get(ancestorId) ?? [];
+        result.set(ancestorId, [...existingPaths, ...paths]);
+      }
+    }
+
+    return result;
+  }
+
+  // Get ancestors from both sides (from the perspective of a hypothetical offspring)
+  const sireAncestors = getAncestors(animalA.id, MAX_PEDIGREE_DEPTH, [animalA.id]);
+  const damAncestors = getAncestors(animalB.id, MAX_PEDIGREE_DEPTH, [animalB.id]);
+
+  // Also include the parents themselves as ancestors of the offspring
+  sireAncestors.set(animalA.id, [[animalA.id]]);
+  damAncestors.set(animalB.id, [[animalB.id]]);
+
+  // Find common ancestors
+  let coi = 0;
+  for (const [ancestorId, sirePaths] of sireAncestors.entries()) {
+    const damPaths = damAncestors.get(ancestorId);
+    if (!damPaths) continue;
+
+    // For each pair of paths through a common ancestor, add (1/2)^(n1+n2+1)
+    // where n1 = steps from sire to ancestor, n2 = steps from dam to ancestor
+    for (const sirePath of sirePaths) {
+      for (const damPath of damPaths) {
+        const n1 = sirePath.length; // includes the starting animal
+        const n2 = damPath.length;
+        const pathLength = n1 + n2 - 1; // -1 because ancestor counted in both
+        coi += Math.pow(0.5, pathLength);
+      }
+    }
+  }
+
+  return coi;
+}
+
+// ============================================================
+// Trait Profile
+// ============================================================
+
+export async function getAnimalTraitProfile(
+  prisma: PrismaClient,
+  animalId: string,
+  animalSex: string,
+): Promise<TraitProfile> {
+  const profile: TraitProfile = {
+    birthWeight: null,
+    calvingDifficultyAvg: null,
+    bcsLatest: null,
+    temperamentLatest: null,
+    scrotalCirc: null,
+    offspringCount: 0,
+  };
+
+  // Query all relevant observations for this animal
+  const observations = await prisma.observation.findMany({
+    where: {
+      animalId,
+      type: {
+        in: [
+          "calving",
+          "body_condition_score",
+          "temperament_score",
+          "scrotal_circumference",
+        ],
+      },
+    },
+    orderBy: { observedAt: "desc" },
+    select: { type: true, details: true, observedAt: true },
+  });
+
+  for (const obs of observations) {
+    const d = parseDetails(obs.details);
+
+    if (obs.type === "body_condition_score" && profile.bcsLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.bcsLatest = score;
+    }
+
+    if (obs.type === "temperament_score" && profile.temperamentLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.temperamentLatest = score;
+    }
+
+    if (obs.type === "scrotal_circumference" && profile.scrotalCirc === null) {
+      const cm = parseFloat(d.measurement_cm ?? "");
+      if (!isNaN(cm)) profile.scrotalCirc = cm;
+    }
+  }
+
+  if (animalSex === "Male") {
+    // For bulls: average calving difficulty of their calves
+    // Find calving observations where the bull is the father.
+    // Filter by `details LIKE %animalId%` to avoid a full table scan.
+    const calvingObs = await prisma.observation.findMany({
+      where: { type: "calving", details: { contains: animalId } },
+      select: { details: true },
+    });
+
+    const difficulties: number[] = [];
+    const birthWeights: number[] = [];
+    let offspringCount = 0;
+
+    for (const obs of calvingObs) {
+      const d = parseDetails(obs.details);
+      if (d.fatherId === animalId || d.bull_id === animalId) {
+        offspringCount++;
+        const diff = parseFloat(d.calving_difficulty ?? d.calvingDifficulty ?? "");
+        if (!isNaN(diff)) difficulties.push(diff);
+        const bw = parseFloat(d.birth_weight ?? d.birthWeight ?? "");
+        if (!isNaN(bw)) birthWeights.push(bw);
+      }
+    }
+
+    profile.offspringCount = offspringCount;
+    if (difficulties.length > 0) {
+      profile.calvingDifficultyAvg =
+        difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
+    }
+    if (birthWeights.length > 0) {
+      profile.birthWeight =
+        birthWeights.reduce((a, b) => a + b, 0) / birthWeights.length;
+    }
+  } else {
+    // For cows: their own calving difficulty history
+    const ownCalvings = await prisma.observation.findMany({
+      where: { type: "calving", animalId },
+      select: { details: true },
+    });
+
+    const difficulties: number[] = [];
+    for (const obs of ownCalvings) {
+      const d = parseDetails(obs.details);
+      const diff = parseFloat(d.calving_difficulty ?? d.calvingDifficulty ?? "");
+      if (!isNaN(diff)) difficulties.push(diff);
+      // Use birth weight from the cow's own calving records
+      if (profile.birthWeight === null) {
+        const bw = parseFloat(d.birth_weight ?? d.birthWeight ?? "");
+        if (!isNaN(bw)) profile.birthWeight = bw;
+      }
+    }
+
+    profile.offspringCount = ownCalvings.length;
+    if (difficulties.length > 0) {
+      profile.calvingDifficultyAvg =
+        difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
+    }
+  }
+
+  return profile;
+}
+
+// ============================================================
+// Pairing Score Calculation
+// ============================================================
+
+function calculatePairingScore(
+  coi: number,
+  bullProfile: TraitProfile,
+  cowProfile: TraitProfile,
+  cowCategory: string,
+): { score: number; reason: string; riskFlags: string[]; traitBreakdown: PairingSuggestion["traitBreakdown"] } {
+  const riskFlags: string[] = [];
+  const reasons: string[] = [];
+  let totalScore = 70; // Base score for a viable pairing
+
+  // --- Inbreeding penalty ---
+  if (coi > COI_SOFT_LIMIT) {
+    // Scale from 0 at 3.125% to -30 at 6.25%
+    const penalty = ((coi - COI_SOFT_LIMIT) / (COI_HARD_LIMIT - COI_SOFT_LIMIT)) * 30;
+    totalScore -= clamp(penalty, 0, 30);
+    const coiPct = (coi * 100).toFixed(1);
+    riskFlags.push(`High COI (${coiPct}%)`);
+    reasons.push(`COI ${coiPct}% — elevated inbreeding risk`);
+  } else if (coi > 0) {
+    reasons.push(`COI ${(coi * 100).toFixed(1)}% — acceptable`);
+  } else {
+    reasons.push("No detected common ancestors — low inbreeding risk");
+    totalScore += 5;
+  }
+
+  // --- Heifer safety: penalize high birth weight bulls ---
+  if (cowCategory === "Heifer" && bullProfile.birthWeight !== null && bullProfile.birthWeight > HIGH_BIRTH_WEIGHT_KG) {
+    totalScore -= 20;
+    riskFlags.push(`Heifer + high BW bull (${bullProfile.birthWeight.toFixed(1)}kg avg)`);
+    reasons.push("Bull produces heavy calves — risk for heifer");
+  } else if (cowCategory === "Heifer") {
+    reasons.push("Heifer pairing — monitoring birth weights recommended");
+  }
+
+  // --- Trait scores ---
+  let growthScore: number | null = null;
+  let fertilityScore: number | null = null;
+  let calvingEaseScore: number | null = null;
+  let temperamentScore: number | null = null;
+
+  // Calving ease: lower difficulty avg = better (1 is best, 5 is worst)
+  if (bullProfile.calvingDifficultyAvg !== null) {
+    // Convert 1-5 difficulty to 0-100 score (1=100, 5=0)
+    calvingEaseScore = clamp(((5 - bullProfile.calvingDifficultyAvg) / 4) * 100, 0, 100);
+    if (bullProfile.calvingDifficultyAvg <= 1.5) {
+      totalScore += 10;
+      reasons.push("Bull has excellent calving ease record");
+    } else if (bullProfile.calvingDifficultyAvg >= 3) {
+      totalScore -= 10;
+      riskFlags.push(`High avg calving difficulty (${bullProfile.calvingDifficultyAvg.toFixed(1)})`);
+    }
+  }
+
+  // Growth: birth weight as proxy
+  if (bullProfile.birthWeight !== null) {
+    // Optimal birth weight: 30-36kg range. Penalize extremes.
+    const bw = bullProfile.birthWeight;
+    if (bw >= 30 && bw <= 36) {
+      growthScore = 80;
+      totalScore += 5;
+    } else if (bw < 30) {
+      growthScore = 50;
+    } else {
+      growthScore = clamp(100 - (bw - 36) * 5, 20, 70);
+    }
+  }
+
+  // Temperament: lower is better (1 = docile)
+  const bullTemp = bullProfile.temperamentLatest;
+  const cowTemp = cowProfile.temperamentLatest;
+  if (bullTemp !== null || cowTemp !== null) {
+    const avgTemp = bullTemp !== null && cowTemp !== null
+      ? (bullTemp + cowTemp) / 2
+      : (bullTemp ?? cowTemp)!;
+    temperamentScore = clamp(((5 - avgTemp) / 4) * 100, 0, 100);
+    if (avgTemp <= 2) {
+      totalScore += 5;
+      reasons.push("Good temperament genetics");
+    } else if (avgTemp >= 4) {
+      totalScore -= 5;
+      riskFlags.push("Poor temperament genetics");
+    }
+  }
+
+  // BCS complementarity: ideally both in 5-7 range
+  if (bullProfile.bcsLatest !== null && cowProfile.bcsLatest !== null) {
+    const avgBcs = (bullProfile.bcsLatest + cowProfile.bcsLatest) / 2;
+    if (avgBcs >= 5 && avgBcs <= 7) {
+      totalScore += 5;
+      reasons.push("Both animals in good body condition");
+    } else if (avgBcs < 4) {
+      totalScore -= 5;
+      riskFlags.push("Poor body condition — may affect fertility");
+    }
+  }
+
+  // Scrotal circumference bonus for bulls
+  if (bullProfile.scrotalCirc !== null) {
+    if (bullProfile.scrotalCirc >= 34) {
+      totalScore += 5;
+      fertilityScore = 85;
+      reasons.push(`Good scrotal circumference (${bullProfile.scrotalCirc}cm)`);
+    } else if (bullProfile.scrotalCirc >= 30) {
+      fertilityScore = 60;
+    } else {
+      fertilityScore = 30;
+      totalScore -= 5;
+      riskFlags.push(`Low scrotal circumference (${bullProfile.scrotalCirc}cm)`);
+    }
+  }
+
+  // Offspring count bonus: proven sire
+  if (bullProfile.offspringCount >= 5) {
+    totalScore += 5;
+    reasons.push(`Proven sire (${bullProfile.offspringCount} calves on record)`);
+  }
+
+  const finalScore = clamp(Math.round(totalScore), 0, 100);
+
+  return {
+    score: finalScore,
+    reason: reasons.join(". ") + ".",
+    riskFlags,
+    traitBreakdown: {
+      growth: growthScore,
+      fertility: fertilityScore,
+      calvingEase: calvingEaseScore,
+      temperament: temperamentScore,
+    },
+  };
+}
+
+// ============================================================
+// Pairing Suggestions (enhanced)
+// ============================================================
 
 export async function suggestPairings(
   prisma: PrismaClient,
@@ -309,34 +677,59 @@ export async function suggestPairings(
     return scan !== "pregnant";
   });
 
-  const risks = detectInbreedingRisk(allAnimals);
-  const riskPairs = new Set(
-    risks.map((r) => `${r.animalId}:${r.relatedAnimalId}`),
-  );
+  // Pre-fetch trait profiles for all bulls and open cows
+  const profileCache = new Map<string, TraitProfile>();
 
+  const profilePromises = [
+    ...bulls.map(async (b) => {
+      const profile = await getAnimalTraitProfile(prisma, b.id, b.sex);
+      profileCache.set(b.id, profile);
+    }),
+    ...openCows.map(async (c) => {
+      const profile = await getAnimalTraitProfile(prisma, c.id, c.sex);
+      profileCache.set(c.id, profile);
+    }),
+  ];
+
+  await Promise.all(profilePromises);
+
+  // Generate scored pairings
   const suggestions: PairingSuggestion[] = [];
 
   for (const bull of bulls) {
+    const bullProfile = profileCache.get(bull.id)!;
+
     for (const cow of openCows) {
-      const pairKey = `${bull.id}:${cow.id}`;
-      const reversePairKey = `${cow.id}:${bull.id}`;
+      // Calculate COI for hypothetical offspring
+      const coi = calculateCOI(bull, cow, allAnimals);
 
-      if (riskPairs.has(pairKey) || riskPairs.has(reversePairKey)) continue;
+      // Hard limit: skip if COI too high
+      if (coi > COI_HARD_LIMIT) continue;
 
-      const reason =
-        cow.category === "Heifer"
-          ? "Open heifer — no inbreeding conflict detected"
-          : "Open cow — no inbreeding conflict detected";
+      const cowProfile = profileCache.get(cow.id)!;
+
+      const { score, reason, riskFlags, traitBreakdown } = calculatePairingScore(
+        coi,
+        bullProfile,
+        cowProfile,
+        cow.category,
+      );
 
       suggestions.push({
         bullId: bull.id,
         bullTag: bull.animalId,
         cowId: cow.id,
         cowTag: cow.animalId,
+        score,
+        coi,
         reason,
+        riskFlags,
+        traitBreakdown,
       });
     }
   }
 
-  return suggestions;
+  // Sort by score descending and limit
+  suggestions.sort((a, b) => b.score - a.score);
+  return suggestions.slice(0, MAX_PAIRINGS);
 }

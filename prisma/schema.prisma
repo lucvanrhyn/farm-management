@@ -47,6 +47,7 @@ model Animal {
   status             String   @default("Active")
   motherId           String?
   fatherId           String?
+  mobId              String?
   registrationNumber String?
   dateAdded          String
   deceasedAt         String?
@@ -118,6 +119,7 @@ model Camp {
   sizeHectares Float?
   waterSource  String?
   geojson      String?
+  color        String?
   createdAt    DateTime @default(now())
 }
 
@@ -131,6 +133,15 @@ model CampCoverReading {
   recordedBy   String
 
   @@index([campId, recordedAt], name: "idx_cover_camp_date")
+}
+
+model Mob {
+  id          String   @id @default(cuid())
+  name        String
+  currentCamp String
+  createdAt   DateTime @default(now())
+
+  @@index([currentCamp], name: "idx_mob_camp")
 }
 
 model Task {

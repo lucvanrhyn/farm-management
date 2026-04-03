@@ -9,6 +9,7 @@ export interface CampRow {
   camp_name: string;
   water_source?: string;
   sizeHectares?: number;
+  color?: string;
   liveCount: number;
   grazing: string;
   fence: string;
@@ -27,6 +28,7 @@ interface EditForm {
   campName: string;
   sizeHectares: string;
   waterSource: string;
+  color: string;
 }
 
 const FIELD_STYLE = {
@@ -44,7 +46,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "", color: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -53,6 +55,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       campName: row.camp_name,
       sizeHectares: row.sizeHectares !== undefined ? String(row.sizeHectares) : "",
       waterSource: row.water_source ?? "",
+      color: row.color ?? "",
     });
     setEditError(null);
     setEditing(row.camp_id);
@@ -72,6 +75,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       const body: Record<string, unknown> = { campName: editForm.campName.trim() };
       body.sizeHectares = editForm.sizeHectares ? parseFloat(editForm.sizeHectares) : null;
       body.waterSource = editForm.waterSource.trim() || null;
+      body.color = editForm.color.trim() || null;
 
       const res = await fetch(`/api/camps/${editing}`, {
         method: "PATCH",
@@ -182,6 +186,18 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                   style={FIELD_STYLE}
                 />
               </div>
+              <div className="col-span-2">
+                <label style={LABEL_STYLE}>Camp Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={editForm.color || "#94a3b8"}
+                    onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
+                    style={{ width: 36, height: 36, border: "1px solid #D8CFC4", borderRadius: 6, cursor: "pointer", padding: 2 }}
+                  />
+                  <span className="text-xs font-mono" style={{ color: "#9C8E7A" }}>{editForm.color || "Auto"}</span>
+                </div>
+              </div>
             </div>
 
             {editError && (
@@ -259,13 +275,21 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                     style={{ borderBottom: "1px solid #E0D5C8", opacity: isDeleting ? 0.5 : 1 }}
                   >
                     <td className="px-4 py-3 font-semibold">
-                      <Link
-                        href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
-                        className="transition-colors hover:text-[#8B6914]"
-                        style={{ color: "#1C1815" }}
-                      >
-                        {camp.camp_name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {camp.color && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full shrink-0"
+                            style={{ background: camp.color }}
+                          />
+                        )}
+                        <Link
+                          href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
+                          className="transition-colors hover:text-[#8B6914]"
+                          style={{ color: "#1C1815" }}
+                        >
+                          {camp.camp_name}
+                        </Link>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono" style={{ color: "#6B5C4E" }}>
                       {camp.liveCount}

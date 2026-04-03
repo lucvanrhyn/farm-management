@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import type { Camp } from "@/lib/types";
+import { DEFAULT_CAMP_COLOR } from "@/lib/camp-colors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -375,6 +376,7 @@ export default function SchematicMap({
           const liveCondition = liveConditions[camp.camp_id];
           const animalCount   = campAnimalCounts[camp.camp_id] ?? 0;
           const colors        = getCampColors(filterBy, liveCondition, animalCount, camp.size_hectares ?? 120);
+          const identityColor = camp.color ?? DEFAULT_CAMP_COLOR;
           const isAlert       = liveCondition
             ? liveCondition.grazing_quality === "Overgrazed" || liveCondition.water_status === "Empty" || liveCondition.water_status === "Broken" || liveCondition.fence_status === "Damaged"
             : false;
@@ -407,13 +409,14 @@ export default function SchematicMap({
                 width: `${wPct.toFixed(3)}%`,
                 height: `${hPct.toFixed(3)}%`,
                 border: `${isZoomed ? "2px" : "1.5px"} solid ${colors.border}`,
+                borderLeft: `4px solid ${identityColor}`,
                 background: isZoomed ? "rgba(255,255,255,0.98)" : colors.bg,
                 borderRadius: 8,
                 cursor: "pointer",
                 overflow: "hidden",
                 userSelect: "none",
                 boxSizing: "border-box",
-                boxShadow: isZoomed ? `0 4px 24px rgba(0,0,0,0.14), 0 0 0 2px ${colors.border}40` : "none",
+                boxShadow: isZoomed ? `0 4px 24px rgba(0,0,0,0.14), 0 0 0 2px ${identityColor}40` : "none",
               }}
             >
               {isZoomed ? (

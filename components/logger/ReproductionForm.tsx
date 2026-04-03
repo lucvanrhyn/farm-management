@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
-type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving";
+type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving" | "body_condition_score" | "temperament_score" | "scrotal_circumference";
 
 export interface ReproSubmitData {
   type: ReproType;
@@ -13,6 +13,7 @@ export interface ReproSubmitData {
 
 interface Props {
   animalId: string;
+  animalSex?: "Male" | "Female";
   onClose: () => void;
   onSubmit: (data: ReproSubmitData) => void;
 }
@@ -63,7 +64,7 @@ function BottomSheet({
   );
 }
 
-const TYPE_OPTIONS: { value: ReproType; label: string; icon: string; desc: string }[] = [
+const BASE_TYPE_OPTIONS: { value: ReproType; label: string; icon: string; desc: string; maleOnly?: boolean }[] = [
   {
     value: "heat_detection",
     label: "Heat / Oestrus",
@@ -88,6 +89,25 @@ const TYPE_OPTIONS: { value: ReproType; label: string; icon: string; desc: strin
     icon: "🐮",
     desc: "Dam calved — record calf outcome",
   },
+  {
+    value: "body_condition_score",
+    label: "Body Condition Score",
+    icon: "📊",
+    desc: "Score 1-9 body condition assessment",
+  },
+  {
+    value: "temperament_score",
+    label: "Temperament Score",
+    icon: "🧠",
+    desc: "Score 1-5 temperament assessment",
+  },
+  {
+    value: "scrotal_circumference",
+    label: "Scrotal Circumference",
+    icon: "📏",
+    desc: "Measure scrotal circumference (cm)",
+    maleOnly: true,
+  },
 ];
 
 const SELECTED_STYLE = {
@@ -101,7 +121,18 @@ const DEFAULT_STYLE = {
   color: "#D2B48C",
 };
 
-export default function ReproductionForm({ animalId, onClose, onSubmit }: Props) {
+const BCS_DESCRIPTIONS: Record<number, string> = {
+  1: "Emaciated", 2: "Very thin", 3: "Thin",
+  4: "Borderline", 5: "Moderate", 6: "Good",
+  7: "Fleshy", 8: "Obese", 9: "Very obese",
+};
+
+const TEMPERAMENT_DESCRIPTIONS: Record<number, string> = {
+  1: "Docile", 2: "Slightly restless", 3: "Restless",
+  4: "Nervous", 5: "Flighty / Wild",
+};
+
+export default function ReproductionForm({ animalId, animalSex, onClose, onSubmit }: Props) {
   const [step, setStep] = useState<"type" | "details">("type");
   const [selectedType, setSelectedType] = useState<ReproType | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -119,6 +150,20 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
   // Calving
   const [calfStatus, setCalfStatus] = useState<"live" | "stillborn">("live");
   const [calfTag, setCalfTag] = useState("");
+
+  // Body condition score
+  const [bcsScore, setBcsScore] = useState(5);
+
+  // Temperament score
+  const [temperamentScore, setTemperamentScore] = useState(1);
+
+  // Scrotal circumference
+  const [scrotalCm, setScrotalCm] = useState("");
+
+  // Filter type options based on animal sex
+  const TYPE_OPTIONS = BASE_TYPE_OPTIONS.filter(
+    (opt) => !opt.maleOnly || animalSex === "Male",
+  );
 
   function handleTypeSelect(type: ReproType) {
     setSelectedType(type);
@@ -140,6 +185,16 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
       details = {
         result: scanResult,
       };
+    } else if (selectedType === "body_condition_score") {
+      details = { score: String(bcsScore) };
+    } else if (selectedType === "temperament_score") {
+      details = { score: String(temperamentScore) };
+    } else if (selectedType === "scrotal_circumference") {
+      if (!scrotalCm.trim()) {
+        alert("Scrotal circumference measurement is required.");
+        return;
+      }
+      details = { measurement_cm: scrotalCm.trim() };
     } else {
       // calving
       details = {
@@ -341,6 +396,104 @@ export default function ReproductionForm({ animalId, onClose, onSubmit }: Props)
               style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
             >
               Record Calving
+            </button>
+          </>
+        )}
+
+        {/* Step 2e: body condition score */}
+        {step === "details" && selectedType === "body_condition_score" && (
+          <>
+            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+              Body Condition Score (1-9)
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
+                const rangeLabel =
+                  n <= 3 ? "Thin" : n <= 5 ? "Moderate" : n <= 7 ? "Good" : "Obese";
+                return (
+                  <button
+                    key={n}
+                    onClick={() => setBcsScore(n)}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-colors"
+                    style={bcsScore === n ? SELECTED_STYLE : DEFAULT_STYLE}
+                  >
+                    {n} — {BCS_DESCRIPTIONS[n]}{" "}
+                    <span className="opacity-60">({rangeLabel})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={handleSubmit}
+              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
+              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+            >
+              Record BCS
+            </button>
+          </>
+        )}
+
+        {/* Step 2f: temperament score */}
+        {step === "details" && selectedType === "temperament_score" && (
+          <>
+            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+              Temperament Score (1-5)
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setTemperamentScore(n)}
+                  className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-colors"
+                  style={temperamentScore === n ? SELECTED_STYLE : DEFAULT_STYLE}
+                >
+                  {n} — {TEMPERAMENT_DESCRIPTIONS[n]}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleSubmit}
+              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
+              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+            >
+              Record Temperament
+            </button>
+          </>
+        )}
+
+        {/* Step 2g: scrotal circumference */}
+        {step === "details" && selectedType === "scrotal_circumference" && (
+          <>
+            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+              Scrotal Circumference
+            </p>
+            <div>
+              <p className="text-sm mb-2" style={{ color: "#D2B48C" }}>
+                Measurement in cm
+              </p>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="20"
+                max="50"
+                value={scrotalCm}
+                onChange={(e) => setScrotalCm(e.target.value)}
+                placeholder="e.g. 36"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
+                style={{
+                  backgroundColor: "rgba(26, 13, 5, 0.6)",
+                  border: "1px solid rgba(92, 61, 46, 0.5)",
+                  color: "#F5F0E8",
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSubmit}
+              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
+              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+            >
+              Record Scrotal Circumference
             </button>
           </>
         )}

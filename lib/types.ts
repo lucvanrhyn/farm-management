@@ -26,7 +26,11 @@ export type ObservationType =
   | "weighing"
   | "heat_detection"
   | "insemination"
-  | "pregnancy_scan";
+  | "pregnancy_scan"
+  | "mob_movement"
+  | "body_condition_score"
+  | "temperament_score"
+  | "scrotal_circumference";
 
 export type TreatmentType =
   | "Vaccination"
@@ -55,8 +59,16 @@ export interface Animal {
   status: AnimalStatus;
   mother_id?: string;          // animal_id of mother
   father_id?: string;          // animal_id of sire
+  mob_id?: string;             // mob this animal belongs to
   registration_number?: string; // SA Studbook or breed society number
   date_added: string;          // ISO date string
+}
+
+export interface Mob {
+  id: string;
+  name: string;
+  current_camp: string;
+  animal_count?: number;
 }
 
 export interface Camp {
@@ -65,6 +77,7 @@ export interface Camp {
   size_hectares?: number;
   water_source?: string;       // "borehole" | "dam" | "river" | "trough"
   geojson?: string;            // GeoJSON polygon coordinates (stringified)
+  color?: string;              // Hex identity color for this camp (e.g. "#2563EB")
   // Live condition fields — populated from IndexedDB after logger observations
   grazing_quality?: GrazingQuality;
   water_status?: WaterStatus;
@@ -157,6 +170,7 @@ export interface PrismaAnimal {
   status: AnimalStatus;
   motherId: string | null;
   fatherId: string | null;
+  mobId: string | null;
   registrationNumber: string | null;
   dateAdded: string;
   deceasedAt: string | null;

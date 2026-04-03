@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 interface ImportResult {
   imported: number;
   skipped: number;
+  campsCreated: number;
   errors: string[];
 }
 
@@ -80,8 +81,8 @@ export default function AnimalImporter() {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.done) {
-              setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
-              if (data.imported > 0) router.refresh();
+              setResult({ imported: data.imported, skipped: data.skipped, campsCreated: data.campsCreated ?? 0, errors: data.errors });
+              if (data.imported > 0 || data.campsCreated > 0) router.refresh();
             } else if (typeof data.processed === "number") {
               setProgress({ processed: data.processed, total: data.total });
             }
@@ -113,16 +114,20 @@ export default function AnimalImporter() {
         justifyContent: "space-between",
       }}>
         <div>
-          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1C1815" }}>File Format</p>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1C1815" }}>Two-Tab Template</p>
           <p style={{ fontSize: "0.75rem", color: "#6B5C4E", marginTop: "0.125rem" }}>
-            Required columns:{" "}
+            Sheet 1:{" "}
             <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "#8B6914" }}>
-              Animal ID, Name, Category, Sex, Camp ID
+              Camps
+            </code>
+            {" "}— Sheet 2:{" "}
+            <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "#8B6914" }}>
+              Animals
             </code>
           </p>
         </div>
         <a
-          href="/templates/animals-template.xlsx"
+          href="/templates/farmtrack-import-template.xlsx"
           download
           style={{
             fontSize: "0.75rem",
@@ -260,7 +265,7 @@ export default function AnimalImporter() {
           background: result.skipped === 0 ? "rgba(74,124,89,0.08)" : "#F5F2EE",
         }}>
           <p style={{ fontWeight: 700, color: "#1C1815", marginBottom: "0.75rem" }}>Import Results</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: result.campsCreated > 0 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
             <div style={{
               background: "rgba(74,124,89,0.12)",
               border: "1px solid rgba(74,124,89,0.25)",
@@ -270,6 +275,17 @@ export default function AnimalImporter() {
               <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4A7C59" }}>{result.imported}</p>
               <p style={{ fontSize: "0.75rem", color: "#9C8E7A", marginTop: "0.125rem" }}>Animals imported</p>
             </div>
+            {result.campsCreated > 0 && (
+              <div style={{
+                background: "rgba(74,124,89,0.08)",
+                border: "1px solid rgba(74,124,89,0.2)",
+                borderRadius: "0.5rem",
+                padding: "0.75rem",
+              }}>
+                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4A7C59" }}>{result.campsCreated}</p>
+                <p style={{ fontSize: "0.75rem", color: "#9C8E7A", marginTop: "0.125rem" }}>Camps created</p>
+              </div>
+            )}
             <div style={{
               background: "#FFFFFF",
               border: "1px solid #E0D5C8",

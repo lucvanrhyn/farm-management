@@ -26,7 +26,12 @@ export async function PATCH(
     sizeHectares?: number | null;
     waterSource?: string | null;
     geojson?: string | null;
+    color?: string | null;
   };
+
+  if (body.color !== undefined && body.color !== null && !/^#[0-9A-Fa-f]{6}$/.test(body.color)) {
+    return NextResponse.json({ error: "color must be a valid hex color (e.g. #2563EB)" }, { status: 400 });
+  }
 
   await prisma.camp.update({
     where: { campId },
@@ -35,6 +40,7 @@ export async function PATCH(
       ...(body.sizeHectares !== undefined && { sizeHectares: body.sizeHectares }),
       ...(body.waterSource !== undefined && { waterSource: body.waterSource }),
       ...(body.geojson !== undefined && { geojson: body.geojson }),
+      ...(body.color !== undefined && { color: body.color }),
     },
   });
 

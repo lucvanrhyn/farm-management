@@ -18,6 +18,75 @@ const STATUS_COLORS = {
   neutral: { bar: "#9C8E7A", text: "#9C8E7A", bg: "rgba(156,142,122,0.10)" },
 };
 
+function getScoreColor(score: number): { bg: string; text: string; border: string } {
+  if (score > 70) return { bg: "rgba(74,124,89,0.12)", text: "#4A7C59", border: "rgba(74,124,89,0.3)" };
+  if (score >= 40) return { bg: "rgba(139,105,20,0.12)", text: "#8B6914", border: "rgba(139,105,20,0.3)" };
+  return { bg: "rgba(192,87,76,0.12)", text: "#C0574C", border: "rgba(192,87,76,0.3)" };
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const colors = getScoreColor(score);
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold tabular-nums"
+      style={{ background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}
+    >
+      {score}
+    </span>
+  );
+}
+
+function CoiBadge({ coi }: { coi: number }) {
+  const pct = (coi * 100).toFixed(1);
+  const isHigh = coi > 0.03125;
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium tabular-nums"
+      style={{
+        background: isHigh ? "rgba(192,87,76,0.08)" : "rgba(156,142,122,0.08)",
+        color: isHigh ? "#C0574C" : "#9C8E7A",
+      }}
+    >
+      COI {pct}%
+    </span>
+  );
+}
+
+function RiskChip({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
+      style={{
+        background: "rgba(192,87,76,0.10)",
+        color: "#C0574C",
+        border: "1px solid rgba(192,87,76,0.2)",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function TraitDot({ label, value }: { label: string; value: number | null }) {
+  if (value === null) return null;
+  const color =
+    value >= 70 ? "#4A7C59" : value >= 40 ? "#8B6914" : "#C0574C";
+  return (
+    <div className="flex items-center gap-1.5">
+      <div
+        className="w-2 h-2 rounded-full shrink-0"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-xs" style={{ color: "#9C8E7A" }}>
+        {label}
+      </span>
+      <span className="text-xs font-medium tabular-nums" style={{ color }}>
+        {Math.round(value)}
+      </span>
+    </div>
+  );
+}
+
 function KPICard({
   label,
   value,
@@ -82,6 +151,7 @@ export default function BreedingDashboard({
   const [loading, setLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [hideRisky, setHideRisky] = useState(false);
 
   async function handleAnalyze() {
     setLoading(true);
@@ -121,6 +191,11 @@ export default function BreedingDashboard({
       : snapshot.expectedCalvingsThisMonth > 0
         ? "warning"
         : "good";
+
+  // Filter pairings based on risk toggle
+  const filteredPairings = hideRisky
+    ? pairings.filter((p) => p.coi <= 0.03125)
+    : pairings;
 
   return (
     <div className="space-y-8">
@@ -164,35 +239,80 @@ export default function BreedingDashboard({
 
       {/* Pairing Suggestions */}
       <div>
-        <SectionTitle>Suggested Pairings (Inbreeding-Safe)</SectionTitle>
+        <div className="flex items-center justify-between mb-3">
+          <SectionTitle>Suggested Pairings</SectionTitle>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideRisky}
+              onChange={(e) => setHideRisky(e.target.checked)}
+              className="rounded border-[#E0D5C8] text-[#4A7C59] focus:ring-[#4A7C59]"
+            />
+            <span className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+              Hide risky (COI &gt; 3.125%)
+            </span>
+          </label>
+        </div>
         <Card>
-          {pairings.length === 0 ? (
+          {filteredPairings.length === 0 ? (
             <p className="text-sm" style={{ color: "#9C8E7A" }}>
-              No pairings available. Ensure there are active bulls and open cows with lineage data.
+              {pairings.length === 0
+                ? "No pairings available. Ensure there are active bulls and open cows with lineage data."
+                : "All pairings filtered out. Uncheck the filter to see risky pairings."}
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
-                    <th className="text-left py-2 pr-4 font-semibold text-xs uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Bull Tag</th>
-                    <th className="text-left py-2 pr-4 font-semibold text-xs uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Cow Tag</th>
-                    <th className="text-left py-2 font-semibold text-xs uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pairings.slice(0, 20).map((p, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #F0EBE4" }}>
-                      <td className="py-2 pr-4 font-mono font-medium" style={{ color: "#1C1815" }}>{p.bullTag}</td>
-                      <td className="py-2 pr-4 font-mono" style={{ color: "#4A3728" }}>{p.cowTag}</td>
-                      <td className="py-2" style={{ color: "#6B5B3E" }}>{p.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {pairings.length > 20 && (
-                <p className="text-xs mt-2" style={{ color: "#9C8E7A" }}>
-                  Showing 20 of {pairings.length} pairings
+            <div className="space-y-3">
+              {filteredPairings.map((p, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border p-4"
+                  style={{ borderColor: "#E0D5C8", background: "#FAFAF8" }}
+                >
+                  {/* Header row: tags, score, COI */}
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-sm font-bold" style={{ color: "#1C1815" }}>
+                        {p.bullTag}
+                      </span>
+                      <span className="text-xs" style={{ color: "#9C8E7A" }}>x</span>
+                      <span className="font-mono text-sm font-medium" style={{ color: "#4A3728" }}>
+                        {p.cowTag}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <CoiBadge coi={p.coi} />
+                      <ScoreBadge score={p.score} />
+                    </div>
+                  </div>
+
+                  {/* Risk flags */}
+                  {p.riskFlags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {p.riskFlags.map((flag, fi) => (
+                        <RiskChip key={fi} label={flag} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Trait breakdown */}
+                  {p.traitBreakdown && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2">
+                      <TraitDot label="Growth" value={p.traitBreakdown.growth} />
+                      <TraitDot label="Fertility" value={p.traitBreakdown.fertility} />
+                      <TraitDot label="Calving" value={p.traitBreakdown.calvingEase} />
+                      <TraitDot label="Temper." value={p.traitBreakdown.temperament} />
+                    </div>
+                  )}
+
+                  {/* Reason */}
+                  <p className="text-xs leading-relaxed" style={{ color: "#6B5B3E" }}>
+                    {p.reason}
+                  </p>
+                </div>
+              ))}
+              {pairings.length > filteredPairings.length && (
+                <p className="text-xs" style={{ color: "#9C8E7A" }}>
+                  Showing {filteredPairings.length} of {pairings.length} pairings (risky pairings hidden)
                 </p>
               )}
             </div>

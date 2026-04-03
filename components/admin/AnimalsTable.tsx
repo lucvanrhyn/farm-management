@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
-import type { AnimalCategory, AnimalStatus, Camp, PrismaAnimal } from "@/lib/types";
+import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 
 const PAGE_SIZE = 50;
@@ -13,6 +13,7 @@ interface Props {
   camps: Camp[];
   farmSlug: string;
   withdrawalIds?: Set<string>;
+  mobs?: Mob[];
 }
 
 const farmInput =
@@ -20,7 +21,7 @@ const farmInput =
 const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
-export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds }: Props) {
+export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, mobs }: Props) {
   const [tab, setTab] = useState<"active" | "deceased">("active");
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
@@ -69,6 +70,12 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds }
       {sortKey === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
     </span>
   );
+
+  const mobMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const mob of mobs ?? []) m.set(mob.id, mob.name);
+    return m;
+  }, [mobs]);
 
   const categories: AnimalCategory[] = ["Cow", "Calf", "Heifer", "Bull", "Ox"];
   const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
@@ -192,7 +199,7 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds }
           <thead>
             <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
               {(tab === "active"
-                ? [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ["status", "Status"], ["", ""]] as [string, string][]
+                ? [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ...(mobs && mobs.length > 0 ? [["mobId", "Mob"]] : []), ["status", "Status"], ["", ""]] as [string, string][]
                 : [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
               ).map(([key, label]) => (
                 <th
@@ -265,6 +272,11 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds }
                 </td>
                 {tab === "active" ? (
                   <>
+                    {mobs && mobs.length > 0 && (
+                      <td className="px-3 py-2 text-sm" style={{ color: "#6B5C4E" }}>
+                        {animal.mobId ? (mobMap.get(animal.mobId) ?? "—") : "—"}
+                      </td>
+                    )}
                     <td className="px-3 py-2">
                       <span className="flex items-center gap-1.5">
                         <span

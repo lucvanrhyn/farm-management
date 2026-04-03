@@ -6,7 +6,7 @@ import ExportButton from "@/components/admin/ExportButton";
 import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
-import type { Camp, PrismaAnimal } from "@/lib/types";
+import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,11 @@ export default async function AdminAnimalsPage({
     );
   }
 
-  const [animals, prismaCamps, withdrawalAnimals] = await Promise.all([
+  const [animals, prismaCamps, withdrawalAnimals, prismaMobs] = await Promise.all([
     prisma.animal.findMany({ orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     getAnimalsInWithdrawal(prisma),
+    prisma.mob.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
@@ -38,6 +39,12 @@ export default async function AdminAnimalsPage({
     camp_name: c.campName,
     size_hectares: c.sizeHectares ?? undefined,
     water_source: c.waterSource ?? undefined,
+  }));
+
+  const mobs: Mob[] = prismaMobs.map((m) => ({
+    id: m.id,
+    name: m.name,
+    current_camp: m.currentCamp,
   }));
 
   return (
@@ -55,7 +62,7 @@ export default async function AdminAnimalsPage({
           <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
         </div>
       </div>
-      <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} withdrawalIds={withdrawalIds} />
+      <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} withdrawalIds={withdrawalIds} mobs={mobs} />
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>

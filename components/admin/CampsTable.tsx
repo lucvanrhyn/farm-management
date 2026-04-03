@@ -9,12 +9,12 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
 
   const liveConditions = await getLatestCampConditions(prisma);
 
-  const animalCounts = await Promise.all(
-    camps.map((camp) =>
-      prisma.animal.count({ where: { currentCamp: camp.camp_id, status: "Active" } })
-    )
-  );
-  const countByCamp = new Map(camps.map((camp, i) => [camp.camp_id, animalCounts[i]]));
+  const animalGroups = await prisma.animal.groupBy({
+    by: ["currentCamp"],
+    where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },
+    _count: { _all: true },
+  });
+  const countByCamp = new Map(animalGroups.map((g) => [g.currentCamp, g._count._all]));
 
   const rows: CampRow[] = camps.map((camp) => {
     const live = liveConditions.get(camp.camp_id);
@@ -23,6 +23,7 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
       camp_name: camp.camp_name,
       water_source: camp.water_source,
       sizeHectares: camp.size_hectares,
+      color: camp.color,
       liveCount: countByCamp.get(camp.camp_id) ?? 0,
       grazing: live?.grazing_quality ?? "Fair",
       fence: live?.fence_status ?? "Intact",
