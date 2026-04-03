@@ -62,6 +62,8 @@ interface Props {
   overlayMode?: OverlayMode;
   onOverlayChange?: (mode: OverlayMode) => void;
   onBoundaryDrawn?: (campId: string | null, geojson: string, hectares: number, campName?: string) => void;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -251,6 +253,7 @@ function DrawControl({ onDrawCreate, onDrawDelete, enabled }: DrawControlProps) 
 export default function FarmMap({
   campData, onCampClick, className, drawMode = false,
   overlayMode: overlayModeProp, onOverlayChange, onBoundaryDrawn,
+  latitude: farmLat, longitude: farmLng,
 }: Props) {
   const mapRef = useRef<MapRef>(null);
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
@@ -295,15 +298,18 @@ export default function FarmMap({
       },
     } as Parameters<typeof map.addLayer>[0]);
 
-    // Globe flyover to farm
+    // Globe flyover to farm — Mapbox expects [longitude, latitude]
+    const lng = farmLng ?? 28.5;
+    const lat = farmLat ?? -25.5;
+
     map.flyTo({
-      center: [-25.5, 28.5],
+      center: [lng, lat],
       zoom: 14,
       pitch: 55,
       bearing: -20,
       duration: 3000,
     });
-  }, []);
+  }, [farmLat, farmLng]);
 
   // ── Camp polygon click ────────────────────────────────────────────────────
 

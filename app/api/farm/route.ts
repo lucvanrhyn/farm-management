@@ -23,6 +23,7 @@ export async function GET() {
     return NextResponse.json({
       farmName: settings?.farmName ?? "My Farm",
       breed: settings?.breed ?? "Mixed",
+      heroImageUrl: settings?.heroImageUrl ?? "/farm-hero.jpg",
       animalCount,
       campCount,
     });

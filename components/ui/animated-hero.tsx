@@ -7,6 +7,7 @@ interface FarmStats {
   breed: string;
   animalCount: number;
   campCount: number;
+  heroImageUrl?: string;
 }
 import { motion } from "framer-motion";
 
@@ -29,7 +30,7 @@ function getGreeting(hour: number): { text: string; icon: string } {
   return { text: "Good evening", icon: "🌙" };
 }
 
-export function AnimatedHero() {
+export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: string) => void }) {
   const [wordIndex, setWordIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [farm, setFarm] = useState<FarmStats | null>(null);
@@ -47,7 +48,12 @@ export function AnimatedHero() {
     }, 2500);
     fetch("/api/farm")
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setFarm(data); })
+      .then((data) => {
+        if (data) {
+          setFarm(data);
+          if (data.heroImageUrl) onHeroImageLoad?.(data.heroImageUrl);
+        }
+      })
       .catch(() => {});
     return () => clearInterval(interval);
   }, [words.length]);

@@ -3,13 +3,25 @@
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { OfflineProvider } from '@/components/logger/OfflineProvider';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Camp } from '@/lib/types';
 
 export default function LoggerLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const farmSlug = params.farmSlug as string;
   const warmedUp = useRef(false);
+  const [heroImage, setHeroImage] = useState("/farm-hero.jpg");
+
+  useEffect(() => {
+    fetch("/api/farm")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.heroImageUrl && typeof data.heroImageUrl === "string" && data.heroImageUrl.startsWith("/")) {
+          setHeroImage(data.heroImageUrl);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Pre-fetch all camp pages into the SW "pages" cache while online so they
@@ -33,7 +45,7 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
       {/* Fixed blurred farm background */}
       <div className="fixed inset-0 z-0 overflow-hidden">
         <Image
-          src="/farm-hero.jpg"
+          src={heroImage}
           alt=""
           fill
           priority
