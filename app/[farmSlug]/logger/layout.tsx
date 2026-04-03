@@ -33,7 +33,7 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
       {/* Fixed blurred farm background */}
       <div className="fixed inset-0 z-0 overflow-hidden">
         <Image
-          src="/brangus.jpg"
+          src="/farm-hero.jpg"
           alt=""
           fill
           priority

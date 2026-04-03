@@ -65,7 +65,7 @@ export default function HomePage() {
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
       style={{
-        backgroundImage: 'url("/brangus.jpg")',
+        backgroundImage: 'url("/farm-hero.jpg")',
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
