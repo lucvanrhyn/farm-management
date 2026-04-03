@@ -56,12 +56,65 @@ export async function POST(req: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
+
+  // Look up farm's default breed from settings
+  const farmSettings = await prisma.farmSettings.findFirst({ select: { breed: true } });
+  const defaultBreed = farmSettings?.breed?.trim() || "Mixed";
+
+  // ── Process Camps sheet (if present) ───────────────────────────────────────
+  let campsCreated = 0;
+  const validCampIds = new Set<string>();
+
+  if (workbook.SheetNames.includes("Camps")) {
+    const campsSheet = workbook.Sheets["Camps"];
+    const campRows = XLSX.utils.sheet_to_json<Record<string, string>>(campsSheet, { defval: "" });
+
+    for (const campRow of campRows) {
+      const campName = String(campRow.camp_name ?? "").trim();
+      if (!campName) continue;
+
+      const sizeRaw = String(campRow.size_hectares ?? "").trim();
+      const sizeHectares = sizeRaw ? parseFloat(sizeRaw) : null;
+      const waterSource = String(campRow.water_source ?? "").trim() || null;
+
+      validCampIds.add(campName);
+
+      const existing = await prisma.camp.findUnique({ where: { campId: campName } });
+      if (!existing) {
+        try {
+          await prisma.camp.create({
+            data: {
+              campId: campName,
+              campName,
+              sizeHectares: sizeHectares !== null && !isNaN(sizeHectares) ? sizeHectares : null,
+              waterSource,
+            },
+          });
+          campsCreated++;
+        } catch {
+          // Camp may have been created concurrently — continue
+        }
+      }
+    }
+  }
+
+  // Add all existing DB camps to the valid set (covers both new-format and old-format uploads)
+  const existingCamps = await prisma.camp.findMany({ select: { campId: true, campName: true } });
+  for (const camp of existingCamps) {
+    validCampIds.add(camp.campId);
+    validCampIds.add(camp.campName);
+  }
+
+  // ── Determine which sheet has animals ──────────────────────────────────────
+  // Two-tab template: use "Animals" sheet. Single-sheet (legacy): use first sheet.
+  const animalSheetName = workbook.SheetNames.includes("Animals")
+    ? "Animals"
+    : workbook.SheetNames[0];
+  const sheet = workbook.Sheets[animalSheetName];
   const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
 
   if (rows.length === 0) {
-    return NextResponse.json({ error: "File is empty" }, { status: 400 });
+    return NextResponse.json({ error: "Animals sheet is empty" }, { status: 400 });
   }
 
   // Validate required columns
@@ -76,6 +129,7 @@ export async function POST(req: NextRequest) {
 
   const encoder = new TextEncoder();
   const total = rows.length;
+  const hasCampValidation = validCampIds.size > 0;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -110,9 +164,13 @@ export async function POST(req: NextRequest) {
               if (!currentCamp) {
                 errors.push(`Row ${rowNum} (${animalId}): missing current_camp`);
                 skipped++;
+              } else if (hasCampValidation && !validCampIds.has(currentCamp)) {
+                errors.push(`Row ${rowNum} (${animalId}): camp "${currentCamp}" not found — create it in the Camps sheet or add it manually first`);
+                skipped++;
               } else {
                 const status = String(row.status ?? "Active").trim();
                 const resolvedStatus = VALID_STATUSES.has(status) ? status : "Active";
+                const breed = String(row.breed ?? "").trim() || defaultBreed;
 
                 try {
                   await prisma.animal.upsert({
@@ -121,13 +179,12 @@ export async function POST(req: NextRequest) {
                       name: String(row.name ?? "").trim() || null,
                       sex,
                       dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
-                      breed: String(row.breed ?? "Brangus").trim() || "Brangus",
+                      breed,
                       category,
                       currentCamp,
                       status: resolvedStatus,
                       motherId: String(row.mother_id ?? "").trim() || null,
                       fatherId: String(row.father_id ?? "").trim() || null,
-
                       dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
                     },
                     create: {
@@ -135,13 +192,12 @@ export async function POST(req: NextRequest) {
                       name: String(row.name ?? "").trim() || null,
                       sex,
                       dateOfBirth: String(row.date_of_birth ?? "").trim() || null,
-                      breed: String(row.breed ?? "Brangus").trim() || "Brangus",
+                      breed,
                       category,
                       currentCamp,
                       status: resolvedStatus,
                       motherId: String(row.mother_id ?? "").trim() || null,
                       fatherId: String(row.father_id ?? "").trim() || null,
-
                       dateAdded: String(row.date_added ?? "").trim() || new Date().toISOString().split("T")[0],
                     },
                   });
@@ -161,10 +217,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      send({ done: true, imported, skipped, errors });
+      send({ done: true, imported, skipped, campsCreated, errors });
       controller.close();
 
-      if (imported > 0) {
+      if (imported > 0 || campsCreated > 0) {
         revalidatePath('/admin');
         revalidatePath('/admin/animals');
         revalidatePath('/admin/grafieke');

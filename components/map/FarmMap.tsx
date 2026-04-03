@@ -20,6 +20,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
 import type { Camp, CampStats } from "@/lib/types";
+import { DEFAULT_CAMP_COLOR } from "@/lib/camp-colors";
 import DrawCampModal from "./DrawCampModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): GeoJSON.F
     if (!camp.geojson) continue;
     try {
       const parsed = JSON.parse(camp.geojson) as GeoJSON.Geometry;
+      const identityColor = camp.color ?? DEFAULT_CAMP_COLOR;
       features.push({
         type: "Feature",
         geometry: parsed,
@@ -149,6 +151,7 @@ function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): GeoJSON.F
           fenceStatus: cd.fenceStatus ?? "Unknown",
           daysSinceInspection: cd.daysSinceInspection ?? -1,
           color: getOverlayColor(overlay, cd),
+          borderColor: identityColor,
         },
       });
     } catch {
@@ -174,9 +177,9 @@ const outlineLayer: LayerProps = {
   id: "camp-outline",
   type: "line",
   paint: {
-    "line-color": ["get", "color"],
-    "line-width": 2,
-    "line-opacity": 0.85,
+    "line-color": ["get", "borderColor"],
+    "line-width": 3,
+    "line-opacity": 0.9,
   },
 };
 

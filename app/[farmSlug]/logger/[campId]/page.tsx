@@ -19,7 +19,14 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, AnimalSex, EaseOfBirth, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | null;
+type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
+
+interface MobWithCount {
+  id: string;
+  name: string;
+  current_camp: string;
+  animal_count: number;
+}
 
 export default function CampInspectionPage({
   params,
@@ -38,6 +45,10 @@ export default function CampInspectionPage({
   const [allNormalDone, setAllNormalDone] = useState(false);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [flaggedAnimalIds, setFlaggedAnimalIds] = useState<Set<string>>(new Set());
+  const [mobsInCamp, setMobsInCamp] = useState<MobWithCount[]>([]);
+  const [selectedMob, setSelectedMob] = useState<MobWithCount | null>(null);
+  const [mobDestCamp, setMobDestCamp] = useState("");
+  const [mobMoving, setMobMoving] = useState(false);
 
   const camp = camps.find((c) => c.camp_id === decodedId);
   // camps in IndexedDB may carry merged condition fields (grazing_quality etc.) from updateCampCondition
@@ -49,7 +60,60 @@ export default function CampInspectionPage({
     getAnimalsByCampCached(decodedId).then(setAnimals);
   }, [decodedId]);
 
-  function handleFlag(animalId: string, type: Exclude<ModalType, "condition" | "cover" | null>) {
+  // Load mobs for this camp from API
+  useEffect(() => {
+    if (!isOnline) return;
+    fetch("/api/mobs")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((allMobs: MobWithCount[]) => {
+        setMobsInCamp(allMobs.filter((m) => m.current_camp === decodedId));
+      })
+      .catch(() => { /* non-fatal */ });
+  }, [decodedId, isOnline]);
+
+  async function handleMobMove() {
+    if (!selectedMob || !mobDestCamp) return;
+    setMobMoving(true);
+    try {
+      const res = await fetch(`/api/mobs/${selectedMob.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentCamp: mobDestCamp }),
+      });
+      if (res.ok) {
+        // Log the mob_movement observation locally too
+        await queueObservation({
+          type: "mob_movement",
+          camp_id: decodedId,
+          details: JSON.stringify({
+            mobId: selectedMob.id,
+            mobName: selectedMob.name,
+            sourceCamp: decodedId,
+            destCamp: mobDestCamp,
+            animalCount: selectedMob.animal_count,
+          }),
+          created_at: new Date().toISOString(),
+          synced_at: null,
+          sync_status: "pending",
+        });
+        // Remove the mob from this camp's list
+        setMobsInCamp((prev) => prev.filter((m) => m.id !== selectedMob.id));
+        // Refresh animal list (some may have moved out)
+        getAnimalsByCampCached(decodedId).then(setAnimals);
+        refreshPendingCount();
+        if (isOnline) syncNow();
+      }
+    } catch {
+      /* non-fatal */
+    } finally {
+      setMobMoving(false);
+      setActiveModal(null);
+      setSelectedMob(null);
+      setMobDestCamp("");
+    }
+  }
+
+  function handleFlag(animalId: string, type: Exclude<ModalType, "condition" | "cover" | "mob_move" | null>) {
     setSelectedAnimalId(animalId);
     setActiveModal(type);
   }
@@ -137,6 +201,8 @@ export default function CampInspectionPage({
     breed: string;
     category: string;
     photoBlob: Blob | null;
+    calvingDifficulty: number;
+    birthWeight: number | null;
   }) {
     const { photoBlob, ...obsData } = data;
     const now = new Date().toISOString();
@@ -409,6 +475,64 @@ export default function CampInspectionPage({
         <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} flaggedIds={flaggedAnimalIds} />
       </div>
 
+      {/* Mobs in this camp */}
+      {mobsInCamp.length > 0 && (
+        <div
+          className="mx-3 mb-3 rounded-2xl overflow-hidden"
+          style={{
+            backgroundColor: 'rgba(44, 21, 8, 0.65)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(139, 105, 20, 0.2)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+          }}
+        >
+          <div
+            className="px-4 py-3"
+            style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.35)' }}
+          >
+            <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
+              Mobs in camp ({mobsInCamp.length})
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 p-3">
+            {mobsInCamp.map((mob) => (
+              <div
+                key={mob.id}
+                className="flex items-center justify-between px-4 py-3 rounded-xl"
+                style={{
+                  backgroundColor: 'rgba(92, 61, 46, 0.4)',
+                  border: '1px solid rgba(139, 105, 20, 0.15)',
+                }}
+              >
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
+                    {mob.name}
+                  </p>
+                  <p className="text-xs" style={{ color: '#D2B48C' }}>
+                    {mob.animal_count} animal{mob.animal_count !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedMob(mob);
+                    setMobDestCamp("");
+                    setActiveModal("mob_move");
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95"
+                  style={{
+                    backgroundColor: '#B87333',
+                    color: '#F5F0E8',
+                  }}
+                >
+                  Move Mob
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Camp-level buttons — sticky at bottom */}
       <div
         className="sticky bottom-0 px-4 py-3 flex flex-col gap-2"
@@ -520,6 +644,7 @@ export default function CampInspectionPage({
       {activeModal === "reproduction" && (
         <ReproductionForm
           animalId={selectedAnimalId}
+          animalSex={animals.find((a) => a.animal_id === selectedAnimalId)?.sex as "Male" | "Female" | undefined}
           onClose={() => setActiveModal(null)}
           onSubmit={handleReproSubmit}
         />
@@ -566,6 +691,68 @@ export default function CampInspectionPage({
           onSuccess={() => setActiveModal(null)}
           onCancel={() => setActiveModal(null)}
         />
+      )}
+      {activeModal === "mob_move" && selectedMob && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setActiveModal(null); setSelectedMob(null); }} />
+          <div
+            className="relative rounded-t-3xl p-6 flex flex-col gap-4"
+            style={{ backgroundColor: '#1E0F07', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
+          >
+            <div className="flex justify-center">
+              <div
+                className="w-10 h-1.5 rounded-full"
+                style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
+              />
+            </div>
+            <h2
+              className="font-bold text-lg"
+              style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            >
+              Move Mob: {selectedMob.name}
+            </h2>
+            <p className="text-sm" style={{ color: '#D2B48C' }}>
+              {selectedMob.animal_count} animal{selectedMob.animal_count !== 1 ? 's' : ''} will move together.
+            </p>
+            <select
+              value={mobDestCamp}
+              onChange={(e) => setMobDestCamp(e.target.value)}
+              className="w-full py-3 px-4 rounded-xl text-sm"
+              style={{
+                backgroundColor: 'rgba(44, 21, 8, 0.5)',
+                border: '1px solid rgba(92, 61, 46, 0.4)',
+                color: '#D2B48C',
+              }}
+            >
+              <option value="">Select destination camp...</option>
+              {camps
+                .filter((c) => c.camp_id !== decodedId)
+                .map((c) => (
+                  <option key={c.camp_id} value={c.camp_id}>
+                    {c.camp_name}
+                  </option>
+                ))}
+            </select>
+            <button
+              onClick={handleMobMove}
+              disabled={!mobDestCamp || mobMoving}
+              className="w-full font-bold py-4 rounded-2xl text-sm transition-all active:scale-95 disabled:opacity-50"
+              style={{
+                backgroundColor: '#B87333',
+                color: '#F5F0E8',
+              }}
+            >
+              {mobMoving ? "Moving..." : "Confirm Move"}
+            </button>
+            <button
+              onClick={() => { setActiveModal(null); setSelectedMob(null); }}
+              className="text-sm py-2"
+              style={{ color: 'rgba(210, 180, 140, 0.5)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

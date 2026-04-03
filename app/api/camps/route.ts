@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -34,6 +35,7 @@ export async function GET() {
     size_hectares: camp.sizeHectares,
     water_source: camp.waterSource,
     geojson: camp.geojson,
+    color: camp.color ?? null,
     animal_count: countByCamp[camp.campId] ?? 0,
   }));
 
@@ -51,15 +53,26 @@ export async function POST(req: NextRequest) {
   const { prisma } = db;
 
   const body = await req.json();
-  const { campId, campName, sizeHectares, waterSource, geojson } = body;
+  const { campId, campName, sizeHectares, waterSource, geojson, color } = body;
 
   if (!campId || !campName) {
     return NextResponse.json({ error: "campId and campName are required" }, { status: 400 });
   }
 
+  if (color !== undefined && color !== null && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+    return NextResponse.json({ error: "color must be a valid hex color (e.g. #2563EB)" }, { status: 400 });
+  }
+
   const existing = await prisma.camp.findUnique({ where: { campId } });
   if (existing) {
     return NextResponse.json({ error: "A camp with this ID already exists" }, { status: 409 });
+  }
+
+  // Auto-assign a color from the palette if not provided
+  let assignedColor = color as string | undefined;
+  if (!assignedColor) {
+    const campCount = await prisma.camp.count();
+    assignedColor = CAMP_COLOR_PALETTE[campCount % CAMP_COLOR_PALETTE.length];
   }
 
   const camp = await prisma.camp.create({
@@ -69,6 +82,7 @@ export async function POST(req: NextRequest) {
       sizeHectares: sizeHectares ? Number(sizeHectares) : null,
       waterSource: waterSource || null,
       geojson: geojson || null,
+      color: assignedColor,
     },
   });
 

@@ -16,6 +16,7 @@ import {
   FileDown,
   CheckSquare,
   Dna,
+  Users,
   Lock,
   X,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: "/admin/animals",      label: "Animals",      icon: PawPrint,        group: "Data"    },
   { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
   { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
+  { path: "/admin/mobs",        label: "Mobs",         icon: Users,           group: "Data"    },
   { path: "/admin/reproduction", label: "Reproduction", icon: HeartPulse,      group: "Data",   premiumOnly: true },
   { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
   { path: "/admin/breeding-ai",  label: "Breeding AI",  icon: Dna,             group: "Data",   premiumOnly: true },
