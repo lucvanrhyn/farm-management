@@ -47,22 +47,24 @@ export async function PATCH(
         data: { currentCamp: body.currentCamp },
       });
 
-      // Log a single mob_movement observation
-      await prisma.observation.create({
-        data: {
-          type: "mob_movement",
-          campId: body.currentCamp,
-          details: JSON.stringify({
-            mobId,
-            mobName: updatedMob.name,
-            sourceCamp: mob.currentCamp,
-            destCamp: body.currentCamp,
-            animalCount: affectedAnimals.length,
-            animalIds: affectedAnimals.map((a) => a.animalId),
-          }),
-          observedAt: new Date(),
-          loggedBy: session.user?.email ?? null,
-        },
+      // Log two mob_movement observations — one per camp — so both source and
+      // destination camp histories show the movement event.
+      const observedAt = new Date();
+      const loggedBy = session.user?.email ?? null;
+      const sharedDetails = JSON.stringify({
+        mobId,
+        mobName: updatedMob.name,
+        sourceCamp: mob.currentCamp,
+        destCamp: body.currentCamp,
+        animalCount: affectedAnimals.length,
+        animalIds: affectedAnimals.map((a) => a.animalId),
+      });
+
+      await prisma.observation.createMany({
+        data: [
+          { type: "mob_movement", campId: mob.currentCamp,    details: sharedDetails, observedAt, loggedBy },
+          { type: "mob_movement", campId: body.currentCamp,   details: sharedDetails, observedAt, loggedBy },
+        ],
       });
     }
   }

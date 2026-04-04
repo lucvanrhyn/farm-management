@@ -624,6 +624,119 @@ function calculatePairingScore(
 }
 
 // ============================================================
+// In-memory profile builders (used by suggestPairings batch path)
+// ============================================================
+
+type TraitObsRow = { animalId: string | null; type: string; details: string };
+type CalvingObsRow = { details: string };
+type CowCalvingObsRow = { animalId: string | null; details: string };
+
+function buildBullProfileInMemory(
+  animalId: string,
+  traitObs: TraitObsRow[],
+  bullCalvingObs: CalvingObsRow[],
+): TraitProfile {
+  const profile: TraitProfile = {
+    birthWeight: null,
+    calvingDifficultyAvg: null,
+    bcsLatest: null,
+    temperamentLatest: null,
+    scrotalCirc: null,
+    offspringCount: 0,
+  };
+
+  for (const obs of traitObs) {
+    if (obs.animalId !== animalId) continue;
+    const d = parseDetails(obs.details);
+    if (obs.type === "body_condition_score" && profile.bcsLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.bcsLatest = score;
+    }
+    if (obs.type === "temperament_score" && profile.temperamentLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.temperamentLatest = score;
+    }
+    if (obs.type === "scrotal_circumference" && profile.scrotalCirc === null) {
+      const cm = parseFloat(d.measurement_cm ?? "");
+      if (!isNaN(cm)) profile.scrotalCirc = cm;
+    }
+  }
+
+  const difficulties: number[] = [];
+  const birthWeights: number[] = [];
+  let offspringCount = 0;
+
+  for (const obs of bullCalvingObs) {
+    const d = parseDetails(obs.details);
+    if (d.fatherId === animalId || d.bull_id === animalId) {
+      offspringCount++;
+      const diff = parseFloat(d.calving_difficulty ?? d.calvingDifficulty ?? "");
+      if (!isNaN(diff)) difficulties.push(diff);
+      const bw = parseFloat(d.birth_weight ?? d.birthWeight ?? "");
+      if (!isNaN(bw)) birthWeights.push(bw);
+    }
+  }
+
+  profile.offspringCount = offspringCount;
+  if (difficulties.length > 0) {
+    profile.calvingDifficultyAvg = difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
+  }
+  if (birthWeights.length > 0) {
+    profile.birthWeight = birthWeights.reduce((a, b) => a + b, 0) / birthWeights.length;
+  }
+
+  return profile;
+}
+
+function buildCowProfileInMemory(
+  animalId: string,
+  traitObs: TraitObsRow[],
+  cowCalvingObs: CowCalvingObsRow[],
+): TraitProfile {
+  const profile: TraitProfile = {
+    birthWeight: null,
+    calvingDifficultyAvg: null,
+    bcsLatest: null,
+    temperamentLatest: null,
+    scrotalCirc: null,
+    offspringCount: 0,
+  };
+
+  for (const obs of traitObs) {
+    if (obs.animalId !== animalId) continue;
+    const d = parseDetails(obs.details);
+    if (obs.type === "body_condition_score" && profile.bcsLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.bcsLatest = score;
+    }
+    if (obs.type === "temperament_score" && profile.temperamentLatest === null) {
+      const score = parseFloat(d.score ?? "");
+      if (!isNaN(score)) profile.temperamentLatest = score;
+    }
+  }
+
+  const ownCalvings = cowCalvingObs.filter((obs) => obs.animalId === animalId);
+  const difficulties: number[] = [];
+
+  for (const obs of ownCalvings) {
+    const d = parseDetails(obs.details);
+    const diff = parseFloat(d.calving_difficulty ?? d.calvingDifficulty ?? "");
+    if (!isNaN(diff)) difficulties.push(diff);
+    if (profile.birthWeight === null) {
+      const bw = parseFloat(d.birth_weight ?? d.birthWeight ?? "");
+      if (!isNaN(bw)) profile.birthWeight = bw;
+    }
+  }
+
+  profile.offspringCount = ownCalvings.length;
+  if (difficulties.length > 0) {
+    profile.calvingDifficultyAvg = difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
+  }
+
+  return profile;
+}
+
+// ============================================================
 // Pairing Suggestions (enhanced)
 // ============================================================
 
@@ -677,21 +790,39 @@ export async function suggestPairings(
     return scan !== "pregnant";
   });
 
-  // Pre-fetch trait profiles for all bulls and open cows
+  // Batch-fetch all trait observations in 3 queries instead of O(N) per-animal calls.
+  const threeYearsAgo = new Date(Date.now() - 3 * 365 * 86_400_000);
+  const allAnimalIds = [...bulls.map((b) => b.id), ...openCows.map((c) => c.id)];
+
+  const [traitObs, cowCalvingObs, bullCalvingObs] = await Promise.all([
+    // Trait observations (BCS, temperament, scrotal circumference) for all bulls + cows
+    prisma.observation.findMany({
+      where: {
+        animalId: { in: allAnimalIds },
+        type: { in: ["body_condition_score", "temperament_score", "scrotal_circumference"] },
+      },
+      orderBy: { observedAt: "desc" },
+      select: { animalId: true, type: true, details: true },
+    }),
+    // Calving observations linked to cows (by animalId)
+    prisma.observation.findMany({
+      where: { animalId: { in: openCows.map((c) => c.id) }, type: "calving" },
+      select: { animalId: true, details: true },
+    }),
+    // Calving observations for bull offspring detection (time-bounded, filtered in memory)
+    prisma.observation.findMany({
+      where: { type: "calving", observedAt: { gte: threeYearsAgo } },
+      select: { details: true },
+    }),
+  ]);
+
   const profileCache = new Map<string, TraitProfile>();
-
-  const profilePromises = [
-    ...bulls.map(async (b) => {
-      const profile = await getAnimalTraitProfile(prisma, b.id, b.sex);
-      profileCache.set(b.id, profile);
-    }),
-    ...openCows.map(async (c) => {
-      const profile = await getAnimalTraitProfile(prisma, c.id, c.sex);
-      profileCache.set(c.id, profile);
-    }),
-  ];
-
-  await Promise.all(profilePromises);
+  for (const bull of bulls) {
+    profileCache.set(bull.id, buildBullProfileInMemory(bull.id, traitObs, bullCalvingObs));
+  }
+  for (const cow of openCows) {
+    profileCache.set(cow.id, buildCowProfileInMemory(cow.id, traitObs, cowCalvingObs));
+  }
 
   // Generate scored pairings
   const suggestions: PairingSuggestion[] = [];
