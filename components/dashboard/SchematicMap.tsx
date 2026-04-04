@@ -62,6 +62,19 @@ export const ROAD_PAIRS: [string, string][] = [
   ["B", "Sirkel"], ["Sirkel", "Wildskamp"], ["Wildskamp", "Praalhoek"],
 ];
 
+// ─── Fallback grid layout for camps not in CAMP_CENTERS ──────────────────────
+// Produces a deterministic grid position so every tenant's camps render.
+
+function computeFallbackCenter(index: number, total: number): { cx: number; cy: number } {
+  const cols = Math.min(4, Math.max(1, total));
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  return {
+    cx: Math.round((col + 0.5) * (CANVAS_W / cols)),
+    cy: 80 + row * 140,
+  };
+}
+
 // ─── Size helper ──────────────────────────────────────────────────────────────
 
 export function campSize(ha: number): { w: number; h: number } {
@@ -350,6 +363,11 @@ export default function SchematicMap({
     if (zoomedCampId) handleZoomOut();
   }, [zoomedCampId]);
 
+  // Pre-compute fallback grid positions for camps that have no CAMP_CENTERS entry.
+  // This ensures all tenants see their camps rendered instead of a blank map.
+  const unknownCamps = camps.filter((c) => !CAMP_CENTERS[c.camp_id]);
+  const fallbackIndexMap = new Map(unknownCamps.map((c, i) => [c.camp_id, i]));
+
   return (
     <div
       ref={containerRef}
@@ -369,8 +387,8 @@ export default function SchematicMap({
         <TopoUnderlay />
 
         {camps.map((camp) => {
-          const center        = CAMP_CENTERS[camp.camp_id];
-          if (!center) return null;
+          const center        = CAMP_CENTERS[camp.camp_id]
+            ?? computeFallbackCenter(fallbackIndexMap.get(camp.camp_id) ?? 0, unknownCamps.length);
 
           const { w, h }      = campSize(camp.size_hectares ?? 120);
           const liveCondition = liveConditions[camp.camp_id];
