@@ -45,18 +45,20 @@ async function migrateOne(slug: string): Promise<void> {
   }
   const db = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
 
-  await db.execute(TABLE_SQL);
-  await db.execute(INDEX_CAMP_DATE);
-  await db.execute(INDEX_DATE);
+  try {
+    await db.execute(TABLE_SQL);
+    await db.execute(INDEX_CAMP_DATE);
+    await db.execute(INDEX_DATE);
 
-  if (!(await columnExists(db, 'FarmSettings', 'biomeType'))) {
-    await db.execute('ALTER TABLE "FarmSettings" ADD COLUMN "biomeType" TEXT');
-    console.log(`[ok] ${slug}: added FarmSettings.biomeType`);
-  } else {
-    console.log(`[skip] ${slug}: FarmSettings.biomeType already present`);
+    if (!(await columnExists(db, 'FarmSettings', 'biomeType'))) {
+      await db.execute('ALTER TABLE "FarmSettings" ADD COLUMN "biomeType" TEXT');
+      console.log(`[ok] ${slug}: added FarmSettings.biomeType`);
+    } else {
+      console.log(`[skip] ${slug}: FarmSettings.biomeType already present`);
+    }
+  } finally {
+    db.close();
   }
-
-  db.close();
   console.log(`[done] ${slug}`);
 }
 
