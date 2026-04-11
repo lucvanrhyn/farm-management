@@ -52,9 +52,14 @@ model Animal {
   dateAdded          String
   deceasedAt         String?
   createdAt          DateTime @default(now())
+  // Multi-species support
+  species            String   @default("cattle")
+  speciesData        String?
 
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
+  @@index([species, status], name: "idx_animal_species_status")
+  @@index([species, currentCamp, status], name: "idx_animal_species_camp_status")
 }
 
 model Transaction {
@@ -101,6 +106,11 @@ model FarmSettings {
   calvingAlertDays         Int      @default(14)    // days before expected calving to alert
   daysOpenLimit            Int      @default(365)   // max acceptable days open for a cow
   campGrazingWarningDays   Int      @default(7)     // days grazing remaining to trigger camp warning
+  // Rotation planner defaults
+  defaultRestDays          Int      @default(60)    // target rest period between grazings (days)
+  defaultMaxGrazingDays    Int      @default(7)     // max days a mob stays in a camp before overstay alert
+  rotationSeasonMode       String   @default("auto") // "auto" | "growing" | "dormant"
+  dormantSeasonMultiplier  Float    @default(1.4)    // rest-days multiplier during dormant season
   // Location and farm settings
   latitude                 Float?
   longitude                Float?
@@ -110,17 +120,55 @@ model FarmSettings {
   weaningDate              String?
   openaiApiKey             String?
   heroImageUrl             String?  @default("/farm-hero.jpg")
+  // NVD seller identity fields
+  ownerName                String?
+  ownerIdNumber            String?  // SA ID number (optional, farmer discretion)
+  physicalAddress          String?
+  postalAddress            String?
+  contactPhone             String?
+  contactEmail             String?
+  propertyRegNumber        String?  // SA property registration / LPHS number
+  farmRegion               String?  // district / province
+  biomeType                String?  // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
+}
+
+model NvdRecord {
+  id                 String    @id @default(cuid())
+  nvdNumber          String    @unique  // farm-scoped running number, format: "NVD-2026-0001"
+  issuedAt           DateTime  @default(now())
+  saleDate           String    // YYYY-MM-DD (match Transaction.date convention)
+  transactionId      String?   // links to Transaction if user created sale from NVD flow
+  buyerName          String
+  buyerAddress       String?
+  buyerContact       String?
+  destinationAddress String?
+  animalIds          String    // JSON array of animalId strings (snapshot)
+  animalSnapshot     String    // JSON array of {animalId, category, sex, breed, dateOfBirth, lastCampId, lastMovementDate}
+  sellerSnapshot     String    // JSON of FarmSettings seller fields at time of issue
+  declarationsJson   String    // JSON of 7 NVD declaration booleans + notes
+  generatedBy        String?   // user email
+  pdfHash            String?   // sha256 of generated PDF for tamper-evident audit
+  voidedAt           DateTime?
+  voidReason         String?
+
+  @@index([issuedAt], name: "idx_nvd_issued_at")
+  @@index([transactionId], name: "idx_nvd_transaction")
 }
 
 model Camp {
-  id           String   @id @default(cuid())
-  campId       String   @unique
-  campName     String
-  sizeHectares Float?
-  waterSource  String?
-  geojson      String?
-  color        String?
-  createdAt    DateTime @default(now())
+  id                     String   @id @default(cuid())
+  campId                 String   @unique
+  campName               String
+  sizeHectares           Float?
+  waterSource            String?
+  geojson                String?
+  color                  String?
+  createdAt              DateTime @default(now())
+  // Rotation planner (all optional — fall back to FarmSettings defaults)
+  veldType               String?  // 'sweetveld' | 'sourveld' | 'mixedveld' | 'cultivated'
+  restDaysOverride       Int?
+  maxGrazingDaysOverride Int?
+  rotationNotes          String?
 }
 
 model CampCoverReading {
@@ -160,4 +208,388 @@ model Task {
 
   @@index([assignedTo, status, dueDate], name: "idx_task_assignee_status_date")
   @@index([dueDate, status], name: "idx_task_date_status")
+}
+
+// ── Multi-Species Settings ──────────────────────────────────────────────────
+
+model FarmSpeciesSettings {
+  id                    String   @id @default(cuid())
+  species               String   @unique
+  enabled               Boolean  @default(true)
+  gestationDays         Int?
+  voluntaryWaitingDays  Int?
+  breedingSeasonStart   String?
+  breedingSeasonEnd     String?
+  weaningAgeDays        Int?
+  targetStockingRate    Float?
+  customLsuValues       String?
+  customCategories      String?
+  quotaConfig           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// ── Game Module Tables ──────────────────────────────────────────────────────
+
+model GameSpecies {
+  id                     String   @id @default(cuid())
+  commonName             String   @unique
+  scientificName         String?
+  dietaryClass           String
+  lsuEquivalent          Float
+  averageMassKg          Float?
+  isTops                 Boolean  @default(false)
+  defaultMortalityRate   Float    @default(0.05)
+  defaultRecruitmentRate Float    @default(0.30)
+  gestationDays          Int?
+  trophyMinRW            Float?
+  trophyMinSCI           Float?
+  targetPopulation       Int?
+  currentEstimate        Int      @default(0)
+  lastCensusDate         String?
+  createdAt              DateTime @default(now())
+}
+
+model GameCensusEvent {
+  id              String   @id @default(cuid())
+  date            String
+  method          String
+  observer        String
+  conditions      String?
+  confidenceLevel String   @default("moderate")
+  marginOfError   Float?
+  costRands       Float?
+  notes           String?
+  areaHectares    Float?
+  createdAt       DateTime @default(now())
+
+  @@index([date], name: "idx_game_census_date")
+}
+
+model GameCensusResult {
+  id              String   @id @default(cuid())
+  censusEventId   String
+  speciesId       String
+  totalCount      Int
+  maleCount       Int?
+  femaleCount     Int?
+  juvenileCount   Int?
+  campId          String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([censusEventId], name: "idx_census_result_event")
+  @@index([speciesId], name: "idx_census_result_species")
+}
+
+model GameHuntRecord {
+  id                String   @id @default(cuid())
+  huntType          String
+  startDate         String
+  endDate           String
+  clientName        String
+  clientNationality String?
+  clientEmail       String?
+  clientPhone       String?
+  outfitterName     String?
+  phName            String
+  phLicenseNumber   String?
+  dayFeePerDay      Float?
+  totalDayFees      Float?
+  totalTrophyFees   Float?
+  totalRevenue      Float?
+  notes             String?
+  status            String   @default("active")
+  createdAt         DateTime @default(now())
+
+  @@index([startDate], name: "idx_hunt_start_date")
+  @@index([huntType], name: "idx_hunt_type")
+}
+
+model GameHuntAnimal {
+  id                   String   @id @default(cuid())
+  huntRecordId         String
+  speciesId            String
+  sex                  String
+  ageClass             String
+  harvestDate          String
+  campId               String?
+  gpsLat               Float?
+  gpsLon               Float?
+  caliber              String?
+  trophyMeasurementRW  Float?
+  trophyMeasurementSCI Float?
+  trophyNotes          String?
+  trophyPhotoUrl       String?
+  priceFeeRands        Float?
+  bodyMassKg           Float?
+  createdAt            DateTime @default(now())
+
+  @@index([huntRecordId], name: "idx_hunt_animal_record")
+  @@index([speciesId], name: "idx_hunt_animal_species")
+  @@index([harvestDate], name: "idx_hunt_animal_date")
+}
+
+model GameOfftakeQuota {
+  id          String   @id @default(cuid())
+  speciesId   String
+  season      String
+  seasonStart String
+  seasonEnd   String
+  totalQuota  Int
+  maleQuota   Int?
+  femaleQuota Int?
+  usedTotal   Int      @default(0)
+  usedMale    Int      @default(0)
+  usedFemale  Int      @default(0)
+  quotaType   String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([speciesId, season], name: "idx_quota_species_season")
+}
+
+model GameIntroduction {
+  id              String   @id @default(cuid())
+  speciesId       String
+  date            String
+  direction       String
+  count           Int
+  sex             String?
+  sourceFarm      String?
+  destinationFarm String?
+  costRands       Float?
+  revenueRands    Float?
+  transportPermit String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([speciesId, date], name: "idx_intro_species_date")
+}
+
+model GamePredationEvent {
+  id                 String   @id @default(cuid())
+  date               String
+  predatorSpecies    String
+  preySpeciesId      String?
+  preyCount          Int      @default(1)
+  preySex            String?
+  campId             String?
+  gpsLat             Float?
+  gpsLon             Float?
+  evidenceType       String
+  estimatedLossRands Float?
+  responseAction     String?
+  notes              String?
+  attachmentUrl      String?
+  createdAt          DateTime @default(now())
+
+  @@index([date], name: "idx_predation_date")
+  @@index([predatorSpecies], name: "idx_predation_predator")
+  @@index([campId], name: "idx_predation_camp")
+}
+
+model GameMortality {
+  id                 String   @id @default(cuid())
+  speciesId          String
+  date               String
+  count              Int      @default(1)
+  cause              String
+  sex                String?
+  campId             String?
+  estimatedLossRands Float?
+  veterinaryReport   String?
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  @@index([speciesId, date], name: "idx_mortality_species_date")
+  @@index([cause], name: "idx_mortality_cause")
+}
+
+model GameWaterPoint {
+  id                  String   @id @default(cuid())
+  name                String
+  type                String
+  campId              String?
+  gpsLat              Float?
+  gpsLon              Float?
+  depthMeters         Float?
+  yieldLitersPerHour  Float?
+  capacityLiters      Float?
+  pumpType            String?
+  status              String   @default("operational")
+  lastInspected       String?
+  notes               String?
+  createdAt           DateTime @default(now())
+
+  @@index([campId], name: "idx_water_point_camp")
+  @@index([status], name: "idx_water_point_status")
+}
+
+model GameInfrastructure {
+  id                  String   @id @default(cuid())
+  type                String
+  name                String
+  campId              String?
+  gpsLat              Float?
+  gpsLon              Float?
+  lengthKm            Float?
+  capacityAnimals     Int?
+  condition           String   @default("good")
+  lastMaintenanceDate String?
+  nextMaintenanceDate String?
+  maintenanceCostRands Float?
+  notes               String?
+  createdAt           DateTime @default(now())
+
+  @@index([type], name: "idx_infra_type")
+  @@index([condition], name: "idx_infra_condition")
+}
+
+model GamePermit {
+  id               String   @id @default(cuid())
+  type             String
+  permitNumber     String?
+  speciesId        String?
+  issuedDate       String?
+  expiryDate       String?
+  issuingAuthority String?
+  status           String   @default("active")
+  quotaAllocated   Int?
+  documentUrl      String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@index([type, status], name: "idx_permit_type_status")
+  @@index([expiryDate], name: "idx_permit_expiry")
+}
+
+model GameVeldCondition {
+  id                       String   @id @default(cuid())
+  campId                   String
+  date                     String
+  assessor                 String
+  method                   String   @default("grazing_index")
+  grazingScore             Float?
+  browseScore              Float?
+  coverCategory            String?
+  kgDmPerHa                Float?
+  grassSpeciesComposition  String?
+  bushEncroachment         String?
+  erosionLevel             String?
+  notes                    String?
+  createdAt                DateTime @default(now())
+
+  @@index([campId, date], name: "idx_veld_camp_date")
+}
+
+model VeldAssessment {
+  id                      String   @id @default(cuid())
+  campId                  String
+  assessmentDate          String   // YYYY-MM-DD (match RainfallRecord / CampCoverReading convention)
+  assessor                String
+  // Raw farmer inputs (DFFE EIM)
+  palatableSpeciesPct     Float    // 0..100
+  bareGroundPct           Float    // 0..100
+  erosionLevel            Int      // 0=none, 1=moderate, 2=severe
+  bushEncroachmentLevel   Int      // 0=sparse, 1=moderate, 2=dense
+  // Computed at insert time (denormalised for fast reads, replayable from inputs)
+  veldScore               Float    // 0..10 output of calcVeldScore
+  biomeAtAssessment       String?  // snapshot of FarmSettings.biomeType at insert
+  haPerLsu                Float?   // snapshot of calcGrazingCapacity().haPerLsu
+  notes                   String?
+  createdAt               DateTime @default(now())
+  createdBy               String?  // user email
+
+  @@index([campId, assessmentDate], name: "idx_veld_assessment_camp_date")
+  @@index([assessmentDate], name: "idx_veld_assessment_date")
+}
+
+model RainfallRecord {
+  id          String   @id @default(cuid())
+  date        String
+  rainfallMm  Float
+  stationName String?
+  campId      String?
+  createdAt   DateTime @default(now())
+
+  @@map("GameRainfallRecord")
+  @@index([date], name: "idx_rainfall_date")
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // e.g. "calving_due_7d" | "calving_overdue" | "poor_doer" | "withdrawal_expiring" | "stale_inspection"
+  severity  String   // "red" | "amber"
+  message   String
+  href      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([isRead, createdAt], name: "idx_notification_read_date")
+}
+
+// ── Push Subscriptions ──────────────────────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userEmail String
+  createdAt DateTime @default(now())
+
+  @@index([userEmail], name: "idx_push_user")
+}
+
+// ── Rotation Plans ───────────────────────────────────────────────────────────
+
+model RotationPlan {
+  id        String             @id @default(cuid())
+  name      String
+  startDate DateTime
+  status    String             @default("draft")  // draft|active|completed|archived
+  notes     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  steps     RotationPlanStep[]
+}
+
+model RotationPlanStep {
+  id                    String       @id @default(cuid())
+  planId                String
+  sequence              Int
+  campId                String
+  mobId                 String?
+  plannedStart          DateTime
+  plannedDays           Int
+  status                String       @default("pending")  // pending|executed|skipped
+  actualStart           DateTime?
+  actualEnd             DateTime?
+  executedObservationId String?
+  notes                 String?
+  plan                  RotationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, sequence], name: "plan_sequence")
+  @@index([planId, sequence], name: "idx_plan_step_plan_seq")
+}
+
+// ── Budgets ─────────────────────────────────────────────────────────────────
+
+model Budget {
+  id           String   @id @default(cuid())
+  year         Int
+  month        Int
+  categoryName String
+  type         String
+  amount       Float
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([year, month, categoryName], name: "budget_year_month_category")
+  @@index([year, month], name: "idx_budget_period")
 }
