@@ -32,8 +32,7 @@ export default function CategoryProfitability({
   const [animalData, setAnimalData] = useState<AnimalProfitabilityRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  // searchQuery state — wired up in Task 5
-  const [searchQuery, setSearchQuery] = useState(""); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [searchQuery, setSearchQuery] = useState("");
 
   const prevFromRef = useRef(from);
   const prevToRef = useRef(to);
@@ -87,6 +86,19 @@ export default function CategoryProfitability({
     [fetchAnimalData]
   );
 
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  const categoriesToShow = data.map((row) => {
+    if (!normalizedQuery) return { ...row, forceExpand: false }
+    const matches = (animalData ?? []).filter(
+      (a) =>
+        a.category === row.category &&
+        (a.tagNumber.toLowerCase().includes(normalizedQuery) ||
+          (a.name?.toLowerCase() ?? '').includes(normalizedQuery)),
+    )
+    return { ...row, forceExpand: matches.length > 0 }
+  })
+
   if (data.length === 0) {
     return (
       <div
@@ -135,6 +147,33 @@ export default function CategoryProfitability({
         </ResponsiveContainer>
       </div>
 
+      {/* Search */}
+      <div style={{ marginBottom: 12 }}>
+        <input
+          type="search"
+          placeholder="Search animals by tag or name…"
+          value={searchQuery}
+          onChange={(e) => {
+            const q = e.target.value
+            setSearchQuery(q)
+            if (q.trim() && animalData === null) {
+              fetchAnimalData()
+            }
+          }}
+          style={{
+            width: "100%",
+            maxWidth: 280,
+            borderRadius: 6,
+            border: "1px solid #D4C9B8",
+            background: "#F9F5EF",
+            padding: "6px 12px",
+            fontSize: 13,
+            color: "#1C1815",
+            outline: "none",
+          }}
+        />
+      </div>
+
       {/* Table */}
       <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
         <table className="w-full text-xs">
@@ -149,11 +188,17 @@ export default function CategoryProfitability({
             </tr>
           </thead>
           <tbody>
-            {data.map((row, idx) => {
-              const isExpanded = expandedCategories.has(row.category);
-              const categoryAnimals = (animalData ?? []).filter(
-                (a) => a.category === row.category
-              );
+            {categoriesToShow.map((row, idx) => {
+              const isExpanded =
+                expandedCategories.has(row.category) || (normalizedQuery !== '' && row.forceExpand);
+              const categoryAnimals = (animalData ?? []).filter((a) => {
+                if (a.category !== row.category) return false
+                if (!normalizedQuery) return true
+                return (
+                  a.tagNumber.toLowerCase().includes(normalizedQuery) ||
+                  (a.name?.toLowerCase() ?? '').includes(normalizedQuery)
+                )
+              });
 
               return (
                 <React.Fragment key={row.category}>
