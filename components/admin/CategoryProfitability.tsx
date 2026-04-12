@@ -48,7 +48,7 @@ export default function CategoryProfitability({
   }, [from, to]);
 
   const fetchAnimalData = useCallback(async () => {
-    if (animalData !== null) return; // already loaded — skip
+    if (animalData !== null || loading) return; // already loaded or fetch in-flight — skip
     setLoading(true);
     setFetchError(null);
     try {
@@ -68,7 +68,7 @@ export default function CategoryProfitability({
     } finally {
       setLoading(false);
     }
-  }, [animalData, farmSlug, from, to]);
+  }, [animalData, loading, farmSlug, from, to]);
 
   const toggleCategory = useCallback(
     (category: string) => {
@@ -156,7 +156,7 @@ export default function CategoryProfitability({
           onChange={(e) => {
             const q = e.target.value
             setSearchQuery(q)
-            if (q.trim() && animalData === null) {
+            if (q.trim() && animalData === null && !loading) {
               fetchAnimalData()
             }
           }}
@@ -279,6 +279,7 @@ export default function CategoryProfitability({
                               No animals with transactions in this period.
                             </p>
                           ) : (
+                            <>
                             <table className="w-full text-xs">
                               <thead>
                                 <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
@@ -335,6 +336,10 @@ export default function CategoryProfitability({
                                 ))}
                               </tbody>
                             </table>
+                            <p style={{ fontSize: 11, color: "#9C8E7A", marginTop: 6 }}>
+                              * Per-animal margins include pro-rata camp expenses. Category totals show direct animal transactions only.
+                            </p>
+                            </>
                           )}
                         </div>
                       </td>
