@@ -1,11 +1,14 @@
 import ExportButton from "@/components/admin/ExportButton";
+import RotationPlanExportCard from "@/components/admin/RotationPlanExportCard";
+import CostOfGainExportCard from "@/components/admin/CostOfGainExportCard";
+import VeldExportCard from "@/components/admin/VeldExportCard";
 
 export const dynamic = "force-dynamic";
 
 interface ReportCard {
   title: string;
   description: string;
-  exportType: "animals" | "withdrawal" | "calvings" | "camps" | "transactions";
+  exportType: "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance";
 }
 
 const REPORTS: ReportCard[] = [
@@ -33,6 +36,21 @@ const REPORTS: ReportCard[] = [
     title: "Financial Transactions",
     description: "All income and expense records with amounts, categories, and animal references.",
     exportType: "transactions",
+  },
+  {
+    title: "Weight History",
+    description: "All weight recordings across animals with dates, camps, and kg values.",
+    exportType: "weight-history",
+  },
+  {
+    title: "Reproduction Summary",
+    description: "Pregnancy rate, calving rate, calving interval, and SA benchmarks.",
+    exportType: "reproduction",
+  },
+  {
+    title: "Camp Performance",
+    description: "LSU/ha, kg DM/ha, and days grazing remaining per camp.",
+    exportType: "performance",
   },
 ];
 
@@ -76,6 +94,9 @@ export default async function ReportsPage({
             </div>
           </div>
         ))}
+        <RotationPlanExportCard farmSlug={farmSlug} />
+        <CostOfGainExportCard farmSlug={farmSlug} />
+        <VeldExportCard farmSlug={farmSlug} />
       </div>
     </div>
   );
