@@ -35,7 +35,20 @@ export default async function SettingsPage({
     breedingSeasonStart: raw?.breedingSeasonStart ?? "",
     breedingSeasonEnd: raw?.breedingSeasonEnd ?? "",
     weaningDate: raw?.weaningDate ?? "",
+    defaultRestDays: raw?.defaultRestDays ?? 60,
+    defaultMaxGrazingDays: raw?.defaultMaxGrazingDays ?? 7,
+    rotationSeasonMode: (raw?.rotationSeasonMode as "auto" | "growing" | "dormant" | undefined) ?? "auto",
+    dormantSeasonMultiplier: raw?.dormantSeasonMultiplier ?? 1.4,
     openaiApiKeyConfigured: !!(raw?.openaiApiKey),
+    ownerName: raw?.ownerName ?? "",
+    ownerIdNumber: raw?.ownerIdNumber ?? "",
+    physicalAddress: raw?.physicalAddress ?? "",
+    postalAddress: raw?.postalAddress ?? "",
+    contactPhone: raw?.contactPhone ?? "",
+    contactEmail: raw?.contactEmail ?? "",
+    propertyRegNumber: raw?.propertyRegNumber ?? "",
+    farmRegion: raw?.farmRegion ?? "",
+    biomeType: raw?.biomeType ?? null,
   };
 
   return (

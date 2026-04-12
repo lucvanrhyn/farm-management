@@ -20,13 +20,113 @@ export interface FarmSettingsData {
   breedingSeasonStart: string;
   breedingSeasonEnd: string;
   weaningDate: string;
+  // Rotation Defaults
+  defaultRestDays: number;
+  defaultMaxGrazingDays: number;
+  rotationSeasonMode: "auto" | "growing" | "dormant";
+  dormantSeasonMultiplier: number;
   // AI Integration — key is never returned from server; only whether one is configured
   openaiApiKeyConfigured: boolean;
+  // Biome
+  biomeType: string | null;
+  // NVD Seller Identity
+  ownerName: string;
+  ownerIdNumber: string;
+  physicalAddress: string;
+  postalAddress: string;
+  contactPhone: string;
+  contactEmail: string;
+  propertyRegNumber: string;
+  farmRegion: string;
 }
 
 interface SettingsFormProps {
   farmSlug: string;
   initial: FarmSettingsData;
+}
+
+function PushNotificationToggle() {
+  const [pushStatus, setPushStatus] = useState<"idle" | "subscribed" | "denied" | "loading">("idle");
+
+  async function handleEnable() {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setPushStatus("denied");
+      return;
+    }
+
+    setPushStatus("loading");
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setPushStatus("denied");
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      setPushStatus("subscribed");
+    } catch {
+      setPushStatus("denied");
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    const buffer = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+      buffer[i] = rawData.charCodeAt(i);
+    }
+    return buffer.buffer;
+  }
+
+  return (
+    <div
+      className="rounded-xl p-4 mb-2"
+      style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium" style={{ color: "#1C1815" }}>
+            Push Notifications
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            {pushStatus === "subscribed"
+              ? "Enabled — you'll receive alerts for critical farm events."
+              : pushStatus === "denied"
+              ? "Permission denied. Enable notifications in your browser settings."
+              : "Receive push alerts for calving, poor doers, and grazing warnings on this device."}
+          </p>
+        </div>
+        {pushStatus !== "subscribed" && pushStatus !== "denied" && (
+          <button
+            type="button"
+            onClick={() => void handleEnable()}
+            disabled={pushStatus === "loading"}
+            className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity disabled:opacity-60"
+            style={{ background: "#4A7C59", color: "#FFFFFF" }}
+          >
+            {pushStatus === "loading" ? "Enabling…" : "Enable"}
+          </button>
+        )}
+        {pushStatus === "subscribed" && (
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(74,124,89,0.12)", color: "#2D6A4F" }}>
+            Active
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
@@ -306,6 +406,91 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
         </FieldRow>
       </Section>
 
+      {/* ── Rotation Defaults ─────────────────────────────────────────── */}
+      <Section title="Rotation Defaults">
+        <FieldRow label="Default Rest Days" description="How long to let a camp recover after grazing before it can receive a mob again.">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            value={values.defaultRestDays}
+            onChange={(e) => handleNumber("defaultRestDays", e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Max Grazing Days" description="Trigger an `overstayed` alert after a mob has been on a camp for this many days.">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            value={values.defaultMaxGrazingDays}
+            onChange={(e) => handleNumber("defaultMaxGrazingDays", e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Season Mode" description="Auto uses SA summer-rainfall calendar (Oct–Mar growing, Apr–Sep dormant).">
+          <select
+            value={values.rotationSeasonMode}
+            onChange={(e) =>
+              setValues((prev) => ({
+                ...prev,
+                rotationSeasonMode: e.target.value as "auto" | "growing" | "dormant",
+              }))
+            }
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          >
+            <option value="auto">Auto (by calendar)</option>
+            <option value="growing">Growing (always)</option>
+            <option value="dormant">Dormant (always)</option>
+          </select>
+        </FieldRow>
+        <FieldRow label="Dormant Season Multiplier" description="Extend rest days by this factor in the dormant season (default 1.4).">
+          <input
+            type="number"
+            step="0.1"
+            min="1"
+            value={values.dormantSeasonMultiplier}
+            onChange={(e) => handleNumber("dormantSeasonMultiplier", e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+      </Section>
+
+      {/* ── Biome ─────────────────────────────────────────────────────── */}
+      <Section title="Biome">
+        <FieldRow label="Biome type" description="Determines the grazing-capacity baseline used by Veld Condition Scoring.">
+          <select
+            value={values.biomeType ?? ''}
+            onChange={(e) =>
+              setValues((prev) => ({ ...prev, biomeType: e.target.value || null }))
+            }
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          >
+            <option value="">Not set</option>
+            <option value="highveld">Highveld / grassland (≈5 ha/LSU)</option>
+            <option value="bushveld">Bushveld / savanna (≈12 ha/LSU)</option>
+            <option value="lowveld">Lowveld (≈10 ha/LSU)</option>
+            <option value="karoo">Karoo / Nama-karoo (≈30 ha/LSU)</option>
+            <option value="mixedveld">Mixedveld (≈15 ha/LSU)</option>
+          </select>
+        </FieldRow>
+      </Section>
+
       {/* ── AI Integration ────────────────────────────────────────────── */}
       <Section title="AI Integration">
         <FieldRow
@@ -347,6 +532,109 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
         </FieldRow>
       </Section>
 
+      {/* ── Seller Details for NVDs ───────────────────────────────────── */}
+      <Section title="Seller Details for NVDs">
+        <FieldRow label="Owner / Seller Name" description="Full name of the seller as it appears on the NVD.">
+          <input
+            type="text"
+            value={values.ownerName}
+            onChange={(e) => handleText("ownerName", e.target.value)}
+            placeholder="e.g. J. van der Merwe"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="SA ID Number (optional)" description="Seller's South African ID number — fill at your own discretion.">
+          <input
+            type="text"
+            value={values.ownerIdNumber}
+            onChange={(e) => handleText("ownerIdNumber", e.target.value)}
+            placeholder="e.g. 8001015009087"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Physical Address" description="Farm physical address for the NVD seller block.">
+          <input
+            type="text"
+            value={values.physicalAddress}
+            onChange={(e) => handleText("physicalAddress", e.target.value)}
+            placeholder="e.g. Plaas Doornhoek, Vaalwater, 0530"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Postal Address" description="Postal address (leave blank if same as physical).">
+          <input
+            type="text"
+            value={values.postalAddress}
+            onChange={(e) => handleText("postalAddress", e.target.value)}
+            placeholder="e.g. P.O. Box 12, Vaalwater, 0530"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Contact Phone" description="Seller contact number on the NVD.">
+          <input
+            type="tel"
+            value={values.contactPhone}
+            onChange={(e) => handleText("contactPhone", e.target.value)}
+            placeholder="e.g. 082 555 1234"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Contact Email" description="Seller email address for buyer correspondence.">
+          <input
+            type="email"
+            value={values.contactEmail}
+            onChange={(e) => handleText("contactEmail", e.target.value)}
+            placeholder="e.g. boer@plaas.co.za"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Property Reg / LPHS Number" description="SA property registration or Livestock Production Health System number.">
+          <input
+            type="text"
+            value={values.propertyRegNumber}
+            onChange={(e) => handleText("propertyRegNumber", e.target.value)}
+            placeholder="e.g. LP-2024-00123"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Farm District / Province" description="Region where the farm is located.">
+          <input
+            type="text"
+            value={values.farmRegion}
+            onChange={(e) => handleText("farmRegion", e.target.value)}
+            placeholder="e.g. Limpopo, Waterberg District"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+      </Section>
+
+      {/* ── Push Notifications ────────────────────────────────────────── */}
+      <PushNotificationToggle />
+
       {/* ── Save button ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-4">
         <button
@@ -382,11 +670,15 @@ const inputStyle: React.CSSProperties = {
   color: "#1C1815",
 };
 
-function focusStyle(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
+function focusStyle(
+  e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+) {
   e.currentTarget.style.borderColor = "#4A7C59";
 }
 
-function blurStyle(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
+function blurStyle(
+  e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+) {
   e.currentTarget.style.borderColor = "#E0D5C8";
 }
 
