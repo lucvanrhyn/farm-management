@@ -33,9 +33,9 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
     fetch(`/api/${farmSlug}/financial-analytics${query}`, {
       signal: controller.signal,
     })
-      .then((r) => r.json())
-      .then((d: FinancialAnalyticsResult) => {
-        setData(d);
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: FinancialAnalyticsResult | null) => {
+        if (d) setData(d);
         setLoading(false);
       })
       .catch((err: unknown) => {

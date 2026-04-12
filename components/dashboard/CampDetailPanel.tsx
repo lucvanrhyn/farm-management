@@ -47,10 +47,14 @@ export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal,
   const [animals, setAnimals] = useState<PrismaAnimal[]>([]);
 
   useEffect(() => {
-    fetch(`/api/animals?camp=${encodeURIComponent(campId)}&status=all`)
-      .then((r) => r.json())
+    const controller = new AbortController();
+    fetch(`/api/animals?camp=${encodeURIComponent(campId)}&status=all`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : []))
       .then((data: PrismaAnimal[]) => setAnimals(Array.isArray(data) ? data : []))
-      .catch(() => setAnimals([]));
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") setAnimals([]);
+      });
+    return () => controller.abort();
   }, [campId]);
 
   // Compute stats from fetched animals

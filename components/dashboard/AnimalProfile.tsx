@@ -19,20 +19,29 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   const [obsLoading, setObsLoading] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     setAnimal("loading");
-    fetch(`/api/animals/${encodeURIComponent(animalId)}`)
+    fetch(`/api/animals/${encodeURIComponent(animalId)}`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data: PrismaAnimal | null) => setAnimal(data))
-      .catch(() => setAnimal(null));
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") setAnimal(null);
+      });
+    return () => controller.abort();
   }, [animalId]);
 
   useEffect(() => {
     if (!animalId) return;
+    const controller = new AbortController();
     setObsLoading(true);
-    fetch(`/api/observations?animalId=${encodeURIComponent(animalId)}&limit=100`)
+    fetch(`/api/observations?animalId=${encodeURIComponent(animalId)}&limit=100`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : [])
       .then((data: PrismaObservation[]) => setObservations(Array.isArray(data) ? data : []))
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") setObservations([]);
+      })
       .finally(() => setObsLoading(false));
+    return () => controller.abort();
   }, [animalId]);
 
   const panelBg  = "#1E1710";
