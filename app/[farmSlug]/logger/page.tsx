@@ -5,6 +5,8 @@ import { TodaysTasks } from "@/components/logger/TodaysTasks";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 
+export const dynamic = "force-dynamic";
+
 function getTodayLabel(): string {
   return new Intl.DateTimeFormat("en-ZA", {
     weekday: "long",
