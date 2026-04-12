@@ -22,7 +22,8 @@ export async function GET(
   if (!farm) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (farm.tier === 'basic') {
+  const ADVANCED_TIERS = new Set(['advanced', 'enterprise'])
+  if (!ADVANCED_TIERS.has(farm.tier)) {
     return NextResponse.json({ error: 'Advanced plan required' }, { status: 403 })
   }
 
@@ -34,9 +35,22 @@ export async function GET(
   const { searchParams } = new URL(req.url)
   const fromParam = searchParams.get('from')
   const toParam = searchParams.get('to')
-  const dateRange =
-    fromParam && toParam ? { from: fromParam, to: toParam } : undefined
 
-  const rows = await getProfitabilityByAnimal(prisma, dateRange)
-  return NextResponse.json(rows)
+  let dateRange: { from: string; to: string } | undefined
+  if (fromParam && toParam) {
+    const fromDate = new Date(fromParam)
+    const toDate = new Date(toParam)
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid date params' }, { status: 400 })
+    }
+    dateRange = { from: fromParam, to: toParam }
+  }
+
+  try {
+    const rows = await getProfitabilityByAnimal(prisma, dateRange)
+    return NextResponse.json(rows)
+  } catch (err) {
+    console.error('[profitability-by-animal] query failed', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
