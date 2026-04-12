@@ -22,6 +22,8 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import type { Camp, CampStats } from "@/lib/types";
 import { DEFAULT_CAMP_COLOR } from "@/lib/camp-colors";
 import DrawCampModal from "./DrawCampModal";
+import MoveModePanel from "./MoveModePanel";
+import { useMoveMode } from "./useMoveMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,10 @@ export interface CampData {
   fenceStatus?: string;
   lastInspected?: string;
   daysSinceInspection?: number;
+  censusPopulation?: number;
+  rotationStatus?: "grazing" | "overstayed" | "resting" | "resting_ready" | "overdue_rest" | "unknown";
+  rotationDays?: number | null;
+  veldScore?: number | null;
 }
 
 interface PopupInfo {
@@ -53,7 +59,7 @@ interface DrawnBoundary {
   hectares: number;
 }
 
-export type OverlayMode = "grazing" | "density" | "inspection" | "water";
+export type OverlayMode = "grazing" | "density" | "inspection" | "water" | "census" | "rotation" | "veld_condition";
 
 interface Props {
   campData: CampData[];
@@ -117,14 +123,45 @@ function getOverlayColor(mode: OverlayMode, cd: CampData): string {
       if (days <= 30) return "#f97316";
       return "#ef4444";
     }
+    case "census": {
+      const pop = cd.censusPopulation ?? 0;
+      const ha = cd.camp.size_hectares;
+      if (!ha || ha <= 0 || pop === 0) return DEFAULT_FALLBACK_COLOR;
+      const densityPerHa = pop / ha;
+      if (densityPerHa <= 2) return "#22c55e";
+      if (densityPerHa <= 5) return "#eab308";
+      if (densityPerHa <= 10) return "#f97316";
+      return "#ef4444";
+    }
+    case "rotation": {
+      switch (cd.rotationStatus) {
+        case "grazing":       return "#3b82f6";
+        case "overstayed":    return "#dc2626";
+        case "resting_ready": return "#16a34a";
+        case "resting":       return "#86efac";
+        case "overdue_rest":  return "#f59e0b";
+        default:              return "#9ca3af";
+      }
+    }
+    case "veld_condition": {
+      const s = cd.veldScore;
+      if (s == null) return "#9ca3af"; // grey = no data
+      if (s < 3) return "#ef4444";     // red = critical
+      if (s < 5) return "#f97316";     // orange = poor
+      if (s < 7) return "#eab308";     // yellow = fair
+      return "#22c55e";                 // green = good
+    }
   }
 }
 
 const OVERLAY_OPTIONS: { value: OverlayMode; label: string }[] = [
-  { value: "grazing",    label: "Grazing" },
-  { value: "water",      label: "Water" },
-  { value: "density",    label: "Density" },
-  { value: "inspection", label: "Inspection" },
+  { value: "grazing",        label: "Grazing" },
+  { value: "water",          label: "Water" },
+  { value: "density",        label: "Density" },
+  { value: "inspection",     label: "Inspection" },
+  { value: "census",         label: "Census" },
+  { value: "rotation",       label: "Rotation" },
+  { value: "veld_condition", label: "Veld Condition" },
 ];
 
 // ── GeoJSON builder ───────────────────────────────────────────────────────────
@@ -150,6 +187,19 @@ function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): GeoJSON.F
           waterStatus: cd.waterStatus ?? "Unknown",
           fenceStatus: cd.fenceStatus ?? "Unknown",
           daysSinceInspection: cd.daysSinceInspection ?? -1,
+          censusPopulation: cd.censusPopulation ?? 0,
+          labelSubtext:
+            overlay === "census"
+              ? `${cd.censusPopulation ?? 0} game`
+              : overlay === "rotation" && cd.rotationStatus != null
+              ? (cd.rotationStatus === "grazing" || cd.rotationStatus === "overstayed")
+                ? `${cd.rotationDays ?? 0}d grazed`
+                : cd.rotationDays != null
+                ? `${cd.rotationDays}d rested`
+                : cd.rotationStatus
+              : overlay === "veld_condition" && cd.veldScore != null
+              ? `${cd.veldScore.toFixed(1)}/10`
+              : `${stats.total} head`,
           color: getOverlayColor(overlay, cd),
           borderColor: identityColor,
         },
@@ -191,7 +241,7 @@ const labelLayer: LayerProps = {
       "format",
       ["get", "campName"], { "font-scale": 1.0, "text-font": ["literal", ["Open Sans Bold", "Arial Unicode MS Bold"]] },
       "\n", {},
-      ["concat", ["to-string", ["get", "animalCount"]], " head"], { "font-scale": 0.75, "text-font": ["literal", ["Open Sans Regular", "Arial Unicode MS Regular"]] },
+      ["get", "labelSubtext"], { "font-scale": 0.75, "text-font": ["literal", ["Open Sans Regular", "Arial Unicode MS Regular"]] },
     ] as unknown as string,
     "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
     "text-size": 12,
@@ -264,12 +314,18 @@ export default function FarmMap({
   const [drawnBoundary, setDrawnBoundary] = useState<DrawnBoundary | null>(null);
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [localOverlay, setLocalOverlay] = useState<OverlayMode>("grazing");
+  const [moveMode, moveModeActions] = useMoveMode();
 
   const activeOverlay = overlayModeProp ?? localOverlay;
   const setOverlay = (mode: OverlayMode) => {
     setLocalOverlay(mode);
     onOverlayChange?.(mode);
   };
+
+  // Derived: camp name lookup for MoveModePanel
+  const campNameMap = Object.fromEntries(
+    campData.map((cd) => [cd.camp.camp_id, cd.camp.camp_name])
+  );
 
   const geojsonData = buildCampGeoJSON(campData, activeOverlay);
   const campsWithoutBoundary = campData
@@ -325,6 +381,25 @@ export default function FarmMap({
       const props = feature.properties;
       if (!props) return;
 
+      const campId = String(props.campId);
+
+      // Move mode intercepts all camp clicks
+      if (moveMode.active) {
+        const { phase } = moveMode;
+        if (phase.tag === "idle") {
+          moveModeActions.selectSourceCamp(campId);
+        } else if (phase.tag === "source_selected") {
+          // Clicking a different camp while no mob selected changes source
+          if (campId !== phase.campId) moveModeActions.selectSourceCamp(campId);
+        } else if (phase.tag === "mob_selected") {
+          // Destination selected
+          if (campId !== phase.campId) moveModeActions.selectDestCamp(campId);
+        }
+        // dest_selected phase: ignore further clicks until confirmed/cancelled
+        return;
+      }
+
+      // Normal mode: show popup
       // Compute click point center from feature bounding box (approximate)
       const geometry = feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon;
       let lng = e.lngLat.lng;
@@ -344,7 +419,7 @@ export default function FarmMap({
       const daysRaw = Number(props.daysSinceInspection);
 
       setPopupInfo({
-        campId: String(props.campId),
+        campId,
         campName: String(props.campName),
         grazing: String(props.grazing),
         animalCount: Number(props.animalCount),
@@ -356,9 +431,9 @@ export default function FarmMap({
         latitude: lat,
       });
 
-      onCampClick(String(props.campId));
+      onCampClick(campId);
     },
-    [onCampClick]
+    [onCampClick, moveMode, moveModeActions]
   );
 
   // ── Draw handlers ─────────────────────────────────────────────────────────
@@ -435,6 +510,20 @@ export default function FarmMap({
           <Source id="camps" type="geojson" data={geojsonData}>
             <Layer {...fillLayer} />
             <Layer {...outlineLayer} />
+            {/* Amber glow on move-mode source camp */}
+            {moveMode.sourceCampId && (
+              <Layer
+                id="move-source-outline"
+                type="line"
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                filter={["==", ["get", "campId"], moveMode.sourceCampId] as any}
+                paint={{
+                  "line-color": "#C49030",
+                  "line-width": 4,
+                  "line-opacity": 0.9,
+                }}
+              />
+            )}
             <Layer {...labelLayer} />
           </Source>
         )}
@@ -471,6 +560,16 @@ export default function FarmMap({
           </Popup>
         )}
       </Map>
+
+      {/* Move mode panel */}
+      {moveMode.active && (
+        <MoveModePanel
+          phase={moveMode.phase}
+          campNameMap={campNameMap}
+          actions={moveModeActions}
+          onMoveDone={moveModeActions.cancelMove}
+        />
+      )}
 
       {/* Overlay selector toolbar */}
       <div
@@ -539,15 +638,46 @@ export default function FarmMap({
         </div>
       )}
 
-      {/* Draw button — always visible on satellite map */}
+      {/* Draw + Move buttons — bottom right of map */}
       <div
         style={{
           position: "absolute",
           bottom: 24,
           right: 120,
           zIndex: 10,
+          display: "flex",
+          gap: 8,
         }}
       >
+        {/* Move mob button */}
+        <button
+          onClick={moveModeActions.toggleActive}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 14px",
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: "var(--font-sans)",
+            fontWeight: 500,
+            background: moveMode.active
+              ? "rgba(196,144,48,0.2)"
+              : "rgba(36,28,20,0.88)",
+            border: moveMode.active
+              ? "1px solid rgba(196,144,48,0.5)"
+              : "1px solid rgba(140,100,60,0.35)",
+            color: moveMode.active ? "#C49030" : "#D2B48C",
+            cursor: "pointer",
+            backdropFilter: "blur(6px)",
+            transition: "all 0.2s",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⇄</span>
+          {moveMode.active ? "Exit Move" : "Move Mob"}
+        </button>
+
+        {/* Draw camp boundary button */}
         <button
           onClick={() => setIsDrawing((v) => !v)}
           style={{

@@ -11,6 +11,7 @@ import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
 import WeatherWidget from "./WeatherWidget";
 import type { Camp } from "@/lib/types";
+import { useFarmModeSafe } from "@/lib/farm-mode";
 
 // Leaflet must only render client-side
 const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
@@ -77,61 +78,17 @@ function StatChip({
   pulse?: boolean;
   dark?: boolean;
 }) {
-  if (dark) {
-    return (
-      <motion.div
-        variants={chipVariants}
-        style={{
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "4px 12px",
-          borderRadius: 8,
-          background: accent ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)",
-          border: `1px solid ${accent ? "rgba(239,68,68,0.25)" : "rgba(74,222,128,0.15)"}`,
-          gap: 1,
-        }}
-      >
-        {pulse && (
-          <span
-            style={{
-              position: "absolute",
-              top: 4,
-              right: 4,
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#ef4444",
-              animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
-            }}
-          />
-        )}
-        <span
-          style={{
-            fontFamily: "var(--font-dm-serif)",
-            fontSize: 18,
-            lineHeight: 1,
-            color: accent ? "#ef4444" : "#4ade80",
-          }}
-        >
-          {value}
-        </span>
-        <span
-          style={{
-            fontSize: 9,
-            color: "rgba(74,222,128,0.5)",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            fontFamily: "var(--font-sans)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {label}
-        </span>
-      </motion.div>
-    );
-  }
+  const bg = dark
+    ? (accent ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)")
+    : (accent ? "rgba(220,50,50,0.06)" : "rgba(0,0,0,0.04)");
+  const borderColor = dark
+    ? (accent ? "rgba(239,68,68,0.25)" : "rgba(74,222,128,0.15)")
+    : (accent ? "rgba(200,50,50,0.2)" : "rgba(0,0,0,0.08)");
+  const valueColor = dark
+    ? (accent ? "#ef4444" : "#4ade80")
+    : (accent ? "#B03030" : "#1A1510");
+  const labelColor = dark ? "rgba(74,222,128,0.5)" : "rgba(26,21,16,0.45)";
+  const pulseColor = dark ? "#ef4444" : "#B03030";
 
   return (
     <motion.div
@@ -143,8 +100,8 @@ function StatChip({
         alignItems: "center",
         padding: "4px 12px",
         borderRadius: 8,
-        background: accent ? "rgba(220,50,50,0.06)" : "rgba(0,0,0,0.04)",
-        border: `1px solid ${accent ? "rgba(200,50,50,0.2)" : "rgba(0,0,0,0.08)"}`,
+        background: bg,
+        border: `1px solid ${borderColor}`,
         gap: 1,
       }}
     >
@@ -157,7 +114,7 @@ function StatChip({
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "#B03030",
+            background: pulseColor,
             animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
           }}
         />
@@ -167,7 +124,7 @@ function StatChip({
           fontFamily: "var(--font-dm-serif)",
           fontSize: 18,
           lineHeight: 1,
-          color: accent ? "#B03030" : "#1A1510",
+          color: valueColor,
         }}
       >
         {value}
@@ -175,7 +132,7 @@ function StatChip({
       <span
         style={{
           fontSize: 9,
-          color: "rgba(26,21,16,0.45)",
+          color: labelColor,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           fontFamily: "var(--font-sans)",
@@ -251,18 +208,33 @@ function ViewToggle({
 
 export default function DashboardClient({
   totalAnimals,
+  totalBySpecies,
   campAnimalCounts,
+  campCountsBySpecies,
   camps,
   latitude,
   longitude,
+  censusCountByCamp,
+  rotationByCampId,
+  veldScoreByCamp,
 }: {
   totalAnimals: number;
+  totalBySpecies?: Record<string, number>;
   campAnimalCounts: Record<string, number>;
+  campCountsBySpecies?: Record<string, Record<string, number>>;
   camps: Camp[];
   latitude?: number | null;
   longitude?: number | null;
+  censusCountByCamp?: Record<string, number>;
+  rotationByCampId?: Record<string, { status: "grazing" | "overstayed" | "resting" | "resting_ready" | "overdue_rest" | "unknown"; days: number | null }>;
+  veldScoreByCamp?: Record<string, number>;
 }) {
   const router = useRouter();
+  const { mode } = useFarmModeSafe();
+
+  // Species-filtered counts — fall back to unfiltered totals
+  const filteredTotal = totalBySpecies?.[mode] ?? totalAnimals;
+  const filteredCampCounts = campCountsBySpecies?.[mode] ?? campAnimalCounts;
   const [viewMode, setViewMode]                 = useState<ViewMode>("schematic");
   const [filterBy, setFilterBy]                 = useState<FilterMode>("grazing");
   // Zoom state — driven by map clicks
@@ -271,13 +243,17 @@ export default function DashboardClient({
   const [selectedCampId, setSelectedCampId]     = useState<string | null>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [liveConditions, setLiveConditions]     = useState<Record<string, LiveCampStatus>>({});
+  const [conditionsError, setConditionsError]   = useState(false);
 
   useEffect(() => {
     function fetchConditions() {
       fetch("/api/camps/status")
         .then((r) => r.ok ? r.json() : {})
-        .then((data) => setLiveConditions(data ?? {}))
-        .catch(() => {});
+        .then((data) => {
+          setConditionsError(false);
+          setLiveConditions(data ?? {});
+        })
+        .catch(() => setConditionsError(true));
     }
     fetchConditions();
     const interval = setInterval(fetchConditions, 10_000);
@@ -306,12 +282,16 @@ export default function DashboardClient({
 
     return {
       camp,
-      stats: { total: campAnimalCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
+      stats: { total: filteredCampCounts[camp.camp_id] ?? 0, byCategory: {} as Record<string, number> },
       grazing: cond?.grazing_quality ?? "Fair",
       waterStatus: cond?.water_status,
       fenceStatus: cond?.fence_status,
       lastInspected: cond?.last_inspected_at,
       daysSinceInspection: daysSince,
+      censusPopulation: censusCountByCamp?.[camp.camp_id] ?? 0,
+      rotationStatus: rotationByCampId?.[camp.camp_id]?.status,
+      rotationDays: rotationByCampId?.[camp.camp_id]?.days ?? null,
+      veldScore: veldScoreByCamp?.[camp.camp_id] ?? null,
     };
   });
 
@@ -324,8 +304,11 @@ export default function DashboardClient({
     setSelectedCampId(campId);
   }
 
+  const [boundaryError, setBoundaryError] = useState<string | null>(null);
+
   const handleBoundaryDrawn = useCallback(
     async (campId: string | null, geojson: string, hectares: number, campName?: string) => {
+      setBoundaryError(null);
       try {
         if (campId) {
           // Assign boundary to existing camp
@@ -337,11 +320,12 @@ export default function DashboardClient({
         } else {
           // Create new camp — use provided name or fallback
           const name = campName || `Camp ${camps.length + 1}`;
+          const slug = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
           await fetch("/api/camps", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              campId: name.toLowerCase().replace(/\s+/g, "-"),
+              campId: slug,
               campName: name,
               sizeHectares: hectares,
               geojson,
@@ -350,7 +334,7 @@ export default function DashboardClient({
         }
         router.refresh();
       } catch {
-        // Silently handle — user will see stale data until next refresh
+        setBoundaryError("Failed to save boundary. Please try again.");
       }
     },
     [camps.length, router]
@@ -411,11 +395,15 @@ export default function DashboardClient({
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
           style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
         >
-          <StatChip label="Total Animals"   value={totalAnimals}                        />
+          <StatChip label="Total Animals"   value={filteredTotal}                        />
           <StatChip label="Inspected"       value={`${inspectedToday}/${camps.length}`} />
           <StatChip label="Active Alerts"   value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} />
-          <StatChip label="Outstanding Obs" value={alertCount}                          />
         </motion.div>
+        {conditionsError && (
+          <span style={{ fontSize: 10, color: "rgba(239,68,68,0.7)", whiteSpace: "nowrap" }}>
+            Live data unavailable
+          </span>
+        )}
 
         {/* Weather widget */}
         <div style={{ flexShrink: 0, maxWidth: 380 }}>
@@ -451,6 +439,30 @@ export default function DashboardClient({
           <SignOutButton />
         </div>
       </div>
+
+      {/* Boundary save error */}
+      {boundaryError && (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "6px 16px",
+            background: "rgba(239,68,68,0.1)",
+            color: "#ef4444",
+            fontSize: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>{boundaryError}</span>
+          <button
+            onClick={() => setBoundaryError(null)}
+            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14 }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ── Morning briefing strip ────────────────────────────────────── */}
       <div
@@ -502,7 +514,7 @@ export default function DashboardClient({
               selectedCampId={selectedCampId}
               liveConditions={liveConditions}
               camps={camps}
-              campAnimalCounts={campAnimalCounts}
+              campAnimalCounts={filteredCampCounts}
             />
           )}
           {viewMode === "satellite" && (
