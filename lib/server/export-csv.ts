@@ -3,6 +3,10 @@
 
 import type { WithdrawalAnimal } from "@/lib/server/treatment-analytics";
 import type { UpcomingCalving } from "@/lib/server/reproduction-analytics";
+import type {
+  CogByCampRow,
+  CogByAnimalRow,
+} from "@/lib/server/financial-analytics";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,6 +148,197 @@ export function campsToCSV(camps: CampRow[]): string {
   );
   return `${header}\n${rows.join("\n")}`;
 }
+
+// ── Weight History ──────────────────────────────────────────────────────────
+
+export interface WeightHistoryRow {
+  animalId: string;
+  name: string | null;
+  camp: string | null;
+  date: string;
+  weightKg: number;
+}
+
+export function weightHistoryToCSV(rows: WeightHistoryRow[]): string {
+  const header = row("Animal ID", "Name", "Camp", "Date", "Weight (kg)");
+  const lines = rows.map((r) =>
+    row(r.animalId, r.name, r.camp, r.date, r.weightKg)
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+// ── Reproduction Summary ────────────────────────────────────────────────────
+
+export interface ReproSummaryRow {
+  metric: string;
+  value: string;
+  benchmark: string;
+}
+
+export function reproSummaryToCSV(rows: ReproSummaryRow[]): string {
+  const header = row("Metric", "Value", "SA Benchmark");
+  const lines = rows.map((r) => row(r.metric, r.value, r.benchmark));
+  return `${header}\n${lines.join("\n")}`;
+}
+
+// ── Performance Summary ─────────────────────────────────────────────────────
+
+export interface PerformanceRow {
+  campId: string;
+  campName: string;
+  sizeHectares: number | null;
+  animalCount: number;
+  lsuPerHa: number | null;
+  kgDmPerHa: number | null;
+  daysGrazingRemaining: number | null;
+}
+
+export function performanceToCSV(rows: PerformanceRow[]): string {
+  const header = row(
+    "Camp ID", "Camp Name", "Size (ha)", "Animals",
+    "LSU/ha", "kg DM/ha", "Days Grazing Remaining"
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.campId,
+      r.campName,
+      r.sizeHectares,
+      r.animalCount,
+      r.lsuPerHa != null ? r.lsuPerHa.toFixed(2) : null,
+      r.kgDmPerHa,
+      r.daysGrazingRemaining,
+    )
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+// ── Rotation Plan ───────────────────────────────────────────────────────────
+
+export interface RotationPlanExportStep {
+  sequence: number;
+  campName: string;
+  mobName: string | null;
+  plannedStart: string; // ISO
+  plannedDays: number;
+  status: string;
+  actualStart: string | null; // ISO
+  notes: string | null;
+}
+
+export function rotationPlanToCSV(
+  planName: string,
+  steps: RotationPlanExportStep[],
+): string {
+  const header = row(
+    "Sequence", "Camp", "Mob", "Planned Start", "Planned Days",
+    "Status", "Actual Start", "Notes"
+  );
+  const lines = steps.map((s) =>
+    row(
+      s.sequence,
+      s.campName,
+      s.mobName,
+      formatDate(s.plannedStart),
+      s.plannedDays,
+      s.status,
+      s.actualStart ? formatDate(s.actualStart) : null,
+      s.notes,
+    )
+  );
+  return `# ${planName}\n${header}\n${lines.join("\n")}`;
+}
+
+// ── Cost of Gain ────────────────────────────────────────────────────────────
+
+function formatCog(n: number | null): string {
+  return n === null ? "" : n.toFixed(2);
+}
+
+export function cogByCampToCSV(rows: CogByCampRow[]): string {
+  const header = row(
+    "Camp ID",
+    "Camp Name",
+    "Hectares",
+    "Active Animals",
+    "Total Cost (R)",
+    "Kg Gained",
+    "Cost of Gain (R/kg)",
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.campId,
+      r.campName,
+      r.hectares,
+      r.activeAnimalCount,
+      r.totalCost.toFixed(2),
+      r.kgGained.toFixed(1),
+      formatCog(r.costOfGain),
+    ),
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+export function cogByAnimalToCSV(rows: CogByAnimalRow[]): string {
+  const header = row(
+    "Animal ID",
+    "Name",
+    "Category",
+    "Current Camp",
+    "Total Cost (R)",
+    "Kg Gained",
+    "Cost of Gain (R/kg)",
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.animalId,
+      r.name,
+      r.category,
+      r.currentCamp,
+      r.totalCost.toFixed(2),
+      r.kgGained.toFixed(1),
+      formatCog(r.costOfGain),
+    ),
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+// ── Veld Score Summary ──────────────────────────────────────────────────────
+
+export interface VeldScoreRow {
+  campId: string;
+  latestDate: string | null;
+  assessor: string | null;
+  veldScore: number | null;
+  haPerLsu: number | null;
+  trendSlope: number;
+  daysSinceAssessment: number | null;
+}
+
+export function veldScoreToCSV(rows: VeldScoreRow[]): string {
+  const header = row(
+    "camp_id",
+    "latest_date",
+    "assessor",
+    "veld_score",
+    "ha_per_lsu",
+    "trend_slope_per_month",
+    "days_since_assessment",
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.campId,
+      r.latestDate,
+      r.assessor,
+      r.veldScore,
+      r.haPerLsu,
+      r.trendSlope.toFixed(3),
+      r.daysSinceAssessment,
+    ),
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+// ── Transactions ────────────────────────────────────────────────────────────
 
 export function transactionsToCSV(transactions: TransactionRow[]): string {
   const header = row(
