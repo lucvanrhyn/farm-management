@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -31,12 +31,27 @@ export default function CategoryProfitability({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [animalData, setAnimalData] = useState<AnimalProfitabilityRow[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   // searchQuery state — wired up in Task 5
   const [searchQuery, setSearchQuery] = useState(""); // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  const prevFromRef = useRef(from);
+  const prevToRef = useRef(to);
+
+  useEffect(() => {
+    if (prevFromRef.current !== from || prevToRef.current !== to) {
+      setAnimalData(null);
+      setFetchError(null);
+      setExpandedCategories(new Set());
+      prevFromRef.current = from;
+      prevToRef.current = to;
+    }
+  }, [from, to]);
 
   const fetchAnimalData = useCallback(async () => {
     if (animalData !== null) return; // already loaded — skip
     setLoading(true);
+    setFetchError(null);
     try {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
@@ -44,8 +59,13 @@ export default function CategoryProfitability({
       const res = await fetch(
         `/api/${farmSlug}/profitability-by-animal?${params.toString()}`
       );
-      if (!res.ok) throw new Error("Failed to fetch");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
       setAnimalData(await res.json());
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : "Failed to load animal data");
     } finally {
       setLoading(false);
     }
@@ -136,9 +156,8 @@ export default function CategoryProfitability({
               );
 
               return (
-                <>
+                <React.Fragment key={row.category}>
                   <tr
-                    key={row.category}
                     style={{
                       borderBottom: "1px solid #E0D5C8",
                       background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
@@ -150,7 +169,7 @@ export default function CategoryProfitability({
                           onClick={() => toggleCategory(row.category)}
                           className="shrink-0 transition-colors"
                           style={{ color: "#9C8E7A" }}
-                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                          aria-label={isExpanded ? `Collapse ${row.category}` : `Expand ${row.category}`}
                         >
                           <svg
                             className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -196,7 +215,11 @@ export default function CategoryProfitability({
                     <tr key={`${row.category}-expand`}>
                       <td colSpan={6} style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
                         <div className="px-6 py-3">
-                          {loading && !animalData ? (
+                          {fetchError && !animalData ? (
+                            <p style={{ fontSize: 13, color: "#C0574C", padding: "8px 0" }}>
+                              {fetchError}
+                            </p>
+                          ) : loading && !animalData ? (
                             <div className="space-y-2">
                               {[1, 2, 3].map((i) => (
                                 <div
@@ -272,7 +295,7 @@ export default function CategoryProfitability({
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
