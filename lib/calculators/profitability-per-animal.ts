@@ -33,18 +33,21 @@ export function calcProfitabilityByAnimal(
   for (const tx of taggedTransactions) {
     const entry = acc.get(tx.animalId)
     if (!entry) continue
-    if (tx.type === 'income') {
-      entry.income += tx.amount
-    } else {
-      entry.expenses += tx.amount
-    }
+    if (tx.type !== 'income' && tx.type !== 'expense') continue
+    acc.set(
+      tx.animalId,
+      tx.type === 'income'
+        ? { ...entry, income: entry.income + tx.amount }
+        : { ...entry, expenses: entry.expenses + tx.amount },
+    )
   }
 
   const animalsByCamp = new Map<string, string[]>()
   for (const animal of animals) {
-    const list = animalsByCamp.get(animal.currentCamp) ?? []
-    list.push(animal.animalId)
-    animalsByCamp.set(animal.currentCamp, list)
+    animalsByCamp.set(
+      animal.currentCamp,
+      [...(animalsByCamp.get(animal.currentCamp) ?? []), animal.animalId],
+    )
   }
 
   for (const tx of campTransactions) {
@@ -54,7 +57,7 @@ export function calcProfitabilityByAnimal(
     const share = tx.amount / campAnimals.length
     for (const animalId of campAnimals) {
       const entry = acc.get(animalId)
-      if (entry) entry.expenses += share
+      if (entry) acc.set(animalId, { ...entry, expenses: entry.expenses + share })
     }
   }
 

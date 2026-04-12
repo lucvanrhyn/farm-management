@@ -91,4 +91,27 @@ describe('calcProfitabilityByAnimal', () => {
       expect(r.margin).toBe(0)
     })
   })
+
+  it('drops orphaned transactions for animals not in the animals array', () => {
+    const result = calcProfitabilityByAnimal({
+      taggedTransactions: [{ animalId: 'UNKNOWN', type: 'income', amount: 9999 }],
+      campTransactions: [],
+      animals: ANIMALS,
+    })
+    expect(result).toHaveLength(3)
+    const total = result.reduce((s, r) => s + r.income, 0)
+    expect(total).toBe(0)
+  })
+
+  it('verifies both animals in same camp each receive half of camp expense', () => {
+    const result = calcProfitabilityByAnimal({
+      taggedTransactions: [{ animalId: 'B001', type: 'expense', amount: 200 }],
+      campTransactions: [{ campId: 'camp-1', type: 'expense', amount: 400 }],
+      animals: ANIMALS,
+    })
+    const b001 = result.find(r => r.animalId === 'B001')!
+    const b002 = result.find(r => r.animalId === 'B002')!
+    expect(b001.expenses).toBeCloseTo(400) // 200 direct + 200 allocated
+    expect(b002.expenses).toBeCloseTo(200) // 200 allocated only
+  })
 })
