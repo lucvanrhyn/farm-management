@@ -39,8 +39,11 @@ export async function PATCH(
   if (typeof data.description === "string") update.description = data.description;
   if (typeof data.dueDate === "string") update.dueDate = data.dueDate;
   if (typeof data.assignedTo === "string") update.assignedTo = data.assignedTo;
-  if (typeof data.status === "string") update.status = data.status;
-  if (typeof data.priority === "string") update.priority = data.priority;
+  const VALID_STATUSES = new Set(["pending", "in_progress", "completed"]);
+  const VALID_PRIORITIES = new Set(["low", "normal", "high"]);
+
+  if (typeof data.status === "string" && VALID_STATUSES.has(data.status)) update.status = data.status;
+  if (typeof data.priority === "string" && VALID_PRIORITIES.has(data.priority)) update.priority = data.priority;
   if (typeof data.campId === "string") update.campId = data.campId || null;
   if (typeof data.animalId === "string") update.animalId = data.animalId || null;
   if (typeof data.completedAt === "string") update.completedAt = data.completedAt;

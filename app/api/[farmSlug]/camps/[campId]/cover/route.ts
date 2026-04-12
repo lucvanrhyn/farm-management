@@ -87,11 +87,12 @@ export async function POST(
 
   const { farmSlug, campId } = await params;
 
-  // Verify the authenticated user has access to the requested farm
-  const accessiblePost = (session.user?.farms as SessionFarm[] | undefined)?.some(
+  // Verify the authenticated user has ADMIN access to the requested farm
+  const farmPost = (session.user?.farms as SessionFarm[] | undefined)?.find(
     (f) => f.slug === farmSlug,
   );
-  if (!accessiblePost) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!farmPost) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (farmPost.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
