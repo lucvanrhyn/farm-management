@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SessionFarm } from "@/types/next-auth";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
@@ -97,6 +98,18 @@ export async function GET(
   const rl = checkRateLimit(`export:${farmSlug}`, 20, 10 * 60 * 1000);
   if (!rl.allowed) {
     return new Response(JSON.stringify({ error: "Too many export requests. Please wait." }), { status: 429 });
+  }
+
+  // Tier check for advanced-only exports
+  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction"]);
+  const urlForTier = new URL(req.url);
+  const exportType = urlForTier.searchParams.get("type") ?? "animals";
+
+  if (ADVANCED_ONLY_EXPORTS.has(exportType)) {
+    const creds = await getFarmCreds(farmSlug);
+    if (!creds || creds.tier !== "advanced") {
+      return new Response(JSON.stringify({ error: "This export requires an Advanced subscription." }), { status: 403 });
+    }
   }
 
   const prisma = await getPrismaForFarm(farmSlug);
