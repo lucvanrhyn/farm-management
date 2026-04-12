@@ -5,6 +5,9 @@ import Link from "next/link";
 const TABS = [
   { id: "camps",       label: "Camps"       },
   { id: "performance", label: "Performance" },
+  { id: "rainfall",    label: "Rainfall"    },
+  { id: "rotation",    label: "Rotation"    },
+  { id: "veld",        label: "Veld"        },
 ];
 
 export default function CampsTabBar({

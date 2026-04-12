@@ -15,7 +15,13 @@ export interface CampRow {
   fence: string;
   lastDate: string;
   lastBy: string;
+  veldType: string | null;
+  restDaysOverride: number | null;
+  maxGrazingDaysOverride: number | null;
+  rotationNotes: string | null;
 }
+
+const VELD_TYPES = ["sweetveld", "sourveld", "mixedveld", "cultivated"] as const;
 
 function grazingColor(g: string): { color: string; bg: string } {
   if (g === "Excellent") return { color: "#4A7C59", bg: "rgba(74,124,89,0.18)" };
@@ -29,6 +35,10 @@ interface EditForm {
   sizeHectares: string;
   waterSource: string;
   color: string;
+  veldType: string;
+  restDaysOverride: string;
+  maxGrazingDaysOverride: string;
+  rotationNotes: string;
 }
 
 const FIELD_STYLE = {
@@ -46,7 +56,10 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ campName: "", sizeHectares: "", waterSource: "", color: "" });
+  const [editForm, setEditForm] = useState<EditForm>({
+    campName: "", sizeHectares: "", waterSource: "", color: "",
+    veldType: "", restDaysOverride: "", maxGrazingDaysOverride: "", rotationNotes: "",
+  });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -56,6 +69,10 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       sizeHectares: row.sizeHectares !== undefined ? String(row.sizeHectares) : "",
       waterSource: row.water_source ?? "",
       color: row.color ?? "",
+      veldType: row.veldType ?? "",
+      restDaysOverride: row.restDaysOverride !== null ? String(row.restDaysOverride) : "",
+      maxGrazingDaysOverride: row.maxGrazingDaysOverride !== null ? String(row.maxGrazingDaysOverride) : "",
+      rotationNotes: row.rotationNotes ?? "",
     });
     setEditError(null);
     setEditing(row.camp_id);
@@ -76,6 +93,12 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
       body.sizeHectares = editForm.sizeHectares ? parseFloat(editForm.sizeHectares) : null;
       body.waterSource = editForm.waterSource.trim() || null;
       body.color = editForm.color.trim() || null;
+      body.veldType = editForm.veldType || null;
+      body.restDaysOverride = editForm.restDaysOverride ? parseInt(editForm.restDaysOverride, 10) : null;
+      body.maxGrazingDaysOverride = editForm.maxGrazingDaysOverride
+        ? parseInt(editForm.maxGrazingDaysOverride, 10)
+        : null;
+      body.rotationNotes = editForm.rotationNotes.trim() || null;
 
       const res = await fetch(`/api/camps/${editing}`, {
         method: "PATCH",
@@ -198,6 +221,70 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                   <span className="text-xs font-mono" style={{ color: "#9C8E7A" }}>{editForm.color || "Auto"}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Rotation overrides */}
+            <div
+              className="rounded-lg p-3 space-y-3"
+              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+            >
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#6B5C4E" }}>
+                Rotation Overrides
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label style={LABEL_STYLE}>Veld Type</label>
+                  <select
+                    value={editForm.veldType}
+                    onChange={(e) => setEditForm((f) => ({ ...f, veldType: e.target.value }))}
+                    style={FIELD_STYLE}
+                  >
+                    <option value="">(Inherit from farm)</option>
+                    {VELD_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={LABEL_STYLE}>Rest Days Override</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editForm.restDaysOverride}
+                    onChange={setField("restDaysOverride")}
+                    placeholder="(Inherit)"
+                    style={FIELD_STYLE}
+                  />
+                </div>
+                <div>
+                  <label style={LABEL_STYLE}>Max Grazing Days Override</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editForm.maxGrazingDaysOverride}
+                    onChange={setField("maxGrazingDaysOverride")}
+                    placeholder="(Inherit)"
+                    style={FIELD_STYLE}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label style={LABEL_STYLE}>Rotation Notes</label>
+                  <textarea
+                    rows={2}
+                    value={editForm.rotationNotes}
+                    onChange={setField("rotationNotes")}
+                    placeholder="Optional notes about this camp's rotation"
+                    style={{ ...FIELD_STYLE, resize: "vertical" as const }}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px]" style={{ color: "#9C8E7A" }}>
+                Rest Days Override replaces the farm default and disables the seasonal multiplier for this camp.
+              </p>
             </div>
 
             {editError && (
