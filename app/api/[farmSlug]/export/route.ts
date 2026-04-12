@@ -19,6 +19,8 @@ import {
   cogByCampToCSV,
   cogByAnimalToCSV,
   veldScoreToCSV,
+  fooToCSV,
+  type FooRow,
   type CampRow,
   type TransactionRow,
   type WeightHistoryRow,
@@ -28,6 +30,7 @@ import {
   type VeldScoreRow,
 } from "@/lib/server/export-csv";
 import { getFarmSummary as getVeldFarmSummary } from "@/lib/server/veld-score";
+import { getFarmFooPayload } from "@/lib/server/foo";
 import { getCogByCamp, getCogByAnimal } from "@/lib/server/financial-analytics";
 import { isCogScope } from "@/lib/calculators/cost-of-gain";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
@@ -39,7 +42,7 @@ import { autoTable } from "jspdf-autotable";
 
 export const dynamic = "force-dynamic";
 
-type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score";
+type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo";
 type ExportFormat = "csv" | "pdf";
 
 function today(): string {
@@ -716,6 +719,55 @@ export async function GET(
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${pdfFilename("veld-score")}"`,
+        },
+      });
+    }
+
+    if (type === "foo") {
+      const now = new Date();
+      const payload = await getFarmFooPayload(prisma, now);
+      const rows: FooRow[] = payload.byCamp.map((c) => ({
+        campId: c.campId,
+        campName: c.campName,
+        sizeHectares: c.sizeHectares,
+        kgDmPerHa: c.foo.kgDmPerHa,
+        status: c.foo.status,
+        effectiveFooKg: c.foo.effectiveFooKg,
+        capacityLsuDays: c.foo.capacityLsuDays,
+        lastRecordedAt: c.latestReading?.recordedAt ?? null,
+        daysSinceReading: c.foo.daysSinceReading,
+        trendSlope: c.trendSlope,
+      }));
+
+      if (format === "csv") {
+        return new Response(fooToCSV(rows), {
+          headers: {
+            "Content-Type": "text/csv",
+            "Content-Disposition": `attachment; filename="${csvFilename("foo")}"`,
+          },
+        });
+      }
+
+      const pdfBuf = await buildPdf(
+        "Feed on Offer (FOO) Summary",
+        ["Camp", "Name", "Ha", "kg DM/ha", "Status", "Effective (kg)", "Capacity (LSU-days)", "Last Reading", "Days Since", "Trend/mo"],
+        rows.map((r) => [
+          r.campId,
+          r.campName,
+          r.sizeHectares,
+          r.kgDmPerHa,
+          r.status,
+          r.effectiveFooKg != null ? Math.round(r.effectiveFooKg) : null,
+          r.capacityLsuDays != null ? Math.round(r.capacityLsuDays) : null,
+          r.lastRecordedAt,
+          r.daysSinceReading,
+          r.trendSlope.toFixed(1),
+        ]),
+      );
+      return new Response(pdfBuf, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${pdfFilename("foo")}"`,
         },
       });
     }

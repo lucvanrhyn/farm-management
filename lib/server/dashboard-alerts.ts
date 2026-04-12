@@ -6,6 +6,7 @@ import type { LiveCampStatus } from "@/lib/server/camp-status";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
+import { getFarmFooPayload } from "@/lib/server/foo";
 import { cattleModule } from "@/lib/species/cattle";
 import { sheepModule } from "@/lib/species/sheep";
 import { gameModule } from "@/lib/species/game";
@@ -89,7 +90,7 @@ export async function getDashboardAlerts(
   const thresholdsRecord = toThresholdsRecord(thresholds);
 
   // ── Parallel: species module alerts + farm-wide data ─────────────────────
-  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary] =
+  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, fooPayload] =
     await Promise.all([
       Promise.all(
         SPECIES_MODULES.map((mod) =>
@@ -103,6 +104,7 @@ export async function getDashboardAlerts(
       prisma.camp.count(),
       getRotationStatusByCamp(prisma, now).catch(() => null),
       getVeldSummary(prisma, now).catch(() => null),
+      getFarmFooPayload(prisma, now).catch(() => null),
     ]);
 
   const speciesAlerts: DashboardAlert[] = allSpeciesAlerts.flat();
@@ -254,6 +256,55 @@ export async function getDashboardAlerts(
           : `${n} camps overdue for veld assessment (>180 days)`,
         count: n,
         href: `/${farmSlug}/tools/veld`,
+        species: "farm",
+      });
+    }
+  }
+
+  // FOO (Feed on Offer) alerts (farm-wide)
+  if (fooPayload) {
+    const { summary: fooSummary } = fooPayload;
+    if (fooSummary.campsCritical > 0) {
+      const n = fooSummary.campsCritical;
+      red.push({
+        id: "foo-critical",
+        severity: "red",
+        icon: "AlertTriangle",
+        message: n === 1
+          ? "1 camp with critical feed levels (< 500 kg DM/ha)"
+          : `${n} camps with critical feed levels (< 500 kg DM/ha)`,
+        count: n,
+        href: `/${farmSlug}/tools/foo`,
+        species: "farm",
+      });
+    }
+
+    if (fooSummary.campsLow > 0) {
+      const n = fooSummary.campsLow;
+      amber.push({
+        id: "foo-low",
+        severity: "amber",
+        icon: "Wheat",
+        message: n === 1
+          ? "1 camp with low feed levels (< 1,000 kg DM/ha)"
+          : `${n} camps with low feed levels (< 1,000 kg DM/ha)`,
+        count: n,
+        href: `/${farmSlug}/tools/foo`,
+        species: "farm",
+      });
+    }
+
+    if (fooSummary.campsStaleReading > 0) {
+      const n = fooSummary.campsStaleReading;
+      amber.push({
+        id: "foo-stale-reading",
+        severity: "amber",
+        icon: "CalendarClock",
+        message: n === 1
+          ? "1 camp with outdated cover reading (> 30 days)"
+          : `${n} camps with outdated cover readings (> 30 days)`,
+        count: n,
+        href: `/${farmSlug}/tools/foo`,
         species: "farm",
       });
     }
