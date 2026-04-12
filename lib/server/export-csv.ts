@@ -364,3 +364,48 @@ export function transactionsToCSV(transactions: TransactionRow[]): string {
   );
   return `${header}\n${rows.join("\n")}`;
 }
+
+// ── FOO (Feed on Offer) Summary ───────────────────────────────────────────
+
+export interface FooRow {
+  campId: string;
+  campName: string;
+  sizeHectares: number | null;
+  kgDmPerHa: number | null;
+  status: string;
+  effectiveFooKg: number | null;
+  capacityLsuDays: number | null;
+  lastRecordedAt: string | null;
+  daysSinceReading: number | null;
+  trendSlope: number;
+}
+
+export function fooToCSV(rows: FooRow[]): string {
+  const header = row(
+    "camp_id",
+    "camp_name",
+    "size_hectares",
+    "kg_dm_per_ha",
+    "status",
+    "effective_foo_kg",
+    "capacity_lsu_days",
+    "last_recorded_at",
+    "days_since_reading",
+    "trend_slope_kg_per_month",
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.campId,
+      r.campName,
+      r.sizeHectares,
+      r.kgDmPerHa,
+      r.status,
+      r.effectiveFooKg != null ? Math.round(r.effectiveFooKg) : null,
+      r.capacityLsuDays != null ? Math.round(r.capacityLsuDays) : null,
+      r.lastRecordedAt,
+      r.daysSinceReading,
+      r.trendSlope.toFixed(1),
+    ),
+  );
+  return `${header}\n${lines.join("\n")}`;
+}

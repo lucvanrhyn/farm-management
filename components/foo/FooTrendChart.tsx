@@ -29,7 +29,7 @@ export function FooTrendChart({ trendData }: { trendData: readonly TrendPoint[] 
           <XAxis dataKey="date" />
           <YAxis />
           <Tooltip
-            formatter={(value: number) => [`${value} kg DM/ha`, 'Avg FOO']}
+            formatter={(value) => [`${value} kg DM/ha`, 'Avg FOO']}
           />
           <ReferenceLine
             y={FOO_CRITICAL_KG_DM}
