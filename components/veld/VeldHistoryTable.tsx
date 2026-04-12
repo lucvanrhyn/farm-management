@@ -26,9 +26,12 @@ export function VeldHistoryTable({
   async function onDelete(id: string) {
     if (!confirm('Delete this assessment? This cannot be undone.')) return;
     setBusyId(id);
-    const res = await fetch(`/api/${farmSlug}/veld-assessments/${id}`, { method: 'DELETE' });
-    setBusyId(null);
-    if (res.ok) router.refresh();
+    try {
+      const res = await fetch(`/api/${farmSlug}/veld-assessments/${id}`, { method: 'DELETE' });
+      if (res.ok) router.refresh();
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (initial.length === 0) {
