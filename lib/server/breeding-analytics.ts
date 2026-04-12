@@ -109,7 +109,7 @@ export async function getBreedingSnapshot(
 
   const [allAnimals, recentPregnancyScans, recentInseminations] = await Promise.all([
     prisma.animal.findMany({
-      where: { status: "Active" },
+      where: { status: "Active", species: "cattle" },
       select: {
         id: true,
         animalId: true,
@@ -750,7 +750,7 @@ export async function suggestPairings(
 
   const [allAnimals, recentScans] = await Promise.all([
     prisma.animal.findMany({
-      where: { status: "Active" },
+      where: { status: "Active", species: "cattle" },
       select: {
         id: true,
         animalId: true,
