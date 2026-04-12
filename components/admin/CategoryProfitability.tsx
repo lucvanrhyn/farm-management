@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -10,6 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { CategoryProfitabilityRow } from "@/lib/server/financial-analytics";
+import type { AnimalProfitabilityRow } from "@/lib/calculators/profitability-per-animal";
 
 function fmt(n: number): string {
   return `R ${Math.round(Math.abs(n)).toLocaleString("en-ZA")}`;
@@ -17,9 +19,54 @@ function fmt(n: number): string {
 
 export default function CategoryProfitability({
   data,
+  farmSlug,
+  from,
+  to,
 }: {
   data: CategoryProfitabilityRow[];
+  farmSlug: string;
+  from?: string;
+  to?: string;
 }) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [animalData, setAnimalData] = useState<AnimalProfitabilityRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  // searchQuery state — wired up in Task 5
+  const [searchQuery, setSearchQuery] = useState(""); // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  const fetchAnimalData = useCallback(async () => {
+    if (animalData !== null) return; // already loaded — skip
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      const res = await fetch(
+        `/api/${farmSlug}/profitability-by-animal?${params.toString()}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch");
+      setAnimalData(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [animalData, farmSlug, from, to]);
+
+  const toggleCategory = useCallback(
+    (category: string) => {
+      setExpandedCategories((prev) => {
+        const next = new Set(prev);
+        if (next.has(category)) {
+          next.delete(category);
+        } else {
+          next.add(category);
+          fetchAnimalData();
+        }
+        return next;
+      });
+    },
+    [fetchAnimalData]
+  );
+
   if (data.length === 0) {
     return (
       <div
@@ -82,38 +129,152 @@ export default function CategoryProfitability({
             </tr>
           </thead>
           <tbody>
-            {data.map((row, idx) => (
-              <tr
-                key={row.category}
-                style={{
-                  borderBottom: idx < data.length - 1 ? "1px solid #E0D5C8" : "none",
-                  background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
-                }}
-              >
-                <td className="px-3 py-2.5 font-medium" style={{ color: "#1C1815" }}>{row.category}</td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#4A7C59" }}>
-                  {fmt(row.income)}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#C0574C" }}>
-                  {fmt(row.expense)}
-                </td>
-                <td
-                  className="px-3 py-2.5 text-right font-mono font-semibold"
-                  style={{ color: row.margin >= 0 ? "#4A7C59" : "#C0574C" }}
-                >
-                  {row.margin >= 0 ? "" : "-"}{fmt(row.margin)}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#1C1815" }}>
-                  {row.headCount}
-                </td>
-                <td
-                  className="px-3 py-2.5 text-right font-mono"
-                  style={{ color: row.marginPerHead >= 0 ? "#4A7C59" : "#C0574C" }}
-                >
-                  {row.marginPerHead >= 0 ? "" : "-"}{fmt(row.marginPerHead)}
-                </td>
-              </tr>
-            ))}
+            {data.map((row, idx) => {
+              const isExpanded = expandedCategories.has(row.category);
+              const categoryAnimals = (animalData ?? []).filter(
+                (a) => a.category === row.category
+              );
+
+              return (
+                <>
+                  <tr
+                    key={row.category}
+                    style={{
+                      borderBottom: "1px solid #E0D5C8",
+                      background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
+                    }}
+                  >
+                    <td className="px-3 py-2.5 font-medium" style={{ color: "#1C1815" }}>
+                      <span className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => toggleCategory(row.category)}
+                          className="shrink-0 transition-colors"
+                          style={{ color: "#9C8E7A" }}
+                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                        >
+                          <svg
+                            className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </button>
+                        {row.category}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#4A7C59" }}>
+                      {fmt(row.income)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#C0574C" }}>
+                      {fmt(row.expense)}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-right font-mono font-semibold"
+                      style={{ color: row.margin >= 0 ? "#4A7C59" : "#C0574C" }}
+                    >
+                      {row.margin >= 0 ? "" : "-"}{fmt(row.margin)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#1C1815" }}>
+                      {row.headCount}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-right font-mono"
+                      style={{ color: row.marginPerHead >= 0 ? "#4A7C59" : "#C0574C" }}
+                    >
+                      {row.marginPerHead >= 0 ? "" : "-"}{fmt(row.marginPerHead)}
+                    </td>
+                  </tr>
+
+                  {isExpanded && (
+                    <tr key={`${row.category}-expand`}>
+                      <td colSpan={6} style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
+                        <div className="px-6 py-3">
+                          {loading && !animalData ? (
+                            <div className="space-y-2">
+                              {[1, 2, 3].map((i) => (
+                                <div
+                                  key={i}
+                                  className="h-5 animate-pulse rounded"
+                                  style={{ background: "#E0D5C8" }}
+                                />
+                              ))}
+                            </div>
+                          ) : categoryAnimals.length === 0 ? (
+                            <p className="text-xs py-1" style={{ color: "#9C8E7A" }}>
+                              No animals with transactions in this period.
+                            </p>
+                          ) : (
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Tag</th>
+                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Name</th>
+                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Income</th>
+                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>
+                                    Expenses{" "}
+                                    <span
+                                      title="Camp-level expenses (feed, dip, vet) are split equally across animals present in that camp."
+                                      className="cursor-help"
+                                      style={{ color: "#B0A090" }}
+                                    >
+                                      ⓘ
+                                    </span>
+                                  </th>
+                                  <th className="text-right py-1 font-semibold" style={{ color: "#9C8E7A" }}>Margin</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {categoryAnimals.map((animal) => (
+                                  <tr
+                                    key={animal.animalId}
+                                    style={{ borderBottom: "1px solid rgba(224,213,200,0.4)" }}
+                                  >
+                                    <td className="py-1 pr-3 font-mono" style={{ color: "#1C1815" }}>
+                                      {animal.tagNumber}
+                                    </td>
+                                    <td className="py-1 pr-3" style={{ color: "#9C8E7A" }}>
+                                      {animal.name ?? "—"}
+                                    </td>
+                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "#4A7C59" }}>
+                                      {animal.income === 0 ? "—" : fmt(animal.income)}
+                                    </td>
+                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "#C0574C" }}>
+                                      {animal.expenses === 0 ? "—" : fmt(animal.expenses)}
+                                    </td>
+                                    <td
+                                      className="py-1 text-right font-mono font-semibold"
+                                      style={{
+                                        color:
+                                          animal.income === 0 && animal.expenses === 0
+                                            ? "#9C8E7A"
+                                            : animal.margin >= 0
+                                            ? "#4A7C59"
+                                            : "#C0574C",
+                                      }}
+                                    >
+                                      {animal.income === 0 && animal.expenses === 0
+                                        ? "—"
+                                        : `${animal.margin < 0 ? "-" : ""}${fmt(animal.margin)}`}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
           </tbody>
         </table>
       </div>

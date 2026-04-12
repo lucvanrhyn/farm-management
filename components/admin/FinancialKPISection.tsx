@@ -104,7 +104,7 @@ export default async function FinancialKPISection({
         <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
           Profitability by Animal Category
         </h2>
-        <CategoryProfitability data={categoryProfit} />
+        <CategoryProfitability data={categoryProfit} farmSlug={farmSlug} from={from} to={to} />
       </div>
     </div>
   );
