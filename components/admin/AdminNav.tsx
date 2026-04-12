@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
+  Bell,
   ClipboardList,
   PawPrint,
   Tent,
@@ -19,9 +20,27 @@ import {
   Users,
   Lock,
   X,
+  Rabbit,
+  Target,
+  SlidersHorizontal,
+  CreditCard,
+  Scissors,
+  AlertTriangle,
+  Eye,
+  Crosshair,
+  Shield,
+  Droplet,
+  Fence,
+  Calculator,
+  Route,
+  FileCheck2,
+  Sprout,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
+import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
+import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
 import type { FarmTier } from "@/lib/tier";
+import NotificationBell from "@/components/admin/NotificationBell";
 
 interface NavItem {
   path: string;
@@ -31,22 +50,78 @@ interface NavItem {
   premiumOnly?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+// ── Nav items per mode ──────────────────────────────────────────────────────
+
+const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
   { path: "/admin/animals",      label: "Animals",      icon: PawPrint,        group: "Data"    },
   { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
   { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
-  { path: "/admin/mobs",        label: "Mobs",         icon: Users,           group: "Data"    },
+  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Data"    },
   { path: "/admin/reproduction", label: "Reproduction", icon: HeartPulse,      group: "Data",   premiumOnly: true },
   { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
   { path: "/admin/breeding-ai",  label: "Breeding AI",  icon: Dna,             group: "Data",   premiumOnly: true },
   { path: "/admin/finansies",    label: "Finances",     icon: Receipt,         group: "Finance", premiumOnly: true },
-  { path: "/admin/import",       label: "Import",       icon: Upload,          group: "Tools"   },
-  { path: "/admin/reports",      label: "Reports",      icon: FileDown,        group: "Tools"   },
-  { path: "/admin/settings",     label: "Settings",     icon: Settings,        group: "Tools"   },
+  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
+  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
+  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
+  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
+  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
+  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
+  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
 ];
 
+const SHEEP_NAV_ITEMS: NavItem[] = [
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
+  { path: "/admin/animals",      label: "Flock",        icon: Rabbit,          group: "Data"    },
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
+  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
+  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Data"    },
+  { path: "/sheep/reproduction", label: "Lambing",      icon: HeartPulse,      group: "Data",   premiumOnly: true },
+  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
+  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
+  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
+  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
+  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
+  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
+  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
+  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
+];
+
+const GAME_NAV_ITEMS: NavItem[] = [
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
+  { path: "/game/census",        label: "Census",       icon: Crosshair,       group: "Data"    },
+  { path: "/game/offtake",       label: "Hunting",      icon: Target,          group: "Data"    },
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
+  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
+  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
+  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
+  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
+  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
+  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
+  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
+  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
+  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
+];
+
+const NAV_BY_MODE: Record<FarmMode, NavItem[]> = {
+  cattle: CATTLE_NAV_ITEMS,
+  sheep: SHEEP_NAV_ITEMS,
+  game: GAME_NAV_ITEMS,
+};
+
 const GROUP_ORDER = ["Data", "Finance", "Tools"];
+
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 const linkVariants = {
   hidden: { opacity: 0, x: -8 },
@@ -160,16 +235,35 @@ function UpgradeToast({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function AdminNav({ tier }: { tier: FarmTier }) {
+// ── Main component ──────────────────────────────────────────────────────────
+
+export default function AdminNav({
+  tier,
+  enabledSpecies,
+}: {
+  tier: FarmTier;
+  enabledSpecies?: string[];
+}) {
   const pathname = usePathname();
   const farmSlug = pathname.split("/")[1];
   const [showToast, setShowToast] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { mode, isMultiMode } = useFarmModeSafe();
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const isBasic = tier === "basic";
 
+  // Get nav items for the current mode
+  const navItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
+
   const groups = GROUP_ORDER.map((groupLabel) => ({
     label: groupLabel,
-    links: NAV_ITEMS
+    links: navItems
       .filter((item) => item.group === groupLabel)
       .map((item) => ({
         href: `/${farmSlug}${item.path}`,
@@ -177,11 +271,12 @@ export default function AdminNav({ tier }: { tier: FarmTier }) {
         icon: item.icon,
         locked: isBasic && !!item.premiumOnly,
       })),
-  }));
+  })).filter((group) => group.links.length > 0);
 
   function handleLockedClick() {
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setShowToast(false), 3500);
   }
 
   return (
@@ -191,7 +286,7 @@ export default function AdminNav({ tier }: { tier: FarmTier }) {
         style={{ background: "#1A1510", borderRight: "1px solid rgba(139,105,20,0.15)" }}
       >
         {/* FarmTrack Wordmark */}
-        <div className="mb-5 px-1 md:px-1.5 pt-1">
+        <div className="mb-3 px-1 md:px-1.5 pt-1">
           <div className="flex items-center justify-center md:justify-start gap-2.5">
             <div
               className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold shrink-0"
@@ -207,12 +302,26 @@ export default function AdminNav({ tier }: { tier: FarmTier }) {
               <p className="text-sm font-semibold leading-none" style={{ color: "#F5EBD4" }}>
                 FarmTrack
               </p>
-              <p className="text-[10px] leading-none mt-0.5" style={{ color: "rgba(210,180,140,0.5)" }}>
-                Admin
-              </p>
+              <span
+                className="inline-block mt-1 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full"
+                style={
+                  isBasic
+                    ? { background: "rgba(210,180,140,0.3)", color: "rgba(210,180,140,0.85)" }
+                    : { background: "rgba(139,105,20,0.2)", color: "#8B6914" }
+                }
+              >
+                {tier}
+              </span>
             </div>
           </div>
         </div>
+
+        {/* Mode switcher — compact, in sidebar */}
+        {isMultiMode && (
+          <div className="mb-4 hidden md:block">
+            <ModeSwitcher variant="solid" />
+          </div>
+        )}
 
         <motion.div
           className="flex flex-col gap-4"
@@ -243,7 +352,7 @@ export default function AdminNav({ tier }: { tier: FarmTier }) {
                       href={link.href}
                       label={link.label}
                       icon={link.icon}
-                      isActive={pathname === link.href}
+                      isActive={pathname === link.href || (link.href !== `/${farmSlug}/admin` && pathname.startsWith(link.href))}
                     />
                   )
                 )}
@@ -252,7 +361,8 @@ export default function AdminNav({ tier }: { tier: FarmTier }) {
           ))}
         </motion.div>
 
-        <div className="mt-auto pt-4">
+        <div className="mt-auto pt-4 flex flex-col gap-2">
+          <NotificationBell farmSlug={farmSlug} />
           <SignOutButton />
         </div>
       </nav>
