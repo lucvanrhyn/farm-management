@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getUserRoleForFarm } from "@/lib/auth";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -47,23 +48,28 @@ export async function GET(req: NextRequest) {
     weaningDate: settings?.weaningDate ?? null,
     // Never return the actual API key — only indicate whether one is configured
     openaiApiKeyConfigured: !!(settings?.openaiApiKey),
+    // NVD seller identity
+    ownerName: settings?.ownerName ?? "",
+    ownerIdNumber: settings?.ownerIdNumber ?? "",
+    physicalAddress: settings?.physicalAddress ?? "",
+    postalAddress: settings?.postalAddress ?? "",
+    contactPhone: settings?.contactPhone ?? "",
+    contactEmail: settings?.contactEmail ?? "",
+    propertyRegNumber: settings?.propertyRegNumber ?? "",
+    farmRegion: settings?.farmRegion ?? "",
   });
 }
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
     return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
   }
 
-  // Verify the requesting user has access to this specific farm
-  const userFarms = (session.user as { farms?: Array<{ slug: string }> }).farms ?? [];
-  if (!userFarms.some((f) => f.slug === farmSlug)) {
+  if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -86,6 +92,8 @@ export async function PATCH(req: NextRequest) {
     "calvingAlertDays",
     "daysOpenLimit",
     "campGrazingWarningDays",
+    "defaultRestDays",
+    "defaultMaxGrazingDays",
   ] as const;
 
   for (const field of positiveNumericFields) {
@@ -97,6 +105,26 @@ export async function PATCH(req: NextRequest) {
           { status: 400 }
         );
       }
+    }
+  }
+
+  if ("rotationSeasonMode" in body) {
+    const mode = body.rotationSeasonMode;
+    if (mode !== "auto" && mode !== "growing" && mode !== "dormant") {
+      return NextResponse.json(
+        { error: "rotationSeasonMode must be one of: auto, growing, dormant" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if ("dormantSeasonMultiplier" in body) {
+    const m = body.dormantSeasonMultiplier;
+    if (typeof m !== "number" || !isFinite(m) || m < 1) {
+      return NextResponse.json(
+        { error: "dormantSeasonMultiplier must be a finite number ≥ 1" },
+        { status: 400 }
+      );
     }
   }
 
@@ -127,7 +155,21 @@ export async function PATCH(req: NextRequest) {
     breedingSeasonStart?: string | null;
     breedingSeasonEnd?: string | null;
     weaningDate?: string | null;
+    defaultRestDays?: number;
+    defaultMaxGrazingDays?: number;
+    rotationSeasonMode?: "auto" | "growing" | "dormant";
+    dormantSeasonMultiplier?: number;
     openaiApiKey?: string | null;
+    // NVD seller identity
+    ownerName?: string | null;
+    ownerIdNumber?: string | null;
+    physicalAddress?: string | null;
+    postalAddress?: string | null;
+    contactPhone?: string | null;
+    contactEmail?: string | null;
+    propertyRegNumber?: string | null;
+    farmRegion?: string | null;
+    biomeType?: string | null;
   } = {};
 
   if (typeof body.farmName === "string" && body.farmName.trim()) {
@@ -179,6 +221,22 @@ export async function PATCH(req: NextRequest) {
         ? body.weaningDate.trim()
         : null;
   }
+  if (typeof body.defaultRestDays === "number") {
+    updateData.defaultRestDays = Math.round(body.defaultRestDays);
+  }
+  if (typeof body.defaultMaxGrazingDays === "number") {
+    updateData.defaultMaxGrazingDays = Math.round(body.defaultMaxGrazingDays);
+  }
+  if (
+    body.rotationSeasonMode === "auto" ||
+    body.rotationSeasonMode === "growing" ||
+    body.rotationSeasonMode === "dormant"
+  ) {
+    updateData.rotationSeasonMode = body.rotationSeasonMode;
+  }
+  if (typeof body.dormantSeasonMultiplier === "number") {
+    updateData.dormantSeasonMultiplier = body.dormantSeasonMultiplier;
+  }
   if ("openaiApiKey" in body) {
     if (body.openaiApiKey === null) {
       // Explicit null = user wants to clear the key
@@ -188,6 +246,33 @@ export async function PATCH(req: NextRequest) {
       updateData.openaiApiKey = body.openaiApiKey.trim();
     }
     // Empty string = leave existing key unchanged (blank field on form = no change)
+  }
+
+  // biomeType — validated enum or null
+  const BIOMES = new Set(['highveld', 'bushveld', 'lowveld', 'karoo', 'mixedveld']);
+  if ('biomeType' in body) {
+    if (body.biomeType != null && !BIOMES.has(body.biomeType as string)) {
+      return NextResponse.json({ error: 'invalid biomeType' }, { status: 400 });
+    }
+    updateData.biomeType = (body.biomeType as string | null) ?? null;
+  }
+
+  // NVD seller identity — nullable text fields, empty string = clear to null
+  for (const field of [
+    "ownerName",
+    "ownerIdNumber",
+    "physicalAddress",
+    "postalAddress",
+    "contactPhone",
+    "contactEmail",
+    "propertyRegNumber",
+    "farmRegion",
+  ] as const) {
+    if (field in body) {
+      const val = body[field];
+      (updateData as Record<string, unknown>)[field] =
+        typeof val === "string" && val.trim() ? val.trim() : null;
+    }
   }
 
   const updated = await prisma.farmSettings.upsert({
@@ -208,9 +293,18 @@ export async function PATCH(req: NextRequest) {
       breedingSeasonStart: updateData.breedingSeasonStart ?? null,
       breedingSeasonEnd: updateData.breedingSeasonEnd ?? null,
       weaningDate: updateData.weaningDate ?? null,
+      defaultRestDays: updateData.defaultRestDays ?? 60,
+      defaultMaxGrazingDays: updateData.defaultMaxGrazingDays ?? 7,
+      rotationSeasonMode: updateData.rotationSeasonMode ?? "auto",
+      dormantSeasonMultiplier: updateData.dormantSeasonMultiplier ?? 1.4,
       openaiApiKey: updateData.openaiApiKey ?? null,
     },
   });
 
-  return NextResponse.json(updated);
+  // Never return the raw API key — mirror the GET response shape
+  return NextResponse.json({
+    ...updated,
+    openaiApiKey: undefined,
+    openaiApiKeyConfigured: !!(updated.openaiApiKey),
+  });
 }
