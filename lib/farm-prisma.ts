@@ -4,6 +4,7 @@ import { createClient } from "@libsql/client";
 import { cookies } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { Session } from "next-auth";
+import type { SessionFarm } from "@/types/next-auth";
 
 // Cache Prisma clients per farm slug to avoid creating a new connection on every request.
 // Uses globalThis so the cache survives Next.js hot-reload in development.
@@ -100,19 +101,42 @@ export async function getPrismaForRequest(): Promise<
 }
 
 // Same as getPrismaForRequest but also verifies the user has access to the
-// farm selected by the cookie. Use this in all API routes.
+// farm selected by the cookie. Returns the farm's role for the session user.
+// Use this in all cookie-scoped API routes (no [farmSlug] in path).
 export async function getPrismaWithAuth(
   session: Session,
 ): Promise<
-  { prisma: PrismaClient; slug: string } | { error: string; status: number }
+  { prisma: PrismaClient; slug: string; role: string } | { error: string; status: number }
 > {
   const result = await getPrismaForRequest();
   if ("error" in result) return result;
 
-  const farms = session.user?.farms as Array<{ slug: string }> | undefined;
-  if (!farms?.some((f) => f.slug === result.slug)) {
-    return { error: "Forbidden", status: 403 };
+  const farms = session.user?.farms as SessionFarm[] | undefined;
+  const farm = farms?.find((f) => f.slug === result.slug);
+  if (!farm) return { error: "Forbidden", status: 403 };
+
+  return { ...result, role: farm.role };
+}
+
+// Like getPrismaWithAuth but uses an explicit slug (for [farmSlug] URL routes)
+// rather than the active_farm_slug cookie. This prevents cookie/URL mismatch
+// where the cookie points to farm A but the URL is for farm B.
+export async function getPrismaForSlugWithAuth(
+  session: Session,
+  slug: string,
+): Promise<
+  { prisma: PrismaClient; slug: string; role: string } | { error: string; status: number }
+> {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(slug)) {
+    return { error: "Invalid farm slug", status: 400 };
   }
 
-  return result;
+  const farms = session.user?.farms as SessionFarm[] | undefined;
+  const farm = farms?.find((f) => f.slug === slug);
+  if (!farm) return { error: "Forbidden", status: 403 };
+
+  const prisma = await getPrismaForFarm(slug);
+  if (!prisma) return { error: "Farm not found", status: 404 };
+
+  return { prisma, slug, role: farm.role };
 }

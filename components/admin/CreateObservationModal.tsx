@@ -2,19 +2,30 @@
 
 import { useState } from "react";
 import type { ObservationType } from "@/lib/types";
+import { getAllObservationTypes, getAllSpeciesConfigs } from "@/lib/species/registry";
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const OBSERVATION_TYPES: { value: ObservationType; label: string }[] = [
-  { value: "camp_check",      label: "Camp Check" },
-  { value: "camp_condition",   label: "Camp Condition" },
-  { value: "health_issue",     label: "Health Issue" },
-  { value: "animal_movement",  label: "Animal Movement" },
-  { value: "reproduction",     label: "Reproduction" },
-  { value: "treatment",        label: "Treatment" },
-  { value: "weighing",         label: "Weighing" },
-  { value: "death",            label: "Death" },
-];
+// Derived from the species registry — includes shared + all species-specific types
+const OBSERVATION_TYPES: { value: ObservationType; label: string }[] =
+  getAllObservationTypes().map((t) => ({
+    value: t.value as ObservationType,
+    label: t.label,
+  }));
+
+// Animal-linked types derived from registry requiresAnimal field
+const ANIMAL_LINKED_TYPES = new Set<ObservationType>(
+  getAllObservationTypes()
+    .filter((t) => t.requiresAnimal)
+    .map((t) => t.value as ObservationType),
+);
+
+// Reproduction events derived from all species configs
+const REPRODUCTION_EVENTS: string[] = Array.from(
+  new Set(
+    getAllSpeciesConfigs().flatMap((c) => c.reproEvents.map((e) => e.value)),
+  ),
+);
 
 const TREATMENT_TYPES = ["Antibiotic", "Dip", "Deworming", "Vaccination", "Supplement", "Other"];
 const WITHDRAWAL_DEFAULTS: Record<string, number> = {
@@ -25,12 +36,7 @@ const SEVERITIES = ["mild", "moderate", "severe"];
 const GRAZING_QUALITY = ["Good", "Fair", "Poor", "Overgrazed"];
 const WATER_STATUS = ["Full", "Low", "Empty", "Broken"];
 const FENCE_STATUS = ["Intact", "Damaged"];
-const REPRODUCTION_EVENTS = ["heat", "insemination", "pregnancy_scan", "calving"];
 const DEATH_CAUSES = ["Unknown", "Redwater", "Heartwater", "Snake", "Old_age", "Birth_complications", "Other"];
-
-const ANIMAL_LINKED_TYPES = new Set<ObservationType>([
-  "health_issue", "treatment", "weighing", "death", "reproduction", "animal_movement",
-]);
 
 // ─── Styles ─────────────────────────────────────────────────────
 

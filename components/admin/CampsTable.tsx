@@ -7,17 +7,30 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
 
-  const liveConditions = await getLatestCampConditions(prisma);
+  const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
+    getLatestCampConditions(prisma),
+    prisma.animal.groupBy({
+      by: ["currentCamp"],
+      where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },
+      _count: { _all: true },
+    }),
+    prisma.camp.findMany({
+      select: {
+        campId: true,
+        veldType: true,
+        restDaysOverride: true,
+        maxGrazingDaysOverride: true,
+        rotationNotes: true,
+      },
+    }),
+  ]);
 
-  const animalGroups = await prisma.animal.groupBy({
-    by: ["currentCamp"],
-    where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },
-    _count: { _all: true },
-  });
   const countByCamp = new Map(animalGroups.map((g) => [g.currentCamp, g._count._all]));
+  const rotationByCamp = new Map(rotationCamps.map((c) => [c.campId, c]));
 
   const rows: CampRow[] = camps.map((camp) => {
     const live = liveConditions.get(camp.camp_id);
+    const rot = rotationByCamp.get(camp.camp_id);
     return {
       camp_id: camp.camp_id,
       camp_name: camp.camp_name,
@@ -29,6 +42,10 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
       fence: live?.fence_status ?? "Intact",
       lastDate: live ? live.last_inspected_at.split("T")[0] : "—",
       lastBy: live?.last_inspected_by ?? "—",
+      veldType: rot?.veldType ?? null,
+      restDaysOverride: rot?.restDaysOverride ?? null,
+      maxGrazingDaysOverride: rot?.maxGrazingDaysOverride ?? null,
+      rotationNotes: rot?.rotationNotes ?? null,
     };
   });
 

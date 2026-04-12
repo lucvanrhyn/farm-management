@@ -4,8 +4,12 @@ import FinancialChartsClient from "@/components/admin/FinancialChartsClient";
 
 export default async function FinancialChartsSection({
   farmSlug,
+  from,
+  to,
 }: {
   farmSlug: string;
+  from?: string;
+  to?: string;
 }) {
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return null;
@@ -16,6 +20,8 @@ export default async function FinancialChartsSection({
     prisma,
     campAnalytics.prismaCamps,
     campAnalytics.headcount,
+    from,
+    to,
   );
 
   return <FinancialChartsClient data={finansieleData} />;

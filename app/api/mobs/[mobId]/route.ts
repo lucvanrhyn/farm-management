@@ -3,19 +3,19 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { performMobMove, MobNotFoundError } from "@/lib/server/mob-move";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ mobId: string }> },
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { mobId } = await params;
   const mob = await prisma.mob.findUnique({ where: { id: mobId } });
@@ -25,49 +25,26 @@ export async function PATCH(
 
   const body = (await req.json()) as { name?: string; currentCamp?: string };
 
-  const updateData: Record<string, unknown> = {};
-  if (body.name !== undefined) updateData.name = body.name;
-  if (body.currentCamp !== undefined) updateData.currentCamp = body.currentCamp;
+  const loggedBy = session.user?.email ?? null;
 
-  const updatedMob = await prisma.mob.update({
-    where: { id: mobId },
-    data: updateData,
-  });
-
-  // When the camp changes, batch-update all animals in this mob
+  // Handle camp change via shared performMobMove helper (updates mob + animals + observations)
   if (body.currentCamp && body.currentCamp !== mob.currentCamp) {
-    const affectedAnimals = await prisma.animal.findMany({
-      where: { mobId, status: "Active" },
-      select: { id: true, animalId: true },
-    });
-
-    if (affectedAnimals.length > 0) {
-      await prisma.animal.updateMany({
-        where: { mobId, status: "Active" },
-        data: { currentCamp: body.currentCamp },
-      });
-
-      // Log two mob_movement observations — one per camp — so both source and
-      // destination camp histories show the movement event.
-      const observedAt = new Date();
-      const loggedBy = session.user?.email ?? null;
-      const sharedDetails = JSON.stringify({
-        mobId,
-        mobName: updatedMob.name,
-        sourceCamp: mob.currentCamp,
-        destCamp: body.currentCamp,
-        animalCount: affectedAnimals.length,
-        animalIds: affectedAnimals.map((a) => a.animalId),
-      });
-
-      await prisma.observation.createMany({
-        data: [
-          { type: "mob_movement", campId: mob.currentCamp,    details: sharedDetails, observedAt, loggedBy },
-          { type: "mob_movement", campId: body.currentCamp,   details: sharedDetails, observedAt, loggedBy },
-        ],
-      });
+    try {
+      await performMobMove(prisma, { mobId, toCampId: body.currentCamp, loggedBy });
+    } catch (err) {
+      if (err instanceof MobNotFoundError) {
+        return NextResponse.json({ error: "Mob not found" }, { status: 404 });
+      }
+      throw err;
     }
   }
+
+  // Handle name change (or any other field besides currentCamp)
+  const nameUpdate: Record<string, unknown> = {};
+  if (body.name !== undefined) nameUpdate.name = body.name;
+  const updatedMob = Object.keys(nameUpdate).length > 0
+    ? await prisma.mob.update({ where: { id: mobId }, data: nameUpdate })
+    : await prisma.mob.findUniqueOrThrow({ where: { id: mobId } });
 
   revalidatePath("/admin/mobs");
   revalidatePath("/admin/animals");
@@ -86,13 +63,12 @@ export async function DELETE(
   { params }: { params: Promise<{ mobId: string }> },
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { mobId } = await params;
   const mob = await prisma.mob.findUnique({ where: { id: mobId } });

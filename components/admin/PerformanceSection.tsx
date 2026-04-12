@@ -4,11 +4,8 @@ import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
+import { getMergedLsuValues } from "@/lib/species/registry";
 import type { PerfRow } from "@/components/admin/PerformanceTable";
-
-const LSU_FACTOR: Record<string, number> = {
-  Cow: 1.0, Bull: 1.2, Heifer: 0.7, Calf: 0.3, Ox: 1.1,
-};
 
 export default async function PerformanceSection({
   farmSlug,
@@ -22,6 +19,8 @@ export default async function PerformanceSection({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
 
+  const LSU_VALUES = getMergedLsuValues();
+
   const fromDate = from ? new Date(from) : undefined;
   const toDate = to ? new Date(to) : undefined;
 
@@ -33,7 +32,7 @@ export default async function PerformanceSection({
   const [camps, animalsByCategory, allConditions, allCoverReadings] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campId: "asc" } }),
     prisma.animal.groupBy({
-      by: ["currentCamp", "category"],
+      by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
     }),
@@ -80,7 +79,7 @@ export default async function PerformanceSection({
 
     const animalCount = campAnimals.reduce((sum, r) => sum + r.count, 0);
     const totalLSU = campAnimals.reduce(
-      (sum, r) => sum + r.count * (LSU_FACTOR[r.category] ?? 1.0),
+      (sum, r) => sum + r.count * (LSU_VALUES[r.category] ?? 0),
       0,
     );
     const density =

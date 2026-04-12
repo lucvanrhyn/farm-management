@@ -46,7 +46,8 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
     const interval = setInterval(() => {
       setWordIndex((i) => (i + 1) % words.length);
     }, 2500);
-    fetch("/api/farm")
+    const controller = new AbortController();
+    fetch("/api/farm", { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
@@ -54,8 +55,11 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
           if (data.heroImageUrl) onHeroImageLoad?.(data.heroImageUrl);
         }
       })
-      .catch(() => {});
-    return () => clearInterval(interval);
+      .catch((err) => { if (err?.name !== "AbortError") console.error("[animated-hero] fetch failed:", err); });
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [words.length]);
 
   const now = new Date();

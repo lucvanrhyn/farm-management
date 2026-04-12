@@ -3,6 +3,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getLatestByCamp } from "@/lib/server/veld-score";
+import { getLatestCoverByCamp } from "@/lib/server/foo";
 import type { Camp } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function DashboardPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="p-8 text-red-500">Farm not found.</p>;
 
-  const [totalAnimals, animalGroupsBySpecies, prismaCamps, farmSettings, censusPopByCamp, rotationPayload, veldLatestByCamp] = await Promise.all([
+  const [totalAnimals, animalGroupsBySpecies, prismaCamps, farmSettings, censusPopByCamp, rotationPayload, veldLatestByCamp, fooLatestByCamp] = await Promise.all([
     prisma.animal.groupBy({
       by: ["species"],
       where: { status: "Active" },
@@ -32,6 +33,7 @@ export default async function DashboardPage({
     getCensusPopulationByCamp(prisma),
     getRotationStatusByCamp(prisma),
     getLatestByCamp(prisma),
+    getLatestCoverByCamp(prisma),
   ]);
 
   // Build per-species total counts: { cattle: 120, sheep: 80, ... }
@@ -84,6 +86,11 @@ export default async function DashboardPage({
     veldScoreByCamp[campId] = entry.score;
   }
 
+  const fooKgDmPerHaByCamp: Record<string, number> = {};
+  for (const [campId, entry] of fooLatestByCamp.entries()) {
+    fooKgDmPerHaByCamp[campId] = entry.kgDmPerHa;
+  }
+
   return (
     <DashboardClient
       totalAnimals={totalAll}
@@ -96,6 +103,7 @@ export default async function DashboardPage({
       censusCountByCamp={censusCountByCamp}
       rotationByCampId={rotationByCampId}
       veldScoreByCamp={veldScoreByCamp}
+      fooKgDmPerHaByCamp={fooKgDmPerHaByCamp}
     />
   );
 }

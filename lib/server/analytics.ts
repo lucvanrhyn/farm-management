@@ -1,4 +1,8 @@
 import { type PrismaClient } from "@prisma/client";
+import {
+  calcDaysGrazingRemaining as _calcDaysGrazingRemaining,
+} from "@/lib/species/shared/lsu";
+import { getMergedLsuValues } from "@/lib/species/registry";
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -83,18 +87,20 @@ export async function getHealthIssuesByCamp(prisma: PrismaClient, days = 30): Pr
 
 export interface HeadcountByCamp {
   campId: string;
+  species: string;
   category: string;
   count: number;
 }
 
 export async function getHeadcountByCamp(prisma: PrismaClient): Promise<HeadcountByCamp[]> {
   const rows = await prisma.animal.groupBy({
-    by: ["currentCamp", "category"],
+    by: ["currentCamp", "species", "category"],
     where: { status: "Active" },
     _count: { id: true },
   });
   return rows.map((r) => ({
     campId: r.currentCamp ?? "Onbekend",
+    species: r.species,
     category: r.category,
     count: r._count.id,
   }));
@@ -227,20 +233,16 @@ export async function getDeathsAndSales(prisma: PrismaClient, months = 12): Prom
 
 // ── Days Grazing Remaining ────────────────────────────────────────────────────
 
-export const LSU_EQUIVALENT: Record<string, number> = {
-  Cow: 1.0,
-  Bull: 1.5,
-  Heifer: 0.75,
-  Calf: 0.25,
-  Ox: 1.0,
-};
-
 /**
  * Calculate days of grazing remaining in a camp.
  *
+ * Thin wrapper around the species-aware version in lib/species/shared/lsu.ts.
+ * Defaults to cattle LSU values from the species registry so existing callers
+ * continue to work without modification.
+ *
  * Formula (SA standard):
  *   Effective FOO = kgDmPerHa × useFactor × sizeHectares
- *   LSU           = Σ(count × LSU_EQUIVALENT[category])
+ *   LSU           = Σ(count × lsuValues[category])
  *   Days          = Effective FOO ÷ (LSU × 10 kg DM/LSU/day)
  *
  * Returns null when LSU = 0, no size, or no cover reading.
@@ -249,16 +251,15 @@ export function calcDaysGrazingRemaining(
   kgDmPerHa: number,
   useFactor: number,
   sizeHectares: number,
-  animalsByCategory: Array<{ category: string; count: number }>
+  animalsByCategory: Array<{ category: string; count: number }>,
 ): number | null {
-  if (sizeHectares <= 0 || kgDmPerHa <= 0) return null;
-  const lsu = animalsByCategory.reduce(
-    (sum, { category, count }) => sum + count * (LSU_EQUIVALENT[category] ?? 1.0),
-    0
+  return _calcDaysGrazingRemaining(
+    kgDmPerHa,
+    useFactor,
+    sizeHectares,
+    animalsByCategory,
+    getMergedLsuValues(),
   );
-  if (lsu <= 0) return null;
-  const effectiveFoo = kgDmPerHa * useFactor * sizeHectares;
-  return effectiveFoo / (lsu * 10);
 }
 
 // ── Pasture Growth Rate ───────────────────────────────────────────────────────

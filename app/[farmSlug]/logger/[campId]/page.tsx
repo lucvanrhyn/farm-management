@@ -11,15 +11,25 @@ import WeighingForm from "@/components/logger/WeighingForm";
 import TreatmentForm from "@/components/logger/TreatmentForm";
 import CampCoverLogForm from "@/components/logger/CampCoverLogForm";
 import ReproductionForm, { type ReproSubmitData } from "@/components/logger/ReproductionForm";
+import DeathModal from "@/components/logger/DeathModal";
+import MobMoveModal from "@/components/logger/MobMoveModal";
+import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
-import { getAnimalsByCampCached, queueObservation, queueAnimalCreate, queuePhoto, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
+import { getAnimalsByCampCached, queueObservation, queuePhoto, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Animal, AnimalSex, EaseOfBirth, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
+import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
+import { useFarmModeSafe } from "@/lib/farm-mode";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
+
+const DEATH_CAUSES_BY_SPECIES: Record<string, string[]> = {
+  cattle: ["Unknown", "Redwater", "Heartwater", "Snake", "Old age", "Birth complications", "Other"],
+  sheep:  ["Unknown", "Predation — Jackal", "Predation — Caracal", "Predation — Eagle", "Predation — Unknown", "Pulpy kidney", "Bluetongue", "Heartwater", "Old age", "Birth complications", "Other"],
+  game:   ["Unknown", "Predation", "Disease", "Drought", "Fence injury", "Poaching", "Old age", "Other"],
+};
 
 interface MobWithCount {
   id: string;
@@ -40,6 +50,7 @@ export default function CampInspectionPage({
   const router = useRouter();
   const { data: session } = useSession();
   const { isOnline, refreshPendingCount, refreshCampsState, camps, campsLoaded, syncNow } = useOffline();
+  const { mode } = useFarmModeSafe();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
   const [allNormalDone, setAllNormalDone] = useState(false);
@@ -55,10 +66,14 @@ export default function CampInspectionPage({
   const campWithCondition = camp as (Camp & { grazing_quality?: string }) | undefined;
   const stats = { total: animals.length };
 
-  // Load animals from IndexedDB
+  // Load animals from IndexedDB, filtered by active farm mode species
   useEffect(() => {
-    getAnimalsByCampCached(decodedId).then(setAnimals);
-  }, [decodedId]);
+    getAnimalsByCampCached(decodedId).then((all) => {
+      // Filter by species: animals without a species field default to "cattle"
+      const filtered = all.filter((a) => (a.species ?? "cattle") === mode);
+      setAnimals(filtered);
+    });
+  }, [decodedId, mode]);
 
   // Load mobs for this camp from API
   useEffect(() => {
@@ -75,36 +90,20 @@ export default function CampInspectionPage({
     if (!selectedMob || !mobDestCamp) return;
     setMobMoving(true);
     try {
-      const res = await fetch(`/api/mobs/${selectedMob.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentCamp: mobDestCamp }),
-      });
-      if (res.ok) {
-        // Log the mob_movement observation locally too
-        await queueObservation({
-          type: "mob_movement",
-          camp_id: decodedId,
-          details: JSON.stringify({
-            mobId: selectedMob.id,
-            mobName: selectedMob.name,
-            sourceCamp: decodedId,
-            destCamp: mobDestCamp,
-            animalCount: selectedMob.animal_count,
-          }),
-          created_at: new Date().toISOString(),
-          synced_at: null,
-          sync_status: "pending",
-        });
-        // Remove the mob from this camp's list
+      const result = await submitMobMove(
+        {
+          mobId: selectedMob.id,
+          mobName: selectedMob.name,
+          animalCount: selectedMob.animal_count,
+          fromCampId: decodedId,
+          toCampId: mobDestCamp,
+        },
+        { isOnline, refreshPendingCount, syncNow },
+      );
+      if (result.success) {
         setMobsInCamp((prev) => prev.filter((m) => m.id !== selectedMob.id));
-        // Refresh animal list (some may have moved out)
-        getAnimalsByCampCached(decodedId).then(setAnimals);
-        refreshPendingCount();
-        if (isOnline) syncNow();
+        getAnimalsByCampCached(decodedId).then((all) => setAnimals(all.filter((a) => (a.species ?? "cattle") === mode)));
       }
-    } catch {
-      /* non-fatal */
     } finally {
       setMobMoving(false);
       setActiveModal(null);
@@ -185,95 +184,18 @@ export default function CampInspectionPage({
     if (isOnline) syncNow();
     setActiveModal(null);
     // Refresh animal list so moved animal disappears
-    getAnimalsByCampCached(decodedId).then(setAnimals);
+    getAnimalsByCampCached(decodedId).then((all) => setAnimals(all.filter((a) => (a.species ?? "cattle") === mode)));
   }
 
-  async function handleCalvingSubmit(data: {
-    animalId: string;
-    campId: string;
-    calfAnimalId: string;
-    calfName: string;
-    calfSex: AnimalSex;
-    calfAlive: boolean;
-    easeOfBirth: EaseOfBirth;
-    fatherId: string | null;
-    dateOfBirth: string;
-    breed: string;
-    category: string;
-    photoBlob: Blob | null;
-    calvingDifficulty: number;
-    birthWeight: number | null;
-  }) {
-    const { photoBlob, ...obsData } = data;
-    const now = new Date().toISOString();
-
-    // Queue the calving observation (offline-safe)
-    const localId = await queueObservation({
-      type: "calving",
-      camp_id: decodedId,
-      animal_id: data.animalId,
-      details: JSON.stringify(obsData),
-      created_at: now,
-      synced_at: null,
-      sync_status: "pending",
+  async function handleCalvingSubmit(data: CalvingData) {
+    await submitCalvingObservation(data, {
+      mode,
+      campId: decodedId,
+      isOnline,
+      markAnimalFlagged,
+      refreshPendingCount,
+      syncNow,
     });
-    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
-
-    // Create the new calf animal record if alive
-    if (data.calfAlive) {
-      const calfPayload = {
-        animalId: data.calfAnimalId,
-        name: data.calfName || null,
-        sex: data.calfSex,
-        category: data.category || "Calf",
-        currentCamp: decodedId,
-        motherId: data.animalId,
-        fatherId: data.fatherId || null,
-        dateOfBirth: data.dateOfBirth,
-        dateAdded: data.dateOfBirth,
-        breed: data.breed || "Brangus",
-        status: "Active",
-      };
-
-      if (isOnline) {
-        // Attempt immediate POST — fall back to queue on failure
-        try {
-          const res = await fetch("/api/animals", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(calfPayload),
-          });
-          if (!res.ok) throw new Error("POST failed");
-        } catch {
-          await queueAnimalCreate({
-            animal_id: data.calfAnimalId,
-            name: data.calfName || undefined,
-            sex: data.calfSex,
-            category: data.category || "Calf",
-            current_camp: decodedId,
-            mother_id: data.animalId,
-            date_added: data.dateOfBirth,
-            sync_status: "pending",
-          });
-        }
-      } else {
-        // Offline — queue for later sync
-        await queueAnimalCreate({
-          animal_id: data.calfAnimalId,
-          name: data.calfName || undefined,
-          sex: data.calfSex,
-          category: data.category || "Calf",
-          current_camp: decodedId,
-          mother_id: data.animalId,
-          date_added: data.dateOfBirth,
-          sync_status: "pending",
-        });
-      }
-    }
-
-    markAnimalFlagged(data.animalId);
-    refreshPendingCount();
-    if (isOnline) syncNow();
     setActiveModal(null);
   }
 
@@ -300,7 +222,7 @@ export default function CampInspectionPage({
     if (isOnline) syncNow();
     setActiveModal(null);
     // Refresh animal list so deceased animal is removed from active list
-    getAnimalsByCampCached(decodedId).then(setAnimals);
+    getAnimalsByCampCached(decodedId).then((all) => setAnimals(all.filter((a) => (a.species ?? "cattle") === mode)));
   }
 
   async function handleReproSubmit(data: ReproSubmitData) {
@@ -472,7 +394,7 @@ export default function CampInspectionPage({
             Tap icon to report
           </p>
         </div>
-        <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} flaggedIds={flaggedAnimalIds} />
+        <AnimalChecklist campId={decodedId} onFlag={handleFlag} animals={animals} flaggedIds={flaggedAnimalIds} species={mode} />
       </div>
 
       {/* Mobs in this camp */}
@@ -552,7 +474,7 @@ export default function CampInspectionPage({
             border: '1px solid rgba(139, 105, 20, 0.3)',
           }}
         >
-          <span>🌾</span> Record Cover
+          Record Cover
         </button>
         <button
           onClick={() => setActiveModal("condition")}
@@ -563,7 +485,7 @@ export default function CampInspectionPage({
             border: '1px solid rgba(139, 105, 20, 0.3)',
           }}
         >
-          <span>🌿</span> Report Camp Condition
+          Report Camp Condition
         </button>
       </div>
 
@@ -593,54 +515,13 @@ export default function CampInspectionPage({
           onSubmit={handleCalvingSubmit}
         />
       )}
-      {activeModal === "death" && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setActiveModal(null)} />
-          <div
-            className="relative rounded-t-3xl p-6 flex flex-col gap-4"
-            style={{ backgroundColor: '#1E0F07', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
-          >
-            <div className="flex justify-center">
-              <div
-                className="w-10 h-1.5 rounded-full"
-                style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
-              />
-            </div>
-            <h2
-              className="font-bold text-lg"
-              style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
-            >
-              Record Death — {selectedAnimalId}
-            </h2>
-            <p className="text-sm" style={{ color: '#D2B48C' }}>
-              Confirm that animal <span className="font-bold" style={{ color: '#F5F0E8' }}>{selectedAnimalId}</span> is deceased?
-            </p>
-            <div className="flex flex-col gap-2">
-              {["Unknown", "Redwater", "Heartwater", "Snake", "Old age", "Birth complications", "Other"].map((cause) => (
-                <button
-                  key={cause}
-                  onClick={() => handleDeathSubmit(cause)}
-                  className="w-full py-3.5 rounded-xl text-sm font-medium transition-colors hover:border-[#B87333] hover:text-[#F5F0E8]"
-                  style={{
-                    backgroundColor: 'rgba(44, 21, 8, 0.5)',
-                    border: '1px solid rgba(92, 61, 46, 0.4)',
-                    color: '#D2B48C',
-                  }}
-                >
-                  {cause}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setActiveModal(null)}
-              className="text-sm py-2"
-              style={{ color: 'rgba(210, 180, 140, 0.5)' }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <DeathModal
+        isOpen={activeModal === "death"}
+        animalId={selectedAnimalId}
+        causes={DEATH_CAUSES_BY_SPECIES[mode] ?? DEATH_CAUSES_BY_SPECIES.cattle}
+        onSelect={handleDeathSubmit}
+        onClose={() => setActiveModal(null)}
+      />
       {activeModal === "reproduction" && (
         <ReproductionForm
           animalId={selectedAnimalId}
@@ -692,68 +573,17 @@ export default function CampInspectionPage({
           onCancel={() => setActiveModal(null)}
         />
       )}
-      {activeModal === "mob_move" && selectedMob && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setActiveModal(null); setSelectedMob(null); }} />
-          <div
-            className="relative rounded-t-3xl p-6 flex flex-col gap-4"
-            style={{ backgroundColor: '#1E0F07', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
-          >
-            <div className="flex justify-center">
-              <div
-                className="w-10 h-1.5 rounded-full"
-                style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
-              />
-            </div>
-            <h2
-              className="font-bold text-lg"
-              style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
-            >
-              Move Mob: {selectedMob.name}
-            </h2>
-            <p className="text-sm" style={{ color: '#D2B48C' }}>
-              {selectedMob.animal_count} animal{selectedMob.animal_count !== 1 ? 's' : ''} will move together.
-            </p>
-            <select
-              value={mobDestCamp}
-              onChange={(e) => setMobDestCamp(e.target.value)}
-              className="w-full py-3 px-4 rounded-xl text-sm"
-              style={{
-                backgroundColor: 'rgba(44, 21, 8, 0.5)',
-                border: '1px solid rgba(92, 61, 46, 0.4)',
-                color: '#D2B48C',
-              }}
-            >
-              <option value="">Select destination camp...</option>
-              {camps
-                .filter((c) => c.camp_id !== decodedId)
-                .map((c) => (
-                  <option key={c.camp_id} value={c.camp_id}>
-                    {c.camp_name}
-                  </option>
-                ))}
-            </select>
-            <button
-              onClick={handleMobMove}
-              disabled={!mobDestCamp || mobMoving}
-              className="w-full font-bold py-4 rounded-2xl text-sm transition-all active:scale-95 disabled:opacity-50"
-              style={{
-                backgroundColor: '#B87333',
-                color: '#F5F0E8',
-              }}
-            >
-              {mobMoving ? "Moving..." : "Confirm Move"}
-            </button>
-            <button
-              onClick={() => { setActiveModal(null); setSelectedMob(null); }}
-              className="text-sm py-2"
-              style={{ color: 'rgba(210, 180, 140, 0.5)' }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <MobMoveModal
+        isOpen={activeModal === "mob_move"}
+        mob={selectedMob}
+        camps={camps}
+        currentCampId={decodedId}
+        destCamp={mobDestCamp}
+        onDestCampChange={setMobDestCamp}
+        onConfirm={handleMobMove}
+        onClose={() => { setActiveModal(null); setSelectedMob(null); }}
+        isSubmitting={mobMoving}
+      />
     </div>
   );
 }

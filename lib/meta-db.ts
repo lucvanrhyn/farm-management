@@ -29,6 +29,7 @@ export interface UserFarm {
   role: string;
   logoUrl: string | null;
   tier: string;
+  subscriptionStatus: string;
 }
 
 export interface FarmCreds {
@@ -63,7 +64,7 @@ export async function getUserByIdentifier(identifier: string): Promise<MetaUser 
 export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {
   const client = getMetaClient();
   const result = await client.execute({
-    sql: `SELECT f.slug, f.display_name, fu.role, f.logo_url, f.tier
+    sql: `SELECT f.slug, f.display_name, fu.role, f.logo_url, f.tier, f.subscription_status
           FROM farm_users fu
           JOIN farms f ON f.id = fu.farm_id
           WHERE fu.user_id = ?
@@ -76,6 +77,7 @@ export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {
     role: row.role as string,
     logoUrl: row.logo_url as string | null,
     tier: row.tier as string,
+    subscriptionStatus: (row.subscription_status as string) ?? 'inactive',
   }));
 }
 
@@ -135,6 +137,12 @@ export async function getFarmBySlug(slug: string): Promise<{ id: string; slug: s
     id: result.rows[0].id as string,
     slug: result.rows[0].slug as string,
   };
+}
+
+export async function getAllFarmSlugs(): Promise<string[]> {
+  const client = getMetaClient();
+  const result = await client.execute({ sql: `SELECT slug FROM farms`, args: [] });
+  return result.rows.map((row) => row.slug as string);
 }
 
 // ── Write operations (registration / provisioning) ──────────────────────────
@@ -217,6 +225,55 @@ export async function verifyUserEmail(token: string): Promise<{ userId: string }
     args: [userId],
   });
   return { userId };
+}
+
+// ── Subscription helpers ────────────────────────────────────────────────────
+
+export async function getFarmSubscription(farmSlug: string): Promise<{
+  subscriptionStatus: string;
+  payfastToken: string | null;
+  subscriptionStartedAt: string | null;
+} | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT subscription_status, payfast_token, subscription_started_at
+          FROM farms WHERE slug = ? LIMIT 1`,
+    args: [farmSlug],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    subscriptionStatus: (row.subscription_status as string) ?? 'inactive',
+    payfastToken: (row.payfast_token as string) || null,
+    subscriptionStartedAt: (row.subscription_started_at as string) || null,
+  };
+}
+
+export async function updateFarmSubscription(
+  farmSlug: string,
+  status: string,
+  opts?: {
+    payfastToken?: string;
+    startedAt?: string;
+    billingDate?: string;
+  },
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE farms
+          SET subscription_status = ?,
+              payfast_token = COALESCE(?, payfast_token),
+              subscription_started_at = COALESCE(?, subscription_started_at),
+              subscription_billing_date = COALESCE(?, subscription_billing_date)
+          WHERE slug = ?`,
+    args: [
+      status,
+      opts?.payfastToken ?? null,
+      opts?.startedAt ?? null,
+      opts?.billingDate ?? null,
+      farmSlug,
+    ],
+  });
 }
 
 export async function isEmailVerified(userId: string): Promise<boolean> {

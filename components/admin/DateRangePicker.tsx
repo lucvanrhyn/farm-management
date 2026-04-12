@@ -8,6 +8,7 @@ const PRESETS = [
   { label: "90d", days: 90 },
   { label: "6m", days: 180 },
   { label: "12m", days: 365 },
+  { label: "2y", days: 730 },
 ];
 
 function toYMD(d: Date): string {

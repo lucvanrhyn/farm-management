@@ -28,9 +28,7 @@ export async function GET(
   const toParam = searchParams.get("to");
 
   const to = toParam ? new Date(toParam) : new Date();
-  const from = fromParam
-    ? new Date(fromParam)
-    : new Date(Date.now() - 30 * 86_400_000);
+  const from = fromParam ? new Date(fromParam) : new Date(0); // epoch = all-time
 
   if (isNaN(from.getTime()) || isNaN(to.getTime())) {
     return NextResponse.json({ error: "Invalid date params" }, { status: 400 });

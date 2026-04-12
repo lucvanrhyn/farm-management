@@ -3,8 +3,10 @@ import Link from "next/link";
 import MobKPICard from "@/components/admin/MobKPICard";
 import PastureIntelligenceCard from "@/components/admin/PastureIntelligenceCard";
 import CampCoverForm from "@/components/admin/CampCoverForm";
+import CampRotationHistoryPanel from "@/components/admin/rotation/CampRotationHistoryPanel";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcPastureGrowthRate } from "@/lib/server/analytics";
+import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import type { AnimalCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -151,6 +153,18 @@ export default async function CampDetailPage({
     take: 10,
     select: { id: true, type: true, observedAt: true, loggedBy: true, animalId: true },
   });
+
+  // Rotation history + current status
+  const [rotationMovements, rotationPayload] = await Promise.all([
+    prisma.observation.findMany({
+      where: { campId, type: "mob_movement" },
+      orderBy: { observedAt: "desc" },
+      take: 30,
+      select: { id: true, observedAt: true, details: true, loggedBy: true },
+    }),
+    getRotationStatusByCamp(prisma).catch(() => null),
+  ]);
+  const campRotationStatus = rotationPayload?.camps.find((c) => c.campId === campId) ?? null;
 
   const OBS_LABELS: Record<string, string> = {
     health_issue: "🏥 Health issue",
@@ -418,6 +432,13 @@ export default async function CampDetailPage({
             </ol>
           </div>
         )}
+
+        {/* Rotation history */}
+        <CampRotationHistoryPanel
+          campId={campId}
+          status={campRotationStatus}
+          movements={rotationMovements}
+        />
 
         {/* Recent activity timeline */}
         <div

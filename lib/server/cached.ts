@@ -112,6 +112,121 @@ export async function getCachedDataHealth(
   return fetcher(farmSlug);
 }
 
+// ── Cached: Dashboard Overview (30s) — single cache entry for entire admin page ──
+
+import {
+  countHealthIssuesSince,
+  countInspectedToday,
+  getRecentHealthObservations,
+  getLowGrazingCampCount,
+  type HealthObservation,
+} from "@/lib/server/camp-status";
+import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
+
+export interface DashboardOverview {
+  totalAnimals: number;
+  totalCamps: number;
+  reproStats: ReproStats;
+  liveConditions: LiveCampStatusRecord;
+  healthIssuesThisWeek: number;
+  inspectedToday: number;
+  recentHealth: HealthObservation[];
+  lowGrazingCount: number;
+  deathsToday: number;
+  birthsToday: number;
+  withdrawalCount: number;
+  mtdTransactions: { type: string; amount: number }[];
+  dataHealth: DataHealthScore;
+  dashboardAlerts: DashboardAlerts;
+}
+
+export async function getCachedDashboardOverview(
+  farmSlug: string,
+): Promise<DashboardOverview> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<DashboardOverview> => {
+      const prisma = await requirePrisma(slug);
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      const [
+        totalAnimals,
+        totalCamps,
+        settingsRow,
+        reproStats,
+        campConditions,
+        healthIssuesThisWeek,
+        inspectedToday,
+        recentHealth,
+        lowGrazingCount,
+        deathsToday,
+        birthsToday,
+        withdrawalCount,
+        mtdTransactions,
+        dataHealth,
+      ] = await Promise.all([
+        prisma.animal.count({ where: { status: "Active" } }),
+        prisma.camp.count(),
+        prisma.farmSettings.findFirst(),
+        getReproStats(prisma),
+        getLatestCampConditions(prisma),
+        countHealthIssuesSince(prisma, sevenDaysAgo),
+        countInspectedToday(prisma),
+        getRecentHealthObservations(prisma, 8),
+        getLowGrazingCampCount(prisma),
+        prisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
+        prisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
+        getWithdrawalCount(prisma),
+        prisma.transaction.findMany({
+          where: { date: { startsWith: currentMonth } },
+          select: { type: true, amount: true },
+        }),
+        getDataHealthScore(prisma),
+      ]);
+
+      const settings = settingsRow ?? {
+        adgPoorDoerThreshold: 0.7,
+        calvingAlertDays: 14,
+        daysOpenLimit: 365,
+        campGrazingWarningDays: 7,
+        alertThresholdHours: 48,
+      };
+
+      const dashboardAlerts = await getDashboardAlerts(prisma, slug, {
+        adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
+        calvingAlertDays: settings.calvingAlertDays,
+        daysOpenLimit: settings.daysOpenLimit,
+        campGrazingWarningDays: settings.campGrazingWarningDays,
+        staleCampInspectionHours: settings.alertThresholdHours,
+      }, { reproStats, campConditions });
+
+      return {
+        totalAnimals,
+        totalCamps,
+        reproStats,
+        liveConditions: mapToRecord(campConditions),
+        healthIssuesThisWeek,
+        inspectedToday,
+        recentHealth,
+        lowGrazingCount,
+        deathsToday,
+        birthsToday,
+        withdrawalCount,
+        mtdTransactions: mtdTransactions.map((t) => ({ type: t.type, amount: t.amount })),
+        dataHealth,
+        dashboardAlerts,
+      };
+    },
+    ["dashboard-overview"],
+    { revalidate: 30, tags: ["dashboard", `farm-${farmSlug}`] },
+  );
+  return fetcher(farmSlug);
+}
+
 // ── Cached: Farm Settings (5 min) ────────────────────────────────────────────
 
 export interface FarmSettingsData {

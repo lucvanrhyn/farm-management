@@ -97,7 +97,7 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
     prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
     prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
     prisma.animal.groupBy({
-      by: ["currentCamp", "category"],
+      by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
     }),

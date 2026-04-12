@@ -8,6 +8,7 @@ const TABS = [
   { id: "rainfall",    label: "Rainfall"    },
   { id: "rotation",    label: "Rotation"    },
   { id: "veld",        label: "Veld"        },
+  { id: "foo",         label: "FOO"         },
 ];
 
 export default function CampsTabBar({

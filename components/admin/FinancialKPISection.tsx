@@ -9,21 +9,27 @@ import CategoryProfitability from "@/components/admin/CategoryProfitability";
 
 function kpiColor(value: number, positiveGood = true): string {
   if (value === 0) return "#9C8E7A";
-  return positiveGood === value > 0 ? "#4A7C59" : "#C0574C";
+  return (positiveGood ? value > 0 : value < 0) ? "#4A7C59" : "#C0574C";
 }
 
 export default async function FinancialKPISection({
   farmSlug,
+  from,
+  to,
 }: {
   farmSlug: string;
+  from?: string;
+  to?: string;
 }) {
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return null;
 
+  const dateRange = from && to ? { from, to } : undefined;
+
   const [kpis, campCosts, categoryProfit] = await Promise.all([
-    getFinancialKPIs(prisma, farmSlug),
-    getCostPerCamp(prisma, farmSlug),
-    getProfitabilityByCategory(prisma, farmSlug),
+    getFinancialKPIs(prisma, farmSlug, dateRange),
+    getCostPerCamp(prisma, farmSlug, dateRange),
+    getProfitabilityByCategory(prisma, farmSlug, dateRange),
   ]);
 
   const fmt = (n: number) =>
@@ -37,7 +43,7 @@ export default async function FinancialKPISection({
         style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
         <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
-          Financial KPIs (All Time)
+          Financial KPIs {dateRange ? `(${from} – ${to})` : "(All Time)"}
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {[

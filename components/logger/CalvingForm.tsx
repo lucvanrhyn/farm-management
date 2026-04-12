@@ -151,11 +151,16 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [calfName, setCalfName] = useState("");
   const [calfSex, setCalfSex] = useState<AnimalSex>("Female");
   const [calfAlive, setCalfAlive] = useState(true);
+
+  function handleSexChange(sex: AnimalSex) {
+    setCalfSex(sex);
+    setCategory(sex === "Male" ? "Bull Calf" : "Heifer");
+  }
   const [ease, setEase] = useState<EaseOfBirth>("Unassisted");
   const [fatherId, setFatherId] = useState<string>("");
   const [dateOfBirth, setDateOfBirth] = useState(today);
   const [breed, setBreed] = useState("Brangus");
-  const [category, setCategory] = useState("Calf");
+  const [category, setCategory] = useState("Heifer"); // synced with calfSex (Female → Heifer, Male → Bull Calf)
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [calvingDifficulty, setCalvingDifficulty] = useState("1");
   const [birthWeight, setBirthWeight] = useState("");
@@ -212,7 +217,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         <SegmentGroup
           label="Calf sex"
           value={calfSex}
-          onChange={setCalfSex}
+          onChange={handleSexChange}
           options={[
             { value: "Female", label: "Female", icon: "🐄" },
             { value: "Male",   label: "Male",   icon: "🐂" },
@@ -302,9 +307,17 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
               color: '#F5F0E8',
             }}
           >
-            <option value="Calf">Calf</option>
-            <option value="Heifer">Heifer</option>
-            <option value="Bull Calf">Bull Calf</option>
+            {calfSex === "Female" ? (
+              <>
+                <option value="Heifer">Heifer</option>
+                <option value="Calf">Calf (unweaned)</option>
+              </>
+            ) : (
+              <>
+                <option value="Bull Calf">Bull Calf</option>
+                <option value="Calf">Calf (unweaned)</option>
+              </>
+            )}
           </select>
         </div>
 

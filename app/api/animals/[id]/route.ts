@@ -33,10 +33,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const role = session.user?.role?.toUpperCase();
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
 
   const { id } = await params;
   const body = await req.json() as Record<string, unknown>;
@@ -47,10 +46,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (role === "LOGGER") {
     const hasDisallowedKeys = Object.keys(body).some((k) => !LOGGER_ALLOWED.has(k));
     if (hasDisallowedKeys) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   } else if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const VALID_STATUS = new Set(["Active", "Deceased", "Sold", "Culled"]);
+  const VALID_SEX = new Set(["Male", "Female", "Unknown"]);
+
+  if ("status" in body && !VALID_STATUS.has(body.status as string)) {
+    return NextResponse.json({ error: `status must be one of: ${[...VALID_STATUS].join(", ")}` }, { status: 400 });
+  }
+  if ("sex" in body && !VALID_SEX.has(body.sex as string)) {
+    return NextResponse.json({ error: `sex must be one of: ${[...VALID_SEX].join(", ")}` }, { status: 400 });
   }
 
   const allowed = ["name", "sex", "dateOfBirth", "breed", "category", "currentCamp", "status", "motherId", "fatherId", "registrationNumber", "deceasedAt"];

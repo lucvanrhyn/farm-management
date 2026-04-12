@@ -4,14 +4,6 @@ import DangerZone from "@/components/admin/DangerZone";
 import AnimatedNumber from "@/components/admin/AnimatedNumber";
 import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
-import { getDataHealthScore } from "@/lib/server/data-health";
-import {
-  getLatestCampConditions,
-  getRecentHealthObservations,
-  countHealthIssuesSince,
-  countInspectedToday,
-  getLowGrazingCampCount,
-} from "@/lib/server/camp-status";
 import {
   PawPrint,
   Tent,
@@ -29,9 +21,8 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
-import { getReproStats } from "@/lib/server/reproduction-analytics";
-import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
-import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
+import { getCachedDashboardOverview } from "@/lib/server/cached";
+import { getSession } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 
 interface Props {
@@ -42,33 +33,17 @@ interface Props {
 
 export default async function DashboardContent({ farmSlug, prisma, tier }: Props) {
   const isBasic = tier === "basic";
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const session = await getSession();
+  const isAdmin = (session?.user?.role as string | undefined) === "ADMIN";
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-
-  // First batch: counts + settings + shared data
-  const [totalAnimals, totalCamps, settingsRow, reproStats, liveConditions] = await Promise.all([
-    prisma.animal.count({ where: { status: "Active" } }),
-    prisma.camp.count(),
-    prisma.farmSettings.findFirst(),
-    getReproStats(prisma),
-    getLatestCampConditions(prisma),
-  ]);
-
-  const settings = settingsRow ?? {
-    adgPoorDoerThreshold: 0.7,
-    calvingAlertDays: 14,
-    daysOpenLimit: 365,
-    campGrazingWarningDays: 7,
-    alertThresholdHours: 48,
-  };
-
-  // Second batch: everything else
-  const [
+  // Single cached call — all dashboard data in one cache entry (30s TTL).
+  // On cache hit: zero Turso queries. On miss: all queries fire in parallel.
+  const overview = await getCachedDashboardOverview(farmSlug);
+  const {
+    totalAnimals,
+    totalCamps,
+    reproStats,
     healthIssuesThisWeek,
     inspectedToday,
     recentHealth,
@@ -77,26 +52,10 @@ export default async function DashboardContent({ farmSlug, prisma, tier }: Props
     birthsToday,
     withdrawalCount,
     mtdTransactions,
-    dashboardAlerts,
     dataHealth,
-  ] = await Promise.all([
-    countHealthIssuesSince(prisma, sevenDaysAgo),
-    countInspectedToday(prisma),
-    getRecentHealthObservations(prisma, 8),
-    getLowGrazingCampCount(prisma),
-    prisma.observation.count({ where: { type: "death",   observedAt: { gte: todayStart } } }),
-    prisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
-    getWithdrawalCount(prisma),
-    prisma.transaction.findMany({ where: { date: { startsWith: currentMonth } } }),
-    getDashboardAlerts(prisma, farmSlug, {
-      adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
-      calvingAlertDays: settings.calvingAlertDays,
-      daysOpenLimit: settings.daysOpenLimit,
-      campGrazingWarningDays: settings.campGrazingWarningDays,
-      staleCampInspectionHours: settings.alertThresholdHours,
-    }, { reproStats, campConditions: liveConditions }),
-    getDataHealthScore(prisma),
-  ]);
+    dashboardAlerts,
+  } = overview;
+  const liveConditions = new Map(Object.entries(overview.liveConditions));
 
   // ── Finance MTD ──────────────────────────────────────────────────────────────
   let mtdBalance = 0;
@@ -323,7 +282,13 @@ export default async function DashboardContent({ farmSlug, prisma, tier }: Props
             >
               Reproductive Overview
             </h2>
-            {reproStats.inseminations30d === 0 && reproStats.inHeat7d === 0 && reproStats.calvingsDue30d === 0 ? (
+            {reproStats.inseminations30d === 0 &&
+             reproStats.inHeat7d === 0 &&
+             reproStats.calvingsDue30d === 0 &&
+             reproStats.pregnancyRate === null &&
+             reproStats.upcomingCalvings.length === 0 &&
+             reproStats.scanCounts.pregnant === 0 &&
+             reproStats.scanCounts.empty === 0 ? (
               <p className="text-xs flex-1" style={{ color: "#9C8E7A" }}>No reproductive events recorded yet.</p>
             ) : (
               <div className="flex-1">
@@ -503,9 +468,11 @@ export default async function DashboardContent({ farmSlug, prisma, tier }: Props
         <DataHealthCard score={dataHealth} />
       </div>
 
-      <div className="mt-4">
-        <DangerZone />
-      </div>
+      {isAdmin && (
+        <div className="mt-4">
+          <DangerZone />
+        </div>
+      )}
     </>
   );
 }

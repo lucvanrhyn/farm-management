@@ -69,6 +69,20 @@ function buildLast6MonthKeys(): string[] {
   return result;
 }
 
+/** Build inclusive list of YYYY-MM keys from startMonth to endMonth. */
+function buildMonthRange(startMonth: string, endMonth: string): string[] {
+  const result: string[] = [];
+  const [sy, sm] = startMonth.split("-").map(Number);
+  const [ey, em] = endMonth.split("-").map(Number);
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
 // ── Camp + Animal analytics data ──────────────────────────────────────────────
 
 export async function fetchCampAnalyticsData(prisma: PrismaClient, lookbackDays = 365) {
@@ -122,12 +136,16 @@ export async function fetchFinancialAnalyticsData(
   prisma: PrismaClient,
   prismaCamps: Array<{ campId: string; campName: string; sizeHectares: number | null }>,
   headcount: Array<{ campId: string; category: string; count: number }>,
+  from?: string,
+  to?: string,
 ): Promise<FinansieleData> {
-  const cutoffMonth = monthsAgoString(6);
+  const cutoffMonth = from ? from.slice(0, 7) : monthsAgoString(6);
+  const dateFilter: Record<string, string> = { gte: `${cutoffMonth}-01` };
+  if (to) dateFilter.lte = to;
 
   const [rawTransactions, activeAnimals, coverReadings] = await Promise.all([
     prisma.transaction.findMany({
-      where: { date: { gte: `${cutoffMonth}-01` } },
+      where: { date: dateFilter },
       select: { type: true, amount: true, date: true },
     }),
     prisma.animal.groupBy({
@@ -141,7 +159,10 @@ export async function fetchFinancialAnalyticsData(
   ]);
 
   // Financial trend
-  const monthKeys = buildLast6MonthKeys();
+  const endMonth = to ? to.slice(0, 7) : new Date().toISOString().slice(0, 7);
+  const monthKeys = from
+    ? buildMonthRange(cutoffMonth, endMonth)
+    : buildLast6MonthKeys();
   const financialMap = new Map<string, { income: number; expense: number }>();
   for (const mk of monthKeys) financialMap.set(mk, { income: 0, expense: 0 });
 

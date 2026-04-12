@@ -7,6 +7,7 @@ export interface SessionFarm {
   role: string;
   logoUrl: string | null;
   tier: string;
+  subscriptionStatus: string;
 }
 
 declare module 'next-auth' {
