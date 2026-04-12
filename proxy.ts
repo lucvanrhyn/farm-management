@@ -15,7 +15,7 @@ export async function proxy(req: NextRequest) {
   }
 
   // Enforce tenant isolation: verify user has access to the farm in the URL
-  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger)/);
+  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)/);
   if (farmRouteMatch) {
     const farmSlug = farmRouteMatch[1];
     const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string }>;
