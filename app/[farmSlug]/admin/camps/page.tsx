@@ -3,9 +3,13 @@ import AddCampForm from "@/components/admin/AddCampForm";
 import CampsTable from "@/components/admin/CampsTable";
 import CampAnalyticsSection from "@/components/admin/CampAnalyticsSection";
 import PerformanceSection from "@/components/admin/PerformanceSection";
+import RainfallSection from "@/components/admin/RainfallSection";
+import RotationSection from "@/components/admin/rotation/RotationSection";
 import CampsTabBar from "@/components/admin/CampsTabBar";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
+import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
+import { VeldTab } from "@/components/admin/camps/VeldTab";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +35,11 @@ export default async function AdminCampsPage({
     );
   }
 
-  const prismaCamps = await prisma.camp.findMany({ orderBy: { campName: "asc" } });
+  const [prismaCampsRaw, veldSummary] = await Promise.all([
+    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    getVeldSummary(prisma),
+  ]);
+  const prismaCamps = prismaCampsRaw;
   const camps: Camp[] = prismaCamps.map((c) => ({
     camp_id: c.campId,
     camp_name: c.campName,
@@ -66,6 +74,22 @@ export default async function AdminCampsPage({
         <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
           <PerformanceSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
+      )}
+
+      {activeTab === "rainfall" && (
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <RainfallSection farmSlug={farmSlug} camps={camps} />
+        </Suspense>
+      )}
+
+      {activeTab === "rotation" && (
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <RotationSection farmSlug={farmSlug} camps={camps} />
+        </Suspense>
+      )}
+
+      {activeTab === "veld" && (
+        <VeldTab farmSlug={farmSlug} summary={veldSummary} />
       )}
     </div>
   );
