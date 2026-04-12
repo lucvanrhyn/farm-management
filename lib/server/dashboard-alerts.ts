@@ -1,10 +1,17 @@
 // lib/server/dashboard-alerts.ts
 import type { PrismaClient } from "@prisma/client";
 import type { ReproStats } from "@/lib/server/reproduction-analytics";
-import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
+import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
+import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
+import { cattleModule } from "@/lib/species/cattle";
+import { sheepModule } from "@/lib/species/sheep";
+import { gameModule } from "@/lib/species/game";
+import type { SpeciesModule, SpeciesAlert, SpeciesId } from "@/lib/species/types";
+
+export type AlertSource = SpeciesId | "farm";
 
 export interface DashboardAlert {
   id: string;
@@ -13,6 +20,7 @@ export interface DashboardAlert {
   message: string;
   count: number;
   href: string;
+  species: AlertSource;
 }
 
 export interface DashboardAlerts {
@@ -32,10 +40,39 @@ export interface AlertThresholds {
 /**
  * Optional pre-fetched data to avoid duplicate queries when the caller
  * already has reproStats / campConditions available.
+ *
+ * Note: reproStats is kept for backward compatibility with cached.ts which
+ * uses its presence to decide whether to skip the cache. It is no longer
+ * consumed by getDashboardAlerts itself — species modules handle repro alerts.
  */
 export interface PreFetchedAlertData {
   reproStats?: ReproStats;
   campConditions?: Map<string, LiveCampStatus>;
+}
+
+// All modules that contribute species-level alerts
+const SPECIES_MODULES: SpeciesModule[] = [cattleModule, sheepModule, gameModule];
+
+function toThresholdsRecord(t: AlertThresholds): Record<string, number> {
+  return {
+    adgPoorDoerThreshold: t.adgPoorDoerThreshold,
+    calvingAlertDays: t.calvingAlertDays,
+    daysOpenLimit: t.daysOpenLimit,
+    campGrazingWarningDays: t.campGrazingWarningDays,
+    staleCampInspectionHours: t.staleCampInspectionHours,
+  };
+}
+
+function speciesAlertToDashboardAlert(a: SpeciesAlert, species: AlertSource): DashboardAlert {
+  return {
+    id: a.id,
+    severity: a.severity,
+    icon: a.icon,
+    message: a.message,
+    count: a.count,
+    href: a.href,
+    species,
+  };
 }
 
 export async function getDashboardAlerts(
@@ -45,59 +82,35 @@ export async function getDashboardAlerts(
   preFetched: PreFetchedAlertData = {},
 ): Promise<DashboardAlerts> {
   const {
-    adgPoorDoerThreshold,
-    calvingAlertDays,
-    daysOpenLimit,
     staleCampInspectionHours,
   } = thresholds;
 
   const now = new Date();
+  const thresholdsRecord = toThresholdsRecord(thresholds);
 
-  // Use pre-fetched data when available, fetch only what's missing
-  const [reproStats, withdrawalAnimals, campConditions, totalCamps] = await Promise.all([
-    preFetched.reproStats ?? getReproStats(prisma),
-    getAnimalsInWithdrawal(prisma),
-    preFetched.campConditions ?? getLatestCampConditions(prisma),
-    prisma.camp.count(),
-  ]);
+  // ── Parallel: species module alerts + farm-wide data ─────────────────────
+  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary] =
+    await Promise.all([
+      Promise.all(
+        SPECIES_MODULES.map((mod) =>
+          mod.getAlerts(prisma, farmSlug, thresholdsRecord)
+            .then((alerts) => alerts.map((a) => speciesAlertToDashboardAlert(a, mod.config.id)))
+            .catch(() => [] as DashboardAlert[]),
+        ),
+      ),
+      getAnimalsInWithdrawal(prisma),
+      preFetched.campConditions ?? getLatestCampConditions(prisma),
+      prisma.camp.count(),
+      getRotationStatusByCamp(prisma, now).catch(() => null),
+      getVeldSummary(prisma, now).catch(() => null),
+    ]);
 
-  // ── Poor doers: query weighing observations, compute long-run ADG per animal ──
-  const weighingObs = await prisma.observation.findMany({
-    where: { type: "weighing", animalId: { not: null } },
-    select: { animalId: true, observedAt: true, details: true },
-    orderBy: { observedAt: "asc" },
-  });
-
-  // Group by animalId, compute best ADG
-  const byAnimal = new Map<string, { date: Date; weightKg: number }[]>();
-  for (const obs of weighingObs) {
-    if (!obs.animalId) continue;
-    let details: { weight_kg?: number } = {};
-    try { details = JSON.parse(obs.details) as { weight_kg?: number }; } catch { continue; }
-    if (typeof details.weight_kg !== "number") continue;
-    const existing = byAnimal.get(obs.animalId) ?? [];
-    existing.push({ date: obs.observedAt, weightKg: details.weight_kg });
-    byAnimal.set(obs.animalId, existing);
-  }
-
-  let poorDoerCount = 0;
-  for (const readings of byAnimal.values()) {
-    if (readings.length < 2) continue;
-    const first = readings[0];
-    const last = readings[readings.length - 1];
-    const days = (last.date.getTime() - first.date.getTime()) / 86_400_000;
-    if (days <= 0) continue;
-    const longRunAdg = (last.weightKg - first.weightKg) / days;
-    if (longRunAdg < adgPoorDoerThreshold) poorDoerCount++;
-  }
+  const speciesAlerts: DashboardAlert[] = allSpeciesAlerts.flat();
 
   // ── Stale camp inspections ─────────────────────────────────────────────────
   const staleThresholdMs = staleCampInspectionHours * 60 * 60 * 1000;
-  let staleCampCount = 0;
-  // Camps with no inspection record count as stale
   const uninspectedCamps = totalCamps - campConditions.size;
-  staleCampCount += uninspectedCamps;
-  // Camps with old inspection count as stale
+  let staleCampCount = uninspectedCamps;
   for (const status of campConditions.values()) {
     const inspectedAt = new Date(status.last_inspected_at);
     const ageMs = now.getTime() - inspectedAt.getTime();
@@ -107,135 +120,158 @@ export async function getDashboardAlerts(
   // ── Camp grazing ───────────────────────────────────────────────────────────
   let poorGrazingCount = 0;
   for (const status of campConditions.values()) {
-    if (status.grazing_quality === "Poor" || status.grazing_quality === "Overgrazed") {
+    if (
+      status.grazing_quality === "Poor" ||
+      status.grazing_quality === "Overgrazed"
+    ) {
       poorGrazingCount++;
     }
   }
-
-  // ── Calving tiers ─────────────────────────────────────────────────────────
-  const overdueCounts = reproStats.upcomingCalvings.filter(c => c.daysAway < 0).length;
-  const due7dCount = reproStats.upcomingCalvings.filter(c => c.daysAway >= 0 && c.daysAway <= 7).length;
-  const due14dCount = reproStats.upcomingCalvings.filter(c => c.daysAway > 7 && c.daysAway <= calvingAlertDays).length;
-
-  // ── Open cows above limit ──────────────────────────────────────────────────
-  const openCowsOverLimit = reproStats.daysOpen.filter(d =>
-    (d.daysOpen !== null && d.daysOpen > daysOpenLimit) ||
-    (d.daysOpen === null && d.isExtended)
-  ).length;
 
   // ── Build alert arrays ────────────────────────────────────────────────────
   const red: DashboardAlert[] = [];
   const amber: DashboardAlert[] = [];
 
-  // Red: overdue calvings
-  if (overdueCounts > 0) {
-    red.push({
-      id: "overdue-calvings",
-      severity: "red",
-      icon: "Baby",
-      message: overdueCounts === 1
-        ? "1 animal overdue to calve"
-        : `${overdueCounts} animals overdue to calve`,
-      count: overdueCounts,
-      href: `/${farmSlug}/admin/reproduction`,
-    });
+  // Aggregate species module alerts (split by severity)
+  for (const alert of speciesAlerts) {
+    if (alert.severity === "red") {
+      red.push(alert);
+    } else {
+      amber.push(alert);
+    }
   }
 
-  // Red: animals in withdrawal
+  // Red: animals in withdrawal (farm-wide, not species-specific)
   if (withdrawalAnimals.length > 0) {
     red.push({
       id: "in-withdrawal",
       severity: "red",
       icon: "FlaskConical",
-      message: withdrawalAnimals.length === 1
-        ? "1 animal in withdrawal period"
-        : `${withdrawalAnimals.length} animals in withdrawal period`,
+      message:
+        withdrawalAnimals.length === 1
+          ? "1 animal in withdrawal period"
+          : `${withdrawalAnimals.length} animals in withdrawal period`,
       count: withdrawalAnimals.length,
       href: `/${farmSlug}/admin/animals`,
+      species: "farm",
     });
   }
 
-  // Red: poor or overgrazed camps
+  // Red: poor or overgrazed camps (farm-wide)
   if (poorGrazingCount > 0) {
     red.push({
       id: "poor-grazing",
       severity: "red",
       icon: "Tent",
-      message: poorGrazingCount === 1
-        ? "1 camp with poor or overgrazed pasture"
-        : `${poorGrazingCount} camps with poor or overgrazed pasture`,
+      message:
+        poorGrazingCount === 1
+          ? "1 camp with poor or overgrazed pasture"
+          : `${poorGrazingCount} camps with poor or overgrazed pasture`,
       count: poorGrazingCount,
       href: `/${farmSlug}/admin/performance`,
+      species: "farm",
     });
   }
 
-  // Amber: calvings due within 7 days
-  if (due7dCount > 0) {
-    amber.push({
-      id: "calvings-due-7d",
-      severity: "amber",
-      icon: "Baby",
-      message: due7dCount === 1
-        ? "1 animal due to calve within 7 days"
-        : `${due7dCount} animals due to calve within 7 days`,
-      count: due7dCount,
-      href: `/${farmSlug}/admin/reproduction`,
-    });
+  // Rotation alerts (farm-wide): overstayed=red, overdue_rest=amber
+  if (rotationPayload) {
+    let overstayedCount = 0;
+    let overdueRestCount = 0;
+    for (const c of rotationPayload.camps) {
+      if (c.status === "overstayed") overstayedCount++;
+      else if (c.status === "overdue_rest") overdueRestCount++;
+    }
+    if (overstayedCount > 0) {
+      red.push({
+        id: "rotation-overstayed",
+        severity: "red",
+        icon: "Clock",
+        message:
+          overstayedCount === 1
+            ? "1 camp overstayed (animals past max grazing days)"
+            : `${overstayedCount} camps overstayed (animals past max grazing days)`,
+        count: overstayedCount,
+        href: `/${farmSlug}/admin/camps?tab=rotation`,
+        species: "farm",
+      });
+    }
+    if (overdueRestCount > 0) {
+      amber.push({
+        id: "rotation-overdue-rest",
+        severity: "amber",
+        icon: "AlertTriangle",
+        message:
+          overdueRestCount === 1
+            ? "1 camp overdue for grazing (veld may be declining)"
+            : `${overdueRestCount} camps overdue for grazing (veld may be declining)`,
+        count: overdueRestCount,
+        href: `/${farmSlug}/admin/camps?tab=rotation`,
+        species: "farm",
+      });
+    }
   }
 
-  // Amber: calvings due 8–14 days
-  if (due14dCount > 0 && calvingAlertDays > 7) {
-    amber.push({
-      id: "calvings-due-14d",
-      severity: "amber",
-      icon: "Baby",
-      message: due14dCount === 1
-        ? `1 animal due to calve within ${calvingAlertDays} days`
-        : `${due14dCount} animals due to calve within ${calvingAlertDays} days`,
-      count: due14dCount,
-      href: `/${farmSlug}/admin/reproduction`,
-    });
+  // Veld condition alerts (farm-wide)
+  if (veldSummary) {
+    if (veldSummary.critical.length > 0) {
+      const n = veldSummary.critical.length;
+      red.push({
+        id: "veld-critical",
+        severity: "red",
+        icon: "AlertTriangle",
+        message: n === 1
+          ? "1 camp in critical veld condition (score < 3)"
+          : `${n} camps in critical veld condition (score < 3)`,
+        count: n,
+        href: `/${farmSlug}/tools/veld`,
+        species: "farm",
+      });
+    }
+
+    if (veldSummary.declining.length > 0) {
+      const n = veldSummary.declining.length;
+      amber.push({
+        id: "veld-declining",
+        severity: "amber",
+        icon: "TrendingDown",
+        message: n === 1
+          ? "1 camp showing declining veld trend"
+          : `${n} camps showing declining veld trend`,
+        count: n,
+        href: `/${farmSlug}/tools/veld`,
+        species: "farm",
+      });
+    }
+
+    if (veldSummary.overdue.length > 0) {
+      const n = veldSummary.overdue.length;
+      amber.push({
+        id: "veld-overdue-assessment",
+        severity: "amber",
+        icon: "CalendarClock",
+        message: n === 1
+          ? "1 camp overdue for veld assessment (>180 days)"
+          : `${n} camps overdue for veld assessment (>180 days)`,
+        count: n,
+        href: `/${farmSlug}/tools/veld`,
+        species: "farm",
+      });
+    }
   }
 
-  // Amber: open cows over limit
-  if (openCowsOverLimit > 0) {
-    amber.push({
-      id: "open-cows",
-      severity: "amber",
-      icon: "Calendar",
-      message: openCowsOverLimit === 1
-        ? `1 cow open beyond ${daysOpenLimit} days`
-        : `${openCowsOverLimit} cows open beyond ${daysOpenLimit} days`,
-      count: openCowsOverLimit,
-      href: `/${farmSlug}/admin/reproduction`,
-    });
-  }
-
-  // Amber: poor doers
-  if (poorDoerCount > 0) {
-    amber.push({
-      id: "poor-doers",
-      severity: "amber",
-      icon: "TrendingDown",
-      message: poorDoerCount === 1
-        ? `1 animal with low ADG (below ${adgPoorDoerThreshold} kg/day)`
-        : `${poorDoerCount} animals with low ADG (below ${adgPoorDoerThreshold} kg/day)`,
-      count: poorDoerCount,
-      href: `/${farmSlug}/admin/animals`,
-    });
-  }
-
-  // Amber: stale camp inspections
+  // Amber: stale camp inspections (farm-wide)
   if (staleCampCount > 0) {
     amber.push({
       id: "stale-inspections",
       severity: "amber",
       icon: "ClipboardCheck",
-      message: staleCampCount === 1
-        ? `1 camp not inspected within ${staleCampInspectionHours}h`
-        : `${staleCampCount} camps not inspected within ${staleCampInspectionHours}h`,
+      message:
+        staleCampCount === 1
+          ? `1 camp not inspected within ${staleCampInspectionHours}h`
+          : `${staleCampCount} camps not inspected within ${staleCampInspectionHours}h`,
       count: staleCampCount,
       href: `/${farmSlug}/admin/observations`,
+      species: "farm",
     });
   }
 
