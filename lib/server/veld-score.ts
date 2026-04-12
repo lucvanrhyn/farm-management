@@ -42,6 +42,7 @@ export async function getLatestByCamp(
 ): Promise<Map<string, { score: number; date: string; assessor: string; haPerLsu: number | null }>> {
   const rows = await prisma.veldAssessment.findMany({
     orderBy: { assessmentDate: 'desc' },
+    take: 200,
     select: {
       campId: true,
       assessmentDate: true,

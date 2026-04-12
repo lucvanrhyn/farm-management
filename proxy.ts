@@ -36,6 +36,21 @@ export async function proxy(req: NextRequest) {
         new URL(`/subscribe?farm=${farmSlug}`, req.url),
       );
     }
+
+    // Auto-set the active farm cookie so client-side API calls work even on direct
+    // navigation (bookmark, refresh, typed URL). Only update when it differs.
+    const currentCookie = req.cookies.get("active_farm_slug")?.value;
+    if (currentCookie !== farmSlug) {
+      const response = NextResponse.next();
+      response.cookies.set("active_farm_slug", farmSlug, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+      return response;
+    }
   }
 
   // Authenticated users hitting / get sent to /farms (universal entry point)

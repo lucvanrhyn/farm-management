@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getCachedCampConditions } from "@/lib/server/cached";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -12,11 +12,9 @@ export async function GET() {
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
 
   try {
-    const conditions = await getLatestCampConditions(prisma);
-    // Convert Map to plain object for JSON serialisation
+    const conditions = await getCachedCampConditions(db.slug);
     const result: Record<string, unknown> = {};
     for (const [campId, status] of conditions.entries()) {
       result[campId] = status;

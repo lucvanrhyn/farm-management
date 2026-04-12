@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getCachedCampList } from "@/lib/server/cached";
 import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
 
 export async function GET(req: NextRequest) {
@@ -13,38 +14,11 @@ export async function GET(req: NextRequest) {
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
 
   const { searchParams } = new URL(req.url);
-  const species = searchParams.get("species");
+  const species = searchParams.get("species") ?? undefined;
 
-  const [camps, animalGroups] = await Promise.all([
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-    prisma.animal.groupBy({
-      by: ["currentCamp"],
-      where: {
-        status: "Active",
-        ...(species ? { species } : {}),
-      },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const countByCamp: Record<string, number> = {};
-  for (const g of animalGroups) {
-    countByCamp[g.currentCamp] = g._count._all;
-  }
-
-  const result = camps.map((camp) => ({
-    camp_id: camp.campId,
-    camp_name: camp.campName,
-    size_hectares: camp.sizeHectares,
-    water_source: camp.waterSource,
-    geojson: camp.geojson,
-    color: camp.color ?? null,
-    animal_count: countByCamp[camp.campId] ?? 0,
-  }));
-
+  const result = await getCachedCampList(db.slug, species);
   return NextResponse.json(result);
 }
 
