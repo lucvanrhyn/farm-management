@@ -272,3 +272,88 @@ export async function getCachedFarmSettings(
   );
   return fetcher(farmSlug);
 }
+
+// ── Cached: Camp List with animal counts (30s) ────────────────────────────────
+
+export interface CachedCamp {
+  camp_id: string;
+  camp_name: string;
+  size_hectares: number | null;
+  water_source: string | null;
+  geojson: string | null;
+  color: string | null;
+  animal_count: number;
+}
+
+export async function getCachedCampList(
+  farmSlug: string,
+  species?: string,
+): Promise<CachedCamp[]> {
+  const fetcher = unstable_cache(
+    async (slug: string, sp: string): Promise<CachedCamp[]> => {
+      const prisma = await requirePrisma(slug);
+      const [camps, animalGroups] = await Promise.all([
+        prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+        prisma.animal.groupBy({
+          by: ["currentCamp"],
+          where: {
+            status: "Active",
+            ...(sp ? { species: sp } : {}),
+          },
+          _count: { _all: true },
+        }),
+      ]);
+      const countByCamp: Record<string, number> = {};
+      for (const g of animalGroups) {
+        countByCamp[g.currentCamp] = g._count._all;
+      }
+      return camps.map((camp) => ({
+        camp_id: camp.campId,
+        camp_name: camp.campName,
+        size_hectares: camp.sizeHectares,
+        water_source: camp.waterSource,
+        geojson: camp.geojson,
+        color: camp.color ?? null,
+        animal_count: countByCamp[camp.campId] ?? 0,
+      }));
+    },
+    ["camp-list"],
+    { revalidate: 30, tags: ["camps", `farm-${farmSlug}`] },
+  );
+  return fetcher(farmSlug, species ?? "");
+}
+
+// ── Cached: Farm Summary (30s) — animal + camp counts for /api/farm ──────────
+
+export interface FarmSummary {
+  farmName: string;
+  breed: string;
+  heroImageUrl: string;
+  animalCount: number;
+  campCount: number;
+}
+
+export async function getCachedFarmSummary(
+  farmSlug: string,
+): Promise<FarmSummary> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<FarmSummary> => {
+      const prisma = await requirePrisma(slug);
+      const [settings, animalCount, campCount] = await Promise.all([
+        prisma.farmSettings.findFirst(),
+        prisma.animal.count({ where: { status: "Active" } }),
+        prisma.camp.count(),
+      ]);
+      return {
+        farmName: settings?.farmName ?? "My Farm",
+        breed: settings?.breed ?? "Mixed",
+        heroImageUrl: settings?.heroImageUrl ?? "/farm-hero.jpg",
+        animalCount,
+        campCount,
+      };
+    },
+    ["farm-summary"],
+    { revalidate: 30, tags: ["farm-data", `farm-${farmSlug}`] },
+  );
+  return fetcher(farmSlug);
+}

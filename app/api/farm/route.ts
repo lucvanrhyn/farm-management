@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getCachedFarmSummary } from "@/lib/server/cached";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -11,33 +12,16 @@ export async function GET() {
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
 
   try {
-    const [settings, animalCount, campCount] = await Promise.all([
-      prisma.farmSettings.findFirst(),
-      prisma.animal.count({ where: { status: "Active" } }),
-      prisma.camp.count(),
-    ]);
-
-    return NextResponse.json({
-      farmName: settings?.farmName ?? "My Farm",
-      breed: settings?.breed ?? "Mixed",
-      heroImageUrl: settings?.heroImageUrl ?? "/farm-hero.jpg",
-      animalCount,
-      campCount,
-    });
+    const summary = await getCachedFarmSummary(db.slug);
+    return NextResponse.json(summary);
   } catch (err) {
     const e = err as Record<string, unknown>;
     console.error("[GET /api/farm] query failed:", {
       message: e?.message,
       code: e?.code,
-      meta: e?.meta,
-      name: e?.name,
     });
-    return NextResponse.json(
-      { error: "Failed to load farm data" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to load farm data" }, { status: 500 });
   }
 }

@@ -111,8 +111,12 @@ function isValidVeldType(v: string | null | undefined): v is VeldType {
 async function getLatestMovesByCamp(
   prisma: PrismaClient,
 ): Promise<Map<string, LatestMoveForCamp>> {
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const rows = await prisma.observation.findMany({
-    where: { type: 'mob_movement' },
+    where: {
+      type: 'mob_movement',
+      observedAt: { gte: ninetyDaysAgo },
+    },
     orderBy: { observedAt: 'desc' },
     select: { campId: true, observedAt: true, details: true },
   });
@@ -212,6 +216,7 @@ export async function getRotationStatusByCamp(
     }),
     prisma.campCoverReading.findMany({
       orderBy: { recordedAt: 'desc' },
+      take: 100,
       select: { campId: true, kgDmPerHa: true, useFactor: true },
     }),
     getLatestMovesByCamp(prisma),
