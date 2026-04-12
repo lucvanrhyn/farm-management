@@ -34,14 +34,9 @@ export async function GET(
   const { searchParams } = new URL(req.url)
   const fromParam = searchParams.get('from')
   const toParam = searchParams.get('to')
+  const dateRange =
+    fromParam && toParam ? { from: fromParam, to: toParam } : undefined
 
-  const to = toParam ? new Date(toParam) : new Date()
-  const from = fromParam ? new Date(fromParam) : new Date(0)
-
-  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-    return NextResponse.json({ error: 'Invalid date params' }, { status: 400 })
-  }
-
-  const rows = await getProfitabilityByAnimal(prisma, from, to)
+  const rows = await getProfitabilityByAnimal(prisma, dateRange)
   return NextResponse.json(rows)
 }
