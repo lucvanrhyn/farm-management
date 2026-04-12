@@ -24,8 +24,9 @@ function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: bool
 
   useEffect(() => {
     if (!campId) { setMobs([]); return; }
+    const controller = new AbortController();
     setLoading(true);
-    fetch("/api/mobs")
+    fetch("/api/mobs", { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : []))
       .then((all: MobInfo[]) => {
         const inCamp = all
@@ -33,8 +34,11 @@ function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: bool
           .filter((m) => (m.species ?? "cattle") === mode);
         setMobs(inCamp);
       })
-      .catch(() => setMobs([]))
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") setMobs([]);
+      })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [campId, mode]);
 
   return { mobs, loading };

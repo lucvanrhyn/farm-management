@@ -507,10 +507,16 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
   const [editTarget, setEditTarget] = useState<PrismaObservation | null>(null);
 
   useEffect(() => {
-    fetch("/api/camps")
+    const controller = new AbortController();
+    fetch("/api/camps", { signal: controller.signal })
       .then((r) => r.ok ? r.json() : [])
       .then((data: Camp[]) => setCamps(data))
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") {
+          console.error("[ObservationsLog] Failed to load camps:", err);
+        }
+      });
+    return () => controller.abort();
   }, []);
 
   const fetchObs = useCallback(async (campVal: string, typeVal: string, pageVal: number) => {

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SessionFarm } from "@/types/next-auth";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
@@ -102,13 +103,23 @@ export async function GET(
     return new Response(JSON.stringify({ error: "Too many export requests. Please wait." }), { status: 429 });
   }
 
+  const url = new URL(req.url);
+  const type = (url.searchParams.get("type") ?? "animals") as ExportType;
+
+  // Tier check for advanced-only exports
+  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction"]);
+  if (ADVANCED_ONLY_EXPORTS.has(type)) {
+    const creds = await getFarmCreds(farmSlug);
+    if (!creds || creds.tier !== "advanced") {
+      return new Response(JSON.stringify({ error: "This export requires an Advanced subscription." }), { status: 403 });
+    }
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return new Response(JSON.stringify({ error: "Farm not found" }), { status: 404 });
   }
 
-  const url = new URL(req.url);
-  const type = (url.searchParams.get("type") ?? "animals") as ExportType;
   const format = (url.searchParams.get("format") ?? "csv") as ExportFormat;
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");

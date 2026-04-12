@@ -47,27 +47,33 @@ export async function generateNotifications(
   });
   const existingTypes = new Set(existing.map((n) => n.type));
 
-  let created = 0;
   const newRedAlerts: { message: string; href: string }[] = [];
+  const toCreate: Array<{
+    type: string;
+    severity: string;
+    message: string;
+    href: string;
+    expiresAt: Date;
+  }> = [];
 
   for (const alert of allAlerts) {
     if (existingTypes.has(alert.id)) continue;
-
-    await prisma.notification.create({
-      data: {
-        type: alert.id,
-        severity: alert.severity,
-        message: alert.message,
-        href: alert.href,
-        expiresAt,
-      },
+    toCreate.push({
+      type: alert.id,
+      severity: alert.severity,
+      message: alert.message,
+      href: alert.href,
+      expiresAt,
     });
-    created++;
-
     if (alert.severity === "red") {
       newRedAlerts.push({ message: alert.message, href: alert.href });
     }
   }
+
+  if (toCreate.length > 0) {
+    await prisma.notification.createMany({ data: toCreate });
+  }
+  const created = toCreate.length;
 
   // Send push notification for new RED alerts (batched into one push)
   if (newRedAlerts.length > 0) {
