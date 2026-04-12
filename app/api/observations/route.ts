@@ -3,6 +3,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// Allowlist of valid observation type strings to prevent arbitrary type injection
+const VALID_OBSERVATION_TYPES = new Set([
+  "camp_condition",
+  "camp_check",
+  "calving",
+  "pregnancy_scan",
+  "weighing",
+  "treatment",
+  "heat_detection",
+  "insemination",
+  "drying_off",
+  "weaning",
+  "death",
+  "mob_movement",
+  "general",
+  "dosing",
+  "shearing",
+  "lambing",
+  "game_census",
+  "game_sighting",
+]);
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -46,6 +69,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Rate limit: 100 observations per minute per user (offline sync can burst, but cap runaway clients)
+  const userId = session.user?.email ?? "unknown";
+  const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
@@ -58,6 +88,20 @@ export async function POST(request: NextRequest) {
       { error: "Missing required fields: type and camp_id" },
       { status: 400 }
     );
+  }
+
+  // Validate type against allowlist to prevent arbitrary type injection
+  if (!VALID_OBSERVATION_TYPES.has(type)) {
+    return NextResponse.json(
+      { error: `Invalid observation type: ${type}` },
+      { status: 400 }
+    );
+  }
+
+  // Verify camp_id belongs to this farm's DB (prevents writing to arbitrary camps)
+  const campExists = await prisma.camp.findUnique({ where: { campId: camp_id }, select: { campId: true } });
+  if (!campExists) {
+    return NextResponse.json({ error: "Camp not found" }, { status: 404 });
   }
 
   const observedAt = created_at ? new Date(created_at) : new Date();

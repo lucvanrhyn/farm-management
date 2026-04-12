@@ -6,8 +6,11 @@ import FinansiesClient from "@/components/admin/FinansiesClient";
 import FinancialAnalyticsPanelLazy from "@/components/admin/FinancialAnalyticsPanelLazy";
 import FinancialChartsSection from "@/components/admin/FinancialChartsSection";
 import FinancialKPISection from "@/components/admin/FinancialKPISection";
+import BudgetVsActualSection from "@/components/admin/BudgetVsActualSection";
+import CostOfGainSection from "@/components/admin/CostOfGainSection";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ExportButton from "@/components/admin/ExportButton";
+import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -17,13 +20,16 @@ export const dynamic = "force-dynamic";
 
 export default async function FinansiesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ from?: string; to?: string; cogScope?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const { farmSlug } = await params;
+  const { from, to, cogScope } = searchParams ? await searchParams : {};
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
@@ -70,14 +76,23 @@ export default async function FinansiesPage({
           initialIncome={incomeCategories}
           initialExpense={expenseCategories}
         />
+        <div className="mb-4">
+          <Suspense fallback={<div className="h-9" />}>
+            <DateRangePicker defaultDays={365} />
+          </Suspense>
+        </div>
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
-          <FinancialKPISection farmSlug={farmSlug} />
+          <FinancialKPISection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
-          <FinancialAnalyticsPanelLazy farmSlug={farmSlug} />
+          <BudgetVsActualSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
-          <FinancialChartsSection farmSlug={farmSlug} />
+          <CostOfGainSection farmSlug={farmSlug} from={from} to={to} cogScope={cogScope} />
+        </Suspense>
+        <FinancialAnalyticsPanelLazy farmSlug={farmSlug} />
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <FinancialChartsSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
     </div>
   );

@@ -2,8 +2,16 @@
 
 import { motion } from 'framer-motion';
 import type { SessionFarm } from '@/types/next-auth';
+import type { FarmOverview } from '@/lib/server/multi-farm-overview';
+import { FarmOverviewStats } from '@/components/farms/FarmOverviewStats';
 
-export function FarmCard({ farm, index }: { farm: SessionFarm; index: number }) {
+interface FarmCardProps {
+  farm: SessionFarm;
+  index: number;
+  overview?: FarmOverview;
+}
+
+export function FarmCard({ farm, index, overview }: FarmCardProps) {
   return (
     <motion.a
       href={`/api/farms/${farm.slug}/select`}
@@ -55,6 +63,7 @@ export function FarmCard({ farm, index }: { farm: SessionFarm; index: number }) 
         >
           {farm.role}
         </span>
+        {overview && <FarmOverviewStats overview={overview} />}
       </div>
 
       <svg

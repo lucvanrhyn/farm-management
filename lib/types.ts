@@ -4,7 +4,11 @@
 
 export type AnimalSex = "Male" | "Female";
 
-export type AnimalCategory = "Cow" | "Bull" | "Heifer" | "Calf" | "Ox";
+// Category is a string to support species-specific categories:
+// Cattle: "Cow" | "Bull" | "Heifer" | "Calf" | "Ox"
+// Sheep: "Ewe" | "Ram" | "Wether" | "Hogget" | "Lamb" | "Maiden Ewe" | "Ewe Lamb"
+// Game: "Adult Male" | "Adult Female" | "Sub-adult" | "Juvenile"
+export type AnimalCategory = string;
 
 export type AnimalStatus = "Active" | "Sold" | "Deceased";
 
@@ -15,22 +19,41 @@ export type WaterStatus = "Full" | "Low" | "Empty" | "Broken";
 export type FenceStatus = "Intact" | "Damaged";
 
 export type ObservationType =
+  // Shared
   | "camp_check"
   | "animal_movement"
   | "health_issue"
   | "reproduction"
-  | "calving"
   | "death"
   | "treatment"
   | "camp_condition"
   | "weighing"
-  | "heat_detection"
-  | "insemination"
-  | "pregnancy_scan"
   | "mob_movement"
   | "body_condition_score"
   | "temperament_score"
-  | "scrotal_circumference";
+  // Cattle-specific
+  | "calving"
+  | "heat_detection"
+  | "insemination"
+  | "pregnancy_scan"
+  | "scrotal_circumference"
+  // Sheep-specific
+  | "lambing"
+  | "joining"
+  | "shearing"
+  | "predation_loss"
+  | "dosing"
+  | "fostering"
+  | "famacha"
+  // Game-specific
+  | "census"
+  | "hunt_record"
+  | "game_mortality"
+  | "game_predation"
+  | "game_introduction"
+  | "water_point_check"
+  | "veld_assessment"
+  | "fence_inspection";
 
 export type TreatmentType =
   | "Vaccination"
@@ -57,6 +80,7 @@ export interface Animal {
   category: AnimalCategory;
   current_camp: string;        // camp_id
   status: AnimalStatus;
+  species?: string;            // "cattle" | "sheep" | "game" — defaults to "cattle"
   mother_id?: string;          // animal_id of mother
   father_id?: string;          // animal_id of sire
   mob_id?: string;             // mob this animal belongs to
@@ -168,6 +192,7 @@ export interface PrismaAnimal {
   category: AnimalCategory;
   currentCamp: string;
   status: AnimalStatus;
+  species: string;
   motherId: string | null;
   fatherId: string | null;
   mobId: string | null;

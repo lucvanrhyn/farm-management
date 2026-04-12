@@ -1,13 +1,51 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import type { SessionFarm } from "@/types/next-auth";
 import { FarmCard } from "./FarmCard";
+import { getOverviewForUserFarms } from "@/lib/server/multi-farm-overview";
+import type { FarmOverview } from "@/lib/server/multi-farm-overview";
+
+// ── Overview loader (only rendered for 2+ farms) ──────────────────────────────
+
+async function OverviewCards({ farms }: { farms: SessionFarm[] }) {
+  const overviews = await getOverviewForUserFarms(farms);
+  const overviewBySlug = Object.fromEntries(overviews.map((o) => [o.slug, o]));
+
+  return (
+    <>
+      {farms.map((farm, i) => (
+        <FarmCard
+          key={farm.slug}
+          farm={farm}
+          index={i}
+          overview={overviewBySlug[farm.slug]}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── Skeleton fallback for multi-farm overview load ────────────────────────────
+
+function CardSkeletons({ farms }: { farms: SessionFarm[] }) {
+  return (
+    <>
+      {farms.map((farm, i) => (
+        <FarmCard key={farm.slug} farm={farm} index={i} />
+      ))}
+    </>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function FarmsPage() {
   const session = await getSession();
   if (!session?.user) redirect("/login");
 
   const farms: SessionFarm[] = session.user.farms ?? [];
+  const isMultiFarm = farms.length >= 2;
 
   return (
     <div
@@ -76,9 +114,17 @@ export default async function FarmsPage() {
           </p>
         ) : (
           <div className="flex flex-col gap-3 w-full">
-            {farms.map((farm, i) => (
-              <FarmCard key={farm.slug} farm={farm} index={i} />
-            ))}
+            {isMultiFarm ? (
+              // Multi-farm: load overview stats in Suspense so picker renders immediately
+              <Suspense fallback={<CardSkeletons farms={farms} />}>
+                <OverviewCards farms={farms} />
+              </Suspense>
+            ) : (
+              // Single farm: no Suspense overhead, instant tap
+              farms.map((farm, i) => (
+                <FarmCard key={farm.slug} farm={farm} index={i} />
+              ))
+            )}
           </div>
         )}
       </div>

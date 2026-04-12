@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "rm -f .next/dev/lock && next dev --webpack",
+    "dev": "rm -f .next/dev/lock && next dev --webpack --port 3001",
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -43,6 +43,7 @@
     "recharts": "^3.8.0",
     "resend": "^6.10.0",
     "serwist": "^9.5.6",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -53,6 +54,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",

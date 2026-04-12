@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 
 export interface ExportButtonProps {
   farmSlug: string;
-  exportType: "animals" | "withdrawal" | "calvings" | "camps" | "transactions";
+  exportType: "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance";
   label?: string;
 }
 

@@ -108,3 +108,50 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+// ── Push Notifications ──────────────────────────────────────────────────────
+
+interface PushPayload {
+  title: string;
+  body: string;
+  href: string;
+}
+
+self.addEventListener("push", (event: PushEvent) => {
+  if (!event.data) return;
+
+  let payload: PushPayload;
+  try {
+    payload = event.data.json() as PushPayload;
+  } catch {
+    payload = { title: "FarmTrack Alert", body: event.data.text(), href: "/" };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icon-192x192.png",
+      badge: "/icon-192x192.png",
+      data: { href: payload.href },
+      tag: "farmtrack-alert",
+      renotify: true,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event: NotificationEvent) => {
+  event.notification.close();
+  const href = (event.notification.data as { href?: string })?.href ?? "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        const existing = clientList.find((c) => "focus" in c);
+        if (existing) {
+          void existing.navigate(href);
+          return existing.focus();
+        }
+        return self.clients.openWindow(href);
+      }),
+  );
+});

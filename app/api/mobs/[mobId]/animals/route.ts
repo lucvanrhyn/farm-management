@@ -9,13 +9,12 @@ export async function POST(
   { params }: { params: Promise<{ mobId: string }> },
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { mobId } = await params;
   const mob = await prisma.mob.findUnique({ where: { id: mobId } });
@@ -50,13 +49,12 @@ export async function DELETE(
   { params }: { params: Promise<{ mobId: string }> },
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { mobId } = await params;
   const mob = await prisma.mob.findUnique({ where: { id: mobId } });

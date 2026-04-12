@@ -32,13 +32,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { name, type } = await request.json();
   if (!name || !type || !["income", "expense"].includes(type)) {

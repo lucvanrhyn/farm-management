@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 import * as XLSX from "xlsx";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
@@ -30,13 +31,19 @@ function normalizeCategory(raw: string): "Cow" | "Bull" | "Heifer" | "Calf" | "O
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit: 5 imports per hour per user — each import parses XLSX and bulk-upserts rows
+  const userId = session.user?.email ?? "unknown";
+  const rl = checkRateLimit(`import:${userId}`, 5, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many import requests. Please wait before importing again." }, { status: 429 });
   }
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

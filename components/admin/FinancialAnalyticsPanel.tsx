@@ -10,20 +10,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import DateRangePicker from "@/components/admin/DateRangePicker";
 import type { FinancialAnalyticsResult } from "@/lib/server/financial-analytics";
-
-function toYMD(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string }) {
   const searchParams = useSearchParams();
   const rawFrom = searchParams.get("from");
   const rawTo = searchParams.get("to");
 
-  const effectiveTo = rawTo ?? toYMD(new Date());
-  const effectiveFrom = rawFrom ?? toYMD(new Date(Date.now() - 30 * 86_400_000));
+  const effectiveFrom = rawFrom ?? "";
+  const effectiveTo = rawTo ?? "";
 
   const [data, setData] = useState<FinancialAnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,8 +26,11 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    const params = new URLSearchParams({ from: effectiveFrom, to: effectiveTo });
-    fetch(`/api/${farmSlug}/financial-analytics?${params.toString()}`, {
+    const params = new URLSearchParams();
+    if (effectiveFrom) params.set("from", effectiveFrom);
+    if (effectiveTo) params.set("to", effectiveTo);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    fetch(`/api/${farmSlug}/financial-analytics${query}`, {
       signal: controller.signal,
     })
       .then((r) => r.json())
@@ -63,7 +61,6 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
             {effectiveFrom} → {effectiveTo}
           </p>
         </div>
-        <DateRangePicker defaultDays={30} />
       </div>
 
       {loading && (

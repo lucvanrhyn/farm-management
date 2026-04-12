@@ -10,6 +10,7 @@ import WeightTrendChart from "@/components/admin/charts/WeightTrendChart";
 import type { WeightPoint } from "@/components/admin/charts/WeightTrendChart";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
 import AnimalInvestment from "@/components/admin/AnimalInvestment";
+import CostOfGainCard from "@/components/admin/CostOfGainCard";
 
 export const dynamic = "force-dynamic";
 
@@ -658,7 +659,12 @@ export default async function AnimalDetailPage({
 
         {/* ── Tab: Investment ── */}
         {activeTab === "investment" && (
-          <AnimalInvestment data={investmentData.totalCost > 0 ? investmentData : null} />
+          <div className="space-y-4">
+            <AnimalInvestment data={investmentData.totalCost > 0 ? investmentData : null} />
+            {investmentData.totalCost > 0 && (
+              <CostOfGainCard investment={investmentData} weight={weightData} />
+            )}
+          </div>
         )}
 
         {/* ── Tab: Progeny (Bulls only) ── */}

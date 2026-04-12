@@ -12,6 +12,10 @@ const FinancialAnalyticsPanel = dynamic(
   },
 );
 
-export default function FinancialAnalyticsPanelLazy({ farmSlug }: { farmSlug: string }) {
+export default function FinancialAnalyticsPanelLazy({
+  farmSlug,
+}: {
+  farmSlug: string;
+}) {
   return <FinancialAnalyticsPanel farmSlug={farmSlug} />;
 }

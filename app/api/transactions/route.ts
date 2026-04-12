@@ -20,6 +20,14 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (from && !DATE_RE.test(from)) {
+    return NextResponse.json({ error: "from must be YYYY-MM-DD" }, { status: 400 });
+  }
+  if (to && !DATE_RE.test(to)) {
+    return NextResponse.json({ error: "to must be YYYY-MM-DD" }, { status: 400 });
+  }
+
   const where: Record<string, unknown> = {};
   if (type) where.type = type;
   if (category) where.category = category;
@@ -40,13 +48,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
   const {

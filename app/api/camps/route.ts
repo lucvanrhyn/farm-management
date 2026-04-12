@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,11 +15,17 @@ export async function GET() {
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma } = db;
 
+  const { searchParams } = new URL(req.url);
+  const species = searchParams.get("species");
+
   const [camps, animalGroups] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     prisma.animal.groupBy({
       by: ["currentCamp"],
-      where: { status: "Active" },
+      where: {
+        status: "Active",
+        ...(species ? { species } : {}),
+      },
       _count: { _all: true },
     }),
   ]);
@@ -44,13 +50,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role?.toUpperCase() !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getPrismaWithAuth(session);
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const { prisma, role } = db;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const { campId, campName, sizeHectares, waterSource, geojson, color } = body;
@@ -90,5 +95,14 @@ export async function POST(req: NextRequest) {
   revalidatePath("/admin");
   revalidatePath("/dashboard");
 
-  return NextResponse.json(camp, { status: 201 });
+  // Return snake_case to match the GET /api/camps response shape
+  return NextResponse.json({
+    camp_id: camp.campId,
+    camp_name: camp.campName,
+    size_hectares: camp.sizeHectares,
+    water_source: camp.waterSource,
+    geojson: camp.geojson,
+    color: camp.color,
+    animal_count: 0,
+  }, { status: 201 });
 }

@@ -136,25 +136,36 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     }
   }, [syncStatus, refreshPendingCount]);
 
-  // Initialize on mount — set farm slug for IndexedDB isolation BEFORE any DB calls
+  // Initialize on farm switch — set farm slug for IndexedDB isolation BEFORE any DB calls.
+  // The `cancelled` flag discards async results that resolve after a subsequent farm switch,
+  // preventing farm A data from briefly appearing on a farm B screen.
   useEffect(() => {
     if (!farmSlug) return;
-    setActiveFarmSlug(farmSlug);
+    setActiveFarmSlug(farmSlug); // synchronous — must be first
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    let cancelled = false;
+
     setIsOnline(navigator.onLine);
+
     refreshPendingCount();
-    getLastSyncedAt().then(setLastSyncedAtState);
+    getLastSyncedAt().then((ts) => {
+      if (!cancelled) setLastSyncedAtState(ts);
+    });
 
     // Load camps: paint instantly with cache, always pull fresh in background
     getCachedCamps().then((existing) => {
+      if (cancelled) return;
       if (existing.length > 0) setCamps(existing);
       setCampsLoaded(true);
       refreshData();
     });
 
     // Load tasks from IndexedDB if available (tasks store added in DB v3)
-    getCachedTasks(farmSlug).then(setTasks);
+    getCachedTasks(farmSlug).then((cachedTasks) => {
+      if (!cancelled) setTasks(cachedTasks);
+    });
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmSlug, refreshPendingCount]);
 

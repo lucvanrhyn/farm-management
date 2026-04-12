@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getBreedingSnapshot, suggestPairings } from "@/lib/server/breeding-analytics";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getFarmCreds } from "@/lib/meta-db";
 import type { SessionFarm } from "@/types/next-auth";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +25,23 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { farmSlug } = await params;
-  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find(
+  const farmFromToken = (session.user?.farms as SessionFarm[] | undefined)?.find(
     (f) => f.slug === farmSlug,
   );
-  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (farm.tier === "basic") {
+  if (!farmFromToken) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Live tier check — JWT tier can be stale after subscription changes
+  const creds = await getFarmCreds(farmSlug);
+  if (!creds || creds.tier === "basic") {
     return NextResponse.json({ error: "Breeding AI requires an Advanced plan" }, { status: 403 });
+  }
+
+  const { allowed, retryAfterMs } = checkRateLimit(`breeding:${farmSlug}`, 5, 60_000);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait before trying again." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } },
+    );
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

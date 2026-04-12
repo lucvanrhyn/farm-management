@@ -18,9 +18,23 @@ export async function proxy(req: NextRequest) {
   const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger)/);
   if (farmRouteMatch) {
     const farmSlug = farmRouteMatch[1];
-    const farms = token.farms as Array<{ slug: string }>;
-    if (!farms.some((f) => f.slug === farmSlug)) {
+    const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string }>;
+    const farm = farms.find((f) => f.slug === farmSlug);
+
+    if (!farm) {
       return NextResponse.redirect(new URL("/farms", req.url));
+    }
+
+    // Gate Basic-tier farms that haven't completed payment.
+    // Only active when PayFast is configured (prevents lockouts in dev/staging).
+    if (
+      process.env.PAYFAST_MERCHANT_ID &&
+      farm.tier === "basic" &&
+      farm.subscriptionStatus !== "active"
+    ) {
+      return NextResponse.redirect(
+        new URL(`/subscribe?farm=${farmSlug}`, req.url),
+      );
     }
   }
 

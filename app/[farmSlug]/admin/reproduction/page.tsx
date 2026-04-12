@@ -6,6 +6,7 @@ import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -72,7 +73,16 @@ export default async function ReproductionPage({
     );
   }
 
-  const stats = await getReproStats(prisma);
+  const mode = await getFarmMode(farmSlug);
+
+  // Pre-fetch animal IDs for the active species so all repro queries can be scoped.
+  const speciesAnimals = await prisma.animal.findMany({
+    where: { species: mode },
+    select: { animalId: true },
+  });
+  const speciesAnimalIds = speciesAnimals.map((a) => a.animalId);
+
+  const stats = await getReproStats(prisma, { animalIds: speciesAnimalIds });
 
   // Fetch recent events (last 15) — includes heat/insem/scan/calving
   // Default to 12 months when no date range is selected
@@ -89,6 +99,7 @@ export default async function ReproductionPage({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan", "calving"] },
         observedAt: observedAtFilter,
+        animalId: { in: speciesAnimalIds },
       },
       orderBy: { observedAt: "desc" },
       take: 15,

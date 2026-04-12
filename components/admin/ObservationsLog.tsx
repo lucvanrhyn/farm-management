@@ -37,6 +37,19 @@ const TYPE_LABEL: Record<string, string> = {
   treatment:       "Treatment",
   death:           "Death",
   weighing:        "Weighing",
+  calving:         "Calving",
+  pregnancy_scan:  "Pregnancy Scan",
+  heat:            "Heat / Oestrus",
+  insemination:    "Insemination",
+  lambing:         "Lambing",
+  joining:         "Joining",
+  shearing:        "Shearing",
+  predation_loss:  "Predation Loss",
+  dosing:          "Dosing",
+  famacha:         "FAMACHA Score",
+  fostering:       "Fostering",
+  camp_cover:      "Cover Reading",
+  mob_movement:    "Mob Movement",
 };
 
 const TREATMENT_TYPES = ["Antibiotic", "Dip", "Deworming", "Vaccination", "Supplement", "Other"];

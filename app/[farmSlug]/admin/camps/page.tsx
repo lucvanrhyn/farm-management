@@ -10,6 +10,8 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import { VeldTab } from "@/components/admin/camps/VeldTab";
+import { getFarmFooPayload } from "@/lib/server/foo";
+import { FooTab } from "@/components/admin/camps/FooTab";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +37,10 @@ export default async function AdminCampsPage({
     );
   }
 
-  const [prismaCampsRaw, veldSummary] = await Promise.all([
+  const [prismaCampsRaw, veldSummary, fooPayload] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     getVeldSummary(prisma),
+    getFarmFooPayload(prisma),
   ]);
   const prismaCamps = prismaCampsRaw;
   const camps: Camp[] = prismaCamps.map((c) => ({
@@ -90,6 +93,10 @@ export default async function AdminCampsPage({
 
       {activeTab === "veld" && (
         <VeldTab farmSlug={farmSlug} summary={veldSummary} />
+      )}
+
+      {activeTab === "foo" && (
+        <FooTab farmSlug={farmSlug} payload={fooPayload} />
       )}
     </div>
   );

@@ -185,7 +185,7 @@ export const DAILY_LOGS: DailyCampLog[] = CAMPS.flatMap((camp, ci) =>
     const grazing = GRAZING_BY_CAMP[camp.camp_id] ?? "Fair";
     const water = WATER_BY_CAMP[camp.camp_id] ?? "Full";
     const baseCount = CAMP_SPECS.find(s => s.campId === camp.camp_id)
-      ? Object.values(CAMP_SPECS.find(s => s.campId === camp.camp_id)!.counts).reduce((a, b) => a + b, 0)
+      ? Object.values(CAMP_SPECS.find(s => s.campId === camp.camp_id)!.counts).reduce((a: number, b) => a + (b ?? 0), 0)
       : 30;
     const jitter = Math.floor(Math.random() * 3) - 1;
 

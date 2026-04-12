@@ -24,6 +24,6 @@ export async function GET() {
     return NextResponse.json(result);
   } catch (err) {
     console.error("[camps/status] DB error:", err);
-    return NextResponse.json({}, { status: 200 }); // Return empty — dashboard falls back to dummy-data
+    return NextResponse.json({ error: "Failed to load camp conditions" }, { status: 500 });
   }
 }

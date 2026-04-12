@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
-import type { SessionFarm } from "@/types/next-auth";
+import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -15,14 +14,9 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { farmSlug } = await params;
-
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug,
-  );
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const _authGet = await getPrismaForSlugWithAuth(session, farmSlug);
+  if ("error" in _authGet) return NextResponse.json({ error: _authGet.error }, { status: _authGet.status });
+  const prisma = _authGet.prisma;
 
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
@@ -66,14 +60,10 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { farmSlug } = await params;
-
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug,
-  );
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
+  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
+  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const prisma = _auth.prisma;
 
   const body = await req.json();
   const {

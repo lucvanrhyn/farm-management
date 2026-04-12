@@ -5,6 +5,8 @@ import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
+import { useFarmModeSafe } from "@/lib/farm-mode";
+import { getSpeciesModule } from "@/lib/species/registry";
 
 const PAGE_SIZE = 50;
 
@@ -22,6 +24,7 @@ const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
 export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, mobs }: Props) {
+  const { mode } = useFarmModeSafe();
   const [tab, setTab] = useState<"active" | "deceased">("active");
   const [search, setSearch] = useState("");
   const [campFilter, setCampFilter] = useState("all");
@@ -77,7 +80,7 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
     return m;
   }, [mobs]);
 
-  const categories: AnimalCategory[] = ["Cow", "Calf", "Heifer", "Bull", "Ox"];
+  const categories: AnimalCategory[] = getSpeciesModule(mode).config.categories.map((c) => c.value);
   const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
 
   return (
@@ -215,6 +218,17 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
             </tr>
           </thead>
           <tbody>
+            {pageData.length === 0 && (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="px-4 py-10 text-center text-sm"
+                  style={{ color: "#9C8E7A" }}
+                >
+                  No animals found.
+                </td>
+              </tr>
+            )}
             {pageData.map((animal) => (
               <tr
                 key={animal.animalId}

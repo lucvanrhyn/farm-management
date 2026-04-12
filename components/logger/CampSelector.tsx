@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { useOffline } from "./OfflineProvider";
 import { getGrazingDot, relativeTime } from "@/lib/utils";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
+import { useFarmModeSafe } from "@/lib/farm-mode";
+import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
 
 function CampSkeleton() {
   return (
@@ -43,6 +45,7 @@ export default function CampSelector() {
   const router = useRouter();
   const params = useParams<{ farmSlug: string }>();
   const { camps } = useOffline();
+  const { isMultiMode } = useFarmModeSafe();
 
   if (camps.length === 0) {
     return (
@@ -55,12 +58,19 @@ export default function CampSelector() {
   }
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
-      className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4"
-    >
+    <div>
+      {/* Mode switcher for logger — only shown when multi-species */}
+      {isMultiMode && (
+        <div className="flex justify-center pt-3 pb-1">
+          <ModeSwitcher variant="glass" />
+        </div>
+      )}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4"
+      >
       {camps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
         // Use grey dot when no condition has ever been recorded; do not default to "Fair"
@@ -122,5 +132,6 @@ export default function CampSelector() {
         );
       })}
     </motion.div>
+    </div>
   );
 }

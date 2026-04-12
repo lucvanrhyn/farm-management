@@ -1,5 +1,6 @@
 import { getCategoryLabel } from "@/lib/utils";
 import { Animal, AnimalCategory } from "@/lib/types";
+import type { FarmMode } from "@/lib/farm-mode";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "weigh" | "treat";
 
@@ -8,17 +9,43 @@ interface AnimalChecklistProps {
   onFlag: (animalId: string, type: ModalType) => void;
   animals?: Animal[];
   flaggedIds?: Set<string>;
+  species?: FarmMode;
 }
 
-const ACTION_BUTTONS: { type: ModalType; icon: string; label: string; className: string }[] = [
-  { type: "health",       icon: "🏥", label: "Health",  className: "text-amber-400 active:bg-amber-400/10" },
-  { type: "weigh",        icon: "⚖️", label: "Weigh",   className: "text-blue-400 active:bg-blue-400/10" },
-  { type: "treat",        icon: "💊", label: "Treat",   className: "text-green-400 active:bg-green-400/10" },
-  { type: "movement",     icon: "➡️", label: "Move",    className: "text-sky-400 active:bg-sky-400/10" },
+type ActionButton = { type: ModalType; icon: string; label: string; className: string };
+
+const SHARED_BUTTONS: ActionButton[] = [
+  { type: "health",   icon: "🏥", label: "Health", className: "text-amber-400 active:bg-amber-400/10" },
+  { type: "weigh",    icon: "⚖️", label: "Weigh",  className: "text-blue-400 active:bg-blue-400/10" },
+  { type: "treat",    icon: "💊", label: "Treat",  className: "text-green-400 active:bg-green-400/10" },
+  { type: "movement", icon: "➡️", label: "Move",   className: "text-sky-400 active:bg-sky-400/10" },
+];
+
+const CATTLE_BUTTONS: ActionButton[] = [
+  ...SHARED_BUTTONS,
   { type: "calving",      icon: "🐄", label: "Calving", className: "text-violet-400 active:bg-violet-400/10" },
   { type: "reproduction", icon: "🔬", label: "Repro",   className: "text-pink-400 active:bg-pink-400/10" },
   { type: "death",        icon: "✕",  label: "Death",   className: "text-red-400 active:bg-red-400/10" },
 ];
+
+const SHEEP_BUTTONS: ActionButton[] = [
+  ...SHARED_BUTTONS,
+  { type: "calving",      icon: "🐑", label: "Lambing", className: "text-violet-400 active:bg-violet-400/10" },
+  { type: "reproduction", icon: "🔬", label: "Repro",   className: "text-pink-400 active:bg-pink-400/10" },
+  { type: "death",        icon: "✕",  label: "Death",   className: "text-red-400 active:bg-red-400/10" },
+];
+
+// Game animals are rarely tracked individually, but when they are (boma species), use basic buttons
+const GAME_BUTTONS: ActionButton[] = [
+  ...SHARED_BUTTONS,
+  { type: "death", icon: "✕", label: "Death", className: "text-red-400 active:bg-red-400/10" },
+];
+
+const ACTION_BUTTONS_BY_MODE: Record<FarmMode, ActionButton[]> = {
+  cattle: CATTLE_BUTTONS,
+  sheep: SHEEP_BUTTONS,
+  game: GAME_BUTTONS,
+};
 
 function getCategoryChipDark(category: AnimalCategory): string {
   switch (category) {
@@ -27,11 +54,26 @@ function getCategoryChipDark(category: AnimalCategory): string {
     case "Heifer": return "bg-violet-900/50 text-violet-300";
     case "Bull":   return "bg-amber-900/50 text-amber-300";
     case "Ox":     return "bg-stone-800/50 text-stone-300";
+    // Sheep
+    case "Ewe":        return "bg-rose-900/50 text-rose-300";
+    case "Ram":        return "bg-amber-900/50 text-amber-300";
+    case "Lamb":       return "bg-sky-900/50 text-sky-300";
+    case "Wether":     return "bg-stone-800/50 text-stone-300";
+    case "Hogget":     return "bg-teal-900/50 text-teal-300";
+    case "Maiden Ewe": return "bg-pink-900/50 text-pink-300";
+    case "Ewe Lamb":   return "bg-fuchsia-900/50 text-fuchsia-300";
+    // Game
+    case "Adult Male":   return "bg-indigo-900/50 text-indigo-300";
+    case "Adult Female": return "bg-purple-900/50 text-purple-300";
+    case "Sub-adult":    return "bg-cyan-900/50 text-cyan-300";
+    case "Juvenile":     return "bg-sky-900/50 text-sky-300";
+    default:             return "bg-gray-800/50 text-gray-300";
   }
 }
 
-export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, flaggedIds }: AnimalChecklistProps) {
+export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, flaggedIds, species = "cattle" }: AnimalChecklistProps) {
   const animals = animalsProp ?? [];
+  const actionButtons = ACTION_BUTTONS_BY_MODE[species];
 
   if (animals.length === 0) {
     return (
@@ -82,9 +124,9 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, 
               )}
             </div>
 
-            {/* Action pill buttons */}
+            {/* Action pill buttons — species-specific */}
             <div className="flex items-center gap-1 shrink-0">
-              {ACTION_BUTTONS.map((btn) => (
+              {actionButtons.map((btn) => (
                 <button
                   key={btn.type}
                   onClick={() => onFlag(animal.animal_id, btn.type)}

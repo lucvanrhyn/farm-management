@@ -135,3 +135,33 @@ export async function POST(
 
   return NextResponse.json({ reading, daysRemaining }, { status: 201 });
 }
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ farmSlug: string; campId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { farmSlug } = await params;
+
+  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find(
+    (f) => f.slug === farmSlug,
+  );
+  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (farm.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+
+  const body = await req.json();
+  const { readingId } = body;
+  if (!readingId || typeof readingId !== "string") {
+    return NextResponse.json({ error: "readingId is required" }, { status: 400 });
+  }
+
+  await prisma.campCoverReading.delete({ where: { id: readingId } });
+  return NextResponse.json({ ok: true });
+}

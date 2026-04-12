@@ -35,9 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  // Scope blobs to the active farm slug to prevent cross-farm namespace collisions
+  const farmSlug = (session.user as { farms?: Array<{ slug: string }> }).farms?.[0]?.slug ?? 'unknown';
 
   try {
-    const blob = await put(`farm-photos/${Date.now()}-${safeName}`, file, { access: 'public' });
+    const blob = await put(`farm-photos/${farmSlug}/${Date.now()}-${safeName}`, file, { access: 'public' });
     return NextResponse.json({ url: blob.url });
   } catch (err) {
     console.error('[photos/upload] Blob upload failed:', err);

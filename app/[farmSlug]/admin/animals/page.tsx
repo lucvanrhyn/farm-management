@@ -6,6 +6,7 @@ import ExportButton from "@/components/admin/ExportButton";
 import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,10 @@ export default async function AdminAnimalsPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   const [animals, prismaCamps, withdrawalAnimals, prismaMobs] = await Promise.all([
-    prisma.animal.findMany({ orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
+    prisma.animal.findMany({ where: { species: mode }, orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     getAnimalsInWithdrawal(prisma),
     prisma.mob.findMany({ orderBy: { name: "asc" } }),

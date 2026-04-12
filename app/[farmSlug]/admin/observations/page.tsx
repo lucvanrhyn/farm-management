@@ -1,4 +1,5 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ObservationsPageClient from "./ObservationsPageClient";
 
@@ -20,9 +21,11 @@ export default async function AdminObservationsPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   const [prismaCamps, prismaAnimals] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campName: "asc" }, select: { campId: true, campName: true } }),
-    prisma.animal.findMany({ where: { status: "Active" }, orderBy: { animalId: "asc" }, select: { animalId: true, currentCamp: true } }),
+    prisma.animal.findMany({ where: { status: "Active", species: mode }, orderBy: { animalId: "asc" }, select: { animalId: true, currentCamp: true } }),
   ]);
 
   const camps = prismaCamps.map((c) => ({ id: c.campId, name: c.campName }));

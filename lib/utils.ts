@@ -11,6 +11,7 @@ export function getCategoryLabel(category: AnimalCategory): string {
     case "Heifer": return "Heifer";
     case "Bull":   return "Bull";
     case "Ox":     return "Ox";
+    default:       return category; // Sheep/game categories pass through as-is
   }
 }
 
@@ -21,6 +22,7 @@ export function getCategoryPluralLabel(category: AnimalCategory): string {
     case "Heifer": return "Heifers";
     case "Bull":   return "Bulls";
     case "Ox":     return "Oxen";
+    default:       return `${category}s`; // Reasonable pluralization fallback
   }
 }
 
@@ -98,6 +100,20 @@ export function getCategoryChipColor(category: AnimalCategory): string {
     case "Heifer": return "bg-violet-100 text-violet-800";
     case "Bull":   return "bg-amber-100 text-amber-800";
     case "Ox":     return "bg-stone-100 text-stone-700";
+    // Sheep categories
+    case "Ewe":        return "bg-rose-100 text-rose-800";
+    case "Ram":        return "bg-amber-100 text-amber-800";
+    case "Lamb":       return "bg-sky-100 text-sky-800";
+    case "Wether":     return "bg-stone-100 text-stone-700";
+    case "Hogget":     return "bg-teal-100 text-teal-800";
+    case "Maiden Ewe": return "bg-pink-100 text-pink-800";
+    case "Ewe Lamb":   return "bg-fuchsia-100 text-fuchsia-800";
+    // Game categories
+    case "Adult Male":   return "bg-indigo-100 text-indigo-800";
+    case "Adult Female": return "bg-purple-100 text-purple-800";
+    case "Sub-adult":    return "bg-cyan-100 text-cyan-800";
+    case "Juvenile":     return "bg-sky-100 text-sky-800";
+    default:             return "bg-gray-100 text-gray-700";
   }
 }
 

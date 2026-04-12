@@ -1,0 +1,82 @@
+import type { FarmOverview } from "@/lib/server/multi-farm-overview";
+
+function formatHeartbeat(date: Date | null): string {
+  if (!date) return "No activity";
+  const diffMs = Date.now() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours < 1) return "< 1h ago";
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function TierBadge({ tier, subscriptionStatus }: { tier: string; subscriptionStatus: string }) {
+  const isActive = subscriptionStatus === "active";
+  const label = isActive ? tier : "inactive";
+  const style =
+    tier === "advanced" && isActive
+      ? { background: "rgba(139,105,20,0.18)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.3)" }
+      : { background: "rgba(210,180,140,0.12)", color: "rgba(210,180,140,0.6)", border: "1px solid rgba(210,180,140,0.2)" };
+
+  return (
+    <span
+      className="inline-block text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full"
+      style={style}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
+  const unavailable = overview.activeAnimalCount === null;
+
+  if (unavailable) {
+    return (
+      <div className="flex items-center gap-2 mt-2">
+        <span
+          className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full"
+          style={{ background: "rgba(200,50,50,0.15)", color: "rgba(220,100,100,0.8)", border: "1px solid rgba(200,50,50,0.3)" }}
+        >
+          Unavailable
+        </span>
+        <TierBadge tier={overview.tier} subscriptionStatus={overview.subscriptionStatus} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+      <Stat value={overview.activeAnimalCount!} label="animals" />
+      <Divider />
+      <Stat value={overview.campCount!} label="camps" />
+      <Divider />
+      <span
+        className="text-[10px]"
+        style={{ color: "#6A4E30" }}
+        title="Last logged observation"
+      >
+        {formatHeartbeat(overview.lastObservationAt)}
+      </span>
+      <Divider />
+      <TierBadge tier={overview.tier} subscriptionStatus={overview.subscriptionStatus} />
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <span className="text-[10px]" style={{ color: "#6A4E30" }}>
+      <span className="font-semibold" style={{ color: "#C49030" }}>{value}</span>
+      {" "}{label}
+    </span>
+  );
+}
+
+function Divider() {
+  return (
+    <span style={{ color: "rgba(196,144,48,0.2)", fontSize: "0.6rem" }}>•</span>
+  );
+}
