@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
+import { getSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 
 export default async function ToolsLayout({
@@ -12,10 +14,14 @@ export default async function ToolsLayout({
 }) {
   const { farmSlug } = await params;
 
+  const session = await getSession();
+  if (!session?.user) redirect("/login");
+  if (!getUserRoleForFarm(session, farmSlug)) redirect("/farms");
+
   let tier: FarmTier = "basic";
   try {
     const creds = await getFarmCreds(farmSlug);
-    tier = (creds?.tier ?? "advanced") as FarmTier;
+    tier = (creds?.tier ?? "basic") as FarmTier;
   } catch (err) {
     console.error(`[ToolsLayout] getFarmCreds failed for "${farmSlug}":`, err);
     return (
