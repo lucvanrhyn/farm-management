@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export interface FarmSettingsData {
   // Farm Identity
@@ -137,6 +137,11 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
   const [geoLoading, setGeoLoading] = useState(false);
   // Separate state for new API key input — never pre-filled from server
   const [newApiKey, setNewApiKey] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
 
   function handleText(key: keyof FarmSettingsData, raw: string) {
     setValues((prev) => ({ ...prev, [key]: raw }));
@@ -204,7 +209,8 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
       }
 
       setStatus("success");
-      setTimeout(() => setStatus("idle"), 3000);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setStatus("idle"), 3000);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
