@@ -8,6 +8,7 @@ import type {
   CogByAnimalRow,
 } from "@/lib/server/financial-analytics";
 import type { DroughtMonthRow } from "@/lib/server/drought";
+import type { It3SnapshotPayload } from "@/lib/server/sars-it3";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -409,6 +410,57 @@ export function fooToCSV(rows: FooRow[]): string {
     ),
   );
   return `${header}\n${lines.join("\n")}`;
+}
+
+// ── SARS / IT3 Farming Tax Export ───────────────────────────────────────────
+
+/**
+ * Two-section CSV mirroring the PDF layout: farm header, income schedule,
+ * expense schedule, summary block, inventory block. Single flat file — the
+ * downstream consumer (farmer's accountant) can slice sections in Excel.
+ */
+export function it3SnapshotToCSV(payload: It3SnapshotPayload): string {
+  const lines: string[] = [];
+  const f = payload.farm;
+
+  lines.push(row("# SARS / ITR12 Farming Schedule"));
+  lines.push(row("# Tax year", String(payload.taxYear)));
+  lines.push(row("# Period", `${payload.periodStart} to ${payload.periodEnd}`));
+  lines.push(row("# Farm", f.farmName));
+  lines.push(row("# Owner", f.ownerName));
+  if (f.ownerIdNumber) lines.push(row("# Owner ID", f.ownerIdNumber));
+  if (f.propertyRegNumber) lines.push(row("# Property Reg", f.propertyRegNumber));
+  if (f.physicalAddress) lines.push(row("# Physical Address", f.physicalAddress));
+  if (f.farmRegion) lines.push(row("# Region", f.farmRegion));
+  lines.push("");
+
+  lines.push(row("section", "code", "line", "source_categories", "amount_zar", "transaction_count"));
+
+  for (const r of payload.schedules.income) {
+    lines.push(
+      row("income", r.code, r.line, r.sourceCategories.join("; "), r.amount.toFixed(2), r.count),
+    );
+  }
+  for (const r of payload.schedules.expense) {
+    lines.push(
+      row("expense", r.code, r.line, r.sourceCategories.join("; "), r.amount.toFixed(2), r.count),
+    );
+  }
+
+  lines.push("");
+  lines.push(row("summary", "total_income_zar", payload.schedules.totalIncome.toFixed(2)));
+  lines.push(row("summary", "total_expenses_zar", payload.schedules.totalExpenses.toFixed(2)));
+  lines.push(row("summary", "net_farming_income_zar", payload.schedules.netFarmingIncome.toFixed(2)));
+  lines.push(row("summary", "transactions_included", payload.schedules.transactionCount));
+
+  lines.push("");
+  lines.push(row("inventory", "category", "head_count"));
+  for (const r of payload.inventory.byCategory) {
+    lines.push(row("inventory", r.category, r.count));
+  }
+  lines.push(row("inventory", "total_active", payload.inventory.activeAtPeriodEnd));
+
+  return lines.join("\n");
 }
 
 export function droughtMonthlyToCSV(rows: DroughtMonthRow[]): string {

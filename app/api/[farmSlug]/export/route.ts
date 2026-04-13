@@ -22,6 +22,7 @@ import {
   veldScoreToCSV,
   fooToCSV,
   droughtMonthlyToCSV,
+  it3SnapshotToCSV,
   type FooRow,
   type CampRow,
   type TransactionRow,
@@ -34,6 +35,8 @@ import {
 import { getFarmSummary as getVeldFarmSummary } from "@/lib/server/veld-score";
 import { getFarmFooPayload } from "@/lib/server/foo";
 import { getDroughtPayload } from "@/lib/server/drought";
+import { parseStoredPayload } from "@/lib/server/sars-it3";
+import { buildIt3Pdf } from "@/lib/server/sars-it3-pdf";
 import { getCogByCamp, getCogByAnimal } from "@/lib/server/financial-analytics";
 import { isCogScope } from "@/lib/calculators/cost-of-gain";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
@@ -45,7 +48,7 @@ import { autoTable } from "jspdf-autotable";
 
 export const dynamic = "force-dynamic";
 
-type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo" | "drought";
+type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo" | "drought" | "sars-it3";
 type ExportFormat = "csv" | "pdf";
 
 function today(): string {
@@ -109,7 +112,7 @@ export async function GET(
   const type = (url.searchParams.get("type") ?? "animals") as ExportType;
 
   // Tier check for advanced-only exports
-  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction", "drought"]);
+  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction", "drought", "sars-it3"]);
   if (ADVANCED_ONLY_EXPORTS.has(type)) {
     const creds = await getFarmCreds(farmSlug);
     if (!creds || creds.tier !== "advanced") {
@@ -827,6 +830,59 @@ export async function GET(
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${pdfFilename("drought")}"`,
+        },
+      });
+    }
+
+    if (type === "sars-it3") {
+      const taxYearRaw = url.searchParams.get("taxYear");
+      const taxYear = taxYearRaw ? parseInt(taxYearRaw, 10) : NaN;
+      if (!Number.isFinite(taxYear)) {
+        return new Response(
+          JSON.stringify({ error: "taxYear query parameter is required for sars-it3 export" }),
+          { status: 400 },
+        );
+      }
+
+      // Always export from a stored, non-voided snapshot — never re-aggregate
+      // transactions here. Farmers must issue a snapshot first so the return
+      // they download matches the one they filed.
+      const snapshot = await prisma.it3Snapshot.findFirst({
+        where: { taxYear, voidedAt: null },
+        orderBy: { issuedAt: "desc" },
+      });
+      if (!snapshot) {
+        return new Response(
+          JSON.stringify({
+            error: `No active IT3 snapshot found for tax year ${taxYear}. Issue one from the Tax tools page first.`,
+          }),
+          { status: 404 },
+        );
+      }
+
+      if (format === "csv") {
+        const payload = parseStoredPayload(snapshot.payload);
+        return new Response(it3SnapshotToCSV(payload), {
+          headers: {
+            "Content-Type": "text/csv",
+            "Content-Disposition": `attachment; filename="${csvFilename(`sars-it3-${taxYear}`)}"`,
+          },
+        });
+      }
+
+      const pdfBuf = buildIt3Pdf({
+        taxYear: snapshot.taxYear,
+        issuedAt: snapshot.issuedAt,
+        payload: snapshot.payload,
+        generatedBy: snapshot.generatedBy,
+        pdfHash: snapshot.pdfHash,
+        voidedAt: snapshot.voidedAt,
+        voidReason: snapshot.voidReason,
+      });
+      return new Response(pdfBuf, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${pdfFilename(`sars-it3-${taxYear}`)}"`,
         },
       });
     }
