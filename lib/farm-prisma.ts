@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { Session } from "next-auth";
 import type { SessionFarm } from "@/types/next-auth";
@@ -87,13 +87,41 @@ export function evictFarmClient(slug: string): void {
   globalForPrisma.lastValidated!.delete(slug);
 }
 
+// Farm-slug validator mirrors the one in getPrismaForSlugWithAuth.
+const FARM_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// First path segment after a Referer origin when the user is inside a farm shell.
+// Must stay in sync with proxy.ts's farmRouteMatch regex.
+const REFERER_SLUG_RE = /^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)/;
+
+function slugFromReferer(referer: string | null): string | null {
+  if (!referer) return null;
+  try {
+    const { pathname } = new URL(referer);
+    const match = pathname.match(REFERER_SLUG_RE);
+    if (!match) return null;
+    const slug = match[1];
+    return FARM_SLUG_RE.test(slug) ? slug : null;
+  } catch {
+    return null;
+  }
+}
+
 // Reads active_farm_slug cookie and returns a scoped Prisma client.
-// Returns { error, status } if the cookie is missing or the farm is not found.
+// Falls back to parsing the slug out of the Referer header when the cookie is
+// missing — needed because the PWA service worker can serve a cached shell for
+// /[farmSlug]/* routes without ever letting proxy.ts refresh the cookie. The
+// caller (getPrismaWithAuth) still enforces that the session user has access
+// to the resolved slug, so Referer spoofing cannot widen access.
+// Returns { error, status } if neither source yields a slug or the farm is not found.
 export async function getPrismaForRequest(): Promise<
   { prisma: PrismaClient; slug: string } | { error: string; status: number }
 > {
   const cookieStore = await cookies();
-  const slug = cookieStore.get("active_farm_slug")?.value;
+  let slug = cookieStore.get("active_farm_slug")?.value;
+  if (!slug) {
+    const headerStore = await headers();
+    slug = slugFromReferer(headerStore.get("referer")) ?? undefined;
+  }
   if (!slug) return { error: "No active farm selected", status: 400 };
   const prisma = await getPrismaForFarm(slug);
   if (!prisma) return { error: "Farm not found", status: 404 };
