@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFinancialAnalytics } from "@/lib/server/financial-analytics";
+import { getFarmCreds } from "@/lib/meta-db";
 import type { SessionFarm } from "@/types/next-auth";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +17,16 @@ export async function GET(
 
   const { farmSlug } = await params;
   const farms = session.user?.farms as SessionFarm[] | undefined;
-  const farm = farms?.find((f) => f.slug === farmSlug);
-  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (farm.tier === "basic") return NextResponse.json({ error: "Advanced plan required" }, { status: 403 });
+  if (!farms?.some((f) => f.slug === farmSlug)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Tier must be read live from meta DB — session JWT is cached at login
+  // and would lie about recently-upgraded farms until the user re-logs in.
+  const creds = await getFarmCreds(farmSlug);
+  if (!creds) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  if (creds.tier === "basic") {
+    return NextResponse.json({ error: "Advanced plan required" }, { status: 403 });
+  }
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });

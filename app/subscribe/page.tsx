@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getFarmSubscription } from '@/lib/meta-db';
 
+export const dynamic = 'force-dynamic';
+
 export default async function SubscribePage({
   searchParams,
 }: {
