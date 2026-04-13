@@ -36,6 +36,7 @@ import {
   FileCheck2,
   Sprout,
   Wheat,
+  Cloud,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
@@ -71,6 +72,7 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
   { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
   { path: "/tools/foo",              label: "FOO",              icon: Wheat,              group: "Tools",  premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
   { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
   { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
@@ -92,6 +94,7 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
   { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
   { path: "/tools/foo",              label: "FOO",              icon: Wheat,              group: "Tools",  premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
   { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
   { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
@@ -112,6 +115,7 @@ const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
   { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
   { path: "/tools/foo",              label: "FOO",              icon: Wheat,              group: "Tools",  premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
   { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
   { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },

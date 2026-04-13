@@ -517,6 +517,22 @@ model RainfallRecord {
   @@index([date], name: "idx_rainfall_date")
 }
 
+// ── Rainfall Climatology Cache ──────────────────────────────────────────────
+
+model RainfallNormal {
+  id          String   @id @default(cuid())
+  latitude    Float
+  longitude   Float
+  monthIdx    Int      // 1..12 (calendar month)
+  meanMm      Float    // long-term mean monthly rainfall (mm)
+  stdDevMm    Float    // population stdDev (mm)
+  sampleYears Int      // number of years used to compute the normal
+  computedAt  DateTime @default(now())
+
+  @@unique([latitude, longitude, monthIdx], name: "rain_norm_latlng_month")
+  @@index([latitude, longitude], name: "idx_rain_norm_latlng")
+}
+
 // ── Notifications ───────────────────────────────────────────────────────────
 
 model Notification {

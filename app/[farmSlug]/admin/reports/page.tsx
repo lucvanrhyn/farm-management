@@ -3,6 +3,7 @@ import RotationPlanExportCard from "@/components/admin/RotationPlanExportCard";
 import CostOfGainExportCard from "@/components/admin/CostOfGainExportCard";
 import VeldExportCard from "@/components/admin/VeldExportCard";
 import FooExportCard from "@/components/admin/FooExportCard";
+import DroughtExportCard from "@/components/admin/DroughtExportCard";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,7 @@ export default async function ReportsPage({
         <CostOfGainExportCard farmSlug={farmSlug} />
         <VeldExportCard farmSlug={farmSlug} />
         <FooExportCard farmSlug={farmSlug} />
+        <DroughtExportCard farmSlug={farmSlug} />
       </div>
     </div>
   );
