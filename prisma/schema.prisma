@@ -533,6 +533,24 @@ model RainfallNormal {
   @@index([latitude, longitude], name: "idx_rain_norm_latlng")
 }
 
+// ── SARS / IT3 Tax Export Snapshot ──────────────────────────────────────────
+
+model It3Snapshot {
+  id           String    @id @default(cuid())
+  taxYear      Int       // the calendar year the SA tax year ends in (e.g. 2026 → 2025-03-01..2026-02-28)
+  issuedAt     DateTime  @default(now())
+  periodStart  String    // YYYY-MM-DD
+  periodEnd    String    // YYYY-MM-DD
+  payload      String    // JSON: { schedules, totals, farmSnapshot, categoryMap, meta }
+  generatedBy  String?   // user email at issue time
+  pdfHash      String?   // sha256 of generated PDF for tamper-evident audit
+  voidedAt     DateTime?
+  voidReason   String?
+
+  @@index([taxYear], name: "idx_it3_tax_year")
+  @@index([issuedAt], name: "idx_it3_issued_at")
+}
+
 // ── Notifications ───────────────────────────────────────────────────────────
 
 model Notification {
