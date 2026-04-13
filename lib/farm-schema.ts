@@ -415,6 +415,18 @@ CREATE TABLE "GameRainfallRecord" (
 );
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "RainfallNormal" (
+    "id"          TEXT     NOT NULL PRIMARY KEY,
+    "latitude"    REAL     NOT NULL,
+    "longitude"   REAL     NOT NULL,
+    "monthIdx"    INTEGER  NOT NULL,
+    "meanMm"      REAL     NOT NULL,
+    "stdDevMm"    REAL     NOT NULL,
+    "sampleYears" INTEGER  NOT NULL,
+    "computedAt"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE "Notification" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "type" TEXT NOT NULL,
@@ -565,6 +577,12 @@ CREATE INDEX "idx_veld_camp_date" ON "GameVeldCondition"("campId", "date");
 
 -- CreateIndex
 CREATE INDEX "idx_rainfall_date" ON "GameRainfallRecord"("date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "rain_norm_latlng_month" ON "RainfallNormal"("latitude", "longitude", "monthIdx");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "idx_rain_norm_latlng" ON "RainfallNormal"("latitude", "longitude");
 
 -- CreateIndex
 CREATE INDEX "idx_notification_read_date" ON "Notification"("isRead", "createdAt");

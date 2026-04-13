@@ -7,6 +7,7 @@ import type {
   CogByCampRow,
   CogByAnimalRow,
 } from "@/lib/server/financial-analytics";
+import type { DroughtMonthRow } from "@/lib/server/drought";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -405,6 +406,30 @@ export function fooToCSV(rows: FooRow[]): string {
       r.lastRecordedAt,
       r.daysSinceReading,
       r.trendSlope.toFixed(1),
+    ),
+  );
+  return `${header}\n${lines.join("\n")}`;
+}
+
+export function droughtMonthlyToCSV(rows: DroughtMonthRow[]): string {
+  const header = row(
+    "month",
+    "actual_mm",
+    "normal_mm",
+    "deviation_mm",
+    "spi",
+    "severity",
+    "source",
+  );
+  const lines = rows.map((r) =>
+    row(
+      r.month,
+      r.actualMm.toFixed(1),
+      r.normalMm.toFixed(1),
+      (r.actualMm - r.normalMm).toFixed(1),
+      r.spi.toFixed(2),
+      r.severity,
+      r.source,
     ),
   );
   return `${header}\n${lines.join("\n")}`;

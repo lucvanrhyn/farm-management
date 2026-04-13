@@ -7,6 +7,7 @@ import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import { getFarmFooPayload } from "@/lib/server/foo";
+import { getDroughtPayload, type DroughtPayload } from "@/lib/server/drought";
 import { cattleModule } from "@/lib/species/cattle";
 import { sheepModule } from "@/lib/species/sheep";
 import { gameModule } from "@/lib/species/game";
@@ -90,7 +91,7 @@ export async function getDashboardAlerts(
   const thresholdsRecord = toThresholdsRecord(thresholds);
 
   // ── Parallel: species module alerts + farm-wide data ─────────────────────
-  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, fooPayload] =
+  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, fooPayload, farmSettings] =
     await Promise.all([
       Promise.all(
         SPECIES_MODULES.map((mod) =>
@@ -105,7 +106,18 @@ export async function getDashboardAlerts(
       getRotationStatusByCamp(prisma, now).catch(() => null),
       getVeldSummary(prisma, now).catch(() => null),
       getFarmFooPayload(prisma, now).catch(() => null),
+      prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }).catch(() => null),
     ]);
+
+  // ── Drought payload (needs lat/lng from farmSettings, best-effort) ─────────
+  let droughtPayload: DroughtPayload | null = null;
+  if (farmSettings?.latitude != null && farmSettings?.longitude != null) {
+    droughtPayload = await getDroughtPayload(
+      prisma,
+      farmSettings.latitude,
+      farmSettings.longitude,
+    ).catch(() => null);
+  }
 
   const speciesAlerts: DashboardAlert[] = allSpeciesAlerts.flat();
 
@@ -305,6 +317,32 @@ export async function getDashboardAlerts(
           : `${n} camps with outdated cover readings (> 30 days)`,
         count: n,
         href: `/${farmSlug}/tools/foo`,
+        species: "farm",
+      });
+    }
+  }
+
+  // Drought alerts (farm-wide, based on SPI-3)
+  if (droughtPayload?.spi3 != null) {
+    const { value: spi3 } = droughtPayload.spi3;
+    if (spi3 <= -1.5) {
+      red.push({
+        id: "drought-severe",
+        severity: "red",
+        icon: "CloudOff",
+        message: `Severe drought conditions — SPI-3 = ${spi3.toFixed(2)}`,
+        count: 1,
+        href: `/${farmSlug}/tools/drought`,
+        species: "farm",
+      });
+    } else if (spi3 <= -1.0) {
+      amber.push({
+        id: "drought-moderate",
+        severity: "amber",
+        icon: "Cloud",
+        message: `Moderate drought conditions — SPI-3 = ${spi3.toFixed(2)}`,
+        count: 1,
+        href: `/${farmSlug}/tools/drought`,
         species: "farm",
       });
     }

@@ -21,6 +21,7 @@ import {
   cogByAnimalToCSV,
   veldScoreToCSV,
   fooToCSV,
+  droughtMonthlyToCSV,
   type FooRow,
   type CampRow,
   type TransactionRow,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/server/export-csv";
 import { getFarmSummary as getVeldFarmSummary } from "@/lib/server/veld-score";
 import { getFarmFooPayload } from "@/lib/server/foo";
+import { getDroughtPayload } from "@/lib/server/drought";
 import { getCogByCamp, getCogByAnimal } from "@/lib/server/financial-analytics";
 import { isCogScope } from "@/lib/calculators/cost-of-gain";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
@@ -43,7 +45,7 @@ import { autoTable } from "jspdf-autotable";
 
 export const dynamic = "force-dynamic";
 
-type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo";
+type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo" | "drought";
 type ExportFormat = "csv" | "pdf";
 
 function today(): string {
@@ -107,7 +109,7 @@ export async function GET(
   const type = (url.searchParams.get("type") ?? "animals") as ExportType;
 
   // Tier check for advanced-only exports
-  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction"]);
+  const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction", "drought"]);
   if (ADVANCED_ONLY_EXPORTS.has(type)) {
     const creds = await getFarmCreds(farmSlug);
     if (!creds || creds.tier !== "advanced") {
@@ -779,6 +781,52 @@ export async function GET(
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${pdfFilename("foo")}"`,
+        },
+      });
+    }
+
+    if (type === "drought") {
+      const settings = await prisma.farmSettings.findFirst({
+        select: { latitude: true, longitude: true },
+      });
+      const lat = settings?.latitude ?? null;
+      const lng = settings?.longitude ?? null;
+
+      if (lat == null || lng == null) {
+        return new Response(
+          JSON.stringify({ error: "Farm location not configured. Set latitude and longitude in Settings." }),
+          { status: 400 },
+        );
+      }
+
+      const payload = await getDroughtPayload(prisma, lat, lng);
+
+      if (format === "csv") {
+        return new Response(droughtMonthlyToCSV(payload.monthly), {
+          headers: {
+            "Content-Type": "text/csv",
+            "Content-Disposition": `attachment; filename="${csvFilename("drought")}"`,
+          },
+        });
+      }
+
+      const pdfBuf = await buildPdf(
+        "Drought Tracking — Monthly SPI",
+        ["Month", "Actual (mm)", "Normal (mm)", "Deviation (mm)", "SPI", "Severity", "Source"],
+        payload.monthly.map((r) => [
+          r.month,
+          r.actualMm.toFixed(1),
+          r.normalMm.toFixed(1),
+          (r.actualMm - r.normalMm).toFixed(1),
+          r.spi.toFixed(2),
+          r.severity,
+          r.source,
+        ]),
+      );
+      return new Response(pdfBuf, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${pdfFilename("drought")}"`,
         },
       });
     }
