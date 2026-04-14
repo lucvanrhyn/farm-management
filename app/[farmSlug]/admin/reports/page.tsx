@@ -68,7 +68,7 @@ export default async function ReportsPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Reports & Exports" />;
+    return <UpgradePrompt feature="Reports & Exports" farmSlug={farmSlug} />;
   }
 
   return (

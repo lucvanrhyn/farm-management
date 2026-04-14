@@ -20,7 +20,7 @@ export default async function NvdPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="NVD Generator" />;
+    return <UpgradePrompt feature="NVD Generator" farmSlug={farmSlug} />;
   }
 
   const isAdmin = getUserRoleForFarm(session, farmSlug) === "ADMIN";

@@ -20,7 +20,7 @@ export default async function TaxPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="SARS IT3 Tax Export" />;
+    return <UpgradePrompt feature="SARS IT3 Tax Export" farmSlug={farmSlug} />;
   }
 
   const isAdmin = getUserRoleForFarm(session, farmSlug) === "ADMIN";

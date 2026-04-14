@@ -33,7 +33,7 @@ export default async function FinansiesPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Finance" />;
+    return <UpgradePrompt feature="Finance" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

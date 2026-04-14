@@ -60,7 +60,7 @@ export default async function ReproductionPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Reproductive Performance" />;
+    return <UpgradePrompt feature="Reproductive Performance" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

@@ -19,7 +19,7 @@ export default async function TasksPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Tasks & Work Board" />;
+    return <UpgradePrompt feature="Tasks & Work Board" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

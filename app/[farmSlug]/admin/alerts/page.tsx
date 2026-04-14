@@ -15,7 +15,7 @@ export default async function AlertsPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Alerts & Notifications" />;
+    return <UpgradePrompt feature="Alerts & Notifications" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

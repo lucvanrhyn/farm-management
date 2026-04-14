@@ -22,7 +22,7 @@ export default async function RotationPlannerPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Rotation Planner" />;
+    return <UpgradePrompt feature="Rotation Planner" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

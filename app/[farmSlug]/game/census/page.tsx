@@ -123,7 +123,7 @@ export default async function GameCensusPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Game Management" />;
+    return <UpgradePrompt feature="Game Management" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

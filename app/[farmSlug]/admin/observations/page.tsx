@@ -16,7 +16,7 @@ export default async function AdminObservationsPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Observations Trail" />;
+    return <UpgradePrompt feature="Observations Trail" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

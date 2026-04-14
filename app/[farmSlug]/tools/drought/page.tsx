@@ -16,7 +16,7 @@ export default async function DroughtToolPage({
   const creds = await getFarmCreds(farmSlug);
   if (!creds) notFound();
   if (creds.tier === 'basic') {
-    return <UpgradePrompt feature="Drought Tracking" />;
+    return <UpgradePrompt feature="Drought Tracking" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);
