@@ -5,6 +5,8 @@ import VeldExportCard from "@/components/admin/VeldExportCard";
 import FooExportCard from "@/components/admin/FooExportCard";
 import DroughtExportCard from "@/components/admin/DroughtExportCard";
 import It3ExportCard from "@/components/admin/It3ExportCard";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { getFarmCreds } from "@/lib/meta-db";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,11 @@ export default async function ReportsPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Reports & Exports" />;
+  }
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
