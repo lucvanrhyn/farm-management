@@ -1,6 +1,7 @@
 import { getFarmCreds } from "@/lib/meta-db";
 import { Check, Minus } from "lucide-react";
 import type { FarmTier } from "@/lib/tier";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -224,21 +225,13 @@ export default async function SubscriptionPage({
           </p>
         </div>
 
-        {/* Upgrade note (basic only) */}
+        {/* Upgrade CTA (basic only) */}
         {isBasic && (
-          <div
-            className="rounded-xl p-5"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-          >
-            <h3 className="text-base font-semibold mb-1" style={{ color: "#1C1815" }}>
-              Want to upgrade?
-            </h3>
-            <p className="text-sm" style={{ color: "#6B5E50" }}>
-              In-app upgrade is coming soon. If your farm has unusual data or custom
-              tracking needs, Consulting may be a better fit than Advanced — reach out
-              via the Consulting intake form (also coming soon).
-            </p>
-          </div>
+          <UpgradePrompt
+            feature="the full intelligence stack"
+            description="Observations, reports, breeding AI, financial analytics, veld scoring, rotation planner, and more — all in one plan."
+            farmSlug={farmSlug}
+          />
         )}
       </div>
     </div>
