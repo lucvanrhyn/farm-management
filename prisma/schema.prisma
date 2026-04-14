@@ -56,6 +56,11 @@ model Animal {
   species            String   @default("cattle")
   speciesData        String?
 
+  sireNote      String?
+  damNote       String?
+  importJobId   String?
+  importJob     ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
   @@index([species, status], name: "idx_animal_species_status")
@@ -626,4 +631,36 @@ model Budget {
 
   @@unique([year, month, categoryName], name: "budget_year_month_category")
   @@index([year, month], name: "idx_budget_period")
+}
+
+model ImportJob {
+  id             String   @id @default(cuid())
+  farmId         String
+  sourceFileHash String
+  sourceFilename String
+  mappingJson    String
+  rowsImported   Int      @default(0)
+  rowsFailed     Int      @default(0)
+  warnings       String?
+  inputTokens    Int?
+  outputTokens   Int?
+  cachedTokens   Int?
+  costZar        Float?
+  createdAt      DateTime @default(now())
+  confirmedBy    String
+  animals        Animal[]
+
+  @@index([farmId, createdAt])
+}
+
+model CustomField {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  appliesTo String
+  dataType  String
+  source    String
+  createdAt DateTime @default(now())
+
+  @@unique([farmId, appliesTo, name])
 }
