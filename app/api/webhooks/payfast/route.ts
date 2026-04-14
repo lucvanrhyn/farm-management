@@ -73,11 +73,45 @@ export async function POST(req: NextRequest) {
   console.info('[payfast-itn] Received:', { paymentStatus, farmSlug, payfastToken });
 
   if (paymentStatus === 'COMPLETE') {
+    const tier = (rawParams.custom_str2 ?? '') as 'basic' | 'advanced' | '';
+    const frequency = (rawParams.custom_str3 ?? '') as 'monthly' | 'annual' | '';
+    const amountGross = rawParams.amount_gross ?? rawParams.amount;
+    const billingAmountZar = amountGross ? Math.round(parseFloat(amountGross)) : undefined;
+
+    // Compute and lock the farm's LSU at subscription time.
+    // Catch any error so a DB hiccup doesn't block the ITN response.
+    let lockedLsu: number | undefined;
+    try {
+      const { computeFarmLsu } = await import('@/lib/pricing/farm-lsu');
+      lockedLsu = await computeFarmLsu(farmSlug);
+    } catch (err) {
+      console.error('[payfast-itn] Failed to compute farm LSU — lockedLsu will be null:', err);
+    }
+
+    const now = new Date();
+    const nextRenewal = new Date(now);
+    if (frequency === 'annual') {
+      nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+    } else {
+      nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+    }
+
     await updateFarmSubscription(farmSlug, 'active', {
       payfastToken: payfastToken || undefined,
-      startedAt: new Date().toISOString(),
+      startedAt: now.toISOString(),
+      ...(tier === 'basic' || tier === 'advanced' ? { tier } : {}),
+      ...(frequency === 'monthly' || frequency === 'annual' ? { billingFrequency: frequency } : {}),
+      ...(billingAmountZar !== undefined ? { billingAmountZar } : {}),
+      ...(lockedLsu !== undefined ? { lockedLsu } : {}),
+      nextRenewalAt: nextRenewal.toISOString(),
     });
-    console.info('[payfast-itn] Subscription activated for farm:', farmSlug);
+
+    console.info('[payfast-itn] Subscription activated for farm:', farmSlug, {
+      tier: tier || 'unknown',
+      frequency: frequency || 'unknown',
+      billingAmountZar,
+      lockedLsu,
+    });
   } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
     await updateFarmSubscription(farmSlug, 'inactive');
     console.info('[payfast-itn] Subscription set to inactive for farm:', farmSlug, '— status:', paymentStatus);
