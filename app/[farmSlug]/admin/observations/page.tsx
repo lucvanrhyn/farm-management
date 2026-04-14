@@ -1,6 +1,8 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { getFarmCreds } from "@/lib/meta-db";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import ObservationsPageClient from "./ObservationsPageClient";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,12 @@ export default async function AdminObservationsPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Observations Trail" />;
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
 
   if (!prisma) {

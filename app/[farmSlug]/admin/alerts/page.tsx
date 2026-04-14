@@ -1,6 +1,8 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
 import AlertsFilterClient from "@/components/admin/AlertsFilterClient";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,12 @@ export default async function AlertsPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Alerts & Notifications" />;
+  }
+
   const prisma = await getPrismaForFarm(farmSlug);
 
   if (!prisma) {

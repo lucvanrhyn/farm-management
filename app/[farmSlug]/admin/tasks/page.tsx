@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import { TaskBoard } from "@/components/admin/TaskBoard";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { redirect } from "next/navigation";
 
 export default async function TasksPage({
@@ -14,6 +16,11 @@ export default async function TasksPage({
 
   const session = await getSession();
   if (!session) redirect(`/${farmSlug}/login`);
+
+  const creds = await getFarmCreds(farmSlug);
+  if (creds?.tier === "basic") {
+    return <UpgradePrompt feature="Tasks & Work Board" />;
+  }
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
