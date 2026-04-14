@@ -10,8 +10,8 @@ export function FooTab({ farmSlug, payload }: { farmSlug: string; payload: FarmF
           <h2 className="text-lg font-semibold">Feed on Offer</h2>
           <p className="text-sm text-gray-600">
             Latest FOO per camp. Record new cover readings in{' '}
-            <Link href={`/${farmSlug}/tools/foo`} className="underline">
-              Tools &rarr; FOO
+            <Link href={`/${farmSlug}/tools/feed-on-offer`} className="underline">
+              Tools &rarr; Feed on Offer
             </Link>
             .
           </p>

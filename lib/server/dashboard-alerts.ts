@@ -286,7 +286,7 @@ export async function getDashboardAlerts(
           ? "1 camp with critical feed levels (< 500 kg DM/ha)"
           : `${n} camps with critical feed levels (< 500 kg DM/ha)`,
         count: n,
-        href: `/${farmSlug}/tools/foo`,
+        href: `/${farmSlug}/tools/feed-on-offer`,
         species: "farm",
       });
     }
@@ -301,7 +301,7 @@ export async function getDashboardAlerts(
           ? "1 camp with low feed levels (< 1,000 kg DM/ha)"
           : `${n} camps with low feed levels (< 1,000 kg DM/ha)`,
         count: n,
-        href: `/${farmSlug}/tools/foo`,
+        href: `/${farmSlug}/tools/feed-on-offer`,
         species: "farm",
       });
     }
@@ -316,7 +316,7 @@ export async function getDashboardAlerts(
           ? "1 camp with outdated cover reading (> 30 days)"
           : `${n} camps with outdated cover readings (> 30 days)`,
         count: n,
-        href: `/${farmSlug}/tools/foo`,
+        href: `/${farmSlug}/tools/feed-on-offer`,
         species: "farm",
       });
     }
