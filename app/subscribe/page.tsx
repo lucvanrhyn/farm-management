@@ -47,6 +47,9 @@ export default async function SubscribePage({
   );
 
   const pfParams = buildSubscriptionParams({
+    tier: 'basic',
+    amountZar: 200,
+    frequency: 'monthly',
     farmSlug,
     farmDisplayName: farm.displayName,
     userEmail: session.user.email,
