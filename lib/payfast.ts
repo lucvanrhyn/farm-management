@@ -87,11 +87,16 @@ export async function validateITN(params: PayFastParams): Promise<boolean> {
   }
 }
 
-/**
- * Build the params object for a Basic plan recurring subscription.
- * Caller must add the signature after calling this.
- */
-export function buildSubscriptionParams(opts: {
+export interface BuildSubscriptionOpts {
+  /** Pricing tier being subscribed to. */
+  tier: 'basic' | 'advanced';
+  /**
+   * Amount in whole ZAR (no decimals). Must be an integer. Compute via
+   * lib/pricing/calculator.ts quoteTier() before passing here.
+   */
+  amountZar: number;
+  /** Billing frequency. Determines PayFast frequency code (3=monthly, 6=annual). */
+  frequency: 'monthly' | 'annual';
   farmSlug: string;
   farmDisplayName: string;
   userEmail: string;
@@ -99,10 +104,36 @@ export function buildSubscriptionParams(opts: {
   returnUrl: string;
   cancelUrl: string;
   notifyUrl: string;
-}): PayFastParams {
+}
+
+const PAYFAST_FREQUENCY_CODE: Record<BuildSubscriptionOpts['frequency'], string> = {
+  monthly: '3',
+  annual:  '6',
+};
+
+function formatAmount(zar: number): string {
+  if (!Number.isInteger(zar)) throw new Error('amountZar must be an integer (no decimals)');
+  return `${zar}.00`;
+}
+
+/**
+ * Build params for a PayFast recurring subscription form POST.
+ *
+ * Does NOT add the signature — callers must call generateSignature() and
+ * attach the result as params.signature before rendering the form.
+ *
+ * custom_str1 = farmSlug     (for ITN farm identification)
+ * custom_str2 = tier         (for ITN tier persistence)
+ * custom_str3 = frequency    (for ITN billing-period persistence)
+ * custom_str4 = farmDisplayName (for PayFast receipt display)
+ */
+export function buildSubscriptionParams(opts: BuildSubscriptionOpts): PayFastParams {
   const merchantId = process.env.PAYFAST_MERCHANT_ID ?? '';
   const merchantKey = process.env.PAYFAST_MERCHANT_KEY ?? '';
 
+  const tierLabel = opts.tier === 'basic' ? 'Basic' : 'Advanced';
+  const freqLabel = opts.frequency === 'monthly' ? 'Monthly' : 'Annual';
+  const amount = formatAmount(opts.amountZar);
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   return {
@@ -113,16 +144,16 @@ export function buildSubscriptionParams(opts: {
     notify_url: opts.notifyUrl,
     name_first: opts.userFirstName,
     email_address: opts.userEmail,
-    amount: '200.00',
-    item_name: 'FarmTrack Basic — Monthly Subscription',
-    // Recurring subscription
+    amount,
+    item_name: `FarmTrack ${tierLabel} — ${freqLabel}`,
     subscription_type: '1',
     billing_date: today,
-    recurring_amount: '200.00',
-    frequency: '3', // Monthly
-    cycles: '0',    // Indefinite
-    // Map payment back to farm
+    recurring_amount: amount,
+    frequency: PAYFAST_FREQUENCY_CODE[opts.frequency],
+    cycles: '0',
     custom_str1: opts.farmSlug,
-    custom_str2: opts.farmDisplayName,
+    custom_str2: opts.tier,
+    custom_str3: opts.frequency,
+    custom_str4: opts.farmDisplayName,
   };
 }
