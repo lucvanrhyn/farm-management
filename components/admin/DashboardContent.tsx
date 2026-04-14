@@ -18,8 +18,6 @@ import {
   FileDown,
   BarChart2,
   Lock,
-  Mail,
-  Phone,
 } from "lucide-react";
 import { getCachedDashboardOverview } from "@/lib/server/cached";
 import { getSession } from "@/lib/auth";
@@ -252,24 +250,13 @@ export default async function DashboardContent({ farmSlug, prisma, tier }: Props
             <p className="text-xs mb-4 flex-1" style={{ color: "#6B5E50" }}>
               Upgrade to unlock Reproductive Analytics, Financial Tracking, and detailed Performance reports.
             </p>
-            <div className="flex flex-col gap-2">
-              <a
-                href="mailto:vanrhynluc@gmail.com"
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-                style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.25)" }}
-              >
-                <Mail className="w-3.5 h-3.5" />
-                Contact us to upgrade
-              </a>
-              <a
-                href="tel:+27712107201"
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-                style={{ color: "#9C8E7A", border: "1px solid #E0D5C8" }}
-              >
-                <Phone className="w-3.5 h-3.5" />
-                +27 71 210 7201
-              </a>
-            </div>
+            <Link
+              href={`/${farmSlug}/subscribe/upgrade`}
+              className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+              style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.25)" }}
+            >
+              Upgrade to Advanced
+            </Link>
           </div>
         ) : (
           <div
