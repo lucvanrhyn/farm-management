@@ -19,7 +19,7 @@ export default async function BreedingAIPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Breeding AI" />;
+    return <UpgradePrompt feature="Breeding AI" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

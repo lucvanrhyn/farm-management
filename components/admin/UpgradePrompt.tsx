@@ -1,62 +1,61 @@
-import { Lock, Phone, Mail } from "lucide-react";
+import Link from 'next/link';
+import { computeFarmLsu } from '@/lib/pricing/farm-lsu';
+import { quoteTier } from '@/lib/pricing/calculator';
 
 interface Props {
   feature: string;
   description?: string;
+  farmSlug: string;
 }
 
-export default function UpgradePrompt({ feature, description }: Props) {
+export default async function UpgradePrompt({ feature, description, farmSlug }: Props) {
+  // Compute live quote — graceful fallback if LSU computation fails
+  let quote: { annualFormatted: string; monthlyFormatted: string; lsu: number } | null = null;
+  try {
+    const lsu = await computeFarmLsu(farmSlug);
+    const q = quoteTier('advanced', lsu);
+    quote = {
+      annualFormatted: q.annualFormatted,
+      monthlyFormatted: q.monthlyFormatted,
+      lsu,
+    };
+  } catch {
+    // Non-critical — show the prompt without the computed price
+  }
+
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-[60vh] flex items-center justify-center">
-      <div
-        className="rounded-2xl p-8 max-w-md w-full text-center"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+    <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+      <h2 className="text-2xl font-semibold text-amber-900">{feature} is on Advanced</h2>
+
+      {description && (
+        <p className="mt-2 text-sm text-amber-700">{description}</p>
+      )}
+
+      {quote ? (
+        <div className="mt-6 rounded-xl bg-white p-5 text-left border border-amber-100">
+          <p className="text-sm text-neutral-500">
+            Your farm ({quote.lsu} LSU) on Advanced:
+          </p>
+          <p className="mt-1 text-3xl font-semibold text-neutral-900">
+            {quote.annualFormatted}
+            <span className="ml-2 text-base font-normal text-neutral-500">/year</span>
+          </p>
+          <p className="text-sm text-neutral-400">
+            or {quote.monthlyFormatted}/month
+          </p>
+        </div>
+      ) : (
+        <p className="mt-6 text-sm text-amber-700">
+          Upgrade to Advanced to unlock the full intelligence stack.
+        </p>
+      )}
+
+      <Link
+        href={`/${farmSlug}/subscribe/upgrade`}
+        className="mt-6 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-6 py-3 text-white font-medium hover:bg-emerald-700 transition-colors"
       >
-        {/* Lock icon */}
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
-          style={{ background: "rgba(139,105,20,0.1)", border: "1px solid rgba(139,105,20,0.2)" }}
-        >
-          <Lock className="w-6 h-6" style={{ color: "#8B6914" }} />
-        </div>
-
-        {/* Heading */}
-        <h2 className="text-xl font-bold mb-2" style={{ color: "#1C1815" }}>
-          {feature}
-        </h2>
-        <p className="text-sm mb-1 font-medium" style={{ color: "#8B6914" }}>
-          Advanced Plan feature
-        </p>
-        <p className="text-sm mb-6" style={{ color: "#6B5E50" }}>
-          {description ??
-            "This feature is available on the Advanced plan. Contact us to get a personalised quote and hands-on onboarding."}
-        </p>
-
-        {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="mailto:contact@example.com"
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{ background: "#8B6914", color: "#FFFBF2" }}
-          >
-            <Mail className="w-4 h-4" />
-            Email us
-          </a>
-          <a
-            href="tel:+27000000000"
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.25)" }}
-          >
-            <Phone className="w-4 h-4" />
-            Call us
-          </a>
-        </div>
-
-        {/* Tagline */}
-        <p className="text-xs mt-5" style={{ color: "#9C8E7A" }}>
-          Advanced pricing is based on herd size — we'll quote you directly.
-        </p>
-      </div>
+        Upgrade to Advanced
+      </Link>
     </div>
   );
 }

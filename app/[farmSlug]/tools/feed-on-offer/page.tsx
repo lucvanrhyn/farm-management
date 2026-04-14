@@ -19,7 +19,7 @@ export default async function FeedOnOfferToolPage({
   const creds = await getFarmCreds(farmSlug);
   if (!creds) notFound();
   if (creds.tier === 'basic') {
-    return <UpgradePrompt feature="Feed on Offer" />;
+    return <UpgradePrompt feature="Feed on Offer" farmSlug={farmSlug} />;
   }
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) notFound();

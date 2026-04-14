@@ -64,7 +64,7 @@ export default async function GameOfftakePage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Game Management" />;
+    return <UpgradePrompt feature="Game Management" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);

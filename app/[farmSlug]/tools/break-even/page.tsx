@@ -19,7 +19,7 @@ export default async function BreakEvenPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Break-even Calculator" />;
+    return <UpgradePrompt feature="Break-even Calculator" farmSlug={farmSlug} />;
   }
 
   return (

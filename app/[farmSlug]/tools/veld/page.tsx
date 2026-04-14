@@ -20,7 +20,7 @@ export default async function VeldToolPage({
   const creds = await getFarmCreds(farmSlug);
   if (!creds) notFound();
   if (creds.tier === 'basic') {
-    return <UpgradePrompt feature="Veld Condition Scoring" />;
+    return <UpgradePrompt feature="Veld Condition Scoring" farmSlug={farmSlug} />;
   }
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) notFound();

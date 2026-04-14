@@ -121,7 +121,7 @@ export default async function SheepReproductionPage({
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
-    return <UpgradePrompt feature="Sheep Management" />;
+    return <UpgradePrompt feature="Sheep Management" farmSlug={farmSlug} />;
   }
 
   const prisma = await getPrismaForFarm(farmSlug);
