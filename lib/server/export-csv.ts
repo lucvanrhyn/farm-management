@@ -367,29 +367,29 @@ export function transactionsToCSV(transactions: TransactionRow[]): string {
   return `${header}\n${rows.join("\n")}`;
 }
 
-// ── FOO (Feed on Offer) Summary ───────────────────────────────────────────
+// ── Feed on Offer Summary ──────────────────────────────────────────────────
 
-export interface FooRow {
+export interface FeedOnOfferRow {
   campId: string;
   campName: string;
   sizeHectares: number | null;
   kgDmPerHa: number | null;
   status: string;
-  effectiveFooKg: number | null;
+  effectiveFeedOnOfferKg: number | null;
   capacityLsuDays: number | null;
   lastRecordedAt: string | null;
   daysSinceReading: number | null;
   trendSlope: number;
 }
 
-export function fooToCSV(rows: FooRow[]): string {
+export function feedOnOfferToCSV(rows: FeedOnOfferRow[]): string {
   const header = row(
     "camp_id",
     "camp_name",
     "size_hectares",
     "kg_dm_per_ha",
     "status",
-    "effective_foo_kg",
+    "effective_feed_on_offer_kg",
     "capacity_lsu_days",
     "last_recorded_at",
     "days_since_reading",
@@ -402,7 +402,7 @@ export function fooToCSV(rows: FooRow[]): string {
       r.sizeHectares,
       r.kgDmPerHa,
       r.status,
-      r.effectiveFooKg != null ? Math.round(r.effectiveFooKg) : null,
+      r.effectiveFeedOnOfferKg != null ? Math.round(r.effectiveFeedOnOfferKg) : null,
       r.capacityLsuDays != null ? Math.round(r.capacityLsuDays) : null,
       r.lastRecordedAt,
       r.daysSinceReading,

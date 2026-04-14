@@ -1,6 +1,6 @@
 'use client';
 
-import type { CampFooSummary } from '@/lib/server/foo';
+import type { CampFeedOnOfferSummary } from '@/lib/server/feed-on-offer';
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: 'bg-red-100 text-red-700', text: 'text-red-600', label: 'Critical' },
@@ -10,7 +10,7 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> 
   unknown:  { bg: 'bg-gray-100 text-gray-500', text: 'text-gray-400', label: 'No data' },
 };
 
-export function FooCampTable({ byCamp }: { byCamp: readonly CampFooSummary[] }) {
+export function FeedOnOfferCampTable({ byCamp }: { byCamp: readonly CampFeedOnOfferSummary[] }) {
   if (byCamp.length === 0) {
     return <p className="text-sm text-gray-500">No camps found.</p>;
   }
@@ -31,12 +31,12 @@ export function FooCampTable({ byCamp }: { byCamp: readonly CampFooSummary[] }) 
         </thead>
         <tbody className="divide-y">
           {byCamp.map((c) => {
-            const badge = STATUS_BADGE[c.foo.status] ?? STATUS_BADGE.unknown;
+            const badge = STATUS_BADGE[c.feedOnOffer.status] ?? STATUS_BADGE.unknown;
             return (
               <tr key={c.campId}>
                 <td className="px-4 py-2 font-medium">{c.campName}</td>
                 <td className="px-4 py-2">
-                  {c.foo.kgDmPerHa != null ? Math.round(c.foo.kgDmPerHa) : '—'}
+                  {c.feedOnOffer.kgDmPerHa != null ? Math.round(c.feedOnOffer.kgDmPerHa) : '—'}
                 </td>
                 <td className="px-4 py-2">
                   <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge.bg}`}>
@@ -44,20 +44,20 @@ export function FooCampTable({ byCamp }: { byCamp: readonly CampFooSummary[] }) 
                   </span>
                 </td>
                 <td className="px-4 py-2 hidden md:table-cell">
-                  {c.foo.effectiveFooKg != null
-                    ? Math.round(c.foo.effectiveFooKg).toLocaleString()
+                  {c.feedOnOffer.effectiveFeedOnOfferKg != null
+                    ? Math.round(c.feedOnOffer.effectiveFeedOnOfferKg).toLocaleString()
                     : '—'}
                 </td>
                 <td className="px-4 py-2 hidden md:table-cell">
-                  {c.foo.capacityLsuDays != null
-                    ? Math.round(c.foo.capacityLsuDays).toLocaleString()
+                  {c.feedOnOffer.capacityLsuDays != null
+                    ? Math.round(c.feedOnOffer.capacityLsuDays).toLocaleString()
                     : '—'}
                 </td>
                 <td className="px-4 py-2">
                   {c.latestReading ? (
-                    <span className={c.foo.isStale ? 'text-amber-600' : 'text-gray-600'}>
+                    <span className={c.feedOnOffer.isStale ? 'text-amber-600' : 'text-gray-600'}>
                       {c.latestReading.recordedAt.slice(0, 10)}
-                      {c.foo.isStale && ' (stale)'}
+                      {c.feedOnOffer.isStale && ' (stale)'}
                     </span>
                   ) : (
                     <span className="text-gray-400">never</span>

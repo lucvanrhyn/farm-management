@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import type { SessionFarm } from '@/types/next-auth';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
-import { getFarmFooPayload } from '@/lib/server/foo';
+import { getFarmFeedOnOfferPayload } from '@/lib/server/feed-on-offer';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,6 @@ export async function GET(
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
 
-  const payload = await getFarmFooPayload(prisma);
+  const payload = await getFarmFeedOnOfferPayload(prisma);
   return NextResponse.json(payload);
 }

@@ -217,7 +217,7 @@ export default function DashboardClient({
   censusCountByCamp,
   rotationByCampId,
   veldScoreByCamp,
-  fooKgDmPerHaByCamp,
+  feedOnOfferKgDmPerHaByCamp,
 }: {
   totalAnimals: number;
   totalBySpecies?: Record<string, number>;
@@ -229,7 +229,7 @@ export default function DashboardClient({
   censusCountByCamp?: Record<string, number>;
   rotationByCampId?: Record<string, { status: "grazing" | "overstayed" | "resting" | "resting_ready" | "overdue_rest" | "unknown"; days: number | null }>;
   veldScoreByCamp?: Record<string, number>;
-  fooKgDmPerHaByCamp?: Record<string, number>;
+  feedOnOfferKgDmPerHaByCamp?: Record<string, number>;
 }) {
   const router = useRouter();
   const { mode } = useFarmModeSafe();
@@ -294,7 +294,7 @@ export default function DashboardClient({
       rotationStatus: rotationByCampId?.[camp.camp_id]?.status,
       rotationDays: rotationByCampId?.[camp.camp_id]?.days ?? null,
       veldScore: veldScoreByCamp?.[camp.camp_id] ?? null,
-      fooKgDmPerHa: fooKgDmPerHaByCamp?.[camp.camp_id] ?? null,
+      feedOnOfferKgDmPerHa: feedOnOfferKgDmPerHaByCamp?.[camp.camp_id] ?? null,
     };
   });
 

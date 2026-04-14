@@ -20,10 +20,10 @@ import {
   cogByCampToCSV,
   cogByAnimalToCSV,
   veldScoreToCSV,
-  fooToCSV,
+  feedOnOfferToCSV,
   droughtMonthlyToCSV,
   it3SnapshotToCSV,
-  type FooRow,
+  type FeedOnOfferRow,
   type CampRow,
   type TransactionRow,
   type WeightHistoryRow,
@@ -33,7 +33,7 @@ import {
   type VeldScoreRow,
 } from "@/lib/server/export-csv";
 import { getFarmSummary as getVeldFarmSummary } from "@/lib/server/veld-score";
-import { getFarmFooPayload } from "@/lib/server/foo";
+import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { getDroughtPayload } from "@/lib/server/drought";
 import { parseStoredPayload } from "@/lib/server/sars-it3";
 import { buildIt3Pdf } from "@/lib/server/sars-it3-pdf";
@@ -48,7 +48,7 @@ import { autoTable } from "jspdf-autotable";
 
 export const dynamic = "force-dynamic";
 
-type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "foo" | "drought" | "sars-it3";
+type ExportType = "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance" | "rotation-plan" | "cost-of-gain" | "veld-score" | "feed-on-offer" | "drought" | "sars-it3";
 type ExportFormat = "csv" | "pdf";
 
 function today(): string {
@@ -739,33 +739,33 @@ export async function GET(
       });
     }
 
-    if (type === "foo") {
+    if (type === "feed-on-offer") {
       const now = new Date();
-      const payload = await getFarmFooPayload(prisma, now);
-      const rows: FooRow[] = payload.byCamp.map((c) => ({
+      const payload = await getFarmFeedOnOfferPayload(prisma, now);
+      const rows: FeedOnOfferRow[] = payload.byCamp.map((c) => ({
         campId: c.campId,
         campName: c.campName,
         sizeHectares: c.sizeHectares,
-        kgDmPerHa: c.foo.kgDmPerHa,
-        status: c.foo.status,
-        effectiveFooKg: c.foo.effectiveFooKg,
-        capacityLsuDays: c.foo.capacityLsuDays,
+        kgDmPerHa: c.feedOnOffer.kgDmPerHa,
+        status: c.feedOnOffer.status,
+        effectiveFeedOnOfferKg: c.feedOnOffer.effectiveFeedOnOfferKg,
+        capacityLsuDays: c.feedOnOffer.capacityLsuDays,
         lastRecordedAt: c.latestReading?.recordedAt ?? null,
-        daysSinceReading: c.foo.daysSinceReading,
+        daysSinceReading: c.feedOnOffer.daysSinceReading,
         trendSlope: c.trendSlope,
       }));
 
       if (format === "csv") {
-        return new Response(fooToCSV(rows), {
+        return new Response(feedOnOfferToCSV(rows), {
           headers: {
             "Content-Type": "text/csv",
-            "Content-Disposition": `attachment; filename="${csvFilename("foo")}"`,
+            "Content-Disposition": `attachment; filename="${csvFilename("feed-on-offer")}"`,
           },
         });
       }
 
       const pdfBuf = await buildPdf(
-        "Feed on Offer (FOO) Summary",
+        "Feed on Offer Summary",
         ["Camp", "Name", "Ha", "kg DM/ha", "Status", "Effective (kg)", "Capacity (LSU-days)", "Last Reading", "Days Since", "Trend/mo"],
         rows.map((r) => [
           r.campId,
@@ -773,7 +773,7 @@ export async function GET(
           r.sizeHectares,
           r.kgDmPerHa,
           r.status,
-          r.effectiveFooKg != null ? Math.round(r.effectiveFooKg) : null,
+          r.effectiveFeedOnOfferKg != null ? Math.round(r.effectiveFeedOnOfferKg) : null,
           r.capacityLsuDays != null ? Math.round(r.capacityLsuDays) : null,
           r.lastRecordedAt,
           r.daysSinceReading,
@@ -783,7 +783,7 @@ export async function GET(
       return new Response(pdfBuf, {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${pdfFilename("foo")}"`,
+          "Content-Disposition": `attachment; filename="${pdfFilename("feed-on-offer")}"`,
         },
       });
     }

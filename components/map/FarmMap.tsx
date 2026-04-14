@@ -39,7 +39,7 @@ export interface CampData {
   rotationStatus?: "grazing" | "overstayed" | "resting" | "resting_ready" | "overdue_rest" | "unknown";
   rotationDays?: number | null;
   veldScore?: number | null;
-  fooKgDmPerHa?: number | null;
+  feedOnOfferKgDmPerHa?: number | null;
 }
 
 interface PopupInfo {
@@ -60,7 +60,7 @@ interface DrawnBoundary {
   hectares: number;
 }
 
-export type OverlayMode = "grazing" | "density" | "inspection" | "water" | "census" | "rotation" | "veld_condition" | "foo";
+export type OverlayMode = "grazing" | "density" | "inspection" | "water" | "census" | "rotation" | "veld_condition" | "feed_on_offer";
 
 interface Props {
   campData: CampData[];
@@ -152,8 +152,8 @@ function getOverlayColor(mode: OverlayMode, cd: CampData): string {
       if (s < 7) return "#eab308";     // yellow = fair
       return "#22c55e";                 // green = good
     }
-    case "foo": {
-      const f = cd.fooKgDmPerHa;
+    case "feed_on_offer": {
+      const f = cd.feedOnOfferKgDmPerHa;
       if (f == null) return "#9ca3af"; // grey = no data
       if (f < 500) return "#ef4444";   // red = critical
       if (f < 1000) return "#f97316";  // orange = low
@@ -171,7 +171,7 @@ const OVERLAY_OPTIONS: { value: OverlayMode; label: string }[] = [
   { value: "census",         label: "Census" },
   { value: "rotation",       label: "Rotation" },
   { value: "veld_condition", label: "Veld Condition" },
-  { value: "foo",            label: "FOO" },
+  { value: "feed_on_offer",  label: "Feed on Offer" },
 ];
 
 // ── GeoJSON builder ───────────────────────────────────────────────────────────
@@ -209,8 +209,8 @@ function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): GeoJSON.F
                 : cd.rotationStatus
               : overlay === "veld_condition" && cd.veldScore != null
               ? `${cd.veldScore.toFixed(1)}/10`
-              : overlay === "foo" && cd.fooKgDmPerHa != null
-              ? `${Math.round(cd.fooKgDmPerHa)} kg/ha`
+              : overlay === "feed_on_offer" && cd.feedOnOfferKgDmPerHa != null
+              ? `${Math.round(cd.feedOnOfferKgDmPerHa)} kg/ha`
               : `${stats.total} head`,
           color: getOverlayColor(overlay, cd),
           borderColor: identityColor,

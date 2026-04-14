@@ -1,16 +1,16 @@
 import { notFound } from 'next/navigation';
 import { getFarmCreds } from '@/lib/meta-db';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
-import { getFarmFooPayload } from '@/lib/server/foo';
+import { getFarmFeedOnOfferPayload } from '@/lib/server/feed-on-offer';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
-import { FooSummaryCards } from '@/components/foo/FooSummaryCards';
-import { FooCampTable } from '@/components/foo/FooCampTable';
-import { CoverReadingForm } from '@/components/foo/CoverReadingForm';
-import { FooTrendChart } from '@/components/foo/FooTrendChart';
+import { FeedOnOfferSummaryCards } from '@/components/feed-on-offer/FeedOnOfferSummaryCards';
+import { FeedOnOfferCampTable } from '@/components/feed-on-offer/FeedOnOfferCampTable';
+import { CoverReadingForm } from '@/components/feed-on-offer/CoverReadingForm';
+import { FeedOnOfferTrendChart } from '@/components/feed-on-offer/FeedOnOfferTrendChart';
 
 export const dynamic = 'force-dynamic';
 
-export default async function FooToolPage({
+export default async function FeedOnOfferToolPage({
   params,
 }: {
   params: Promise<{ farmSlug: string }>;
@@ -25,7 +25,7 @@ export default async function FooToolPage({
   if (!prisma) notFound();
 
   const [payload, camps] = await Promise.all([
-    getFarmFooPayload(prisma),
+    getFarmFeedOnOfferPayload(prisma),
     prisma.camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
       orderBy: { campName: 'asc' },
@@ -37,17 +37,17 @@ export default async function FooToolPage({
       <header>
         <h1 className="text-2xl font-semibold text-emerald-900">Feed on Offer</h1>
         <p className="text-sm text-gray-600">
-          Farm pasture inventory and grazing capacity. Record cover readings to track FOO per camp.
+          Farm pasture inventory and grazing capacity. Record cover readings to track Feed on Offer per camp.
         </p>
       </header>
 
-      <FooSummaryCards summary={payload.summary} />
+      <FeedOnOfferSummaryCards summary={payload.summary} />
 
       <CoverReadingForm farmSlug={farmSlug} camps={camps} />
 
-      <FooCampTable byCamp={payload.byCamp} />
+      <FeedOnOfferCampTable byCamp={payload.byCamp} />
 
-      <FooTrendChart trendData={payload.trendData} />
+      <FeedOnOfferTrendChart trendData={payload.trendData} />
     </div>
   );
 }
