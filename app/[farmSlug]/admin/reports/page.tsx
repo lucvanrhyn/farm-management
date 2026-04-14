@@ -2,7 +2,7 @@ import ExportButton from "@/components/admin/ExportButton";
 import RotationPlanExportCard from "@/components/admin/RotationPlanExportCard";
 import CostOfGainExportCard from "@/components/admin/CostOfGainExportCard";
 import VeldExportCard from "@/components/admin/VeldExportCard";
-import FooExportCard from "@/components/admin/FooExportCard";
+import FeedOnOfferExportCard from "@/components/admin/FeedOnOfferExportCard";
 import DroughtExportCard from "@/components/admin/DroughtExportCard";
 import It3ExportCard from "@/components/admin/It3ExportCard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -107,7 +107,7 @@ export default async function ReportsPage({
         <RotationPlanExportCard farmSlug={farmSlug} />
         <CostOfGainExportCard farmSlug={farmSlug} />
         <VeldExportCard farmSlug={farmSlug} />
-        <FooExportCard farmSlug={farmSlug} />
+        <FeedOnOfferExportCard farmSlug={farmSlug} />
         <DroughtExportCard farmSlug={farmSlug} />
         <It3ExportCard farmSlug={farmSlug} />
       </div>

@@ -2,9 +2,9 @@
 
 import { Download } from "lucide-react";
 
-export default function FooExportCard({ farmSlug }: { farmSlug: string }) {
+export default function FeedOnOfferExportCard({ farmSlug }: { farmSlug: string }) {
   function triggerDownload(format: "csv" | "pdf") {
-    const url = `/api/${farmSlug}/export?type=foo&format=${format}`;
+    const url = `/api/${farmSlug}/export?type=feed-on-offer&format=${format}`;
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener noreferrer";
@@ -20,9 +20,9 @@ export default function FooExportCard({ farmSlug }: { farmSlug: string }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-[#1C1815]">Feed on Offer (FOO)</h2>
+          <h2 className="text-sm font-semibold text-[#1C1815]">Feed on Offer</h2>
           <p className="text-xs mt-1 leading-relaxed" style={{ color: "#9C8E7A" }}>
-            Per-camp FOO status, effective inventory, LSU-day capacity, and trend slope.
+            Per-camp status, effective inventory, LSU-day capacity, and trend slope.
           </p>
         </div>
         <div className="shrink-0 mt-0.5 flex gap-2">

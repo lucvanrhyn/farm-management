@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { classifyFooStatus, DAILY_DMI_PER_LSU } from '@/lib/calculators/foo';
+import { classifyFeedOnOfferStatus, DAILY_DMI_PER_LSU } from '@/lib/calculators/feed-on-offer';
 
 const CATEGORY_KG_DM: Record<string, number> = {
   Good: 2000,
@@ -35,13 +35,13 @@ export function CoverReadingForm({
   const effectiveKg = useOverride && kgOverride
     ? Number(kgOverride)
     : CATEGORY_KG_DM[category];
-  const status = classifyFooStatus(effectiveKg);
+  const status = classifyFeedOnOfferStatus(effectiveKg);
   const selectedCamp = camps.find((c) => c.campId === campId);
-  const effectiveFoo =
+  const effectiveInventory =
     selectedCamp?.sizeHectares && effectiveKg > 0
       ? effectiveKg * 0.35 * selectedCamp.sizeHectares
       : null;
-  const daysGrazing = effectiveFoo ? Math.round(effectiveFoo / DAILY_DMI_PER_LSU) : null;
+  const daysGrazing = effectiveInventory ? Math.round(effectiveInventory / DAILY_DMI_PER_LSU) : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -127,7 +127,7 @@ export function CoverReadingForm({
         {/* Live preview */}
         <div className="flex flex-col justify-end text-sm">
           <div>
-            FOO: <strong>{effectiveKg} kg/ha</strong>{' '}
+            Feed on Offer: <strong>{effectiveKg} kg/ha</strong>{' '}
             <span className={`text-xs ${status === 'critical' ? 'text-red-600' : status === 'low' ? 'text-amber-600' : status === 'good' ? 'text-green-600' : 'text-emerald-600'}`}>
               ({status})
             </span>

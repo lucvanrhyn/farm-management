@@ -1,15 +1,15 @@
 import Link from 'next/link';
-import type { FarmFooPayload } from '@/lib/server/foo';
-import { FooCampTable } from '@/components/foo/FooCampTable';
+import type { FarmFeedOnOfferPayload } from '@/lib/server/feed-on-offer';
+import { FeedOnOfferCampTable } from '@/components/feed-on-offer/FeedOnOfferCampTable';
 
-export function FooTab({ farmSlug, payload }: { farmSlug: string; payload: FarmFooPayload }) {
+export function FeedOnOfferTab({ farmSlug, payload }: { farmSlug: string; payload: FarmFeedOnOfferPayload }) {
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <div>
           <h2 className="text-lg font-semibold">Feed on Offer</h2>
           <p className="text-sm text-gray-600">
-            Latest FOO per camp. Record new cover readings in{' '}
+            Latest Feed on Offer per camp. Record new cover readings in{' '}
             <Link href={`/${farmSlug}/tools/feed-on-offer`} className="underline">
               Tools &rarr; Feed on Offer
             </Link>
@@ -17,7 +17,7 @@ export function FooTab({ farmSlug, payload }: { farmSlug: string; payload: FarmF
           </p>
         </div>
       </div>
-      <FooCampTable byCamp={payload.byCamp} />
+      <FeedOnOfferCampTable byCamp={payload.byCamp} />
     </div>
   );
 }

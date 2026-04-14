@@ -1,6 +1,6 @@
-import type { FarmFooSummary } from '@/lib/calculators/foo';
+import type { FarmFeedOnOfferSummary } from '@/lib/calculators/feed-on-offer';
 
-export function FooSummaryCards({ summary }: { summary: FarmFooSummary }) {
+export function FeedOnOfferSummaryCards({ summary }: { summary: FarmFeedOnOfferSummary }) {
   const totalTonnes = (summary.totalPastureInventoryKg / 1000).toFixed(1);
 
   return (
@@ -11,10 +11,10 @@ export function FooSummaryCards({ summary }: { summary: FarmFooSummary }) {
         tone="neutral"
       />
       <Kpi
-        label="Avg FOO"
+        label="Avg Feed on Offer"
         value={
-          summary.averageFooKgDmPerHa != null
-            ? `${Math.round(summary.averageFooKgDmPerHa)} kg/ha`
+          summary.averageFeedOnOfferKgDmPerHa != null
+            ? `${Math.round(summary.averageFeedOnOfferKgDmPerHa)} kg/ha`
             : '—'
         }
         tone="neutral"

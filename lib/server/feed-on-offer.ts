@@ -1,13 +1,13 @@
 import type { PrismaClient } from '@prisma/client';
 import {
-  calcCampFoo,
-  calcFarmFooSummary,
-  calcFooTrendSlope,
-  type CampFooInput,
-  type CampFooResult,
-  type FarmFooSummary,
-  type FooTrendPoint,
-} from '@/lib/calculators/foo';
+  calcCampFeedOnOffer,
+  calcFarmFeedOnOfferSummary,
+  calcFeedOnOfferTrendSlope,
+  type CampFeedOnOfferInput,
+  type CampFeedOnOfferResult,
+  type FarmFeedOnOfferSummary,
+  type FeedOnOfferTrendPoint,
+} from '@/lib/calculators/feed-on-offer';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,19 +20,19 @@ export interface LatestCover {
   readonly recordedBy: string;
 }
 
-export interface CampFooSummary {
+export interface CampFeedOnOfferSummary {
   readonly campId: string;
   readonly campName: string;
   readonly sizeHectares: number | null;
   readonly latestReading: LatestCover | null;
-  readonly foo: CampFooResult;
+  readonly feedOnOffer: CampFeedOnOfferResult;
   readonly trendSlope: number;
   readonly readingCount: number;
 }
 
-export interface FarmFooPayload {
-  readonly summary: FarmFooSummary;
-  readonly byCamp: readonly CampFooSummary[];
+export interface FarmFeedOnOfferPayload {
+  readonly summary: FarmFeedOnOfferSummary;
+  readonly byCamp: readonly CampFeedOnOfferSummary[];
   readonly trendData: readonly { date: string; avgKgDmPerHa: number }[];
 }
 
@@ -76,7 +76,7 @@ export async function getCoverTrendByCamp(
   prisma: PrismaClient,
   campId: string,
   now: Date = new Date(),
-): Promise<FooTrendPoint[]> {
+): Promise<FeedOnOfferTrendPoint[]> {
   const cutoff = new Date(now);
   cutoff.setMonth(cutoff.getMonth() - 12);
   const cutoffStr = cutoff.toISOString();
@@ -91,11 +91,11 @@ export async function getCoverTrendByCamp(
   }));
 }
 
-/** Aggregates everything needed for the FOO dashboard / tools page / alerts. */
-export async function getFarmFooPayload(
+/** Aggregates everything needed for the Feed on Offer dashboard / tools page / alerts. */
+export async function getFarmFeedOnOfferPayload(
   prisma: PrismaClient,
   now: Date = new Date(),
-): Promise<FarmFooPayload> {
+): Promise<FarmFeedOnOfferPayload> {
   const [camps, allReadings] = await Promise.all([
     prisma.camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
@@ -121,25 +121,25 @@ export async function getFarmFooPayload(
     byCampRows.get(r.campId)!.push(r);
   }
 
-  // Per-camp FOO metrics
-  const byCamp: CampFooSummary[] = camps.map(({ campId, campName, sizeHectares }) => {
+  // Per-camp Feed on Offer metrics
+  const byCamp: CampFeedOnOfferSummary[] = camps.map(({ campId, campName, sizeHectares }) => {
     const rows = byCampRows.get(campId) ?? [];
     const latest = rows.length > 0 ? rows[rows.length - 1] : null;
 
-    const input: CampFooInput = {
+    const input: CampFeedOnOfferInput = {
       kgDmPerHa: latest?.kgDmPerHa ?? null,
       useFactor: latest?.useFactor ?? null,
       sizeHectares,
       recordedAt: latest?.recordedAt ?? null,
     };
 
-    const foo = calcCampFoo(input, now);
+    const feedOnOffer = calcCampFeedOnOffer(input, now);
 
-    const trendPoints: FooTrendPoint[] = rows.map((r) => ({
+    const trendPoints: FeedOnOfferTrendPoint[] = rows.map((r) => ({
       date: r.recordedAt.slice(0, 10),
       kgDmPerHa: r.kgDmPerHa,
     }));
-    const trendSlope = calcFooTrendSlope(trendPoints);
+    const trendSlope = calcFeedOnOfferTrendSlope(trendPoints);
 
     const latestReading: LatestCover | null = latest
       ? {
@@ -157,16 +157,16 @@ export async function getFarmFooPayload(
       campName,
       sizeHectares,
       latestReading,
-      foo,
+      feedOnOffer,
       trendSlope,
       readingCount: rows.length,
     };
   });
 
   // Farm-wide summary from pure calculator
-  const summary = calcFarmFooSummary(byCamp.map((c) => c.foo));
+  const summary = calcFarmFeedOnOfferSummary(byCamp.map((c) => c.feedOnOffer));
 
-  // Farm-wide monthly trend: average FOO across all camps per month
+  // Farm-wide monthly trend: average Feed on Offer across all camps per month
   const monthlyMap = new Map<string, { sum: number; count: number }>();
   for (const r of allReadings) {
     const month = r.recordedAt.slice(0, 7); // YYYY-MM

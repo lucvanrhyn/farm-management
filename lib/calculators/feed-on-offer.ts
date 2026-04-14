@@ -1,52 +1,52 @@
-// Pure Feed on Offer (FOO) helpers — no side effects, no Prisma, no network.
-// FOO (kg DM/ha) is the farm's grass inventory and the foundation of all
-// grazing management decisions in SA.
+// Pure Feed on Offer helpers — no side effects, no Prisma, no network.
+// Feed on Offer (kg DM/ha) is the farm's grass inventory and the foundation of
+// all grazing management decisions in SA.
 //
 // SA standards:
 //   - Daily DMI per LSU: 10 kg DM/day (DALRRD official standard)
 //   - Use factor: 35% of standing biomass consumed before moving (default)
-//   - FOO thresholds derived from SA bushveld/highveld ranges
+//   - Thresholds derived from SA bushveld/highveld ranges
 
 // ── Thresholds (constants) ────────────────────────────────────────────────────
 
-/** FOO below this = critical — veld cannot sustain grazing. */
-export const FOO_CRITICAL_KG_DM = 500;
+/** Feed on Offer below this = critical — veld cannot sustain grazing. */
+export const FEED_ON_OFFER_CRITICAL_KG_DM = 500;
 
-/** FOO below this = low — reduced carrying capacity, monitor closely. */
-export const FOO_LOW_KG_DM = 1000;
+/** Feed on Offer below this = low — reduced carrying capacity, monitor closely. */
+export const FEED_ON_OFFER_LOW_KG_DM = 1000;
 
-/** FOO at or above this = good — healthy grazing. */
-export const FOO_GOOD_KG_DM = 2000;
+/** Feed on Offer at or above this = good — healthy grazing. */
+export const FEED_ON_OFFER_GOOD_KG_DM = 2000;
 
 /** Cover reading older than this many days = stale. */
-export const FOO_STALE_DAYS = 30;
+export const FEED_ON_OFFER_STALE_DAYS = 30;
 
 /** Daily dry matter intake per LSU (kg DM/day), SA DALRRD standard. */
 export const DAILY_DMI_PER_LSU = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type FooStatus = 'critical' | 'low' | 'adequate' | 'good' | 'unknown';
+export type FeedOnOfferStatus = 'critical' | 'low' | 'adequate' | 'good' | 'unknown';
 
-export interface CampFooInput {
+export interface CampFeedOnOfferInput {
   readonly kgDmPerHa: number | null;
   readonly useFactor: number | null;
   readonly sizeHectares: number | null;
   readonly recordedAt: string | null; // ISO date string
 }
 
-export interface CampFooResult {
+export interface CampFeedOnOfferResult {
   readonly kgDmPerHa: number | null;
-  readonly effectiveFooKg: number | null;
+  readonly effectiveFeedOnOfferKg: number | null;
   readonly capacityLsuDays: number | null;
-  readonly status: FooStatus;
+  readonly status: FeedOnOfferStatus;
   readonly daysSinceReading: number | null;
   readonly isStale: boolean;
 }
 
-export interface FarmFooSummary {
+export interface FarmFeedOnOfferSummary {
   readonly totalPastureInventoryKg: number;
-  readonly averageFooKgDmPerHa: number | null;
+  readonly averageFeedOnOfferKgDmPerHa: number | null;
   readonly totalCapacityLsuDays: number;
   readonly campsCritical: number;
   readonly campsLow: number;
@@ -56,7 +56,7 @@ export interface FarmFooSummary {
   readonly campsStaleReading: number;
 }
 
-export interface FooTrendPoint {
+export interface FeedOnOfferTrendPoint {
   readonly date: string; // YYYY-MM-DD
   readonly kgDmPerHa: number;
 }
@@ -64,31 +64,31 @@ export interface FooTrendPoint {
 // ── Functions ─────────────────────────────────────────────────────────────────
 
 /**
- * Classify FOO level into a status bucket.
+ * Classify Feed on Offer level into a status bucket.
  *   null → unknown
  *   < 500 → critical
  *   < 1000 → low
  *   < 2000 → adequate
  *   ≥ 2000 → good
  */
-export function classifyFooStatus(kgDmPerHa: number | null): FooStatus {
+export function classifyFeedOnOfferStatus(kgDmPerHa: number | null): FeedOnOfferStatus {
   if (kgDmPerHa == null) return 'unknown';
-  if (kgDmPerHa < FOO_CRITICAL_KG_DM) return 'critical';
-  if (kgDmPerHa < FOO_LOW_KG_DM) return 'low';
-  if (kgDmPerHa < FOO_GOOD_KG_DM) return 'adequate';
+  if (kgDmPerHa < FEED_ON_OFFER_CRITICAL_KG_DM) return 'critical';
+  if (kgDmPerHa < FEED_ON_OFFER_LOW_KG_DM) return 'low';
+  if (kgDmPerHa < FEED_ON_OFFER_GOOD_KG_DM) return 'adequate';
   return 'good';
 }
 
 /**
- * Compute FOO metrics for a single camp from its latest cover reading.
+ * Compute Feed on Offer metrics for a single camp from its latest cover reading.
  *
- * effectiveFooKg = kgDmPerHa × useFactor × sizeHectares
- * capacityLsuDays = effectiveFooKg / DAILY_DMI_PER_LSU
+ * effectiveFeedOnOfferKg = kgDmPerHa × useFactor × sizeHectares
+ * capacityLsuDays = effectiveFeedOnOfferKg / DAILY_DMI_PER_LSU
  */
-export function calcCampFoo(input: CampFooInput, now: Date): CampFooResult {
+export function calcCampFeedOnOffer(input: CampFeedOnOfferInput, now: Date): CampFeedOnOfferResult {
   const { kgDmPerHa, useFactor, sizeHectares, recordedAt } = input;
 
-  const status = classifyFooStatus(kgDmPerHa);
+  const status = classifyFeedOnOfferStatus(kgDmPerHa);
 
   // Staleness
   let daysSinceReading: number | null = null;
@@ -97,10 +97,10 @@ export function calcCampFoo(input: CampFooInput, now: Date): CampFooResult {
     const readingDate = new Date(recordedAt);
     const diffMs = now.getTime() - readingDate.getTime();
     daysSinceReading = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    isStale = daysSinceReading > FOO_STALE_DAYS;
+    isStale = daysSinceReading > FEED_ON_OFFER_STALE_DAYS;
   }
 
-  // Effective FOO and capacity
+  // Effective Feed on Offer and capacity
   const canCompute =
     kgDmPerHa != null &&
     kgDmPerHa > 0 &&
@@ -112,7 +112,7 @@ export function calcCampFoo(input: CampFooInput, now: Date): CampFooResult {
   if (!canCompute) {
     return {
       kgDmPerHa,
-      effectiveFooKg: null,
+      effectiveFeedOnOfferKg: null,
       capacityLsuDays: null,
       status,
       daysSinceReading,
@@ -120,12 +120,12 @@ export function calcCampFoo(input: CampFooInput, now: Date): CampFooResult {
     };
   }
 
-  const effectiveFooKg = kgDmPerHa! * useFactor! * sizeHectares!;
-  const capacityLsuDays = effectiveFooKg / DAILY_DMI_PER_LSU;
+  const effectiveFeedOnOfferKg = kgDmPerHa! * useFactor! * sizeHectares!;
+  const capacityLsuDays = effectiveFeedOnOfferKg / DAILY_DMI_PER_LSU;
 
   return {
     kgDmPerHa,
-    effectiveFooKg,
+    effectiveFeedOnOfferKg,
     capacityLsuDays,
     status,
     daysSinceReading,
@@ -134,15 +134,15 @@ export function calcCampFoo(input: CampFooInput, now: Date): CampFooResult {
 }
 
 /**
- * Aggregate FOO metrics across all camps on a farm.
+ * Aggregate Feed on Offer metrics across all camps on a farm.
  */
-export function calcFarmFooSummary(
-  camps: readonly CampFooResult[],
-): FarmFooSummary {
+export function calcFarmFeedOnOfferSummary(
+  camps: readonly CampFeedOnOfferResult[],
+): FarmFeedOnOfferSummary {
   let totalPastureInventoryKg = 0;
   let totalCapacityLsuDays = 0;
-  let fooSum = 0;
-  let fooCount = 0;
+  let feedOnOfferSum = 0;
+  let feedOnOfferCount = 0;
   let campsCritical = 0;
   let campsLow = 0;
   let campsAdequate = 0;
@@ -169,15 +169,15 @@ export function calcFarmFooSummary(
         break;
     }
 
-    if (camp.effectiveFooKg != null) {
-      totalPastureInventoryKg += camp.effectiveFooKg;
+    if (camp.effectiveFeedOnOfferKg != null) {
+      totalPastureInventoryKg += camp.effectiveFeedOnOfferKg;
     }
     if (camp.capacityLsuDays != null) {
       totalCapacityLsuDays += camp.capacityLsuDays;
     }
     if (camp.kgDmPerHa != null) {
-      fooSum += camp.kgDmPerHa;
-      fooCount++;
+      feedOnOfferSum += camp.kgDmPerHa;
+      feedOnOfferCount++;
     }
     if (camp.isStale) {
       campsStaleReading++;
@@ -186,7 +186,7 @@ export function calcFarmFooSummary(
 
   return {
     totalPastureInventoryKg,
-    averageFooKgDmPerHa: fooCount > 0 ? fooSum / fooCount : null,
+    averageFeedOnOfferKgDmPerHa: feedOnOfferCount > 0 ? feedOnOfferSum / feedOnOfferCount : null,
     totalCapacityLsuDays,
     campsCritical,
     campsLow,
@@ -202,8 +202,8 @@ export function calcFarmFooSummary(
  * Returns kg DM/ha per month. Positive = improving, negative = declining.
  * Returns 0 for <2 points or flat series.
  */
-export function calcFooTrendSlope(
-  points: readonly FooTrendPoint[],
+export function calcFeedOnOfferTrendSlope(
+  points: readonly FeedOnOfferTrendPoint[],
 ): number {
   if (points.length < 2) return 0;
 

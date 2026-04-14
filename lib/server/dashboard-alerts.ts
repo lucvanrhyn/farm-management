@@ -6,7 +6,7 @@ import type { LiveCampStatus } from "@/lib/server/camp-status";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
-import { getFarmFooPayload } from "@/lib/server/foo";
+import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { getDroughtPayload, type DroughtPayload } from "@/lib/server/drought";
 import { cattleModule } from "@/lib/species/cattle";
 import { sheepModule } from "@/lib/species/sheep";
@@ -91,7 +91,7 @@ export async function getDashboardAlerts(
   const thresholdsRecord = toThresholdsRecord(thresholds);
 
   // ── Parallel: species module alerts + farm-wide data ─────────────────────
-  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, fooPayload, farmSettings] =
+  const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, feedOnOfferPayload, farmSettings] =
     await Promise.all([
       Promise.all(
         SPECIES_MODULES.map((mod) =>
@@ -105,7 +105,7 @@ export async function getDashboardAlerts(
       prisma.camp.count(),
       getRotationStatusByCamp(prisma, now).catch(() => null),
       getVeldSummary(prisma, now).catch(() => null),
-      getFarmFooPayload(prisma, now).catch(() => null),
+      getFarmFeedOnOfferPayload(prisma, now).catch(() => null),
       prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }).catch(() => null),
     ]);
 
@@ -273,13 +273,13 @@ export async function getDashboardAlerts(
     }
   }
 
-  // FOO (Feed on Offer) alerts (farm-wide)
-  if (fooPayload) {
-    const { summary: fooSummary } = fooPayload;
-    if (fooSummary.campsCritical > 0) {
-      const n = fooSummary.campsCritical;
+  // Feed on Offer alerts (farm-wide)
+  if (feedOnOfferPayload) {
+    const { summary: feedOnOfferSummary } = feedOnOfferPayload;
+    if (feedOnOfferSummary.campsCritical > 0) {
+      const n = feedOnOfferSummary.campsCritical;
       red.push({
-        id: "foo-critical",
+        id: "feed-on-offer-critical",
         severity: "red",
         icon: "AlertTriangle",
         message: n === 1
@@ -291,10 +291,10 @@ export async function getDashboardAlerts(
       });
     }
 
-    if (fooSummary.campsLow > 0) {
-      const n = fooSummary.campsLow;
+    if (feedOnOfferSummary.campsLow > 0) {
+      const n = feedOnOfferSummary.campsLow;
       amber.push({
-        id: "foo-low",
+        id: "feed-on-offer-low",
         severity: "amber",
         icon: "Wheat",
         message: n === 1
@@ -306,10 +306,10 @@ export async function getDashboardAlerts(
       });
     }
 
-    if (fooSummary.campsStaleReading > 0) {
-      const n = fooSummary.campsStaleReading;
+    if (feedOnOfferSummary.campsStaleReading > 0) {
+      const n = feedOnOfferSummary.campsStaleReading;
       amber.push({
-        id: "foo-stale-reading",
+        id: "feed-on-offer-stale-reading",
         severity: "amber",
         icon: "CalendarClock",
         message: n === 1
