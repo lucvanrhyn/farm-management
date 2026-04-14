@@ -63,3 +63,26 @@ describe('formatZar', () => {
     expect(formatZar(0)).toBe('R0');
   });
 });
+
+describe('formatZar at million scale', () => {
+  it('formats millions with thousand separators', () => {
+    expect(formatZar(1_000_000)).toBe('R1,000,000');
+  });
+});
+
+describe('quoteTier shape round-trip', () => {
+  it('echoes tier and lsu in the returned quote', () => {
+    const q = quoteTier('advanced', 500);
+    expect(q.tier).toBe('advanced');
+    expect(q.lsu).toBe(500);
+  });
+});
+
+describe('assertValidLsu rejects non-finite', () => {
+  it('rejects NaN', () => {
+    expect(() => quoteTier('basic', NaN)).toThrow(/finite/);
+  });
+  it('rejects Infinity', () => {
+    expect(() => quoteTier('basic', Infinity)).toThrow(/finite/);
+  });
+});
