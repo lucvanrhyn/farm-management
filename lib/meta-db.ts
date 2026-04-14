@@ -229,6 +229,26 @@ export async function verifyUserEmail(token: string): Promise<{ userId: string }
 
 // ── Subscription helpers ────────────────────────────────────────────────────
 
+export interface FarmBilling {
+  tier: 'basic' | 'advanced';
+  subscriptionStatus: 'active' | 'inactive' | null;
+  billingFrequency: 'monthly' | 'annual' | null;
+  lockedLsu: number | null;
+  billingAmountZar: number | null;
+  nextRenewalAt: string | null;
+}
+
+export interface SubscriptionFields {
+  payfastToken?: string;
+  startedAt?: string;
+  billingDate?: string;
+  tier?: 'basic' | 'advanced';
+  billingFrequency?: 'monthly' | 'annual';
+  lockedLsu?: number;
+  billingAmountZar?: number;
+  nextRenewalAt?: string;
+}
+
 export async function getFarmSubscription(farmSlug: string): Promise<{
   subscriptionStatus: string;
   payfastToken: string | null;
@@ -249,30 +269,68 @@ export async function getFarmSubscription(farmSlug: string): Promise<{
   };
 }
 
+/**
+ * Read the full billing view for a farm (tier + subscription + locked pricing).
+ * Used by UpgradePrompt, /subscribe/upgrade, PayFast webhook.
+ *
+ * Returns null if the farm slug is not found.
+ */
+export async function getFarmBilling(farmSlug: string): Promise<FarmBilling | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT tier, subscription_status, billing_frequency, locked_lsu,
+                 billing_amount_zar, next_renewal_at
+          FROM farms WHERE slug = ? LIMIT 1`,
+    args: [farmSlug],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    tier: (row.tier as 'basic' | 'advanced') ?? 'basic',
+    subscriptionStatus:
+      (row.subscription_status as FarmBilling['subscriptionStatus']) ?? null,
+    billingFrequency:
+      (row.billing_frequency as FarmBilling['billingFrequency']) ?? null,
+    lockedLsu: row.locked_lsu != null ? Number(row.locked_lsu) : null,
+    billingAmountZar:
+      row.billing_amount_zar != null ? Number(row.billing_amount_zar) : null,
+    nextRenewalAt: (row.next_renewal_at as string) ?? null,
+  };
+}
+
 export async function updateFarmSubscription(
   farmSlug: string,
   status: string,
-  opts?: {
-    payfastToken?: string;
-    startedAt?: string;
-    billingDate?: string;
-  },
+  opts: SubscriptionFields = {},
 ): Promise<void> {
   const client = getMetaClient();
+
+  // Build SET clause dynamically so we only update fields that were provided.
+  // Using COALESCE for the old fields would overwrite them with NULL when
+  // opts is partial — we want "leave untouched" semantics instead.
+  const sets: string[] = ['subscription_status = ?'];
+  const args: (string | number | null)[] = [status];
+
+  const push = (col: string, val: string | number | undefined) => {
+    if (val === undefined) return;
+    sets.push(`${col} = ?`);
+    args.push(val);
+  };
+
+  push('payfast_token', opts.payfastToken);
+  push('subscription_started_at', opts.startedAt);
+  push('subscription_billing_date', opts.billingDate);
+  push('tier', opts.tier);
+  push('billing_frequency', opts.billingFrequency);
+  push('locked_lsu', opts.lockedLsu);
+  push('billing_amount_zar', opts.billingAmountZar);
+  push('next_renewal_at', opts.nextRenewalAt);
+
+  args.push(farmSlug);
+
   await client.execute({
-    sql: `UPDATE farms
-          SET subscription_status = ?,
-              payfast_token = COALESCE(?, payfast_token),
-              subscription_started_at = COALESCE(?, subscription_started_at),
-              subscription_billing_date = COALESCE(?, subscription_billing_date)
-          WHERE slug = ?`,
-    args: [
-      status,
-      opts?.payfastToken ?? null,
-      opts?.startedAt ?? null,
-      opts?.billingDate ?? null,
-      farmSlug,
-    ],
+    sql: `UPDATE farms SET ${sets.join(', ')} WHERE slug = ?`,
+    args,
   });
 }
 
