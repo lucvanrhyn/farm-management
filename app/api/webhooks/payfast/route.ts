@@ -89,11 +89,19 @@ export async function POST(req: NextRequest) {
     }
 
     const now = new Date();
-    const nextRenewal = new Date(now);
-    if (frequency === 'annual') {
-      nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
-    } else {
-      nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+
+    // Only compute nextRenewalAt when we know the billing period.
+    // An absent custom_str3 (empty frequency) means we don't know —
+    // skip the field rather than silently persisting the wrong renewal date.
+    let nextRenewalAt: string | undefined;
+    if (frequency === 'monthly') {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() + 1);
+      nextRenewalAt = d.toISOString();
+    } else if (frequency === 'annual') {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() + 1);
+      nextRenewalAt = d.toISOString();
     }
 
     await updateFarmSubscription(farmSlug, 'active', {
@@ -103,7 +111,7 @@ export async function POST(req: NextRequest) {
       ...(frequency === 'monthly' || frequency === 'annual' ? { billingFrequency: frequency } : {}),
       ...(billingAmountZar !== undefined ? { billingAmountZar } : {}),
       ...(lockedLsu !== undefined ? { lockedLsu } : {}),
-      nextRenewalAt: nextRenewal.toISOString(),
+      ...(nextRenewalAt !== undefined ? { nextRenewalAt } : {}),
     });
 
     console.info('[payfast-itn] Subscription activated for farm:', farmSlug, {

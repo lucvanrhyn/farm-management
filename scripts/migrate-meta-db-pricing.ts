@@ -39,9 +39,18 @@ export async function addColumnIfMissing(
   column: string,
   type: string,
 ): Promise<boolean> {
+  // Guard against DDL injection — table/column/type are interpolated directly
+  // since LibSQL does not support parameter binding in DDL statements.
+  // Only word characters (letters, digits, underscore) are allowed.
+  const WORD = /^\w+$/;
+  if (!WORD.test(table) || !WORD.test(column)) {
+    throw new Error(`addColumnIfMissing: invalid identifier — table=${table}, column=${column}`);
+  }
+  if (!WORD.test(type.split(' ')[0])) {
+    throw new Error(`addColumnIfMissing: invalid type — ${type}`);
+  }
+
   if (await columnExists(db, table, column)) return false;
-  // ALTER TABLE ADD COLUMN — the column name + type must be hardcoded
-  // (parameter binding is not allowed in DDL).
   await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   return true;
 }
