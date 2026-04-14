@@ -130,6 +130,10 @@ function formatAmount(zar: number): string {
 export function buildSubscriptionParams(opts: BuildSubscriptionOpts): PayFastParams {
   const merchantId = process.env.PAYFAST_MERCHANT_ID ?? '';
   const merchantKey = process.env.PAYFAST_MERCHANT_KEY ?? '';
+  if (!merchantId || !merchantKey) {
+    // Fail loudly rather than silently building a form that PayFast will reject.
+    throw new Error('PAYFAST_MERCHANT_ID and PAYFAST_MERCHANT_KEY must be set');
+  }
 
   const tierLabel = opts.tier === 'basic' ? 'Basic' : 'Advanced';
   const freqLabel = opts.frequency === 'monthly' ? 'Monthly' : 'Annual';

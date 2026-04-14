@@ -31,15 +31,18 @@ export default async function SubscribeUpgradePage({
     redirect(`/${farmSlug}/admin/settings/subscription`);
   }
 
-  // Compute live quote — must be an integer (assertValidLsu enforces this)
-  let lsu = 100; // safe default if computation fails
+  // Compute live quote. Fall back to 100 LSU if the DB is unavailable so the
+  // page stays usable — the farmer sees a slightly-off price for an average herd
+  // rather than a broken page. The ITN webhook re-computes and locks the real LSU
+  // at payment time (Task 6), so the displayed estimate doesn't affect billing.
+  let lsu = 100;
   try {
     const rawLsu = await computeFarmLsu(farmSlug);
     lsu = Math.round(rawLsu);
   } catch {
-    // non-critical — use default
+    // non-critical — fallback price displayed; actual billing locked at ITN
   }
-  // Ensure lsu is at least 1 (avoids base-only pricing for empty farms)
+  // Floor at 1 so empty farms see base+R10 (Advanced min), not bare R3,000.
   if (lsu < 1) lsu = 1;
 
   const quote = quoteTier('advanced', lsu);
