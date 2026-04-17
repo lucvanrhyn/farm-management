@@ -28,7 +28,7 @@ import {
  *     raw exception strings to the client
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_CALLS_PER_DAY = 3;
 
 type MapColumnsBody = {
@@ -52,22 +52,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const rl = checkRateLimit(
-    `map-columns:${slug}`,
-    MAX_CALLS_PER_DAY,
-    DAY_MS
-  );
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        error:
-          "Daily AI import limit reached. Try again tomorrow or contact support.",
-        retryAfterMs: rl.retryAfterMs,
-      },
-      { status: 429 }
-    );
-  }
-
   let raw: MapColumnsBody;
   try {
     raw = (await req.json()) as MapColumnsBody;
@@ -81,6 +65,22 @@ export async function POST(req: NextRequest) {
   const parsed = parseBody(raw);
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  const rl = checkRateLimit(
+    `map-columns:${slug}`,
+    MAX_CALLS_PER_DAY,
+    RATE_LIMIT_WINDOW_MS
+  );
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "Daily AI import limit reached. Try again tomorrow or contact support.",
+        retryAfterMs: rl.retryAfterMs,
+      },
+      { status: 429 }
+    );
   }
 
   const existingCamps = await prisma.camp.findMany({
@@ -129,8 +129,12 @@ function parseBody(
       fullRowCount: number;
     }
   | { error: string } {
-  if (!Array.isArray(raw.parsedColumns) || raw.parsedColumns.length === 0) {
-    return { error: "parsedColumns must be a non-empty array of strings." };
+  if (
+    !Array.isArray(raw.parsedColumns) ||
+    raw.parsedColumns.length === 0 ||
+    raw.parsedColumns.length > 200
+  ) {
+    return { error: "parsedColumns must contain between 1 and 200 strings." };
   }
   if (!raw.parsedColumns.every((c) => typeof c === "string")) {
     return { error: "parsedColumns must contain only strings." };
@@ -148,12 +152,22 @@ function parseBody(
   ) {
     return { error: "sampleRows entries must be objects." };
   }
+  for (const row of raw.sampleRows as Array<Record<string, unknown>>) {
+    for (const v of Object.values(row)) {
+      if (typeof v === "string" && v.length > 512) {
+        return {
+          error: "sampleRows string values must be 512 chars or fewer.",
+        };
+      }
+    }
+  }
   if (
     typeof raw.fullRowCount !== "number" ||
     !Number.isFinite(raw.fullRowCount) ||
+    !Number.isInteger(raw.fullRowCount) ||
     raw.fullRowCount < 0
   ) {
-    return { error: "fullRowCount must be a non-negative number." };
+    return { error: "fullRowCount must be a non-negative integer." };
   }
 
   return {
