@@ -634,20 +634,22 @@ model Budget {
 }
 
 model ImportJob {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   farmId         String
   sourceFileHash String
   sourceFilename String
   mappingJson    String
-  rowsImported   Int      @default(0)
-  rowsFailed     Int      @default(0)
+  rowsImported   Int       @default(0)
+  rowsFailed     Int       @default(0)
   warnings       String?
   inputTokens    Int?
   outputTokens   Int?
   cachedTokens   Int?
   costZar        Float?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
   confirmedBy    String
+  status         String?   // "pending" | "running" | "complete" | "failed"
+  completedAt    DateTime?
   animals        Animal[]
 
   @@index([farmId, createdAt])

@@ -126,7 +126,7 @@ describe("commitImport", () => {
     const state = makeState();
     const { prisma, $transaction, importJobUpdate } = makeMockPrisma(state);
 
-    const res = await commitImport(prisma, { rows: [], importJobId: DEFAULT_JOB_ID });
+    const res = await commitImport(prisma, { rows: [], importJobId: DEFAULT_JOB_ID, defaultSpecies: "cattle" });
 
     expect(res).toEqual({ inserted: 0, skipped: 0, errors: [] });
     expect($transaction).not.toHaveBeenCalled();
@@ -140,7 +140,7 @@ describe("commitImport", () => {
 
     const res = await commitImport(
       prisma,
-      { rows: [{ earTag: "  " } as ImportRow], importJobId: DEFAULT_JOB_ID },
+      { rows: [{ earTag: "  " } as ImportRow], importJobId: DEFAULT_JOB_ID, defaultSpecies: "cattle" },
     );
 
     expect(res.inserted).toBe(0);
@@ -158,6 +158,7 @@ describe("commitImport", () => {
       {
         rows: [mkRow({ earTag: "DUP-1" }), mkRow({ earTag: "DUP-1" })],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -179,6 +180,7 @@ describe("commitImport", () => {
       {
         rows: [mkRow({ earTag: "BAD-DOB", birthDate: "not a date" })],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -203,6 +205,7 @@ describe("commitImport", () => {
           { earTag: "BAD-SEX", sex: "Bull" as unknown as "Male" },
         ],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -225,6 +228,7 @@ describe("commitImport", () => {
       {
         rows: [mkRow({ earTag: "CALF-1", sireEarTag: "EXISTING-SIRE" })],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -253,6 +257,7 @@ describe("commitImport", () => {
           mkRow({ earTag: "SIRE-A", sex: "Male" }),
         ],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -282,6 +287,7 @@ describe("commitImport", () => {
           mkRow({ earTag: "B", sireEarTag: "A" }),
         ],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -311,6 +317,7 @@ describe("commitImport", () => {
           mkRow({ earTag: "OK-2" }),
         ],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
     );
 
@@ -344,6 +351,7 @@ describe("commitImport", () => {
           mkRow({ earTag: "P-SIRE", sex: "Male" }),
         ],
         importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
       },
       onProgress,
     );
@@ -371,13 +379,20 @@ describe("commitImport", () => {
       {
         rows: [mkRow({ earTag: "IJ-1" }), mkRow({ earTag: "IJ-2" })],
         importJobId: "job-abc",
+        defaultSpecies: "cattle",
       },
     );
 
     expect(importJobUpdate).toHaveBeenCalledTimes(1);
     const call = state.importJobUpdateCalls[0];
     expect(call.where).toEqual({ id: "job-abc" });
-    expect(call.data).toMatchObject({ rowsImported: 2, rowsFailed: 0 });
+    expect(call.data).toMatchObject({
+      rowsImported: 2,
+      rowsFailed: 0,
+      status: "complete",
+    });
+    // completedAt should be a Date instance
+    expect((call.data as { completedAt: unknown }).completedAt).toBeInstanceOf(Date);
   });
 
   // 12. ImportJob update failure is swallowed
@@ -392,12 +407,97 @@ describe("commitImport", () => {
 
     const res = await commitImport(
       prisma,
-      { rows: [mkRow({ earTag: "IJ-FAIL" })], importJobId: "job-fail" },
+      {
+        rows: [mkRow({ earTag: "IJ-FAIL" })],
+        importJobId: "job-fail",
+        defaultSpecies: "cattle",
+      },
     );
 
     expect(res).toEqual({ inserted: 1, skipped: 0, errors: [] });
     expect(importJobUpdate).toHaveBeenCalledTimes(1);
 
     consoleSpy.mockRestore();
+  });
+
+  // 13. Species — row override beats defaultSpecies
+  it("inserts a row with valid species overriding defaultSpecies", async () => {
+    const state = makeState();
+    const { prisma } = makeMockPrisma(state);
+
+    const res = await commitImport(prisma, {
+      rows: [mkRow({ earTag: "SHEEP-1", species: "sheep" })],
+      importJobId: DEFAULT_JOB_ID,
+      defaultSpecies: "cattle",
+    });
+
+    expect(res.inserted).toBe(1);
+    expect(res.skipped).toBe(0);
+    expect(state.insertedAnimals[0]).toMatchObject({
+      animalId: "SHEEP-1",
+      species: "sheep",
+    });
+  });
+
+  // 14. Species — invalid per-row species is skipped
+  it('skips rows with species outside the allowlist with reason "invalid species"', async () => {
+    const state = makeState();
+    const { prisma } = makeMockPrisma(state);
+
+    const res = await commitImport(prisma, {
+      rows: [mkRow({ earTag: "BAD-SPEC", species: "pig" })],
+      importJobId: DEFAULT_JOB_ID,
+      defaultSpecies: "cattle",
+    });
+
+    expect(res.inserted).toBe(0);
+    expect(res.skipped).toBe(1);
+    expect(res.errors[0]).toMatchObject({
+      row: 1,
+      earTag: "BAD-SPEC",
+      reason: "invalid species",
+    });
+    expect(state.insertedAnimals).toHaveLength(0);
+  });
+
+  // 15. Missing / invalid defaultSpecies throws (caller contract)
+  it("throws when defaultSpecies is missing or outside the allowlist", async () => {
+    const state = makeState();
+    const { prisma } = makeMockPrisma(state);
+
+    // Missing
+    await expect(
+      commitImport(prisma, {
+        rows: [mkRow({ earTag: "X" })],
+        importJobId: DEFAULT_JOB_ID,
+      } as unknown as Parameters<typeof commitImport>[1]),
+    ).rejects.toThrow("invalid defaultSpecies");
+
+    // Invalid
+    await expect(
+      commitImport(prisma, {
+        rows: [mkRow({ earTag: "X" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "pig",
+      }),
+    ).rejects.toThrow("invalid defaultSpecies");
+  });
+
+  // 16. Species — row with no species falls back to defaultSpecies
+  it("falls back to defaultSpecies when row has no species", async () => {
+    const state = makeState();
+    const { prisma } = makeMockPrisma(state);
+
+    const res = await commitImport(prisma, {
+      rows: [mkRow({ earTag: "FALLBACK-1" })],
+      importJobId: DEFAULT_JOB_ID,
+      defaultSpecies: "goats",
+    });
+
+    expect(res.inserted).toBe(1);
+    expect(state.insertedAnimals[0]).toMatchObject({
+      animalId: "FALLBACK-1",
+      species: "goats",
+    });
   });
 });

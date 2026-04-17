@@ -18,8 +18,8 @@
  * names at insert time. Pedigree resolution still runs a topological sort
  * so cycles are rejected and ordering is deterministic.
  *
- * ImportJob fields used: `rowsImported`, `rowsFailed` (the schema has no
- * status/completedAt columns at this time).
+ * ImportJob fields used: `rowsImported`, `rowsFailed`, `warnings`, `status`,
+ * `completedAt`.
  */
 
 import type { PrismaClient } from "@prisma/client";
@@ -37,11 +37,18 @@ export type ImportRow = {
   sireEarTag?: string; // pedigree — may reference another row in THIS import
   damEarTag?: string; // pedigree — may reference another row in THIS import
   notes?: string;
+  species?: string; // per-row override of defaultSpecies; validated against ALLOWED_SPECIES
 };
 
 export type CommitImportInput = {
   rows: ImportRow[];
   importJobId: string; // caller pre-creates the ImportJob row
+  /**
+   * Fallback species used when a row does not specify `species`. Must be one
+   * of ALLOWED_SPECIES. Required — callers must make this choice explicitly so
+   * we don't silently default to cattle and regress multi-species support.
+   */
+  defaultSpecies: string;
 };
 
 export type CommitImportProgress = {
@@ -72,6 +79,12 @@ const PEDIGREE_PROGRESS_STEPS = 4; // 25% intervals
 const TRANSACTION_MAX_WAIT_MS = 30_000;
 const TRANSACTION_TIMEOUT_MS = 60_000;
 
+/**
+ * Allowed species values. Must match the multi-species registry
+ * (see `multi-species-architecture.md`).
+ */
+const ALLOWED_SPECIES = new Set(["cattle", "sheep", "goats", "game"]);
+
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
@@ -87,6 +100,8 @@ type ValidatedRow = {
   sireEarTag?: string;
   damEarTag?: string;
   notes?: string;
+  /** Resolved per-row species (row.species if valid, else undefined — caller applies defaultSpecies at insert). */
+  species?: string;
 };
 
 function parseBirthDate(value: Date | string): string | null {
@@ -128,6 +143,13 @@ function validateRows(
       });
     } else if (row.sex !== undefined && row.sex !== "Male" && row.sex !== "Female") {
       errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid sex" });
+    } else if (
+      row.species !== undefined &&
+      row.species !== null &&
+      row.species !== "" &&
+      !ALLOWED_SPECIES.has(row.species)
+    ) {
+      errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid species" });
     } else {
       let birthDateIso: string | undefined;
       if (row.birthDate !== undefined && row.birthDate !== null && row.birthDate !== "") {
@@ -143,6 +165,9 @@ function validateRows(
         birthDateIso = parsed;
       }
 
+      const resolvedSpecies =
+        row.species && ALLOWED_SPECIES.has(row.species) ? row.species : undefined;
+
       seenEarTags.add(rawEarTag);
       kept.push({
         originalIndex: rowNum,
@@ -154,6 +179,7 @@ function validateRows(
         sireEarTag: row.sireEarTag?.trim() || undefined,
         damEarTag: row.damEarTag?.trim() || undefined,
         notes: row.notes,
+        species: resolvedSpecies,
       });
     }
 
@@ -284,7 +310,14 @@ export async function commitImport(
   input: CommitImportInput,
   onProgress?: (p: CommitImportProgress) => void,
 ): Promise<CommitImportResult> {
-  const { rows, importJobId } = input;
+  const { rows, importJobId, defaultSpecies } = input;
+
+  // Caller-contract validation: defaultSpecies is required and must be in the
+  // allowlist. This is a programmer error (not a per-row error) so we throw.
+  if (!defaultSpecies || !ALLOWED_SPECIES.has(defaultSpecies)) {
+    throw new Error("invalid defaultSpecies");
+  }
+
   const total = rows.length;
   const errors: CommitImportError[] = [];
 
@@ -362,7 +395,7 @@ export async function commitImport(
               motherId,
               fatherId,
               dateAdded: todayIso,
-              species: "cattle",
+              species: row.species ?? defaultSpecies,
               importJobId,
               sireNote: row.sireEarTag && !resolvedByTag.has(row.sireEarTag)
                 ? `Unresolved sire: ${row.sireEarTag}`
@@ -416,6 +449,8 @@ export async function commitImport(
     await prisma.importJob.update({
       where: { id: importJobId },
       data: {
+        status: "complete",
+        completedAt: new Date(),
         rowsImported: inserted,
         rowsFailed: skipped,
         warnings: errors.length > 0 ? JSON.stringify(errors.slice(0, 100)) : null,
