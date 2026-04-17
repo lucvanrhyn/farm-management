@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ vi.mock("next-auth", () => ({
 }));
 
 const importJobCreateMock = vi.fn();
+const importJobFindUniqueMock = vi.fn();
 const getPrismaWithAuthMock = vi.fn();
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaWithAuth: (...args: unknown[]) => getPrismaWithAuthMock(...args),
@@ -44,12 +45,19 @@ function makeReq(body: unknown, raw = false) {
   });
 }
 
+const VALID_PROVENANCE = {
+  sourceFilename: "animals.csv",
+  sourceFileHash: "abc123",
+  mappingJson: '{"earTag":"id_number"}',
+};
+
 const validBody = {
   rows: [
     { earTag: "A001", sex: "Female" as const, birthDate: "2023-01-01" },
     { earTag: "A002", sex: "Male" as const },
   ],
   defaultSpecies: "cattle",
+  ...VALID_PROVENANCE,
 };
 
 type ProgressFn = (p: {
@@ -58,13 +66,18 @@ type ProgressFn = (p: {
   total: number;
 }) => void;
 
-function primeHappyMocks(opts: { role?: string; importJobId?: string } = {}) {
+function primeHappyMocks(opts: { role?: string } = {}) {
   getServerSessionMock.mockResolvedValue({
     user: { email: "luc@example.com", name: "Luc", farms: [] },
   });
   importJobCreateMock.mockResolvedValue({ id: "job-new-id" });
   getPrismaWithAuthMock.mockResolvedValue({
-    prisma: { importJob: { create: importJobCreateMock } },
+    prisma: {
+      importJob: {
+        create: importJobCreateMock,
+        findUnique: importJobFindUniqueMock,
+      },
+    },
     slug: "basson-boerdery",
     role: opts.role ?? "ADMIN",
   });
@@ -134,6 +147,7 @@ describe("POST /api/onboarding/commit-import", () => {
     getServerSessionMock.mockReset();
     getPrismaWithAuthMock.mockReset();
     importJobCreateMock.mockReset();
+    importJobFindUniqueMock.mockReset();
     checkRateLimitMock.mockReset();
     commitImportMock.mockReset();
   });
@@ -261,6 +275,113 @@ describe("POST /api/onboarding/commit-import", () => {
     expect(commitImportMock).not.toHaveBeenCalled();
   });
 
+  // -------------------------------------------------------------------------
+  // HIGH #1 — provenance fields required when creating a new ImportJob
+  // -------------------------------------------------------------------------
+
+  it("returns 400 when creating a new ImportJob without sourceFilename", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const { sourceFilename: _omit, ...bodyMissing } = validBody;
+    const res = await POST(makeReq(bodyMissing));
+    expect(res.status).toBe(400);
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when creating a new ImportJob without sourceFileHash", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const { sourceFileHash: _omit, ...bodyMissing } = validBody;
+    const res = await POST(makeReq(bodyMissing));
+    expect(res.status).toBe(400);
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when creating a new ImportJob without mappingJson", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const { mappingJson: _omit, ...bodyMissing } = validBody;
+    const res = await POST(makeReq(bodyMissing));
+    expect(res.status).toBe(400);
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when mappingJson is not valid JSON", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, mappingJson: "{not-json" }),
+    );
+    expect(res.status).toBe(400);
+    const err = await res.json();
+    expect(err.error).toMatch(/mappingJson/);
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // MEDIUM #2 — ownership check on reused importJobId
+  // -------------------------------------------------------------------------
+
+  it("returns 404 when reused importJobId does not exist", async () => {
+    primeHappyMocks();
+    importJobFindUniqueMock.mockResolvedValue(null);
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "missing-job" }),
+    );
+    expect(res.status).toBe(404);
+    expect(commitImportMock).not.toHaveBeenCalled();
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when reused importJobId belongs to a different farm", async () => {
+    primeHappyMocks();
+    importJobFindUniqueMock.mockResolvedValue({
+      id: "cross-tenant-job",
+      status: "running",
+      farmId: "other-farm",
+    });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "cross-tenant-job" }),
+    );
+    expect(res.status).toBe(403);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when reused importJobId is already complete", async () => {
+    primeHappyMocks();
+    importJobFindUniqueMock.mockResolvedValue({
+      id: "done-job",
+      status: "complete",
+      farmId: "basson-boerdery",
+    });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "done-job" }),
+    );
+    expect(res.status).toBe(409);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
   it("uses a per-farm rate-limit key scoped to commit-import", async () => {
     primeHappyMocks();
     const { POST } = await import(
@@ -295,12 +416,16 @@ describe("POST /api/onboarding/commit-import", () => {
     const complete = events[events.length - 1];
     expect(complete.data).toEqual({ inserted: 2, skipped: 0, errors: [] });
 
-    // ImportJob auto-created with farmId = slug and confirmedBy from session.
+    // ImportJob auto-created with farmId = slug and confirmedBy from session,
+    // and the provenance fields passed through verbatim (no defaults).
     expect(importJobCreateMock).toHaveBeenCalledTimes(1);
     const createArg = importJobCreateMock.mock.calls[0][0].data;
     expect(createArg.farmId).toBe("basson-boerdery");
     expect(createArg.confirmedBy).toBe("luc@example.com");
     expect(createArg.status).toBe("running");
+    expect(createArg.sourceFilename).toBe(VALID_PROVENANCE.sourceFilename);
+    expect(createArg.sourceFileHash).toBe(VALID_PROVENANCE.sourceFileHash);
+    expect(createArg.mappingJson).toBe(VALID_PROVENANCE.mappingJson);
 
     // commitImport receives the freshly-minted job id.
     expect(commitImportMock).toHaveBeenCalledTimes(1);
@@ -312,6 +437,11 @@ describe("POST /api/onboarding/commit-import", () => {
 
   it("reuses a caller-supplied importJobId instead of creating one", async () => {
     primeHappyMocks();
+    importJobFindUniqueMock.mockResolvedValue({
+      id: "existing-job-42",
+      status: "running",
+      farmId: "basson-boerdery",
+    });
     const { POST } = await import(
       "@/app/api/onboarding/commit-import/route"
     );
@@ -357,5 +487,51 @@ describe("POST /api/onboarding/commit-import", () => {
     expect(errFrame.data).toEqual({ message: "Import failed" });
     // Generic message only — raw exception text must NOT leak to the client.
     expect(JSON.stringify(errFrame.data)).not.toContain("db offline");
+  });
+
+  // -------------------------------------------------------------------------
+  // HIGH #2 — commitImport timeout
+  // -------------------------------------------------------------------------
+
+  describe("when commitImport exceeds the 90s timeout", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("emits an error frame with a timeout-specific message", async () => {
+      primeHappyMocks();
+      // commitImport hangs forever — only the timeout should resolve the race.
+      commitImportMock.mockImplementationOnce(
+        () => new Promise(() => {}),
+      );
+
+      const { POST } = await import(
+        "@/app/api/onboarding/commit-import/route"
+      );
+      const res = await POST(makeReq(validBody));
+      expect(res.status).toBe(200);
+
+      // Start reading the body in parallel so the stream's start() runs and
+      // sets up the setTimeout before we advance fake timers.
+      const bodyPromise = readStream(res);
+
+      // Yield microtasks so the ReadableStream start() executes and registers
+      // the timeout before we advance the clock.
+      await vi.advanceTimersByTimeAsync(91_000);
+
+      const body = await bodyPromise;
+      const events = parseSSE(body);
+      const names = events.map((e) => e.event);
+      expect(names[names.length - 1]).toBe("error");
+      expect(names).not.toContain("complete");
+
+      const errFrame = events[events.length - 1];
+      const data = errFrame.data as { message: string };
+      expect(data.message).toMatch(/timed out/i);
+    });
   });
 });
