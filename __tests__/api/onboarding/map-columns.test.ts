@@ -66,7 +66,7 @@ const happyProposal = {
     costUsd: 0.0264,
     costZar: 0.49,
   },
-  model: "claude-sonnet-4-6" as const,
+  model: "gpt-4o-mini" as const,
   promptVersion: "1.0.0",
 };
 
@@ -249,7 +249,7 @@ describe("POST /api/onboarding/map-columns", () => {
 
     const json = await res.json();
     expect(json.proposal.row_count).toBe(103);
-    expect(json.model).toBe("claude-sonnet-4-6");
+    expect(json.model).toBe("gpt-4o-mini");
     expect(json.usage.costZar).toBeGreaterThan(0);
 
     expect(proposeColumnMappingMock).toHaveBeenCalledTimes(1);

@@ -18,7 +18,6 @@
     "db:gen-schema": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
     "@libsql/client": "^0.8.1",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@prisma/adapter-libsql": "^5.22.0",
@@ -38,6 +37,7 @@
     "mapbox-gl": "^3.20.0",
     "next": "16.1.6",
     "next-auth": "^4.24.13",
+    "openai": "^6.34.0",
     "prisma": "^5.22.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
