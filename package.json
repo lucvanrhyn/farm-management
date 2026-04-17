@@ -70,8 +70,7 @@
   "pnpm": {
     "overrides": {
       "flatted": ">=3.4.2",
-      "brace-expansion@<2.0.3": ">=2.0.3",
-      "brace-expansion@>=4.0.0": ">=5.0.5",
+      "brace-expansion": "^2.0.3",
       "picomatch": ">=4.0.4",
       "dompurify": ">=3.4.0",
       "protocol-buffers-schema": ">=3.6.1",
