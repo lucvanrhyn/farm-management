@@ -392,6 +392,133 @@ export function checkSexTransformAgainstSamples(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Sanity-check (Commit B) — dry-run sample values against target-field
+// semantics to catch common model hallucinations (e.g. Massa→currentCamp,
+// Prys→status observed in live farmer-doc E2E test).
+// ---------------------------------------------------------------------------
+
+const SEX_ENUM = new Set([
+  "male",
+  "female",
+  "m",
+  "f",
+  "ooi",
+  "ram",
+  "manlik",
+  "vroulik",
+  "bull",
+  "cow",
+  "ewe",
+]);
+const STATUS_ENUM = new Set([
+  "active",
+  "dead",
+  "sold",
+  "pregnant",
+  "non-pregnant",
+  "open",
+  "inactive",
+  "deceased",
+]);
+const CURRENCY_RE = /[R$€£¥]/;
+const DATE_RE = /^\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}$/;
+const MIN_SANE_YEAR = 1900;
+
+function sampleValues(
+  row: Record<string, unknown>,
+  source: string
+): string | undefined {
+  const v = row[source];
+  if (v === null || v === undefined) return undefined;
+  const s = String(v).trim();
+  return s.length > 0 ? s : undefined;
+}
+
+function checkValueForTarget(target: string, value: string): boolean {
+  switch (target) {
+    case "earTag":
+    case "sireEarTag":
+    case "damEarTag": {
+      if (value.length === 0 || value.length > 30) return false;
+      if (CURRENCY_RE.test(value)) return false;
+      if (DATE_RE.test(value)) return false;
+      const n = Number(value);
+      if (Number.isFinite(n) && n >= 10000 && !/[A-Za-z\-_]/.test(value))
+        return false;
+      return true;
+    }
+    case "birthDate": {
+      if (DATE_RE.test(value)) return true;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return false;
+      const y = d.getFullYear();
+      return y >= MIN_SANE_YEAR && y <= new Date().getFullYear() + 1;
+    }
+    case "sex":
+      return SEX_ENUM.has(value.toLowerCase());
+    case "currentCamp":
+    case "campId": {
+      if (value.length > 40) return false;
+      if (CURRENCY_RE.test(value)) return false;
+      const n = Number(value);
+      // Camp names/IDs almost always contain letters (e.g. "Bergkamp",
+      // "Weiveld 1", "bb-c-001"). Pure numerics (e.g. weights 485, 510)
+      // are a strong signal the model hallucinated a weight/price column
+      // into the camp field.
+      if (Number.isFinite(n) && !/[A-Za-z]/.test(value)) return false;
+      return true;
+    }
+    case "status":
+      return STATUS_ENUM.has(value.toLowerCase());
+    default:
+      return true; // unknown target — don't second-guess the model
+  }
+}
+
+export function sanityCheckMapping(
+  proposal: MappingProposal,
+  sampleRows: Array<Record<string, unknown>>
+): MappingProposal {
+  const newMapping: ColumnMapping[] = [];
+  const newUnmapped: UnmappedColumn[] = [...proposal.unmapped];
+  const newWarnings: string[] = [...proposal.warnings];
+
+  for (const m of proposal.mapping) {
+    const samples: string[] = [];
+    for (const row of sampleRows) {
+      const v = sampleValues(row, m.source);
+      if (v !== undefined) samples.push(v);
+      if (samples.length >= 3) break;
+    }
+    if (samples.length === 0) {
+      newMapping.push(m);
+      continue;
+    }
+    const failing = samples.filter((v) => !checkValueForTarget(m.target, v));
+    const failRate = failing.length / samples.length;
+    if (failRate >= 0.5) {
+      newUnmapped.push({
+        source: m.source,
+        samples,
+        upsell_hint: `Column values don't match target field '${m.target}' — import may need manual review.`,
+      });
+      newWarnings.push(
+        `Demoted ${m.source}→${m.target}: sample values don't fit target field`
+      );
+    } else {
+      newMapping.push(m);
+    }
+  }
+
+  return {
+    mapping: newMapping,
+    unmapped: newUnmapped,
+    warnings: newWarnings,
+    row_count: proposal.row_count,
+  };
+}
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -473,6 +600,7 @@ export async function proposeColumnMapping(
     proposal,
     input.sampleRows
   );
+  const sanitized = sanityCheckMapping(afterSexCheck, input.sampleRows);
 
   const usage = computeUsage(
     {
@@ -486,7 +614,7 @@ export async function proposeColumnMapping(
   );
 
   return {
-    proposal: afterSexCheck,
+    proposal: sanitized,
     usage,
     model: MODEL_ID,
     promptVersion: SYSTEM_PROMPT_VERSION,

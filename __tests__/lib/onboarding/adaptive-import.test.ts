@@ -24,6 +24,7 @@ import {
   validateMappingProposal,
   computeUsage,
   checkSexTransformAgainstSamples,
+  sanityCheckMapping,
   AdaptiveImportError,
   GPT_4O_MINI_RATES,
   ZAR_PER_USD,
@@ -56,7 +57,7 @@ const bassonInput: ProposeMappingInput = {
       Ras: "Bonsmara",
       Moeder: "BB-C088",
       Pa: "Van Aswegen 2023",
-      Status: "Aktief",
+      Status: "active",
       "Semen kode": "SK-2019-42",
     },
   ],
@@ -527,5 +528,94 @@ describe("checkSexTransformAgainstSamples (A2)", () => {
     ]);
     expect(out.mapping[0].confidence).toBe(0.9);
     expect(out.warnings).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Commit B — sanityCheckMapping
+// ---------------------------------------------------------------------------
+
+describe("sanityCheckMapping (B)", () => {
+  function baseProposal(mapping: MappingProposal["mapping"]): MappingProposal {
+    return { mapping, unmapped: [], warnings: [], row_count: 3 };
+  }
+
+  it("demotes Massa→currentCamp when values look like weights", () => {
+    const proposal = baseProposal([
+      { source: "Massa", target: "currentCamp", confidence: 0.7 },
+    ]);
+    const rows = [{ Massa: 485 }, { Massa: 510 }, { Massa: 478 }];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "Massa")).toBeUndefined();
+    const demoted = out.unmapped.find((u) => u.source === "Massa");
+    expect(demoted).toBeDefined();
+    expect(demoted?.upsell_hint).toContain(
+      "don't match target field 'currentCamp'"
+    );
+    expect(
+      out.warnings.some((w) => w.includes("Demoted Massa→currentCamp"))
+    ).toBe(true);
+  });
+
+  it("demotes Prys→status when values look like prices", () => {
+    const proposal = baseProposal([
+      { source: "Prys", target: "status", confidence: 0.6 },
+    ]);
+    const rows = [{ Prys: 8500 }, { Prys: 9200 }];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "Prys")).toBeUndefined();
+    expect(out.unmapped.find((u) => u.source === "Prys")).toBeDefined();
+    expect(
+      out.warnings.some((w) => w.includes("Demoted Prys→status"))
+    ).toBe(true);
+  });
+
+  it("keeps valid earTag mappings in place", () => {
+    const proposal = baseProposal([
+      { source: "Oormerk", target: "earTag", confidence: 0.98 },
+    ]);
+    const rows = [{ Oormerk: "BB-C001" }, { Oormerk: "BB-C002" }];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "Oormerk")).toBeDefined();
+    expect(out.unmapped.find((u) => u.source === "Oormerk")).toBeUndefined();
+  });
+
+  it("keeps valid birthDate mappings with mixed date formats", () => {
+    const proposal = baseProposal([
+      { source: "Geboorte", target: "birthDate", confidence: 0.85 },
+    ]);
+    const rows = [
+      { Geboorte: "2022-01-15" },
+      { Geboorte: "15/03/2021" },
+      { Geboorte: "2020-06-30" },
+    ];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "Geboorte")).toBeDefined();
+    expect(out.unmapped.find((u) => u.source === "Geboorte")).toBeUndefined();
+  });
+
+  it("passes through mappings with no sample values for that column", () => {
+    const proposal = baseProposal([
+      { source: "MissingCol", target: "earTag", confidence: 0.8 },
+    ]);
+    const rows = [{ OtherCol: "x" }];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "MissingCol")).toBeDefined();
+    expect(out.unmapped).toHaveLength(0);
+    expect(out.warnings).toHaveLength(0);
+  });
+
+  it("passes through unknown target fields without second-guessing the model", () => {
+    const proposal = baseProposal([
+      {
+        source: "Kleur",
+        target: "someCustomField",
+        confidence: 0.8,
+      },
+    ]);
+    const rows = [{ Kleur: "Rooi" }, { Kleur: "Swart" }, { Kleur: "Wit" }];
+    const out = sanityCheckMapping(proposal, rows);
+    expect(out.mapping.find((m) => m.source === "Kleur")).toBeDefined();
+    expect(out.unmapped).toHaveLength(0);
   });
 });
