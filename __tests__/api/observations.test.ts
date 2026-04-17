@@ -3,18 +3,60 @@ import { NextRequest } from 'next/server';
 
 // Mock getServerSession to return a valid session by default
 vi.mock('next-auth', () => ({
-  getServerSession: vi.fn().mockResolvedValue({ user: { id: 'user-1', role: 'field_logger' } }),
+  getServerSession: vi.fn().mockResolvedValue({
+    user: {
+      id: 'user-1',
+      email: 'user-1@example.com',
+      role: 'field_logger',
+      farms: [{ slug: 'test-farm-slug', role: 'field_logger' }],
+    },
+  }),
 }));
 
-// Mock prisma before importing the route
+// Mock prisma client methods used by the route
 const mockCreate = vi.fn().mockResolvedValue({ id: 'test-obs-id' });
+const mockCampFindUnique = vi.fn().mockResolvedValue({ campId: 'A' });
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    observation: {
-      create: mockCreate,
-    },
+const mockPrisma = {
+  observation: {
+    create: mockCreate,
   },
+  camp: {
+    findUnique: mockCampFindUnique,
+  },
+};
+
+// Mock @/lib/prisma in case anything imports it directly
+vi.mock('@/lib/prisma', () => ({
+  prisma: mockPrisma,
+}));
+
+// Mock farm-prisma so cookie/header resolution is bypassed in tests.
+// Next 16 made cookies() async and request-scoped, which throws outside a
+// request scope. Stubbing getPrismaWithAuth avoids that entirely.
+vi.mock('@/lib/farm-prisma', () => ({
+  getPrismaWithAuth: vi.fn().mockResolvedValue({
+    prisma: mockPrisma,
+    slug: 'test-farm-slug',
+    role: 'field_logger',
+  }),
+  getPrismaForRequest: vi.fn().mockResolvedValue({
+    prisma: mockPrisma,
+    slug: 'test-farm-slug',
+  }),
+  getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
+}));
+
+// revalidatePath throws outside a request scope in Next 16. No-op it here.
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+}));
+
+// Rate limit: always allow in tests (the real impl uses an in-memory map that
+// could carry state between tests if we didn't stub it).
+vi.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 100 }),
 }));
 
 describe('POST /api/observations', () => {
@@ -26,7 +68,7 @@ describe('POST /api/observations', () => {
     const { POST } = await import('@/app/api/observations/route');
 
     const body = {
-      type: 'health_check',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: 'brangus-001',
       details: JSON.stringify({ status: 'healthy' }),
@@ -47,7 +89,7 @@ describe('POST /api/observations', () => {
     expect(mockCreate).toHaveBeenCalledOnce();
     expect(mockCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        type: 'health_check',
+        type: 'camp_check',
         campId: 'A',
         animalId: 'brangus-001',
       }),
