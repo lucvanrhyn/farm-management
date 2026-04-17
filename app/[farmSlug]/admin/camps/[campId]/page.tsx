@@ -7,6 +7,7 @@ import CampRotationHistoryPanel from "@/components/admin/rotation/CampRotationHi
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { AnimalCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,8 @@ export default async function CampDetailPage({
   const camp = await prisma.camp.findUnique({ where: { campId } });
   if (!camp) notFound();
 
+  const mode = await getFarmMode(farmSlug);
+
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -72,7 +75,7 @@ export default async function CampDetailPage({
   const [activeAnimals, healthCount, calvingCount, visitCount, latestInspection, latestCondition, latestCoverReading] =
     await Promise.all([
       prisma.animal.findMany({
-        where: { currentCamp: campId, status: "Active" },
+        where: { currentCamp: campId, status: "Active", species: mode },
         select: { category: true },
       }),
       prisma.observation.count({

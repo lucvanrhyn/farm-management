@@ -333,7 +333,7 @@ export default async function AnimalDetailPage({
     getCostPerAnimal(prisma, id),
     isBull
       ? prisma.animal.findMany({
-          where: { fatherId: animal.animalId },
+          where: { fatherId: animal.animalId, species: animal.species },
           orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),

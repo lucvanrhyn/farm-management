@@ -36,7 +36,7 @@ export default async function BreedingAIPage({
     getBreedingSnapshot(prisma, farmSlug),
     suggestPairings(prisma, farmSlug),
     prisma.animal.findMany({
-      where: { status: "Active" },
+      where: { status: "Active", species: "cattle" },
       select: {
         id: true,
         animalId: true,
