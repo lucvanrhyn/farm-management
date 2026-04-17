@@ -8,6 +8,8 @@ import { getSession, getUserRoleForFarm } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+const MS_PER_APPROX_MONTH = 1000 * 60 * 60 * 24 * 30; // ~30-day approximation for revenue estimates
+
 const zarFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "ZAR",
@@ -96,7 +98,7 @@ export default async function ConsultingAdminPage({
     const clampedEnd = Number.isNaN(endMs) ? now : Math.min(endMs, now);
     const monthsElapsed = Math.max(
       0,
-      (clampedEnd - startedMs) / (1000 * 60 * 60 * 24 * 30),
+      (clampedEnd - startedMs) / MS_PER_APPROX_MONTH,
     );
     return sum + setup + retainer * monthsElapsed;
   }, 0);
@@ -168,8 +170,9 @@ export default async function ConsultingAdminPage({
           <p
             className="text-[10px] uppercase tracking-wider font-mono mb-2"
             style={subtleText}
+            title="Retainer months approximated as 30-day periods; actual billed revenue may differ."
           >
-            Estimated Revenue
+            Estimated Revenue (approx.)
           </p>
           <p className="text-2xl font-bold" style={{ color: "#8B6914" }}>
             {formatZar(estimatedRevenue)}
