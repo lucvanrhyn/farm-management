@@ -16,6 +16,9 @@ const withSerwist = withSerwistInit({
   globPublicPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,webp,woff2}"],
 });
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  // Don't leak that this app runs on Next.js — small but free security win.
+  poweredByHeader: false,
+};
 
 export default withSerwist(nextConfig);
