@@ -6,7 +6,9 @@ import PerformanceSection from "@/components/admin/PerformanceSection";
 import RainfallSection from "@/components/admin/RainfallSection";
 import RotationSection from "@/components/admin/rotation/RotationSection";
 import CampsTabBar from "@/components/admin/CampsTabBar";
+import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmCreds } from "@/lib/meta-db";
 import type { Camp } from "@/lib/types";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import { VeldTab } from "@/components/admin/camps/VeldTab";
@@ -14,6 +16,16 @@ import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { FeedOnOfferTab } from "@/components/admin/camps/FeedOnOfferTab";
 
 export const dynamic = "force-dynamic";
+
+// Advanced-tier only tabs. The `camps` overview and `rainfall` tab stay
+// accessible to all tiers; the tabs below mirror gated /tools/* routes and
+// must render an UpgradePrompt for basic-tier farms.
+const ADVANCED_TABS: Record<string, string> = {
+  performance: "Performance Analytics",
+  rotation: "Rotation Planning",
+  veld: "Veld Condition Scoring",
+  "feed-on-offer": "Feed-on-Offer",
+};
 
 export default async function AdminCampsPage({
   params,
@@ -37,10 +49,20 @@ export default async function AdminCampsPage({
     );
   }
 
+  const creds = await getFarmCreds(farmSlug);
+  const tier = creds?.tier ?? "basic";
+  const isBasic = tier === "basic";
+  const gatedFeature =
+    isBasic && ADVANCED_TABS[activeTab] ? ADVANCED_TABS[activeTab] : null;
+
+  // Skip heavy queries for advanced tabs the basic tier can't view.
+  const needsVeldSummary = !gatedFeature && activeTab === "veld";
+  const needsFeedOnOffer = !gatedFeature && activeTab === "feed-on-offer";
+
   const [prismaCampsRaw, veldSummary, feedOnOfferPayload] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-    getVeldSummary(prisma),
-    getFarmFeedOnOfferPayload(prisma),
+    needsVeldSummary ? getVeldSummary(prisma) : Promise.resolve(null),
+    needsFeedOnOffer ? getFarmFeedOnOfferPayload(prisma) : Promise.resolve(null),
   ]);
   const prismaCamps = prismaCampsRaw;
   const camps: Camp[] = prismaCamps.map((c) => ({
@@ -73,7 +95,11 @@ export default async function AdminCampsPage({
         </>
       )}
 
-      {activeTab === "performance" && (
+      {gatedFeature && (
+        <UpgradePrompt feature={gatedFeature} farmSlug={farmSlug} />
+      )}
+
+      {!gatedFeature && activeTab === "performance" && (
         <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
           <PerformanceSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
@@ -85,17 +111,17 @@ export default async function AdminCampsPage({
         </Suspense>
       )}
 
-      {activeTab === "rotation" && (
+      {!gatedFeature && activeTab === "rotation" && (
         <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
           <RotationSection farmSlug={farmSlug} camps={camps} />
         </Suspense>
       )}
 
-      {activeTab === "veld" && (
+      {!gatedFeature && activeTab === "veld" && veldSummary && (
         <VeldTab farmSlug={farmSlug} summary={veldSummary} />
       )}
 
-      {activeTab === "feed-on-offer" && (
+      {!gatedFeature && activeTab === "feed-on-offer" && feedOnOfferPayload && (
         <FeedOnOfferTab farmSlug={farmSlug} payload={feedOnOfferPayload} />
       )}
     </div>
