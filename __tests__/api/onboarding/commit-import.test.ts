@@ -1,0 +1,361 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+
+// ---------------------------------------------------------------------------
+// Mocks — declared before route import
+// ---------------------------------------------------------------------------
+
+const getServerSessionMock = vi.fn();
+vi.mock("next-auth", () => ({
+  getServerSession: (...args: unknown[]) => getServerSessionMock(...args),
+}));
+
+const importJobCreateMock = vi.fn();
+const getPrismaWithAuthMock = vi.fn();
+vi.mock("@/lib/farm-prisma", () => ({
+  getPrismaWithAuth: (...args: unknown[]) => getPrismaWithAuthMock(...args),
+}));
+
+const checkRateLimitMock = vi.fn();
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: (...args: unknown[]) => checkRateLimitMock(...args),
+}));
+
+const commitImportMock = vi.fn();
+vi.mock("@/lib/onboarding/commit-import", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/onboarding/commit-import")
+  >("@/lib/onboarding/commit-import");
+  return {
+    ...actual,
+    commitImport: (...args: unknown[]) => commitImportMock(...args),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeReq(body: unknown, raw = false) {
+  return new NextRequest("http://localhost/api/onboarding/commit-import", {
+    method: "POST",
+    body: raw ? (body as string) : JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const validBody = {
+  rows: [
+    { earTag: "A001", sex: "Female" as const, birthDate: "2023-01-01" },
+    { earTag: "A002", sex: "Male" as const },
+  ],
+  defaultSpecies: "cattle",
+};
+
+type ProgressFn = (p: {
+  phase: string;
+  processed: number;
+  total: number;
+}) => void;
+
+function primeHappyMocks(opts: { role?: string; importJobId?: string } = {}) {
+  getServerSessionMock.mockResolvedValue({
+    user: { email: "luc@example.com", name: "Luc", farms: [] },
+  });
+  importJobCreateMock.mockResolvedValue({ id: "job-new-id" });
+  getPrismaWithAuthMock.mockResolvedValue({
+    prisma: { importJob: { create: importJobCreateMock } },
+    slug: "acme-cattle",
+    role: opts.role ?? "ADMIN",
+  });
+  checkRateLimitMock.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+  commitImportMock.mockImplementation(
+    async (
+      _prisma: unknown,
+      _input: unknown,
+      onProgress?: ProgressFn,
+    ) => {
+      onProgress?.({ phase: "validating", processed: 2, total: 2 });
+      onProgress?.({ phase: "inserting", processed: 2, total: 2 });
+      onProgress?.({ phase: "done", processed: 2, total: 2 });
+      return { inserted: 2, skipped: 0, errors: [] };
+    },
+  );
+}
+
+async function readStream(res: Response): Promise<string> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let out = "";
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out += decoder.decode(value, { stream: true });
+  }
+  out += decoder.decode();
+  return out;
+}
+
+/**
+ * Minimal SSE frame parser — splits on the blank-line delimiter and pulls the
+ * `event:` / `data:` fields out of each frame. Good enough for asserting the
+ * sequence of event names the route emits.
+ */
+function parseSSE(raw: string): Array<{ event: string; data: unknown }> {
+  return raw
+    .split("\n\n")
+    .map((frame) => frame.trim())
+    .filter(Boolean)
+    .map((frame) => {
+      const lines = frame.split("\n");
+      let event = "message";
+      let data = "";
+      for (const line of lines) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      let parsed: unknown = data;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        // leave as string if not JSON
+      }
+      return { event, data: parsed };
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("POST /api/onboarding/commit-import", () => {
+  beforeEach(() => {
+    getServerSessionMock.mockReset();
+    getPrismaWithAuthMock.mockReset();
+    importJobCreateMock.mockReset();
+    checkRateLimitMock.mockReset();
+    commitImportMock.mockReset();
+  });
+
+  it("returns 401 when there is no session", async () => {
+    getServerSessionMock.mockResolvedValue(null);
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(401);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the farm role is not ADMIN", async () => {
+    primeHappyMocks({ role: "VIEWER" });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(403);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("propagates getPrismaWithAuth error status", async () => {
+    getServerSessionMock.mockResolvedValue({
+      user: { email: "luc@example.com", farms: [] },
+    });
+    getPrismaWithAuthMock.mockResolvedValue({
+      error: "No active farm selected",
+      status: 400,
+    });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(400);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 when the rate limit is exceeded (body is valid)", async () => {
+    primeHappyMocks();
+    checkRateLimitMock.mockReturnValue({
+      allowed: false,
+      retryAfterMs: 3_600_000,
+    });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("3600");
+    expect(commitImportMock).not.toHaveBeenCalled();
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when the body is not valid JSON", async () => {
+    primeHappyMocks();
+    const req = new NextRequest(
+      "http://localhost/api/onboarding/commit-import",
+      {
+        method: "POST",
+        body: "not-json",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(checkRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when rows is empty", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, rows: [] }),
+    );
+    expect(res.status).toBe(400);
+    expect(commitImportMock).not.toHaveBeenCalled();
+    // body validation runs BEFORE rate-limit (B3 hardening)
+    expect(checkRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when rows exceeds the 10_000 hard cap", async () => {
+    primeHappyMocks();
+    const tooMany = Array.from({ length: 10_001 }, (_, i) => ({
+      earTag: `X${i}`,
+    }));
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, rows: tooMany }),
+    );
+    expect(res.status).toBe(400);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when defaultSpecies is not in the allowlist", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, defaultSpecies: "llama" }),
+    );
+    expect(res.status).toBe(400);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when importJobId is an empty string", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "" }),
+    );
+    expect(res.status).toBe(400);
+    expect(commitImportMock).not.toHaveBeenCalled();
+  });
+
+  it("uses a per-farm rate-limit key scoped to commit-import", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    // Drain the stream so the route runs to completion.
+    await readStream(res);
+    expect(checkRateLimitMock).toHaveBeenCalledTimes(1);
+    const [key, max, windowMs] = checkRateLimitMock.mock.calls[0];
+    expect(key).toBe("commit-import:acme-cattle");
+    expect(max).toBe(3);
+    expect(windowMs).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("happy path: creates ImportJob, streams progress, then complete", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/event-stream");
+
+    const body = await readStream(res);
+    const events = parseSSE(body);
+
+    const names = events.map((e) => e.event);
+    expect(names).toContain("progress");
+    expect(names[names.length - 1]).toBe("complete");
+
+    const complete = events[events.length - 1];
+    expect(complete.data).toEqual({ inserted: 2, skipped: 0, errors: [] });
+
+    // ImportJob auto-created with farmId = slug and confirmedBy from session.
+    expect(importJobCreateMock).toHaveBeenCalledTimes(1);
+    const createArg = importJobCreateMock.mock.calls[0][0].data;
+    expect(createArg.farmId).toBe("acme-cattle");
+    expect(createArg.confirmedBy).toBe("luc@example.com");
+    expect(createArg.status).toBe("running");
+
+    // commitImport receives the freshly-minted job id.
+    expect(commitImportMock).toHaveBeenCalledTimes(1);
+    const [, input] = commitImportMock.mock.calls[0];
+    expect(input.importJobId).toBe("job-new-id");
+    expect(input.defaultSpecies).toBe("cattle");
+    expect(input.rows).toHaveLength(2);
+  });
+
+  it("reuses a caller-supplied importJobId instead of creating one", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "existing-job-42" }),
+    );
+    await readStream(res);
+
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+    expect(commitImportMock).toHaveBeenCalledTimes(1);
+    expect(commitImportMock.mock.calls[0][1].importJobId).toBe(
+      "existing-job-42",
+    );
+  });
+
+  it("emits an error frame and closes the stream when commitImport throws", async () => {
+    primeHappyMocks();
+    commitImportMock.mockImplementationOnce(
+      async (
+        _prisma: unknown,
+        _input: unknown,
+        onProgress?: ProgressFn,
+      ) => {
+        onProgress?.({ phase: "validating", processed: 1, total: 2 });
+        throw new Error("db offline — raw detail that must not leak");
+      },
+    );
+
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(200);
+
+    const body = await readStream(res);
+    const events = parseSSE(body);
+    const names = events.map((e) => e.event);
+    expect(names).toContain("progress");
+    expect(names[names.length - 1]).toBe("error");
+    expect(names).not.toContain("complete");
+
+    const errFrame = events[events.length - 1];
+    expect(errFrame.data).toEqual({ message: "Import failed" });
+    // Generic message only — raw exception text must NOT leak to the client.
+    expect(JSON.stringify(errFrame.data)).not.toContain("db offline");
+  });
+});
