@@ -176,6 +176,52 @@ describe("POST /api/onboarding/map-columns", () => {
     expect(proposeColumnMappingMock).not.toHaveBeenCalled();
   });
 
+  it("returns 400 when parsedColumns has more than 200 entries", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/map-columns/route"
+    );
+    const tooMany = Array.from({ length: 201 }, (_, i) => `col${i}`);
+    const res = await POST(
+      makeReq({ ...validBody, parsedColumns: tooMany })
+    );
+    expect(res.status).toBe(400);
+    expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when a sampleRows value exceeds 512 chars", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/map-columns/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, sampleRows: [{ col: "x".repeat(513) }] })
+    );
+    expect(res.status).toBe(400);
+    expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when fullRowCount is not an integer", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/map-columns/route"
+    );
+    const res = await POST(makeReq({ ...validBody, fullRowCount: 1.5 }));
+    expect(res.status).toBe(400);
+    expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+  });
+
+  it("does not charge rate limit when body is malformed", async () => {
+    primeHappyMocks();
+    const { POST } = await import(
+      "@/app/api/onboarding/map-columns/route"
+    );
+    const res = await POST(makeReq({ parsedColumns: [] }));
+    expect(res.status).toBe(400);
+    expect(checkRateLimitMock).not.toHaveBeenCalled();
+    expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+  });
+
   it("returns 400 when body is not valid JSON", async () => {
     primeHappyMocks();
     const req = new NextRequest(
