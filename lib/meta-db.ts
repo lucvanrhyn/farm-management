@@ -343,3 +343,207 @@ export async function isEmailVerified(userId: string): Promise<boolean> {
   if (result.rows.length === 0) return false;
   return (result.rows[0].email_verified as number) === 1;
 }
+
+// ─── Consulting Leads (D4) ───────────────────────────────────────────
+
+export type ConsultingLead = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  farmName: string | null;
+  province: string | null;
+  species: string[]; // parsed from species_json
+  herdSize: number | null;
+  dataNotes: string | null;
+  customTracking: string | null;
+  source: string;
+  status: 'new' | 'scoped' | 'quoted' | 'active' | 'complete';
+  assignedTo: string | null;
+  createdAt: string; // ISO
+};
+
+export type ConsultingEngagement = {
+  id: string;
+  leadId: string;
+  farmId: string | null;
+  setupFeeZar: number | null;
+  retainerFeeZar: number | null;
+  startedAt: string | null;
+  endsAt: string | null;
+  status: string | null;
+};
+
+const ALLOWED_STATUS_TRANSITIONS: Record<
+  ConsultingLead['status'],
+  ConsultingLead['status'][]
+> = {
+  new: ['scoped'],
+  scoped: ['quoted', 'new'],
+  quoted: ['active', 'scoped'],
+  active: ['complete', 'quoted'],
+  complete: [],
+};
+
+const VALID_LEAD_STATUSES: ReadonlyArray<ConsultingLead['status']> = [
+  'new',
+  'scoped',
+  'quoted',
+  'active',
+  'complete',
+];
+
+function parseSpeciesJson(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (typeof raw !== 'string') return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string');
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToConsultingLead(row: Record<string, unknown>): ConsultingLead {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    phone: (row.phone as string) ?? null,
+    farmName: (row.farm_name as string) ?? null,
+    province: (row.province as string) ?? null,
+    species: parseSpeciesJson(row.species_json),
+    herdSize: row.herd_size != null ? Number(row.herd_size) : null,
+    dataNotes: (row.data_notes as string) ?? null,
+    customTracking: (row.custom_tracking as string) ?? null,
+    source: row.source as string,
+    status: (row.status as ConsultingLead['status']) ?? 'new',
+    assignedTo: (row.assigned_to as string) ?? null,
+    createdAt: row.created_at as string,
+  };
+}
+
+export async function getConsultingLeads(opts?: {
+  status?: ConsultingLead['status'];
+  limit?: number;
+}): Promise<ConsultingLead[]> {
+  const client = getMetaClient();
+  const limit = opts?.limit ?? 100;
+
+  const sql = opts?.status
+    ? `SELECT id, name, email, phone, farm_name, province, species_json, herd_size,
+              data_notes, custom_tracking, source, status, assigned_to, created_at
+         FROM consulting_leads
+         WHERE status = ?
+         ORDER BY created_at DESC
+         LIMIT ?`
+    : `SELECT id, name, email, phone, farm_name, province, species_json, herd_size,
+              data_notes, custom_tracking, source, status, assigned_to, created_at
+         FROM consulting_leads
+         ORDER BY created_at DESC
+         LIMIT ?`;
+  const args: (string | number)[] = opts?.status
+    ? [opts.status, limit]
+    : [limit];
+
+  const result = await client.execute({ sql, args });
+  return result.rows.map((row) =>
+    rowToConsultingLead(row as unknown as Record<string, unknown>),
+  );
+}
+
+export async function getConsultingLeadById(
+  id: string,
+): Promise<ConsultingLead | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id, name, email, phone, farm_name, province, species_json, herd_size,
+                 data_notes, custom_tracking, source, status, assigned_to, created_at
+          FROM consulting_leads
+          WHERE id = ?
+          LIMIT 1`,
+    args: [id],
+  });
+  if (result.rows.length === 0) return null;
+  return rowToConsultingLead(result.rows[0] as unknown as Record<string, unknown>);
+}
+
+export async function updateConsultingLeadStatus(
+  id: string,
+  nextStatus: ConsultingLead['status'],
+  options?: { assignedTo?: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const client = getMetaClient();
+
+  const existing = await getConsultingLeadById(id);
+  if (!existing) return { ok: false, error: 'not found' };
+
+  const allowed = ALLOWED_STATUS_TRANSITIONS[existing.status] ?? [];
+  if (!allowed.includes(nextStatus)) {
+    return { ok: false, error: 'invalid transition' };
+  }
+
+  // COALESCE(?, assigned_to) → keeps existing when null/undefined is passed.
+  const assignedArg =
+    options?.assignedTo === undefined ? null : options.assignedTo;
+
+  await client.execute({
+    sql: `UPDATE consulting_leads
+          SET status = ?, assigned_to = COALESCE(?, assigned_to)
+          WHERE id = ?`,
+    args: [nextStatus, assignedArg, id],
+  });
+
+  return { ok: true };
+}
+
+export async function getConsultingEngagements(
+  leadId?: string,
+): Promise<ConsultingEngagement[]> {
+  const client = getMetaClient();
+  const sql = leadId
+    ? `SELECT id, lead_id, farm_id, setup_fee_zar, retainer_fee_zar,
+              started_at, ends_at, status
+         FROM consulting_engagements
+         WHERE lead_id = ?
+         ORDER BY started_at DESC`
+    : `SELECT id, lead_id, farm_id, setup_fee_zar, retainer_fee_zar,
+              started_at, ends_at, status
+         FROM consulting_engagements
+         ORDER BY started_at DESC`;
+  const args: string[] = leadId ? [leadId] : [];
+  const result = await client.execute({ sql, args });
+  return result.rows.map((row) => ({
+    id: row.id as string,
+    leadId: row.lead_id as string,
+    farmId: (row.farm_id as string) ?? null,
+    setupFeeZar: row.setup_fee_zar != null ? Number(row.setup_fee_zar) : null,
+    retainerFeeZar:
+      row.retainer_fee_zar != null ? Number(row.retainer_fee_zar) : null,
+    startedAt: (row.started_at as string) ?? null,
+    endsAt: (row.ends_at as string) ?? null,
+    status: (row.status as string) ?? null,
+  }));
+}
+
+/**
+ * A user is a "platform admin" if they hold ADMIN role on ANY farm in the
+ * meta-DB. Used to gate meta-level consulting CRM operations.
+ */
+export async function isPlatformAdmin(email: string): Promise<boolean> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT 1
+          FROM farm_users fu
+          JOIN users u ON u.id = fu.user_id
+          WHERE u.email = ? AND fu.role = 'ADMIN'
+          LIMIT 1`,
+    args: [email],
+  });
+  return result.rows.length > 0;
+}
+
+export { ALLOWED_STATUS_TRANSITIONS, VALID_LEAD_STATUSES };
