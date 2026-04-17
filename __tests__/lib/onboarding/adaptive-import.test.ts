@@ -23,6 +23,7 @@ import {
   parseProposalJson,
   validateMappingProposal,
   computeUsage,
+  checkSexTransformAgainstSamples,
   AdaptiveImportError,
   GPT_4O_MINI_RATES,
   ZAR_PER_USD,
@@ -435,5 +436,96 @@ describe("AdaptiveImportError — rawResponse survives catch", () => {
     expect(caught).not.toBeNull();
     expect(caught?.rawResponse).toBe(raw);
     expect(caught?.name).toBe("AdaptiveImportError");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Commit A hardening
+// ---------------------------------------------------------------------------
+
+describe("validateMappingProposal — duplicate-source guard (A1)", () => {
+  it("rejects proposals where the same source appears in both mapping and unmapped", () => {
+    const raw = {
+      mapping: [{ source: "Kleur", target: "breed", confidence: 0.8 }],
+      unmapped: [
+        { source: "Kleur", samples: ["Rooi"], upsell_hint: "coat colour" },
+      ],
+      warnings: [],
+      row_count: 1,
+    };
+    try {
+      validateMappingProposal(raw);
+      expect.unreachable("validateMappingProposal should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AdaptiveImportError);
+      expect((err as AdaptiveImportError).message).toContain(
+        "cannot appear in both mapping and unmapped"
+      );
+      expect((err as AdaptiveImportError).message).toContain("Kleur");
+    }
+  });
+});
+
+describe("checkSexTransformAgainstSamples (A2)", () => {
+  it("demotes confidence and adds a warning when transform doesn't reference observed values", () => {
+    const proposal: MappingProposal = {
+      mapping: [
+        {
+          source: "Geslag",
+          target: "sex",
+          confidence: 0.9,
+          transform: "Manlik→Male; Vroulik→Female",
+        },
+      ],
+      unmapped: [],
+      warnings: [],
+      row_count: 2,
+    };
+    const out = checkSexTransformAgainstSamples(proposal, [
+      { Geslag: "Ooi" },
+      { Geslag: "Ram" },
+    ]);
+    expect(out.mapping[0].confidence).toBe(0.5);
+    expect(
+      out.warnings.some((w) =>
+        w.includes("Sex transform may not match observed values")
+      )
+    ).toBe(true);
+  });
+
+  it("leaves confidence untouched when transform does reference observed values", () => {
+    const proposal: MappingProposal = {
+      mapping: [
+        {
+          source: "Geslag",
+          target: "sex",
+          confidence: 0.9,
+          transform: "Manlik→Male; Vroulik→Female",
+        },
+      ],
+      unmapped: [],
+      warnings: [],
+      row_count: 2,
+    };
+    const out = checkSexTransformAgainstSamples(proposal, [
+      { Geslag: "Manlik" },
+      { Geslag: "Vroulik" },
+    ]);
+    expect(out.mapping[0].confidence).toBe(0.9);
+    expect(out.warnings).toHaveLength(0);
+  });
+
+  it("leaves confidence untouched when no transform is present", () => {
+    const proposal: MappingProposal = {
+      mapping: [{ source: "Geslag", target: "sex", confidence: 0.9 }],
+      unmapped: [],
+      warnings: [],
+      row_count: 2,
+    };
+    const out = checkSexTransformAgainstSamples(proposal, [
+      { Geslag: "Ooi" },
+    ]);
+    expect(out.mapping[0].confidence).toBe(0.9);
+    expect(out.warnings).toHaveLength(0);
   });
 });

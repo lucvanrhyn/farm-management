@@ -325,12 +325,71 @@ export function validateMappingProposal(raw: unknown): MappingProposal {
     ? warnings.filter((w): w is string => typeof w === "string")
     : [];
 
+  // A1. Duplicate-source guard — the model is explicitly forbidden from
+  // emitting the same source column in both `mapping` and `unmapped`, but
+  // has been observed doing so. Reject instead of silently letting the
+  // downstream pipeline see contradictory intents for one column.
+  const mappedSources = new Set(validatedMapping.map((m) => m.source));
+  for (const u of validatedUnmapped) {
+    if (mappedSources.has(u.source)) {
+      throw new AdaptiveImportError(
+        `Column '${u.source}' cannot appear in both mapping and unmapped.`,
+        rawContext(raw)
+      );
+    }
+  }
+
   return {
     mapping: validatedMapping,
     unmapped: validatedUnmapped,
     warnings: [...validatedWarnings, ...coercionWarnings],
     row_count,
   };
+}
+
+/**
+ * A2. Sex-transform referenced-values guard.
+ *
+ * The system prompt includes a `Manlik→Male; Vroulik→Female` example, and
+ * the model has been observed parroting that boilerplate verbatim even
+ * when the sample data uses different Afrikaans terms (e.g. `Ooi`/`Ram`).
+ * If the proposed transform string does not reference the actual observed
+ * values, demote confidence and flag a warning so the commit pipeline
+ * re-derives the mapping from data instead of trusting the model's
+ * hallucinated rule.
+ */
+export function checkSexTransformAgainstSamples(
+  proposal: MappingProposal,
+  sampleRows: Array<Record<string, unknown>>
+): MappingProposal {
+  const out = {
+    ...proposal,
+    mapping: [...proposal.mapping],
+    warnings: [...proposal.warnings],
+  };
+  for (let i = 0; i < out.mapping.length; i++) {
+    const m = out.mapping[i];
+    if (m.target !== "sex" || !m.transform) continue;
+    const observed = new Set<string>();
+    for (const row of sampleRows) {
+      const v = row[m.source];
+      if (typeof v === "string" && v.trim()) observed.add(v.trim().toLowerCase());
+    }
+    if (observed.size === 0) continue;
+    const transformLower = m.transform.toLowerCase();
+    const unreferenced: string[] = [];
+    for (const v of observed) {
+      if (!transformLower.includes(v)) unreferenced.push(v);
+    }
+    if (unreferenced.length > 0) {
+      const example = unreferenced[0];
+      out.mapping[i] = { ...m, confidence: Math.min(0.5, m.confidence) };
+      out.warnings.push(
+        `Sex transform may not match observed values (e.g. ${example}); commit pipeline should re-derive from data.`
+      );
+    }
+  }
+  return out;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -410,6 +469,10 @@ export async function proposeColumnMapping(
 
   const parsed = parseProposalJson(text);
   const proposal = validateMappingProposal(parsed);
+  const afterSexCheck = checkSexTransformAgainstSamples(
+    proposal,
+    input.sampleRows
+  );
 
   const usage = computeUsage(
     {
@@ -423,7 +486,7 @@ export async function proposeColumnMapping(
   );
 
   return {
-    proposal,
+    proposal: afterSexCheck,
     usage,
     model: MODEL_ID,
     promptVersion: SYSTEM_PROMPT_VERSION,
