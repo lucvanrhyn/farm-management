@@ -1,5 +1,6 @@
 import MobsManager from "@/components/admin/MobsManager";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,16 +20,18 @@ export default async function AdminMobsPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   const [prismaMobs, animalGroups, prismaCamps, animals] = await Promise.all([
     prisma.mob.findMany({ orderBy: { name: "asc" } }),
     prisma.animal.groupBy({
       by: ["mobId"],
-      where: { status: "Active", mobId: { not: null } },
+      where: { status: "Active", mobId: { not: null }, species: mode },
       _count: { _all: true },
     }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     prisma.animal.findMany({
-      where: { status: "Active" },
+      where: { status: "Active", species: mode },
       select: { animalId: true, name: true, currentCamp: true, mobId: true, category: true },
       orderBy: { animalId: "asc" },
     }),

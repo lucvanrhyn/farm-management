@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
 
@@ -30,10 +31,12 @@ export default async function CampDetailPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   const [camp, animals, liveConditions] = await Promise.all([
     prisma.camp.findFirst({ where: { campId: decodedId } }),
     prisma.animal.findMany({
-      where: { currentCamp: decodedId, status: "Active" },
+      where: { currentCamp: decodedId, status: "Active", species: mode },
       orderBy: [{ category: "asc" }, { animalId: "asc" }],
       select: { animalId: true, category: true },
     }),
