@@ -21,10 +21,9 @@ import {
  *     rows: ImportRow[],           // max 10_000 entries
  *     defaultSpecies: string,      // "cattle" | "sheep" | "goats" | "game"
  *     importJobId?: string,        // reuse existing ImportJob if provided
- *     rowCount?: number,           // optional metadata for a new ImportJob
- *     sourceFilename?: string,     // optional provenance for a new ImportJob
- *     sourceFileHash?: string,     // optional provenance for a new ImportJob
- *     mappingJson?: string,        // optional provenance for a new ImportJob
+ *     sourceFilename?: string,     // REQUIRED when importJobId is absent
+ *     sourceFileHash?: string,     // REQUIRED when importJobId is absent
+ *     mappingJson?: string,        // REQUIRED when importJobId is absent; must be valid JSON
  *   }
  *
  * Server-side concerns:
@@ -33,11 +32,19 @@ import {
  *   - 3 commits / farm / day rate limit (429)
  *   - body-validate BEFORE rate-limit (matches B3 hardening — malformed
  *     requests must not burn the daily budget)
+ *   - provenance fields (sourceFilename/sourceFileHash/mappingJson) are
+ *     REQUIRED when auto-creating an ImportJob — no silent audit-defeating
+ *     defaults
+ *   - when importJobId is reused, verify ownership (same farm, not already
+ *     complete) — returns 404/403/409 appropriately
+ *   - commitImport is wrapped in a 90s timeout (above the library's internal
+ *     60s transaction timeout) so a hung import surfaces as an SSE error
+ *     frame instead of a dangling connection
  *   - ImportJob row is created up-front when importJobId is absent so the
  *     library's final UPDATE always has a target
  *   - stream format: `event: progress\ndata: {...}\n\n` repeated,
  *     terminated by either `event: complete\ndata: CommitImportResult\n\n`
- *     or `event: error\ndata: {"message":"Import failed"}\n\n`
+ *     or `event: error\ndata: {"message":"..."}\n\n`
  *   - raw library errors are NEVER leaked to the client (generic message only)
  */
 
@@ -45,12 +52,12 @@ const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_COMMITS_PER_DAY = 3;
 const MAX_ROWS = 10_000;
 const ALLOWED_SPECIES = new Set(["cattle", "sheep", "goats", "game"]);
+const IMPORT_TIMEOUT_MS = 90_000;
 
 type RawBody = {
   rows: unknown;
   defaultSpecies: unknown;
   importJobId?: unknown;
-  rowCount?: unknown;
   sourceFilename?: unknown;
   sourceFileHash?: unknown;
   mappingJson?: unknown;
@@ -60,7 +67,6 @@ type ParsedBody = {
   rows: ImportRow[];
   defaultSpecies: string;
   importJobId?: string;
-  rowCount?: number;
   sourceFilename?: string;
   sourceFileHash?: string;
   mappingJson?: string;
@@ -122,14 +128,37 @@ export async function POST(req: NextRequest) {
     session.user?.email ?? session.user?.name ?? "unknown";
   let importJobId: string;
   if (parsed.importJobId) {
+    // Caller supplied an existing ImportJob id — verify ownership + status
+    // before touching it. Prisma is already farm-scoped so the farmId check
+    // is defense-in-depth.
+    const existing = await prisma.importJob.findUnique({
+      where: { id: parsed.importJobId },
+      select: { id: true, status: true, farmId: true },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "ImportJob not found" },
+        { status: 404 },
+      );
+    }
+    if (existing.farmId !== slug) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (existing.status === "complete") {
+      return NextResponse.json(
+        { error: "ImportJob already complete" },
+        { status: 409 },
+      );
+    }
     importJobId = parsed.importJobId;
   } else {
+    // parseBody guarantees these are present + valid when importJobId is absent.
     const created = await prisma.importJob.create({
       data: {
         farmId: slug,
-        sourceFileHash: parsed.sourceFileHash ?? "",
-        sourceFilename: parsed.sourceFilename ?? "import.csv",
-        mappingJson: parsed.mappingJson ?? "{}",
+        sourceFileHash: parsed.sourceFileHash!,
+        sourceFilename: parsed.sourceFilename!,
+        mappingJson: parsed.mappingJson!,
         confirmedBy,
         status: "running",
         rowsImported: 0,
@@ -153,20 +182,34 @@ export async function POST(req: NextRequest) {
         );
       };
 
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Import timeout")),
+          IMPORT_TIMEOUT_MS,
+        ),
+      );
+
       try {
-        const result: CommitImportResult = await commitImport(
-          prisma,
-          {
-            rows: parsed.rows,
-            importJobId,
-            defaultSpecies: parsed.defaultSpecies,
-          },
-          (p: CommitImportProgress) => send("progress", p),
-        );
+        const result: CommitImportResult = await Promise.race([
+          commitImport(
+            prisma,
+            {
+              rows: parsed.rows,
+              importJobId,
+              defaultSpecies: parsed.defaultSpecies,
+            },
+            (p: CommitImportProgress) => send("progress", p),
+          ),
+          timeoutPromise,
+        ]);
         send("complete", result);
       } catch (err) {
         console.error("[commit-import] fatal", err);
-        send("error", { message: "Import failed" });
+        const message =
+          err instanceof Error && err.message === "Import timeout"
+            ? "Import timed out — please reduce batch size and retry"
+            : "Import failed";
+        send("error", { message });
       } finally {
         controller.close();
       }
@@ -216,17 +259,8 @@ function parseBody(raw: RawBody): ParsedBody | { error: string } {
     }
   }
 
-  if (raw.rowCount !== undefined) {
-    if (
-      typeof raw.rowCount !== "number" ||
-      !Number.isFinite(raw.rowCount) ||
-      !Number.isInteger(raw.rowCount) ||
-      raw.rowCount < 0
-    ) {
-      return { error: "rowCount must be a non-negative integer." };
-    }
-  }
-
+  // Shape-check provenance fields regardless of whether importJobId is set,
+  // so malformed strings always 400 rather than silently ignored.
   for (const field of ["sourceFilename", "sourceFileHash", "mappingJson"] as const) {
     const v = raw[field];
     if (v !== undefined && (typeof v !== "string" || v.length > 2048)) {
@@ -234,11 +268,34 @@ function parseBody(raw: RawBody): ParsedBody | { error: string } {
     }
   }
 
+  // When creating a NEW ImportJob, provenance is required (no defaults).
+  if (raw.importJobId === undefined) {
+    if (
+      typeof raw.sourceFilename !== "string" ||
+      raw.sourceFilename.length === 0 ||
+      typeof raw.sourceFileHash !== "string" ||
+      raw.sourceFileHash.length === 0 ||
+      typeof raw.mappingJson !== "string" ||
+      raw.mappingJson.length === 0
+    ) {
+      return {
+        error:
+          "sourceFilename, sourceFileHash, and mappingJson are required when creating a new ImportJob.",
+      };
+    }
+    try {
+      JSON.parse(raw.mappingJson);
+    } catch {
+      return {
+        error: "Invalid mappingJson (must be valid JSON string)",
+      };
+    }
+  }
+
   return {
     rows: raw.rows as ImportRow[],
     defaultSpecies: raw.defaultSpecies,
     importJobId: raw.importJobId as string | undefined,
-    rowCount: raw.rowCount as number | undefined,
     sourceFilename: raw.sourceFilename as string | undefined,
     sourceFileHash: raw.sourceFileHash as string | undefined,
     mappingJson: raw.mappingJson as string | undefined,
