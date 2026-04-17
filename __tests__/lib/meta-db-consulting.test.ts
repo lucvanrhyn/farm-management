@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Shared mock-execute: tests push scripted responses and assert on calls.
 type ExecuteArgs = { sql: string; args?: unknown[] };
@@ -143,7 +143,120 @@ describe('updateConsultingLeadStatus', () => {
     const update = mockExecute.mock.calls[1][0];
     expect(update.sql).toMatch(/UPDATE consulting_leads/);
     expect(update.args?.[0]).toBe('scoped');
-    expect(update.args?.[2]).toBe('lead-1');
+  });
+
+  it('with options.assignedTo="user@x.com" sets the assignee', async () => {
+    const { updateConsultingLeadStatus } = await import('@/lib/meta-db');
+    queueResponses([
+      { rows: [{ ...baseLeadRow, status: 'new' }] }, // SELECT
+      { rows: [] }, // UPDATE
+    ]);
+
+    const res = await updateConsultingLeadStatus('lead-1', 'scoped', {
+      assignedTo: 'user@x.com',
+    });
+
+    expect(res).toEqual({ ok: true });
+    const update = mockExecute.mock.calls[1][0];
+    expect(update.sql).toMatch(/assigned_to = \?/);
+    expect(update.sql).not.toMatch(/COALESCE/);
+    expect(update.args).toEqual(['scoped', 'user@x.com', 'lead-1']);
+  });
+
+  it('with options.assignedTo=null un-assigns the lead', async () => {
+    const { updateConsultingLeadStatus } = await import('@/lib/meta-db');
+    queueResponses([
+      { rows: [{ ...baseLeadRow, status: 'new' }] }, // SELECT
+      { rows: [] }, // UPDATE
+    ]);
+
+    const res = await updateConsultingLeadStatus('lead-1', 'scoped', {
+      assignedTo: null,
+    });
+
+    expect(res).toEqual({ ok: true });
+    const update = mockExecute.mock.calls[1][0];
+    expect(update.sql).toMatch(/assigned_to = \?/);
+    expect(update.sql).not.toMatch(/COALESCE/);
+    expect(update.args).toEqual(['scoped', null, 'lead-1']);
+  });
+
+  it('with no options preserves existing assignee (UPDATE only status column)', async () => {
+    const { updateConsultingLeadStatus } = await import('@/lib/meta-db');
+    queueResponses([
+      { rows: [{ ...baseLeadRow, status: 'new' }] }, // SELECT
+      { rows: [] }, // UPDATE
+    ]);
+
+    const res = await updateConsultingLeadStatus('lead-1', 'scoped');
+
+    expect(res).toEqual({ ok: true });
+    const update = mockExecute.mock.calls[1][0];
+    expect(update.sql).toMatch(/UPDATE consulting_leads SET status = \? WHERE id = \?/);
+    expect(update.sql).not.toMatch(/assigned_to/);
+    expect(update.args).toEqual(['scoped', 'lead-1']);
+  });
+});
+
+describe('isPlatformAdmin', () => {
+  const originalEnv = process.env.PLATFORM_ADMIN_EMAILS;
+
+  beforeEach(() => {
+    mockExecute.mockReset();
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.PLATFORM_ADMIN_EMAILS;
+    } else {
+      process.env.PLATFORM_ADMIN_EMAILS = originalEnv;
+    }
+  });
+
+  it('returns true when email is in PLATFORM_ADMIN_EMAILS (case-insensitive)', async () => {
+    vi.stubEnv(
+      'PLATFORM_ADMIN_EMAILS',
+      'owner@example.com, other@example.com',
+    );
+    const { isPlatformAdmin } = await import('@/lib/meta-db');
+
+    await expect(isPlatformAdmin('LucVanRhyn@iCloud.com')).resolves.toBe(true);
+    // Should not have hit the DB
+    expect(mockExecute).not.toHaveBeenCalled();
+
+    vi.unstubAllEnvs();
+  });
+
+  it('returns false when email NOT in allowlist', async () => {
+    vi.stubEnv('PLATFORM_ADMIN_EMAILS', 'owner@example.com');
+    const { isPlatformAdmin } = await import('@/lib/meta-db');
+
+    await expect(isPlatformAdmin('stranger@example.com')).resolves.toBe(false);
+    expect(mockExecute).not.toHaveBeenCalled();
+
+    vi.unstubAllEnvs();
+  });
+
+  it('falls back to farm-ADMIN check when env var unset', async () => {
+    vi.stubEnv('PLATFORM_ADMIN_EMAILS', '');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    queueResponses([{ rows: [{ count: 1 }] }]);
+
+    const { isPlatformAdmin } = await import('@/lib/meta-db');
+    const result = await isPlatformAdmin('admin@example.com');
+
+    expect(result).toBe(true);
+    expect(mockExecute).toHaveBeenCalledOnce();
+    const call = mockExecute.mock.calls[0][0];
+    expect(call.sql).toMatch(/SELECT COUNT\(\*\)/);
+    expect(call.args).toEqual(['admin@example.com']);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('PLATFORM_ADMIN_EMAILS not set'),
+    );
+
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 });
 

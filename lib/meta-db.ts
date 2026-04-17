@@ -1,6 +1,7 @@
 import { createClient, type Client } from '@libsql/client';
 
 let _client: Client | null = null;
+let hasWarnedAboutPlatformAdminFallback = false;
 
 function getMetaClient(): Client {
   if (_client) return _client;
@@ -486,16 +487,21 @@ export async function updateConsultingLeadStatus(
     return { ok: false, error: 'invalid transition' };
   }
 
-  // COALESCE(?, assigned_to) → keeps existing when null/undefined is passed.
-  const assignedArg =
-    options?.assignedTo === undefined ? null : options.assignedTo;
+  // Distinguish "caller passed no assignedTo" (undefined → preserve existing)
+  // from "caller explicitly passed null" (un-assign). COALESCE conflates these.
+  const hasAssignee = options !== undefined && 'assignedTo' in options;
 
-  await client.execute({
-    sql: `UPDATE consulting_leads
-          SET status = ?, assigned_to = COALESCE(?, assigned_to)
-          WHERE id = ?`,
-    args: [nextStatus, assignedArg, id],
-  });
+  if (hasAssignee) {
+    await client.execute({
+      sql: `UPDATE consulting_leads SET status = ?, assigned_to = ? WHERE id = ?`,
+      args: [nextStatus, options.assignedTo ?? null, id],
+    });
+  } else {
+    await client.execute({
+      sql: `UPDATE consulting_leads SET status = ? WHERE id = ?`,
+      args: [nextStatus, id],
+    });
+  }
 
   return { ok: true };
 }
@@ -530,20 +536,41 @@ export async function getConsultingEngagements(
 }
 
 /**
- * A user is a "platform admin" if they hold ADMIN role on ANY farm in the
- * meta-DB. Used to gate meta-level consulting CRM operations.
+ * A platform admin can manage the consulting CRM across all farms.
+ *
+ * Source of truth: PLATFORM_ADMIN_EMAILS env var (comma-separated).
+ * If unset, falls back to "any farm-level ADMIN" (legacy behaviour, not
+ * recommended for production — logs a warning once).
  */
 export async function isPlatformAdmin(email: string): Promise<boolean> {
+  const allowlist = process.env.PLATFORM_ADMIN_EMAILS;
+  if (allowlist) {
+    const emails = allowlist
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    return emails.includes(email.toLowerCase());
+  }
+
+  // Fallback — legacy farm-ADMIN check. Log once per process.
+  if (!hasWarnedAboutPlatformAdminFallback) {
+    hasWarnedAboutPlatformAdminFallback = true;
+    console.warn(
+      '[meta-db] PLATFORM_ADMIN_EMAILS not set — falling back to farm-ADMIN check. Set the env var for production.',
+    );
+  }
   const client = getMetaClient();
   const result = await client.execute({
-    sql: `SELECT 1
-          FROM farm_users fu
-          JOIN users u ON u.id = fu.user_id
-          WHERE u.email = ? AND fu.role = 'ADMIN'
-          LIMIT 1`,
+    sql: `
+      SELECT COUNT(*) as count
+      FROM farm_users fu
+      JOIN users u ON u.id = fu.user_id
+      WHERE u.email = ? AND fu.role = 'ADMIN'
+    `,
     args: [email],
   });
-  return result.rows.length > 0;
+  const count = Number(result.rows[0]?.count ?? 0);
+  return count > 0;
 }
 
 export { ALLOWED_STATUS_TRANSITIONS, VALID_LEAD_STATUSES };
