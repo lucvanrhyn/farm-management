@@ -1,45 +1,48 @@
 /**
  * lib/onboarding/adaptive-import.ts
  *
- * Workstream B2 — Anthropic SDK client + prompt caching.
+ * Workstream B2 — OpenAI SDK client + prompt caching.
  *
- * Wraps [schema-dictionary.ts] (B1) as a 5-minute ephemeral cached system
- * prompt, calls Claude Sonnet 4.6, parses the JSON mapping proposal, and
- * returns it alongside usage/cost telemetry.
+ * Wraps [schema-dictionary.ts] (B1) as the system prompt, calls OpenAI
+ * (gpt-4o-mini, JSON mode), parses the JSON mapping proposal, and returns
+ * it alongside usage/cost telemetry.
  *
  * Scope (intentionally narrow):
  *   - Server-side only. No routes, no file parsing, no UI.
  *   - Text input (already-parsed columns + sample rows + camp list).
  *   - Vision support (scanned PDFs, notebook photos) is a follow-up.
  *
- * Cost target: ~$0.03 / R0.55 per cached-hit call. See computeUsage tests
- * for the math and the rate table below for the pinned constants.
+ * Prompt caching note: OpenAI caches prompts >= 1024 tokens automatically
+ * (no `cache_control` markers required) and surfaces the cached-token count
+ * via `response.usage.prompt_tokens_details.cached_tokens`. The cached-input
+ * discount is applied automatically — there is no separate cache-write fee.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from "./schema-dictionary";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MODEL_ID = "claude-sonnet-4-6" as const;
+export const MODEL_ID = "gpt-4o-mini" as const;
 
 /**
- * Sonnet 4.6 pricing per million tokens (USD). Pinned in source so cost
+ * gpt-4o-mini pricing per million tokens (USD). Pinned in source so cost
  * telemetry is reproducible and auditable; update alongside F3 dashboard
- * work if Anthropic changes rates.
+ * work if OpenAI changes rates.
  *
- *   input         $3.00  /Mtok
- *   output        $15.00 /Mtok
- *   cache write   $3.75  /Mtok   (1.25x input, 5-min ephemeral)
- *   cache read    $0.30  /Mtok   (0.10x input)
+ *   input          $0.15  /Mtok
+ *   output         $0.60  /Mtok
+ *   cached input   $0.075 /Mtok   (50% of input; applied automatically)
+ *
+ * OpenAI does NOT charge a separate cache-write fee — cache creation is
+ * billed at the normal input rate and cached reads get the discount above.
  */
-export const SONNET_4_6_RATES = Object.freeze({
-  inputUsdPerMtok: 3.0,
-  outputUsdPerMtok: 15.0,
-  cacheWriteUsdPerMtok: 3.75,
-  cacheReadUsdPerMtok: 0.3,
+export const GPT_4O_MINI_RATES = Object.freeze({
+  inputUsdPerMtok: 0.15,
+  outputUsdPerMtok: 0.6,
+  cachedInputUsdPerMtok: 0.075,
 });
 
 /**
@@ -105,10 +108,9 @@ export type ProposalResult = {
 };
 
 type RawApiUsage = {
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens: number | null;
-  cache_read_input_tokens: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cached_tokens: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -134,14 +136,14 @@ export class AdaptiveImportError extends Error {
 // Client
 // ---------------------------------------------------------------------------
 
-function getAnthropicClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new AdaptiveImportError(
-      "ANTHROPIC_API_KEY must be set in environment variables."
+      "OPENAI_API_KEY must be set in environment variables."
     );
   }
-  return new Anthropic({ apiKey });
+  return new OpenAI({ apiKey });
 }
 
 // ---------------------------------------------------------------------------
@@ -345,25 +347,27 @@ function rawContext(raw: unknown): { rawResponse?: string } {
 
 export function computeUsage(
   apiUsage: RawApiUsage,
-  rates: typeof SONNET_4_6_RATES,
+  rates: typeof GPT_4O_MINI_RATES,
   zarPerUsd: number
 ): ProposalUsage {
-  const inputTokens = apiUsage.input_tokens ?? 0;
-  const outputTokens = apiUsage.output_tokens ?? 0;
-  const cacheCreationTokens = apiUsage.cache_creation_input_tokens ?? 0;
-  const cacheReadTokens = apiUsage.cache_read_input_tokens ?? 0;
+  const promptTokens = apiUsage.prompt_tokens ?? 0;
+  const completionTokens = apiUsage.completion_tokens ?? 0;
+  const cachedTokens = apiUsage.cached_tokens ?? 0;
+  const nonCachedInput = Math.max(0, promptTokens - cachedTokens);
 
   const costUsd =
-    (inputTokens / 1_000_000) * rates.inputUsdPerMtok +
-    (outputTokens / 1_000_000) * rates.outputUsdPerMtok +
-    (cacheCreationTokens / 1_000_000) * rates.cacheWriteUsdPerMtok +
-    (cacheReadTokens / 1_000_000) * rates.cacheReadUsdPerMtok;
+    (nonCachedInput / 1_000_000) * rates.inputUsdPerMtok +
+    (cachedTokens / 1_000_000) * rates.cachedInputUsdPerMtok +
+    (completionTokens / 1_000_000) * rates.outputUsdPerMtok;
 
   return {
-    inputTokens,
-    outputTokens,
-    cacheCreationTokens,
-    cacheReadTokens,
+    inputTokens: nonCachedInput,
+    outputTokens: completionTokens,
+    // OpenAI does not charge a distinct cache-creation fee, so the Anthropic
+    // concept of "cache creation tokens" collapses to 0 here. Kept in the
+    // shape for backwards-compatible telemetry consumers.
+    cacheCreationTokens: 0,
+    cacheReadTokens: cachedTokens,
     costUsd,
     costZar: costUsd * zarPerUsd,
   };
@@ -378,47 +382,43 @@ export async function proposeColumnMapping(
 ): Promise<ProposalResult> {
   validateInput(input);
 
-  const client = getAnthropicClient();
+  const client = getOpenAIClient();
   const userPrompt = buildUserPrompt(input);
 
   let response;
   try {
-    response = await client.messages.create({
+    response = await client.chat.completions.create({
       model: MODEL_ID,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
       ],
-      messages: [{ role: "user", content: userPrompt }],
     });
   } catch (err) {
-    throw new AdaptiveImportError("Anthropic API call failed.", { cause: err });
+    throw new AdaptiveImportError("OpenAI API call failed.", { cause: err });
   }
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  const text = response.choices[0]?.message?.content;
+  if (!text) {
     throw new AdaptiveImportError(
-      "Model response contained no text block.",
+      "Model response contained no text content.",
       {}
     );
   }
 
-  const parsed = parseProposalJson(textBlock.text);
+  const parsed = parseProposalJson(text);
   const proposal = validateMappingProposal(parsed);
 
   const usage = computeUsage(
     {
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      cache_creation_input_tokens:
-        response.usage.cache_creation_input_tokens ?? null,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? null,
+      prompt_tokens: response.usage?.prompt_tokens ?? 0,
+      completion_tokens: response.usage?.completion_tokens ?? 0,
+      cached_tokens:
+        response.usage?.prompt_tokens_details?.cached_tokens ?? null,
     },
-    SONNET_4_6_RATES,
+    GPT_4O_MINI_RATES,
     ZAR_PER_USD
   );
 

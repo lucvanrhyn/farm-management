@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from "@/lib/onboarding/schema-dictionary";
+import {
+  SYSTEM_PROMPT,
+  SYSTEM_PROMPT_VERSION,
+} from "@/lib/onboarding/schema-dictionary";
 
 // The SDK is hoisted-mocked below. We import the module-under-test AFTER
-// the mock so the mocked Anthropic constructor is in place.
+// the mock so the mocked OpenAI constructor is in place.
 
-const messagesCreateMock = vi.fn();
+const chatCompletionsCreateMock = vi.fn();
 
-vi.mock("@anthropic-ai/sdk", () => {
-  class MockAnthropic {
-    messages = { create: messagesCreateMock };
+vi.mock("openai", () => {
+  class MockOpenAI {
+    chat = { completions: { create: chatCompletionsCreateMock } };
     constructor(_opts?: { apiKey?: string }) {}
   }
-  return { default: MockAnthropic };
+  return { default: MockOpenAI };
 });
 
 import {
@@ -21,7 +24,7 @@ import {
   validateMappingProposal,
   computeUsage,
   AdaptiveImportError,
-  SONNET_4_6_RATES,
+  GPT_4O_MINI_RATES,
   ZAR_PER_USD,
   type ProposeMappingInput,
   type MappingProposal,
@@ -105,20 +108,21 @@ const happyPathProposal: MappingProposal = {
 function mockSdkResponse(
   json: unknown,
   usage: Partial<{
-    input_tokens: number;
-    output_tokens: number;
-    cache_creation_input_tokens: number;
-    cache_read_input_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    cached_tokens: number;
   }> = {}
 ) {
-  messagesCreateMock.mockResolvedValueOnce({
-    content: [{ type: "text", text: JSON.stringify(json) }],
+  const promptTokens = usage.prompt_tokens ?? 5800;
+  const completionTokens = usage.completion_tokens ?? 1500;
+  const cachedTokens = usage.cached_tokens ?? 5000;
+  chatCompletionsCreateMock.mockResolvedValueOnce({
+    choices: [{ message: { content: JSON.stringify(json) } }],
     usage: {
-      input_tokens: 800,
-      output_tokens: 1500,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 5000,
-      ...usage,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
+      prompt_tokens_details: { cached_tokens: cachedTokens },
     },
   });
 }
@@ -130,16 +134,16 @@ function mockSdkResponse(
 const envBackup: Record<string, string | undefined> = {};
 
 beforeEach(() => {
-  envBackup.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  process.env.ANTHROPIC_API_KEY = "test-key-DO-NOT-USE";
-  messagesCreateMock.mockReset();
+  envBackup.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key-DO-NOT-USE";
+  chatCompletionsCreateMock.mockReset();
 });
 
 afterEach(() => {
-  if (envBackup.ANTHROPIC_API_KEY === undefined) {
-    delete process.env.ANTHROPIC_API_KEY;
+  if (envBackup.OPENAI_API_KEY === undefined) {
+    delete process.env.OPENAI_API_KEY;
   } else {
-    process.env.ANTHROPIC_API_KEY = envBackup.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = envBackup.OPENAI_API_KEY;
   }
 });
 
@@ -148,8 +152,8 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("proposeColumnMapping — environment", () => {
-  it("throws AdaptiveImportError when ANTHROPIC_API_KEY is unset", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  it("throws AdaptiveImportError when OPENAI_API_KEY is unset", async () => {
+    delete process.env.OPENAI_API_KEY;
     await expect(proposeColumnMapping(bassonInput)).rejects.toBeInstanceOf(
       AdaptiveImportError
     );
@@ -161,46 +165,50 @@ describe("proposeColumnMapping — happy path", () => {
     mockSdkResponse(happyPathProposal);
     const result = await proposeColumnMapping(bassonInput);
 
-    expect(result.model).toBe("claude-sonnet-4-6");
+    expect(result.model).toBe("gpt-4o-mini");
     expect(result.promptVersion).toBe(SYSTEM_PROMPT_VERSION);
     expect(result.proposal.row_count).toBe(103);
     expect(result.proposal.mapping).toHaveLength(8);
     expect(result.proposal.unmapped).toHaveLength(1);
+    // With prompt_tokens=5800, cached_tokens=5000 → non-cached input = 800
     expect(result.usage.inputTokens).toBe(800);
     expect(result.usage.cacheReadTokens).toBe(5000);
+    expect(result.usage.cacheCreationTokens).toBe(0);
     expect(result.usage.costZar).toBeGreaterThan(0);
   });
 
-  it("calls the SDK with cache_control ephemeral on the system block", async () => {
+  it("calls the SDK with JSON mode and gpt-4o-mini", async () => {
     mockSdkResponse(happyPathProposal);
     await proposeColumnMapping(bassonInput);
 
-    expect(messagesCreateMock).toHaveBeenCalledTimes(1);
-    const call = messagesCreateMock.mock.calls[0][0];
-    expect(call.model).toBe("claude-sonnet-4-6");
-    expect(Array.isArray(call.system)).toBe(true);
-    expect(call.system[0].type).toBe("text");
-    expect(call.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(chatCompletionsCreateMock).toHaveBeenCalledTimes(1);
+    const call = chatCompletionsCreateMock.mock.calls[0][0];
+    expect(call.model).toBe("gpt-4o-mini");
+    expect(call.response_format).toEqual({ type: "json_object" });
   });
 
-  it("sends SYSTEM_PROMPT verbatim as the cached system block", async () => {
+  it("sends SYSTEM_PROMPT as a plain system message", async () => {
     mockSdkResponse(happyPathProposal);
     await proposeColumnMapping(bassonInput);
 
-    const call = messagesCreateMock.mock.calls[0][0];
-    expect(call.system[0].text).toBe(SYSTEM_PROMPT);
+    const call = chatCompletionsCreateMock.mock.calls[0][0];
+    expect(Array.isArray(call.messages)).toBe(true);
+    expect(call.messages[0].role).toBe("system");
+    // SYSTEM_PROMPT is forwarded verbatim (OpenAI caches >=1024 tok prompts
+    // automatically — no cache_control markers needed).
+    expect(call.messages[0].content).toBe(SYSTEM_PROMPT);
   });
 
   it("keeps per-request data in the user prompt, not the system block", async () => {
     mockSdkResponse(happyPathProposal);
     await proposeColumnMapping(bassonInput);
 
-    // The previous test already pins `call.system[0].text === SYSTEM_PROMPT`,
-    // so we know per-request data is not in the system block by construction.
-    // Here we just assert the user block carries the farm-specific payload.
-    const call = messagesCreateMock.mock.calls[0][0];
-    const userMsg = call.messages[0].content;
-    const userText = typeof userMsg === "string" ? userMsg : userMsg[0].text;
+    // The previous test already pins the system message text. Here we just
+    // assert the user block carries the farm-specific payload.
+    const call = chatCompletionsCreateMock.mock.calls[0][0];
+    const userMsg = call.messages[1];
+    expect(userMsg.role).toBe("user");
+    const userText = userMsg.content;
     expect(userText).toContain("Oormerk");
     expect(userText).toContain("Bergkamp");
     expect(userText).toContain("BB-C001");
@@ -339,63 +347,69 @@ describe("validateMappingProposal", () => {
 });
 
 describe("computeUsage — cost math", () => {
-  it("computes cache-write path cost for fresh cache entry", () => {
+  it("computes uncached path cost (no cache hits)", () => {
+    // prompt_tokens=5800, cached=0 → all 5800 billed as non-cached input
+    // input: 5800/1M * 0.15 = 0.00087
+    // output: 1500/1M * 0.60 = 0.0009
+    // total = 0.00177 USD
     const usage = computeUsage(
       {
-        input_tokens: 800,
-        output_tokens: 1500,
-        cache_creation_input_tokens: 5000,
-        cache_read_input_tokens: 0,
+        prompt_tokens: 5800,
+        completion_tokens: 1500,
+        cached_tokens: 0,
       },
-      SONNET_4_6_RATES,
+      GPT_4O_MINI_RATES,
       ZAR_PER_USD
     );
-    // input: 800/1M * 3 = 0.0024
-    // output: 1500/1M * 15 = 0.0225
-    // cache create: 5000/1M * 3.75 = 0.01875
-    // total ≈ 0.04365
-    expect(usage.costUsd).toBeCloseTo(0.04365, 4);
-    expect(usage.costZar).toBeCloseTo(0.04365 * ZAR_PER_USD, 4);
-    expect(usage.inputTokens).toBe(800);
+    expect(usage.costUsd).toBeCloseTo(0.00177, 5);
+    expect(usage.costZar).toBeCloseTo(0.00177 * ZAR_PER_USD, 5);
+    expect(usage.inputTokens).toBe(5800);
     expect(usage.outputTokens).toBe(1500);
-    expect(usage.cacheCreationTokens).toBe(5000);
+    expect(usage.cacheCreationTokens).toBe(0);
     expect(usage.cacheReadTokens).toBe(0);
   });
 
-  it("computes cache-hit path cost ~R0.55 matching the master plan target", () => {
+  it("computes cache-hit path cost — ~20x cheaper than Anthropic Sonnet", () => {
+    // prompt_tokens=5800, cached=5000 → non-cached input = 800
+    // input: 800/1M * 0.15 = 0.00012
+    // cached: 5000/1M * 0.075 = 0.000375
+    // output: 1500/1M * 0.60 = 0.0009
+    // total = 0.001395 USD ≈ R0.0258
     const usage = computeUsage(
       {
-        input_tokens: 800,
-        output_tokens: 1500,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 5000,
+        prompt_tokens: 5800,
+        completion_tokens: 1500,
+        cached_tokens: 5000,
       },
-      SONNET_4_6_RATES,
+      GPT_4O_MINI_RATES,
       ZAR_PER_USD
     );
-    // input: 0.0024
-    // output: 0.0225
-    // cache read: 5000/1M * 0.30 = 0.0015
-    // total ≈ 0.0264 USD ≈ R0.49
-    expect(usage.costUsd).toBeCloseTo(0.0264, 4);
-    expect(usage.costZar).toBeLessThan(0.6);
-    expect(usage.costZar).toBeGreaterThan(0.3);
+    expect(usage.costUsd).toBeCloseTo(0.001395, 5);
+    expect(usage.costZar).toBeLessThan(0.1);
+    expect(usage.costZar).toBeGreaterThan(0.01);
+    expect(usage.inputTokens).toBe(800);
+    expect(usage.cacheReadTokens).toBe(5000);
+    expect(usage.cacheCreationTokens).toBe(0);
   });
 
-  it("handles null cache fields defensively", () => {
+  it("handles null cached_tokens defensively", () => {
+    // prompt_tokens=100, completion=100, cached=null → non-cached = 100
+    // input: 100/1M * 0.15 = 0.000015
+    // output: 100/1M * 0.60 = 0.00006
+    // total = 0.000075 USD
     const usage = computeUsage(
       {
-        input_tokens: 100,
-        output_tokens: 100,
-        cache_creation_input_tokens: null,
-        cache_read_input_tokens: null,
+        prompt_tokens: 100,
+        completion_tokens: 100,
+        cached_tokens: null,
       },
-      SONNET_4_6_RATES,
+      GPT_4O_MINI_RATES,
       ZAR_PER_USD
     );
     expect(usage.cacheCreationTokens).toBe(0);
     expect(usage.cacheReadTokens).toBe(0);
-    expect(usage.costUsd).toBeCloseTo(0.0003 + 0.0015, 5);
+    expect(usage.inputTokens).toBe(100);
+    expect(usage.costUsd).toBeCloseTo(0.000075, 6);
   });
 });
 
