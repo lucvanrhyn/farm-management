@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getUserRoleForFarm } from "@/lib/auth";
+import { getUserRoleForFarm, verifyFreshAdminRole } from "@/lib/auth";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -70,6 +70,13 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Defence-in-depth: re-verify against meta-db (fresh role) to close the
+  // 5-minute JWT refresh window where a revoked ADMIN could still mutate settings.
+  const freshOk = await verifyFreshAdminRole(session.user.id, farmSlug);
+  if (!freshOk) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
