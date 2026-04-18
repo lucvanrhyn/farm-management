@@ -130,19 +130,24 @@ export async function seedAnimals(animals: Animal[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction('animals', 'readwrite');
 
-  // Read existing keys to detect orphans (Bug A fix)
-  const existingKeys = await tx.store.getAllKeys();
+  // Read existing rows so we can (a) detect orphans and (b) preserve any row
+  // that still carries a pending local mutation — otherwise a full refresh
+  // between an offline edit and its push would silently drop the user's work.
+  const existingRows = (await tx.store.getAll()) as Array<
+    Animal & { _pendingSync?: boolean }
+  >;
   const incomingIds = new Set(animals.map((a) => a.animal_id));
 
   for (const animal of animals) {
     await tx.store.put(animal);
   }
 
-  // Delete animals removed from the server so they don't persist in the logger (Bug A fix)
-  for (const key of existingKeys) {
-    if (!incomingIds.has(key as string)) {
-      await tx.store.delete(key);
-    }
+  // Delete animals removed from the server, except those with a pending local
+  // mutation (Bug L1 fix — orphan-cleanup + offline-safety).
+  for (const row of existingRows) {
+    if (incomingIds.has(row.animal_id)) continue;
+    if (row._pendingSync) continue;
+    await tx.store.delete(row.animal_id);
   }
 
   await tx.done;
