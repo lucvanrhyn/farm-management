@@ -117,4 +117,63 @@ describe("AdminNav", () => {
     });
   });
 
+  // ─── N2: per-mode item filtering ─────────────────────────────────────────
+
+  describe("N2 — filter nav items by enabledSpecies", () => {
+    it("hides sheep-specific items when enabledSpecies excludes 'sheep'", () => {
+      // Force sheep mode in nav; with enabledSpecies=['cattle'], sheep-tagged
+      // items should be filtered out even though the sheep nav set is active.
+      renderNav({
+        pathname: "/farm-x/admin",
+        enabledSpecies: ["cattle"],
+        mode: "sheep",
+      });
+
+      // "Lambing" is tagged species: "sheep" and must be filtered out.
+      expect(getLink("Lambing")).toBeNull();
+    });
+
+    it("hides game-specific items when enabledSpecies excludes 'game'", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        enabledSpecies: ["cattle"],
+        mode: "game",
+      });
+
+      // Game-only items (Census, Hunting) must be filtered out.
+      expect(getLink("Census")).toBeNull();
+      expect(getLink("Hunting")).toBeNull();
+    });
+
+    it("renders sheep items when enabledSpecies includes 'sheep'", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        enabledSpecies: ["cattle", "sheep"],
+        mode: "sheep",
+      });
+
+      expect(getLink("Lambing")).not.toBeNull();
+    });
+
+    it("renders all items when enabledSpecies is undefined (defensive fallback)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        enabledSpecies: undefined,
+        mode: "sheep",
+      });
+
+      expect(getLink("Lambing")).not.toBeNull();
+    });
+
+    it("always renders cattle (shared) items regardless of enabledSpecies", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        enabledSpecies: ["cattle"],
+        mode: "cattle",
+      });
+
+      // Overview is a shared/cattle item — should always be present.
+      expect(getLink("Overview")).not.toBeNull();
+    });
+  });
 });

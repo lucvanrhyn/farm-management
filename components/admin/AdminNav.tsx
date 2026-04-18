@@ -278,8 +278,14 @@ export default function AdminNav({
 
   const isBasic = tier === "basic";
 
-  // Get nav items for the current mode.
-  const navItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
+  // Get nav items for the current mode, then filter by enabledSpecies.
+  // If enabledSpecies is undefined (defensive fallback), show everything.
+  const rawNavItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
+  const navItems = rawNavItems.filter((item) => {
+    if (!item.species) return true; // cattle/shared items always render
+    if (!enabledSpecies) return true; // defensive fallback
+    return enabledSpecies.includes(item.species);
+  });
 
   // N1: pathname sub-route matching for species-scoped items.
   // Any /sheep/* sub-route activates sheep-scoped items; same for game.
