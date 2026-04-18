@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "rm -f .next/dev/lock && next dev --webpack --port 3001",
+    "prebuild": "tsx scripts/create-template.ts",
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -15,7 +16,11 @@
     "db:migrate:meta": "dotenv-cli -e .env.local -- tsx scripts/migrate-meta-db-pricing.ts",
     "db:resync-passwords": "dotenv-cli -e .env.local -- tsx scripts/resync-passwords.ts",
     "db:verify-auth": "dotenv-cli -e .env.local -- tsx scripts/verify-auth.ts",
-    "db:gen-schema": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script"
+    "db:gen-schema": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@libsql/client": "^0.8.1",
@@ -50,6 +55,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/mapbox-gl": "^3.5.0",
     "@types/mapbox__mapbox-gl-draw": "^1.4.9",
@@ -58,14 +66,16 @@
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jsdom": "^29.0.2",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vite": "^8.0.8",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.4"
   },
   "pnpm": {
     "overrides": {

@@ -31,11 +31,21 @@ export async function POST(
     return NextResponse.json({ error: "Snapshot is already voided" }, { status: 409 });
   }
 
-  let body: { reason?: string };
-  try {
-    body = (await req.json()) as { reason?: string };
-  } catch {
-    body = {};
+  // An empty body is legitimate (admin is voiding without a stated reason),
+  // but malformed JSON is a client bug worth surfacing rather than silently
+  // defaulting — this endpoint writes to the audit trail.
+  let body: { reason?: string } = {};
+  const contentLength = Number(req.headers.get("content-length") ?? "0");
+  if (contentLength > 0) {
+    try {
+      body = (await req.json()) as { reason?: string };
+    } catch (err) {
+      console.error("[it3 void] malformed request body:", err);
+      return NextResponse.json(
+        { error: "Request body must be valid JSON" },
+        { status: 400 },
+      );
+    }
   }
 
   const reason = typeof body.reason === "string" && body.reason.trim()

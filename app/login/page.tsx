@@ -5,6 +5,25 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { AUTH_ERROR_CODES } from "@/lib/auth-errors";
+
+/**
+ * Map specific auth error codes (thrown by authorize()) to user-facing copy.
+ * Anything unrecognised falls through to the generic credentials message so
+ * we never leak server internals to the UI.
+ */
+const AUTH_ERROR_COPY: Record<string, string> = {
+  [AUTH_ERROR_CODES.INVALID_CREDENTIALS]:
+    "Incorrect email/username or password. Try again.",
+  [AUTH_ERROR_CODES.EMAIL_NOT_VERIFIED]:
+    "Your email isn't verified yet. Check your inbox (and spam) for the verification link we sent when you registered.",
+  [AUTH_ERROR_CODES.RATE_LIMITED]:
+    "Too many attempts. Wait about a minute before trying again.",
+  [AUTH_ERROR_CODES.SERVER_MISCONFIGURED]:
+    "Server is misconfigured (database env vars missing). Contact support — this isn't your password.",
+  [AUTH_ERROR_CODES.DB_UNAVAILABLE]:
+    "We can't reach the login database right now. Try again in a minute — your password is probably fine.",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,7 +45,12 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Incorrect email/username or password. Try again.");
+        // NextAuth surfaces the authorize()-thrown Error#message as result.error.
+        // Unknown strings fall back to the generic credentials copy.
+        const copy =
+          AUTH_ERROR_COPY[result.error] ??
+          AUTH_ERROR_COPY[AUTH_ERROR_CODES.INVALID_CREDENTIALS];
+        setError(copy);
       } else if (result?.ok) {
         router.push("/farms");
       } else {
