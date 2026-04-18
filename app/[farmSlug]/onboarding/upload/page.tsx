@@ -9,15 +9,14 @@
  *   success  → setProposal + router.push to /mapping
  *   fallback → show TemplateFallback with a kind-specific copy + retry
  *
- * Parse errors from the spreadsheet (e.g. "File too large") surface as a
- * `validation-error` fallback so the user gets the same escape hatch as API
- * failures. Hashing + parsing run in parallel so the user waits on the slower
- * of the two rather than the sum.
+ * Parse + hash run in parallel so the user waits on the slower of the two.
+ * Parse errors surface as `validation-error` fallbacks.
  */
 
 import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FileDropzone } from "@/components/onboarding/FileDropzone";
+import { StepShell } from "@/components/onboarding/StepShell";
 import {
   TemplateFallback,
   type TemplateFallbackReason,
@@ -42,8 +41,6 @@ export default function OnboardingUploadPage() {
     async (file: File) => {
       setView({ kind: "loading" });
 
-      // Parse + hash in parallel. Parse errors are surfaced as
-      // validation-error fallbacks; hash failures are system errors.
       let parsed: Awaited<ReturnType<typeof parseSpreadsheet>>;
       let hashHex: string;
       try {
@@ -61,8 +58,6 @@ export default function OnboardingUploadPage() {
         return;
       }
 
-      // Persist to provider so later steps can read sampleRows/fullRowCount
-      // and the import step can confirm the re-uploaded file matches.
       setParsedFile({
         file: { name: file.name, size: file.size, hashHex },
         parsedColumns: parsed.parsedColumns,
@@ -82,10 +77,7 @@ export default function OnboardingUploadPage() {
           }),
         });
       } catch {
-        setView({
-          kind: "fallback",
-          reason: { kind: "upstream-error" },
-        });
+        setView({ kind: "fallback", reason: { kind: "upstream-error" } });
         return;
       }
 
@@ -96,10 +88,7 @@ export default function OnboardingUploadPage() {
         } catch {
           setView({
             kind: "fallback",
-            reason: {
-              kind: "unknown",
-              message: "Could not read AI response",
-            },
+            reason: { kind: "unknown", message: "Could not read AI response" },
           });
           return;
         }
@@ -107,8 +96,6 @@ export default function OnboardingUploadPage() {
         return;
       }
 
-      // Error path — decode the JSON error body so the fallback can show a
-      // useful message.
       let errorBody: { error?: string; retryAfterMs?: number } = {};
       try {
         errorBody = (await response.json()) as typeof errorBody;
@@ -119,26 +106,17 @@ export default function OnboardingUploadPage() {
       if (response.status === 429) {
         setView({
           kind: "fallback",
-          reason: {
-            kind: "rate-limit",
-            retryAfterMs: errorBody.retryAfterMs,
-          },
+          reason: { kind: "rate-limit", retryAfterMs: errorBody.retryAfterMs },
         });
       } else if (response.status === 502 || response.status === 503) {
         setView({
           kind: "fallback",
-          reason: {
-            kind: "upstream-error",
-            message: errorBody.error,
-          },
+          reason: { kind: "upstream-error", message: errorBody.error },
         });
       } else {
         setView({
           kind: "fallback",
-          reason: {
-            kind: "unknown",
-            message: errorBody.error,
-          },
+          reason: { kind: "unknown", message: errorBody.error },
         });
       }
     },
@@ -146,39 +124,30 @@ export default function OnboardingUploadPage() {
   );
 
   return (
-    <div
-      className="mt-6 flex flex-col gap-5 rounded-[2rem] px-8 py-8"
-      style={{
-        background: "#241C14",
-        border: "1px solid rgba(196,144,48,0.18)",
-        boxShadow:
-          "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
-      }}
+    <StepShell
+      eyebrow="Step 02 · Upload"
+      title={
+        <>
+          Hand us your{" "}
+          <span
+            className="italic"
+            style={{
+              fontFamily: "var(--font-dm-serif)",
+              color: "#E5B964",
+            }}
+          >
+            spreadsheet
+          </span>
+          .
+        </>
+      }
+      lead={
+        <>
+          Any format is fine — we&apos;ll figure the columns out. The file is parsed
+          in your browser and only the header plus a 20-row preview are sent to the AI.
+        </>
+      }
     >
-      <div className="flex flex-col gap-2">
-        <h2
-          style={{
-            fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
-            fontSize: "1.5rem",
-            fontWeight: 700,
-          }}
-        >
-          Upload your animals file
-        </h2>
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            color: "#8A6840",
-            fontSize: "0.875rem",
-            lineHeight: 1.6,
-          }}
-        >
-          Any spreadsheet will do &mdash; we&apos;ll figure out the columns.
-          Nothing is saved until you confirm on the next screen.
-        </p>
-      </div>
-
       {view.kind === "fallback" ? (
         <TemplateFallback
           reason={view.reason}
@@ -187,6 +156,6 @@ export default function OnboardingUploadPage() {
       ) : (
         <FileDropzone onFile={handleFile} isLoading={view.kind === "loading"} />
       )}
-    </div>
+    </StepShell>
   );
 }

@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * Error boundary for the onboarding route segment.
- *
- * Contains any render-time failure (corrupted sessionStorage payload,
- * malformed ProposalResult, XLSX parse regression) within the wizard so
- * the rest of the app stays healthy. Offers a one-click reset that
- * clears sessionStorage and reloads the segment.
+ * Segment-scoped error boundary. Keeps render failures inside the wizard
+ * (corrupt sessionStorage payload, malformed ProposalResult, XLSX regression)
+ * and offers a one-click reset that clears storage + retries the segment.
  */
 
 import { useEffect } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
+import { AlertTriangle, RotateCw } from "lucide-react";
+import { ONBOARDING_COLORS } from "@/components/onboarding/theme";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding/storage";
 
 export default function OnboardingError({
@@ -21,9 +21,6 @@ export default function OnboardingError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Surface to the console for DevTools + any error-reporting integration
-    // that hooks window.onerror. Keep it a warning so prod dashboards don't
-    // page on every private-mode-storage hiccup.
     console.warn("[onboarding] boundary caught:", error);
   }, [error]);
 
@@ -33,104 +30,102 @@ export default function OnboardingError({
         window.sessionStorage.removeItem(ONBOARDING_STORAGE_KEY);
       }
     } catch {
-      /* ignore — storage could be disabled */
+      /* ignore — storage may be disabled */
     }
     reset();
   };
 
   return (
-    <div
-      className="min-h-[60vh] flex items-center justify-center px-5"
-      style={{ background: "#1A1510" }}
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 90, damping: 22 }}
+      className="relative mt-6 overflow-hidden rounded-[2rem] px-8 py-10 text-center"
+      style={{
+        background:
+          "linear-gradient(180deg, #2C2218 0%, #241C14 100%)",
+        border: "1px solid rgba(200,81,58,0.35)",
+        boxShadow:
+          "0 1px 0 rgba(245,235,212,0.04) inset, 0 0 48px rgba(200,81,58,0.08), 0 12px 40px rgba(0,0,0,0.55)",
+      }}
     >
-      <div
-        className="w-full max-w-md px-8 py-10 flex flex-col items-center gap-5 text-center"
+      <motion.div
+        initial={{ scale: 0.6, rotate: -12 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.05 }}
+        aria-hidden="true"
+        className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full"
         style={{
-          borderRadius: "1.5rem",
-          background: "#241C14",
-          border: "1px solid rgba(200,60,40,0.25)",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.55)",
+          background: "rgba(200,81,58,0.15)",
+          border: "1px solid rgba(200,81,58,0.45)",
+          color: "#E88C78",
         }}
       >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: "50%",
-            background: "rgba(200,60,40,0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          aria-hidden
-        >
-          <span style={{ fontSize: 24 }}>⚠️</span>
-        </div>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
-            fontSize: "1.5rem",
-            fontWeight: 700,
-          }}
-        >
-          Onboarding hit a snag
-        </h1>
-        <p
-          style={{
-            color: "#8A6840",
-            fontFamily: "var(--font-sans)",
-            fontSize: "0.875rem",
-            lineHeight: 1.5,
-          }}
-        >
-          Something went wrong rendering the wizard. Resetting the session
-          usually clears it — your file upload isn&apos;t shared until you
-          click through the confirmation step, so nothing has been imported.
-        </p>
+        <AlertTriangle size={22} strokeWidth={2.2} />
+      </motion.div>
+
+      <h1
+        className="mb-2"
+        style={{
+          color: ONBOARDING_COLORS.cream,
+          fontFamily: "var(--font-display)",
+          fontSize: "1.55rem",
+          fontWeight: 700,
+        }}
+      >
+        The ledger jammed
+      </h1>
+
+      <p
+        className="mx-auto max-w-[44ch] text-[0.9375rem] leading-[1.6]"
+        style={{
+          color: ONBOARDING_COLORS.muted,
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        Something went sideways rendering the wizard. Resetting your draft usually
+        clears it — nothing has been written to your farm yet.
+      </p>
+
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
         <button
           type="button"
           onClick={handleReset}
+          className="group inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-all"
           style={{
             background:
-              "linear-gradient(135deg, rgba(196,144,48,0.90) 0%, rgba(160,100,40,0.90) 100%)",
-            border: "1px solid rgba(196,144,48,0.35)",
-            borderRadius: 10,
-            padding: "0.625rem 1.25rem",
-            color: "#F0DEB8",
+              "linear-gradient(135deg, rgba(229,185,100,0.95) 0%, rgba(196,144,48,0.95) 45%, rgba(160,82,45,0.95) 100%)",
+            color: "#1A1510",
+            boxShadow: "0 6px 24px rgba(196,144,48,0.35)",
             fontFamily: "var(--font-sans)",
-            fontSize: "0.9375rem",
-            fontWeight: 500,
-            cursor: "pointer",
           }}
         >
+          <RotateCw size={14} strokeWidth={2.5} className="transition-transform group-hover:rotate-45" />
           Reset and try again
         </button>
         <Link
           href="/"
+          className="text-sm underline-offset-4 hover:underline"
           style={{
-            marginTop: "0.5rem",
-            color: "#6A4E30",
+            color: ONBOARDING_COLORS.muted,
             fontFamily: "var(--font-sans)",
-            fontSize: "0.8125rem",
-            textDecoration: "underline",
           }}
         >
           Back to home
         </Link>
-        {error.digest ? (
-          <p
-            style={{
-              color: "#3A2A1A",
-              fontFamily: "var(--font-mono, ui-monospace)",
-              fontSize: "0.6875rem",
-              marginTop: "0.25rem",
-            }}
-          >
-            ref: {error.digest}
-          </p>
-        ) : null}
       </div>
-    </div>
+
+      {error.digest ? (
+        <p
+          className="mt-6 text-[10px] tracking-wider"
+          style={{
+            color: "#3A2A1A",
+            fontFamily: "var(--font-mono, ui-monospace)",
+          }}
+        >
+          ref · {error.digest}
+        </p>
+      ) : null}
+    </motion.div>
   );
 }

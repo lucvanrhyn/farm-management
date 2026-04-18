@@ -37,12 +37,12 @@ describe("MappingRow", () => {
     );
 
     expect(screen.getByText("Oormerk")).toBeInTheDocument();
-    // Exactly 3 sample values rendered.
-    const samples = screen.getByText(/e\.g\./);
-    expect(samples.textContent).toContain("A001");
-    expect(samples.textContent).toContain("A002");
-    expect(samples.textContent).toContain("A003");
-    expect(samples.textContent).not.toContain("A004");
+    // First three samples show as individual chips; 4th/5th are truncated off.
+    expect(screen.getByText("A001")).toBeInTheDocument();
+    expect(screen.getByText("A002")).toBeInTheDocument();
+    expect(screen.getByText("A003")).toBeInTheDocument();
+    expect(screen.queryByText("A004")).not.toBeInTheDocument();
+    expect(screen.queryByText("A005")).not.toBeInTheDocument();
   });
 
   it("calls onTargetChange when select value changes", () => {
@@ -137,7 +137,8 @@ describe("MappingRow", () => {
       />,
     );
 
-    expect(screen.getByText(/Fuzzy matches/i)).toBeInTheDocument();
+    // Label was shortened from "Fuzzy matches" to "Fuzzy" in the redesign.
+    expect(screen.getByText(/^Fuzzy$/i)).toBeInTheDocument();
     expect(screen.getByText(/Kamp A → camp-a/)).toBeInTheDocument();
     expect(screen.getByText(/Kamp B → camp-b/)).toBeInTheDocument();
   });

@@ -1,27 +1,30 @@
 "use client";
 
+/**
+ * Columns the AI couldn't place with confidence.
+ *
+ * Dashed-border cards in a warm "pending" tone. Each shows sample values,
+ * the AI's upsell hint (consulting-tier fodder), and a target select the
+ * farmer can use to rescue the column.
+ */
+
+import { motion } from "framer-motion";
+import { HelpCircle } from "lucide-react";
 import type { ProposalResult } from "@/lib/onboarding/client-types";
+import { ONBOARDING_COLORS, SPRING_SOFT, staggerContainer } from "./theme";
 
 type Props = {
   unmapped: ProposalResult["proposal"]["unmapped"];
-  /** source -> target overrides the farmer has manually assigned. */
   unmappedOverrides: Record<string, string>;
   targetOptions: Array<{ value: string; label: string }>;
   onAssign: (source: string, target: string) => void;
 };
 
-/**
- * UnmappedList — columns the AI could not place with confidence.
- *
- * Each item surfaces:
- *   - source column name
- *   - up to 3 sample values
- *   - the upsell_hint (kept muted — this is Consulting-tier fodder)
- *   - a target <select> so the farmer can rescue the column manually
- *
- * Returns null when there are no unmapped columns so the page doesn't render
- * a bare heading over an empty list.
- */
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: SPRING_SOFT },
+};
+
 export function UnmappedList({
   unmapped,
   unmappedOverrides,
@@ -33,87 +36,115 @@ export function UnmappedList({
   }
 
   return (
-    <section className="mt-8">
-      <h3
-        className="text-base font-semibold mb-1"
-        style={{
-          color: "#F0DEB8",
-          fontFamily: "var(--font-display)",
-        }}
-      >
-        Columns we couldn&apos;t place
-      </h3>
+    <section className="mt-10">
+      <div className="mb-3 flex items-center gap-2">
+        <HelpCircle size={15} className="text-amber-400/80" strokeWidth={2} />
+        <h3
+          className="text-[1rem] font-semibold"
+          style={{
+            color: ONBOARDING_COLORS.cream,
+            fontFamily: "var(--font-display)",
+            letterSpacing: "-0.005em",
+          }}
+        >
+          Columns we couldn&apos;t place
+        </h3>
+      </div>
       <p
-        className="text-xs mb-4"
+        className="mb-4 text-[12.5px] italic"
         style={{
-          color: "#8A6840",
+          color: ONBOARDING_COLORS.mutedDim,
           fontFamily: "var(--font-sans)",
+          maxWidth: "60ch",
         }}
       >
         These look like custom data the core importer doesn&apos;t handle. Leave
         them unmapped to skip, or assign a target if we missed something.
       </p>
 
-      <div className="flex flex-col gap-3">
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="show"
+        className="flex flex-col gap-3"
+      >
         {unmapped.map((item) => {
           const samples = item.samples
             .slice(0, 3)
-            .map((s) => (s.length > 28 ? `${s.slice(0, 25)}...` : s));
+            .map((s) => (s.length > 28 ? `${s.slice(0, 25)}…` : s));
           const current = unmappedOverrides[item.source] ?? "";
 
           return (
-            <div
+            <motion.div
               key={item.source}
-              className="rounded-xl p-4"
+              variants={itemVariants}
+              className="relative overflow-hidden rounded-2xl px-4 py-4"
               style={{
-                background: "#1F1810",
-                border: "1px dashed rgba(196,144,48,0.25)",
+                background: "rgba(26,21,16,0.85)",
+                border: "1px dashed rgba(196,144,48,0.35)",
               }}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4">
                 <div className="flex-1 min-w-0">
                   <div
-                    className="font-semibold text-sm"
+                    className="text-[0.9rem] font-semibold"
                     style={{
-                      color: "#F0DEB8",
-                      fontFamily: "var(--font-sans)",
+                      color: ONBOARDING_COLORS.cream,
+                      fontFamily: "var(--font-display)",
+                      letterSpacing: "-0.005em",
                     }}
                   >
                     {item.source}
                   </div>
                   {samples.length > 0 ? (
-                    <div
-                      className="mt-1 text-xs"
-                      style={{ color: "#8A6840" }}
-                    >
-                      e.g. {samples.map((v) => `"${v}"`).join(", ")}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {samples.map((v, i) => (
+                        <span
+                          key={`${v}-${i}`}
+                          className="inline-flex rounded-md px-1.5 py-0.5 text-[11px]"
+                          style={{
+                            background: "rgba(20,16,11,0.9)",
+                            border: "1px solid rgba(196,144,48,0.16)",
+                            color: ONBOARDING_COLORS.muted,
+                            fontFamily: "var(--font-mono, ui-monospace)",
+                          }}
+                        >
+                          {v}
+                        </span>
+                      ))}
                     </div>
                   ) : null}
                   {item.upsell_hint ? (
                     <div
-                      className="mt-1.5 text-[11px] italic"
-                      style={{ color: "#6A4E30" }}
+                      className="mt-2 text-[11px] italic"
+                      style={{
+                        color: ONBOARDING_COLORS.whisper,
+                        fontFamily: "var(--font-sans)",
+                      }}
                     >
                       Hint: {item.upsell_hint}
                     </div>
                   ) : null}
                 </div>
 
-                <div className="flex-1 min-w-0 md:max-w-xs">
+                <div className="min-w-0 md:max-w-xs md:flex-1">
                   <label
-                    className="block text-[11px] uppercase tracking-wider mb-1"
-                    style={{ color: "#6A4E30" }}
+                    className="block text-[10px] uppercase tracking-[0.2em]"
+                    style={{
+                      color: ONBOARDING_COLORS.whisper,
+                      fontFamily: "var(--font-sans)",
+                    }}
                   >
                     Assign target
                   </label>
                   <select
                     value={current}
                     onChange={(e) => onAssign(item.source, e.target.value)}
-                    className="w-full rounded-md px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="mt-1 w-full appearance-none rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/60"
                     style={{
-                      background: "#1A1510",
-                      border: "1px solid rgba(196,144,48,0.28)",
-                      color: "#F0DEB8",
+                      background: "rgba(20,16,11,0.9)",
+                      border: "1px solid rgba(196,144,48,0.3)",
+                      color: ONBOARDING_COLORS.parchment,
                       fontFamily: "var(--font-sans)",
                     }}
                     aria-label={`Assign target for ${item.source}`}
@@ -129,10 +160,10 @@ export function UnmappedList({
                   </select>
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </section>
   );
 }

@@ -4,38 +4,37 @@
  * Step 4 — commit import with SSE progress.
  *
  * This step is where the full file contents finally cross into the server.
- * Steps 1–3 only moved 20 sample rows around (for the AI call); the provider
- * deliberately does not store the full dataset or the original File object to
- * keep sessionStorage under its 5 MB quota.
- *
- * To import every row we ask the user to re-drop the same file. We verify the
- * SHA-256 matches the hash captured on step 2 — so the mapping reviewed on
- * step 3 still applies — then materialize ImportRow[] by applying the
- * effective mapping to every row and stream the commit via CommitProgress.
+ * Earlier steps only sent 20 sample rows; the provider deliberately does not
+ * store the full dataset or the original File. We ask the farmer to re-drop
+ * the same file, verify the SHA-256 matches step 2, then materialize every
+ * row through the approved mapping and stream via CommitProgress.
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { AlertTriangle, FileSpreadsheet, RotateCcw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
 import { CommitProgress } from "@/components/onboarding/CommitProgress";
 import { FileDropzone } from "@/components/onboarding/FileDropzone";
+import { StepShell } from "@/components/onboarding/StepShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
-import { hashFile, parseSpreadsheet, sanitizeRow } from "@/lib/onboarding/parse-file";
+import {
+  hashFile,
+  parseSpreadsheet,
+  sanitizeRow,
+} from "@/lib/onboarding/parse-file";
 import type {
   CommitProgressFrame,
   CommitResultFrame,
   ImportRow,
   ProposalResult,
 } from "@/lib/onboarding/client-types";
+import { ONBOARDING_COLORS, SPRING_SOFT } from "@/components/onboarding/theme";
 
 type ViewState =
-  | { kind: "waiting" } // no file yet — show dropzone
-  | { kind: "verifying" } // parsing + hashing the re-uploaded file
-  | {
-      kind: "committing";
-      rows: ImportRow[];
-      mappingJson: string;
-    }
+  | { kind: "waiting" }
+  | { kind: "verifying" }
+  | { kind: "committing"; rows: ImportRow[]; mappingJson: string }
   | { kind: "error"; message: string };
 
 /**
@@ -81,11 +80,7 @@ function materializeRows(
   });
 }
 
-/**
- * Stable string form of the mapping that was actually applied. Shipped to the
- * server as the ImportJob audit trail — reproducing this value reproduces the
- * exact row materialization.
- */
+/** Stable string form of the mapping that was actually applied. */
 function serializeMapping(
   proposal: ProposalResult,
   mappingOverrides: Record<string, string>,
@@ -110,18 +105,11 @@ export default function OnboardingImportPage() {
   const router = useRouter();
   const params = useParams<{ farmSlug: string }>();
   const farmSlug = params.farmSlug;
-  const {
-    state,
-    setProgress,
-    setResult,
-    setImportJobId,
-  } = useOnboarding();
+  const { state, setProgress, setResult, setImportJobId } = useOnboarding();
   const [view, setView] = useState<ViewState>({ kind: "waiting" });
 
   const readyToImport =
-    state.proposal !== null &&
-    state.file !== null &&
-    state.fullRowCount > 0;
+    state.proposal !== null && state.file !== null && state.fullRowCount > 0;
 
   const mappingJson = useMemo(() => {
     if (!state.proposal) return "";
@@ -168,10 +156,12 @@ export default function OnboardingImportPage() {
         return;
       }
 
-      const rows = materializeRows(
+      const rawRows =
         parsed.sampleRows.length >= parsed.fullRowCount
           ? parsed.sampleRows
-          : await readAllRows(file),
+          : await readAllRows(file);
+      const rows = materializeRows(
+        rawRows,
         state.proposal,
         state.mappingOverrides,
         state.unmappedOverrides,
@@ -215,90 +205,92 @@ export default function OnboardingImportPage() {
     [setProgress],
   );
 
-  // Guard: if the user landed here without a proposal (e.g. direct URL),
-  // bounce them back to the upload step.
+  // Guard: if user landed here without a proposal, bounce back
   if (!readyToImport) {
     return (
-      <div
-        className="mt-6 flex flex-col gap-3 rounded-[2rem] px-8 py-8"
-        style={{
-          background: "#241C14",
-          border: "1px solid rgba(196,144,48,0.18)",
-        }}
+      <StepShell
+        eyebrow="Step 04 · Import"
+        title="Missing upload data"
+        lead={
+          <>
+            We need your file and an approved mapping before we can import.
+            Start from step 2 to pick things up.
+          </>
+        }
       >
-        <h2
-          style={{
-            fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
-            fontSize: "1.25rem",
-            fontWeight: 700,
-          }}
-        >
-          Missing upload data
-        </h2>
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            color: "#8A6840",
-            fontSize: "0.875rem",
-          }}
-        >
-          Please start from the beginning — we need your file and an approved
-          mapping before we can import.
-        </p>
         <div>
-          <Button
+          <button
+            type="button"
             onClick={() =>
               farmSlug && router.push(`/${farmSlug}/onboarding/upload`)
             }
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(229,185,100,0.95) 0%, rgba(196,144,48,0.95) 45%, rgba(160,82,45,0.95) 100%)",
+              color: "#1A1510",
+              fontFamily: "var(--font-sans)",
+            }}
           >
             Back to upload
-          </Button>
+          </button>
         </div>
-      </div>
+      </StepShell>
     );
   }
 
-  // At this point state.file + state.proposal are both non-null.
   const file = state.file!;
 
-  return (
-    <div
-      className="mt-6 flex flex-col gap-5 rounded-[2rem] px-8 py-8"
+  const aboveHeading = (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={SPRING_SOFT}
+      className="mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11.5px]"
       style={{
-        background: "#241C14",
-        border: "1px solid rgba(196,144,48,0.18)",
-        boxShadow:
-          "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
+        borderColor: "rgba(196,144,48,0.3)",
+        background: "rgba(31,24,16,0.75)",
+        color: ONBOARDING_COLORS.muted,
+        fontFamily: "var(--font-mono, ui-monospace)",
+        letterSpacing: "0.01em",
       }}
     >
-      <div className="flex flex-col gap-2">
-        <h2
-          style={{
-            fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
-            fontSize: "1.5rem",
-            fontWeight: 700,
-          }}
-        >
-          Ready to import {state.fullRowCount} animals
-        </h2>
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            color: "#8A6840",
-            fontSize: "0.875rem",
-            lineHeight: 1.6,
-          }}
-        >
-          To protect your data we keep spreadsheets in your browser, not on our
-          servers. Re-select{" "}
-          <span style={{ color: "#F0DEB8", fontWeight: 600 }}>{file.name}</span>{" "}
-          to start the import. We verify it&apos;s the same file before anything
-          is written.
-        </p>
-      </div>
+      <FileSpreadsheet size={12} className="text-amber-300" strokeWidth={2} />
+      {file.name}
+      <span aria-hidden="true" style={{ color: ONBOARDING_COLORS.whisper }}>
+        ·
+      </span>
+      <span>{state.fullRowCount.toLocaleString()} rows</span>
+    </motion.div>
+  );
 
+  return (
+    <StepShell
+      eyebrow="Step 04 · Import"
+      title={
+        <>
+          Ready to write{" "}
+          <span
+            className="italic"
+            style={{
+              fontFamily: "var(--font-dm-serif)",
+              color: ONBOARDING_COLORS.amberBright,
+            }}
+          >
+            {state.fullRowCount.toLocaleString()}
+          </span>{" "}
+          animals.
+        </>
+      }
+      lead={
+        <>
+          To protect your data, FarmTrack never uploads the full spreadsheet —
+          we only sent a 20-row preview to the AI. Re-drop <strong style={{ color: ONBOARDING_COLORS.parchment }}>{file.name}</strong> to start the import.
+          We verify it&apos;s the same file before anything is written.
+        </>
+      }
+      aboveHeading={aboveHeading}
+    >
       {view.kind === "waiting" && (
         <FileDropzone onFile={handleFile} isLoading={false} />
       )}
@@ -317,7 +309,6 @@ export default function OnboardingImportPage() {
           importJobId={state.importJobId}
           onProgress={handleProgress}
           onComplete={(result) => {
-            // Clear any importJobId so a later re-try creates a fresh job.
             setImportJobId(null);
             handleComplete(result);
           }}
@@ -326,58 +317,67 @@ export default function OnboardingImportPage() {
       )}
 
       {view.kind === "error" && (
-        <div
+        <motion.div
           role="alert"
-          className="flex flex-col gap-3 rounded-lg p-4"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SPRING_SOFT}
+          className="flex flex-col gap-3 rounded-2xl p-5"
           style={{
-            background: "rgba(220,60,60,0.1)",
-            border: "1px solid rgba(220,60,60,0.4)",
+            background:
+              "linear-gradient(180deg, rgba(200,81,58,0.08) 0%, rgba(36,28,20,0.95) 100%)",
+            border: "1px solid rgba(200,81,58,0.4)",
           }}
         >
-          <p
-            style={{
-              fontFamily: "var(--font-sans)",
-              color: "#F5C2B5",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-            }}
-          >
-            {view.message}
-          </p>
-          <div>
-            <Button
-              variant="outline"
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+              style={{
+                background: "rgba(200,81,58,0.15)",
+                border: "1px solid rgba(200,81,58,0.4)",
+                color: "#E88C78",
+              }}
+              aria-hidden="true"
+            >
+              <AlertTriangle size={14} strokeWidth={2.2} />
+            </div>
+            <p
+              className="flex-1 text-[0.9375rem] font-medium leading-[1.55]"
+              style={{
+                color: "#F5C2B5",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              {view.message}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
               onClick={() => {
-                // Drop any stale importJobId so the retry creates a fresh
-                // ImportJob server-side instead of trying to resume a
-                // partially-failed one (see Phase 2 review HIGH #2).
                 setImportJobId(null);
                 setProgress(null);
                 setView({ kind: "waiting" });
               }}
+              className="group inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm transition-colors"
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(196,144,48,0.4)",
+                color: ONBOARDING_COLORS.parchment,
+                fontFamily: "var(--font-sans)",
+              }}
             >
+              <RotateCcw size={12} strokeWidth={2.2} className="transition-transform group-hover:-rotate-45" />
               Try again
-            </Button>
+            </button>
           </div>
-        </div>
+        </motion.div>
       )}
-    </div>
+    </StepShell>
   );
 }
 
-/**
- * Re-parse a file and return every row (not just the 20-row sample). The
- * dropzone path we hit from this page has already validated size + header
- * shape via parseSpreadsheet, so calling it again is cheap and re-uses the
- * same error messages.
- *
- * We only fall back to this when the cached sampleRows count is smaller than
- * fullRowCount — i.e. the file has more than the 20-row preview that step 2
- * shipped to the AI.
- */
-async function readAllRows(
-  file: File,
-): Promise<Record<string, unknown>[]> {
+async function readAllRows(file: File): Promise<Record<string, unknown>[]> {
   const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
@@ -387,8 +387,5 @@ async function readAllRows(
     defval: "",
     raw: false,
   });
-  // Apply the same formula-injection defuser parseSpreadsheet applies to the
-  // 20-row preview — otherwise payloads in rows 21+ slip through to the
-  // server unsanitized. See Phase 2 review CRITICAL #1.
   return rows.map(sanitizeRow);
 }
