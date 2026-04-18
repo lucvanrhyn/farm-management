@@ -1,113 +1,200 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { compareSync } from 'bcryptjs';
 
-// ─── Mock prisma ──────────────────────────────────────────────────────────────
-const mockFindUnique = vi.fn();
-vi.mock('@/lib/prisma', () => ({
-  prisma: { user: { findUnique: mockFindUnique } },
-}));
-
-// ─── Mock bcryptjs ────────────────────────────────────────────────────────────
+// ─── Mock bcryptjs (declared before auth-options import) ─────────────────────
 vi.mock('bcryptjs', () => ({ compareSync: vi.fn() }));
 
-// Import after mocks are registered
-const { authOptions } = await import('@/lib/auth-options');
-// next-auth CredentialsProvider exposes `authorize` as the third element in the
-// providers array configuration object.
+// ─── Mock meta-db ────────────────────────────────────────────────────────────
+// The production authorize() calls getUserByIdentifier / isEmailVerified /
+// getFarmsForUser — stub them so each test can drive a specific code path.
+const getUserByIdentifierMock = vi.fn();
+const isEmailVerifiedMock = vi.fn();
+const getFarmsForUserMock = vi.fn();
+vi.mock('@/lib/meta-db', () => ({
+  getUserByIdentifier: (...args: unknown[]) => getUserByIdentifierMock(...args),
+  isEmailVerified: (...args: unknown[]) => isEmailVerifiedMock(...args),
+  getFarmsForUser: (...args: unknown[]) => getFarmsForUserMock(...args),
+}));
+
+// ─── Mock rate-limit ─────────────────────────────────────────────────────────
+const checkRateLimitMock = vi.fn();
+vi.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: (...args: unknown[]) => checkRateLimitMock(...args),
+}));
+
+// Import AFTER mocks are registered.
+import { compareSync } from 'bcryptjs';
+const { authOptions, AUTH_ERROR_CODES } = await import('@/lib/auth-options');
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const authorize = (authOptions.providers[0] as any).options.authorize as (
-  credentials: Record<string, string>
+  credentials: Record<string, string> | undefined,
 ) => Promise<unknown>;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// Always-allow rate limiter by default; individual tests override.
+const allow = { allowed: true as const };
+const deny = { allowed: false as const, retryAfterMs: 60_000 };
 
-const VALID_CREDENTIALS = { email: 'dicky@triob.co.za', password: 'Tr!oB_F13ld_26' };
+const VALID_CREDENTIALS = {
+  identifier: 'dicky@triob.co.za',
+  password: 'Tr!oB_F13ld_26',
+};
+
 const STORED_USER = {
   id: 'user-1',
   email: 'dicky@triob.co.za',
+  username: 'dicky',
+  passwordHash: '$2a$12$hashedpassword',
   name: 'Dicky',
-  password: '$2a$12$hashedpassword',
-  role: 'field_logger',
 };
 
 describe('authorize (auth-options.ts)', () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    getUserByIdentifierMock.mockReset();
+    isEmailVerifiedMock.mockReset();
+    getFarmsForUserMock.mockReset();
+    checkRateLimitMock.mockReset().mockReturnValue(allow);
+    vi.mocked(compareSync).mockReset();
   });
 
-  // ── Happy path ──────────────────────────────────────────────────────────────
-  it('returns the user when credentials are valid', async () => {
-    mockFindUnique.mockResolvedValueOnce(STORED_USER);
+  // ── Happy path ────────────────────────────────────────────────────────────
+  it('returns the user when credentials + email verification pass', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
     vi.mocked(compareSync).mockReturnValueOnce(true);
+    isEmailVerifiedMock.mockResolvedValueOnce(true);
+    getFarmsForUserMock.mockResolvedValueOnce([
+      { slug: 'trio-b', displayName: 'Trio B', role: 'ADMIN', logoUrl: null, tier: 'advanced', subscriptionStatus: 'active' },
+    ]);
 
     const result = await authorize(VALID_CREDENTIALS);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       id: 'user-1',
       email: 'dicky@triob.co.za',
-      name: 'Dicky',
-      role: 'field_logger',
+      username: 'dicky',
+      role: 'ADMIN',
     });
   });
 
-  // ── Wrong password ──────────────────────────────────────────────────────────
-  it('returns null when the password is wrong', async () => {
-    mockFindUnique.mockResolvedValueOnce(STORED_USER);
-    vi.mocked(compareSync).mockReturnValueOnce(false);
-
-    expect(await authorize(VALID_CREDENTIALS)).toBeNull();
+  // ── Missing credentials ────────────────────────────────────────────────────
+  it('throws INVALID_CREDENTIALS when fields are empty', async () => {
+    await expect(authorize({ identifier: '', password: '' })).rejects.toThrow(
+      AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+    );
+    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
-  // ── User not found ──────────────────────────────────────────────────────────
-  it('returns null when the user does not exist in the DB', async () => {
-    mockFindUnique.mockResolvedValueOnce(null);
-
-    expect(await authorize(VALID_CREDENTIALS)).toBeNull();
+  it('throws INVALID_CREDENTIALS when credentials is undefined', async () => {
+    await expect(authorize(undefined)).rejects.toThrow(
+      AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+    );
   });
 
-  // ── Missing credentials ─────────────────────────────────────────────────────
-  it('returns null when credentials are missing', async () => {
-    expect(await authorize({ email: '', password: '' })).toBeNull();
-    expect(mockFindUnique).not.toHaveBeenCalled();
+  // ── Rate limited ───────────────────────────────────────────────────────────
+  it('throws RATE_LIMITED when the rate-limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce(deny);
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.RATE_LIMITED,
+    );
+    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
-  // ── DB error → reproduces the production bug ────────────────────────────────
-  // On Vercel (Node 24 + @libsql/client 0.5.6) the DB driver throws on every
-  // request. authorize() catches the error and returns null, which makes login
-  // show "Wrong credentials" even though the password is correct.
-  //
-  // This test pins that behaviour. Once the DB connection is fixed the happy-
-  // path test above is the regression guard.
-  it('returns null (not throw) when the DB driver throws — reproduces Vercel bug', async () => {
-    const dbError = new Error('WebSocket connection failed');
-    mockFindUnique.mockRejectedValueOnce(dbError);
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const result = await authorize(VALID_CREDENTIALS);
-    consoleSpy.mockRestore();
-
-    // Current (broken) behaviour: silently returns null, masking the DB error.
-    expect(result).toBeNull();
+  // ── Server misconfigured (env vars missing) ─────────────────────────────────
+  it('throws SERVER_MISCONFIGURED when meta-db env vars are missing', async () => {
+    getUserByIdentifierMock.mockRejectedValueOnce(
+      new Error(
+        'META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.',
+      ),
+    );
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.SERVER_MISCONFIGURED,
+    );
+    spy.mockRestore();
   });
 
-  // ── Error logging quality ────────────────────────────────────────────────────
-  // The error MUST be logged with enough detail to diagnose production failures.
-  // If logging is missing or incomplete this test fails, prompting us to improve
-  // the logging before the next deploy.
-  it('logs the full error message when the DB throws', async () => {
-    const dbError = new Error('WebSocket connection failed: ECONNREFUSED');
-    mockFindUnique.mockRejectedValueOnce(dbError);
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await authorize(VALID_CREDENTIALS);
-
-    // Must log the actual error message, not just the generic Error object.
-    // The logging format is: prefix string, message string, stack string.
-    expect(consoleSpy).toHaveBeenCalledWith(
+  // ── DB unavailable ─────────────────────────────────────────────────────────
+  it('throws DB_UNAVAILABLE when the DB driver throws a non-env error', async () => {
+    const dbError = new Error(
+      'WebSocket connection failed: ECONNREFUSED',
+    );
+    getUserByIdentifierMock.mockRejectedValueOnce(dbError);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.DB_UNAVAILABLE,
+    );
+    expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('[authorize]'),
       expect.stringContaining('WebSocket connection failed: ECONNREFUSED'),
       expect.any(String),
     );
-    consoleSpy.mockRestore();
+    spy.mockRestore();
+  });
+
+  // ── User not found ─────────────────────────────────────────────────────────
+  it('throws INVALID_CREDENTIALS (generic) when user does not exist', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+    );
+  });
+
+  // ── Wrong password ─────────────────────────────────────────────────────────
+  it('throws INVALID_CREDENTIALS (generic) when password is wrong', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    vi.mocked(compareSync).mockReturnValueOnce(false);
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+    );
+  });
+
+  // ── Email not verified ─────────────────────────────────────────────────────
+  it('throws EMAIL_NOT_VERIFIED when the user exists but email is unverified', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    vi.mocked(compareSync).mockReturnValueOnce(true);
+    isEmailVerifiedMock.mockResolvedValueOnce(false);
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.EMAIL_NOT_VERIFIED,
+    );
+  });
+
+  // ── Users without email (e.g. LOGGER role) skip verification ────────────────
+  it('does NOT check email verification when user has no email', async () => {
+    const userNoEmail = { ...STORED_USER, email: null };
+    getUserByIdentifierMock.mockResolvedValueOnce(userNoEmail);
+    vi.mocked(compareSync).mockReturnValueOnce(true);
+    getFarmsForUserMock.mockResolvedValueOnce([]);
+
+    const result = await authorize(VALID_CREDENTIALS);
+
+    expect(isEmailVerifiedMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ id: 'user-1', email: null });
+  });
+
+  // ── Email verification check fails (DB throw on second query) ──────────────
+  it('throws DB_UNAVAILABLE when email verification query throws', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    vi.mocked(compareSync).mockReturnValueOnce(true);
+    isEmailVerifiedMock.mockRejectedValueOnce(
+      new Error('meta-db connection dropped'),
+    );
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.DB_UNAVAILABLE,
+    );
+    spy.mockRestore();
+  });
+
+  // ── Rate-limit key uses the identifier ─────────────────────────────────────
+  it('keys the rate limiter on the identifier', async () => {
+    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    await authorize(VALID_CREDENTIALS).catch(() => {});
+    const [key, max, windowMs] = checkRateLimitMock.mock.calls[0] as [
+      string,
+      number,
+      number,
+    ];
+    expect(key).toBe(`login:${VALID_CREDENTIALS.identifier}`);
+    expect(max).toBe(10);
+    expect(windowMs).toBe(60_000);
   });
 });
