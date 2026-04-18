@@ -11,6 +11,19 @@ import type { SessionFarm } from '../types/next-auth';
 export { AUTH_ERROR_CODES } from './auth-errors';
 export type { AuthErrorCode } from './auth-errors';
 
+/**
+ * Max age of the JWT's cached `farms` / `role` before we re-fetch from
+ * meta-db. Kept at 60 s to close the session-drift window where a
+ * revoked ADMIN could still act as ADMIN after their role was downgraded.
+ *
+ * Defence-in-depth: the 6 destructive admin ops (animal/observation/
+ * transaction/camp/global reset + farm settings PATCH) also call
+ * `verifyFreshAdminRole()`, which bypasses the JWT entirely and queries
+ * meta-db directly — so even inside this 60 s window a revoked ADMIN
+ * cannot wipe data.
+ */
+export const SESSION_ROLE_TTL_MS = 60_000;
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -106,9 +119,9 @@ export const authOptions: NextAuthOptions = {
         token.farms = (user as { farms: SessionFarm[] }).farms;
         token.farmsRefreshedAt = Date.now();
       }
-      // Re-fetch farms periodically (every 5 min) or on explicit update trigger
+      // Re-fetch farms periodically (see SESSION_ROLE_TTL_MS) or on explicit update trigger.
       const refreshAge = Date.now() - ((token.farmsRefreshedAt as number) ?? 0);
-      const needsRefresh = trigger === 'update' || refreshAge > 5 * 60 * 1000;
+      const needsRefresh = trigger === 'update' || refreshAge > SESSION_ROLE_TTL_MS;
       if (needsRefresh && token.sub) {
         try {
           const farms = await getFarmsForUser(token.sub);

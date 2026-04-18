@@ -24,7 +24,8 @@ export function getUserRoleForFarm(session: Session, slug: string): string | nul
 /**
  * Re-fetches the user's farm roles directly from the DB (bypasses JWT cache).
  * Use on destructive ADMIN operations to protect against stale permissions
- * from the 5-minute JWT refresh window.
+ * from the JWT refresh window (see SESSION_ROLE_TTL_MS in auth-options.ts —
+ * currently 60 s).
  */
 export async function verifyFreshAdminRole(userId: string, slug: string): Promise<boolean> {
   const farms = await getFarmsForUser(userId);
