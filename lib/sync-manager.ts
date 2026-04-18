@@ -92,10 +92,19 @@ async function uploadObservation(obs: PendingObservation): Promise<string | null
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(obs),
     });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // Offline-first: caller marks the observation as failed and retries
+      // later. We still log so operators can diagnose why syncing stalls.
+      console.warn('[sync] observation upload failed:', res.status, res.statusText);
+      return null;
+    }
+    const data = await res.json().catch((parseErr) => {
+      console.warn('[sync] observation response was not JSON:', parseErr);
+      return {};
+    });
     return (data.id as string) ?? null;
-  } catch {
+  } catch (err) {
+    console.warn('[sync] observation upload threw:', err);
     return null;
   }
 }
@@ -145,8 +154,12 @@ async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean>
         status: 'Active',
       }),
     });
+    if (!res.ok) {
+      console.warn('[sync] animal create upload failed:', res.status, res.statusText);
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.warn('[sync] animal create upload threw:', err);
     return false;
   }
 }
