@@ -6,9 +6,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  *
  * When an admin deletes an animal server-side, the logger PWA used to keep the
  * record indefinitely because `seedAnimals` only upserted (`put`) and never
- * deleted. This suite drives a TDD fix that (a) removes any IndexedDB row whose
- * animal_id is not in the fresh server list, while (b) preserving rows that
- * carry a pending local mutation so we never silently lose offline-queued work.
+ * deleted. The fix:
+ *
+ *   (a) removes any IndexedDB row whose animal_id is not in the fresh server
+ *       list,
+ *   (b) preserves rows whose animal_id is in the `pending_animal_updates`
+ *       queue — those represent offline edits (camp-move / status-change)
+ *       that have been applied locally but not yet pushed to the server,
+ *   (c) early-returns on an empty `animals` payload so a transient API
+ *       failure or pagination bug that returns `[]` cannot wipe the whole
+ *       local cache.
  *
  * Runs in jsdom + fake-indexeddb so `idb` finds a real IndexedDB implementation.
  */
@@ -67,15 +74,21 @@ describe('seedAnimals orphan cleanup', () => {
     expect(after.map((a) => a.animal_id).sort()).toEqual(['A-001', 'A-002']);
   });
 
-  it('preserves rows with a pending local mutation even when server omits them', async () => {
-    const { seedAnimals, getAnimalsByCampCached } = await loadStore();
+  it('preserves rows whose animal_id is in the pending_animal_updates queue', async () => {
+    const {
+      seedAnimals,
+      getAnimalsByCampCached,
+      queuePendingAnimalUpdate,
+    } = await loadStore();
 
-    // A-003 has an unsynced local change (e.g. logger edited status offline).
+    // A-003 has an unsynced local change — exercised via the production write
+    // path (updateAnimalStatus/updateAnimalCamp both enqueue this marker).
     await seedAnimals([
       makeAnimal('A-001'),
       makeAnimal('A-002'),
-      makeAnimal('A-003', { _pendingSync: true }),
+      makeAnimal('A-003'),
     ]);
+    await queuePendingAnimalUpdate('A-003');
 
     // Server returns only the two synced animals.
     await seedAnimals([makeAnimal('A-001'), makeAnimal('A-002')]);
@@ -83,9 +96,53 @@ describe('seedAnimals orphan cleanup', () => {
     const after = await getAnimalsByCampCached('camp-1');
     const ids = after.map((a) => a.animal_id).sort();
     expect(ids).toEqual(['A-001', 'A-002', 'A-003']);
+  });
 
-    // Pending flag survives so the next sync push still fires.
-    const pending = after.find((a) => a.animal_id === 'A-003');
-    expect((pending as { _pendingSync?: boolean })._pendingSync).toBe(true);
+  it('treats an empty server response as a no-op (does not wipe local rows)', async () => {
+    const { seedAnimals, getAnimalsByCampCached } = await loadStore();
+
+    await seedAnimals([
+      makeAnimal('A-001'),
+      makeAnimal('A-002'),
+      makeAnimal('A-003'),
+    ]);
+
+    // Transient API bug / pagination glitch returns []. We must NOT delete.
+    await seedAnimals([]);
+
+    const after = await getAnimalsByCampCached('camp-1');
+    expect(after.map((a) => a.animal_id).sort()).toEqual([
+      'A-001',
+      'A-002',
+      'A-003',
+    ]);
+  });
+
+  it('updateAnimalStatus auto-queues a pending marker so the row survives refresh', async () => {
+    // Integration-style: exercise the production write path and prove the
+    // guard actually fires. This is the class-of-bug the reviewer flagged —
+    // the previous in-band `_pendingSync` flag was never set anywhere.
+    const {
+      seedAnimals,
+      updateAnimalStatus,
+      getAnimalsByCampCached,
+      getPendingAnimalUpdateIds,
+    } = await loadStore();
+
+    await seedAnimals([makeAnimal('A-001'), makeAnimal('A-002')]);
+
+    // Logger marks A-001 as Sold offline. Server hasn't seen it yet.
+    await updateAnimalStatus('A-001', 'Sold');
+    expect(await getPendingAnimalUpdateIds()).toEqual(['A-001']);
+
+    // Now server responds with only A-002 (imagine A-001 was
+    // coincidentally deleted server-side in the same window). The guard
+    // must still preserve A-001 because its edit hasn't been pushed.
+    await seedAnimals([makeAnimal('A-002')]);
+
+    const after = await getAnimalsByCampCached('camp-1');
+    const ids = after.map((a) => a.animal_id).sort();
+    expect(ids).toContain('A-001');
+    expect(ids).toContain('A-002');
   });
 });

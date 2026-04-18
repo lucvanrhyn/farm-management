@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 // Multi-tenant: each farm gets its own IndexedDB so switching farms in the
 // same browser never leaks data across tenants.
@@ -77,6 +77,14 @@ function getDB(): Promise<IDBPDatabase> {
           db.createObjectStore('tasks', { keyPath: 'id' });
         }
       }
+      if (oldVersion < 4) {
+        // Markers for animals with a locally-applied but not-yet-pushed mutation
+        // (status change, camp move). Keyed by animal_id so we can O(1) check
+        // during orphan-sweep in seedAnimals without scanning.
+        if (!db.objectStoreNames.contains('pending_animal_updates')) {
+          db.createObjectStore('pending_animal_updates', { keyPath: 'animal_id' });
+        }
+      }
     },
   });
 }
@@ -127,27 +135,37 @@ export async function getCachedCamps(): Promise<Camp[]> {
 }
 
 export async function seedAnimals(animals: Animal[]): Promise<void> {
-  const db = await getDB();
-  const tx = db.transaction('animals', 'readwrite');
+  // Defensive early-return: a transient API failure or pagination bug that
+  // returns an empty list must NOT orphan-sweep the whole local cache. A
+  // genuinely-zero-animals farm is rare and would still heal on the next
+  // non-empty refresh; the inverse mistake (wiping a live herd) is not
+  // recoverable on the device.
+  if (animals.length === 0) return;
 
-  // Read existing rows so we can (a) detect orphans and (b) preserve any row
-  // that still carries a pending local mutation — otherwise a full refresh
-  // between an offline edit and its push would silently drop the user's work.
-  const existingRows = (await tx.store.getAll()) as Array<
-    Animal & { _pendingSync?: boolean }
-  >;
+  const db = await getDB();
+
+  // Collect the set of animal_ids with a pending local mutation BEFORE we
+  // open the write transaction on `animals`. The `idb` library only permits a
+  // single object store per `transaction()` call here (we don't depend on
+  // cross-store atomicity since orphan-sweep and queue-read are idempotent).
+  const pendingIds = new Set(await getPendingAnimalUpdateIds());
+
+  const tx = db.transaction('animals', 'readwrite');
+  const existingKeys = (await tx.store.getAllKeys()) as string[];
   const incomingIds = new Set(animals.map((a) => a.animal_id));
 
   for (const animal of animals) {
     await tx.store.put(animal);
   }
 
-  // Delete animals removed from the server, except those with a pending local
-  // mutation (Bug L1 fix — orphan-cleanup + offline-safety).
-  for (const row of existingRows) {
-    if (incomingIds.has(row.animal_id)) continue;
-    if (row._pendingSync) continue;
-    await tx.store.delete(row.animal_id);
+  // Delete animals the server no longer returns, EXCEPT any row whose
+  // animal_id is still in the pending_animal_updates queue — those represent
+  // offline edits that haven't yet been pushed. Deleting them here would
+  // silently lose the user's work.
+  for (const key of existingKeys) {
+    if (incomingIds.has(key)) continue;
+    if (pendingIds.has(key)) continue;
+    await tx.store.delete(key);
   }
 
   await tx.done;
@@ -252,6 +270,9 @@ export async function updateAnimalCamp(animalId: string, newCampId: string): Pro
   const animal = await db.get('animals', animalId);
   if (animal) {
     await db.put('animals', { ...animal, current_camp: newCampId });
+    // Mark this animal as having a locally-applied mutation so the next
+    // full refresh doesn't orphan-sweep it before the server catches up.
+    await queuePendingAnimalUpdate(animalId);
   }
 }
 
@@ -260,7 +281,38 @@ export async function updateAnimalStatus(animalId: string, status: AnimalStatus)
   const animal = await db.get('animals', animalId);
   if (animal) {
     await db.put('animals', { ...animal, status });
+    await queuePendingAnimalUpdate(animalId);
   }
+}
+
+// ── Pending Animal Updates (offline camp-move / status-change markers) ────────
+//
+// These are NOT a transport queue — the actual mutation is carried by the
+// pending `Observation` (e.g. a `camp_move` or `status_change` observation).
+// This store is just a set of animal_ids that have a local edit outstanding,
+// so `seedAnimals` knows not to delete them during orphan-cleanup.
+
+export async function queuePendingAnimalUpdate(animalId: string): Promise<void> {
+  const db = await getDB();
+  await db.put('pending_animal_updates', { animal_id: animalId });
+}
+
+export async function getPendingAnimalUpdateIds(): Promise<string[]> {
+  const db = await getDB();
+  const rows = (await db.getAll('pending_animal_updates')) as Array<{ animal_id: string }>;
+  return rows.map((r) => r.animal_id);
+}
+
+export async function clearPendingAnimalUpdate(animalId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('pending_animal_updates', animalId);
+}
+
+export async function clearAllPendingAnimalUpdates(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('pending_animal_updates', 'readwrite');
+  await tx.store.clear();
+  await tx.done;
 }
 
 // ── Pending Animal Creates (offline calving) ─────────────────────────────────
