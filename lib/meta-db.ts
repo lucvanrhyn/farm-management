@@ -1,7 +1,11 @@
 import { createClient, type Client } from '@libsql/client';
 
 let _client: Client | null = null;
+let _lastProbe = 0;
 let hasWarnedAboutPlatformAdminFallback = false;
+
+/** Probe interval — match farm-prisma.ts VALIDATION_INTERVAL_MS. */
+const META_PROBE_INTERVAL_MS = 30_000;
 
 function getMetaClient(): Client {
   if (_client) return _client;
@@ -13,7 +17,55 @@ function getMetaClient(): Client {
     );
   }
   _client = createClient({ url, authToken });
+  _lastProbe = Date.now();
   return _client;
+}
+
+function isTokenExpiredError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('expired') ||
+    msg.includes('invalid token') ||
+    msg.includes('unauthorized') ||
+    msg.includes('authentication')
+  );
+}
+
+/**
+ * Evict the cached meta client. Subsequent calls will re-read env vars and
+ * construct a fresh client with the (hopefully rotated) token.
+ */
+function evictMetaClient(): void {
+  _client = null;
+  _lastProbe = 0;
+}
+
+/**
+ * Return a validated meta-DB client. Runs a SELECT 1 probe at most once per
+ * META_PROBE_INTERVAL_MS; on token-expiry errors, evicts the cached client
+ * so the next call picks up a rotated token. Mirrors the pattern in
+ * `farm-prisma.ts` — without it, an expired meta token silently breaks every
+ * login until the Vercel instance recycles.
+ */
+async function getValidatedMetaClient(): Promise<Client> {
+  const client = getMetaClient();
+  const now = Date.now();
+  if (now - _lastProbe > META_PROBE_INTERVAL_MS) {
+    try {
+      await client.execute('SELECT 1');
+      _lastProbe = now;
+    } catch (err) {
+      _lastProbe = now; // prevent probe storms on transient failures
+      if (isTokenExpiredError(err)) {
+        console.warn('[meta-db] Token appears expired — evicting cached client');
+        evictMetaClient();
+        return getMetaClient();
+      }
+      throw err;
+    }
+  }
+  return client;
 }
 
 export interface MetaUser {
@@ -42,7 +94,9 @@ export interface FarmCreds {
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getUserByIdentifier(identifier: string): Promise<MetaUser | null> {
-  const client = getMetaClient();
+  // Use the validated client for auth-critical lookups so expired tokens
+  // self-heal rather than silently blocking login.
+  const client = await getValidatedMetaClient();
   // accepts either email or username
   const result = await client.execute({
     sql: `SELECT id, email, username, password_hash, name
@@ -336,7 +390,7 @@ export async function updateFarmSubscription(
 }
 
 export async function isEmailVerified(userId: string): Promise<boolean> {
-  const client = getMetaClient();
+  const client = await getValidatedMetaClient();
   const result = await client.execute({
     sql: `SELECT email_verified FROM users WHERE id = ? LIMIT 1`,
     args: [userId],

@@ -130,8 +130,21 @@ export async function DELETE(
 
   try {
     await prisma.rainfallRecord.delete({ where: { id } });
-  } catch {
-    return NextResponse.json({ error: "Record not found" }, { status: 404 });
+  } catch (err) {
+    // Differentiate the "not found" case from actual DB failures so the
+    // operator sees the real error instead of a misleading 404. Prisma's
+    // P2025 is the "record to delete does not exist" code — anything else
+    // is a connection / permission / constraint problem worth surfacing.
+    const code = (err as { code?: string })?.code;
+    if (code === "P2025") {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[rainfall DELETE]", message, err instanceof Error ? err.stack : "");
+    return NextResponse.json(
+      { error: "Could not delete rainfall record" },
+      { status: 500 },
+    );
   }
 
   revalidatePath(`/${farmSlug}/admin/camps`);
