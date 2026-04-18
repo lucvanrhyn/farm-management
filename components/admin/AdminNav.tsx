@@ -51,6 +51,14 @@ interface NavItem {
   icon: React.ElementType;
   group: string;
   premiumOnly?: boolean;
+  /**
+   * Species this item is scoped to. When set, the item:
+   *   (a) is only rendered if `enabledSpecies` includes this value (N2), and
+   *   (b) is treated as active whenever the pathname is anywhere under
+   *       /<farmSlug>/<species>/... (N1).
+   * Cattle-shared items omit this field.
+   */
+  species?: "sheep" | "game";
 }
 
 // ── Nav items per mode ──────────────────────────────────────────────────────
@@ -87,7 +95,7 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
   { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
   { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Data"    },
-  { path: "/sheep/reproduction", label: "Lambing",      icon: HeartPulse,      group: "Data",   premiumOnly: true },
+  { path: "/sheep/reproduction", label: "Lambing",      icon: HeartPulse,      group: "Data",   premiumOnly: true, species: "sheep" },
   { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
   { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
   { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
@@ -106,8 +114,8 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
 const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
   { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
-  { path: "/game/census",        label: "Census",       icon: Crosshair,       group: "Data"    },
-  { path: "/game/offtake",       label: "Hunting",      icon: Target,          group: "Data"    },
+  { path: "/game/census",        label: "Census",       icon: Crosshair,       group: "Data",   species: "game" },
+  { path: "/game/offtake",       label: "Hunting",      icon: Target,          group: "Data",   species: "game" },
   { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
   { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
   { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
@@ -270,19 +278,42 @@ export default function AdminNav({
 
   const isBasic = tier === "basic";
 
-  // Get nav items for the current mode
-  const navItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
+  // Get nav items for the current mode, then filter by enabledSpecies.
+  // If enabledSpecies is undefined (defensive fallback), show everything.
+  const rawNavItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
+  const navItems = rawNavItems.filter((item) => {
+    if (!item.species) return true; // cattle/shared items always render
+    if (!enabledSpecies) return true; // defensive fallback
+    return enabledSpecies.includes(item.species);
+  });
+
+  // N1: pathname sub-route matching for species-scoped items.
+  // Any /sheep/* sub-route activates sheep-scoped items; same for game.
+  const inSheepSubtree = pathname.startsWith(`/${farmSlug}/sheep/`);
+  const inGameSubtree = pathname.startsWith(`/${farmSlug}/game/`);
+
+  function isItemActive(item: NavItem, href: string): boolean {
+    if (item.species === "sheep" && inSheepSubtree) return true;
+    if (item.species === "game" && inGameSubtree) return true;
+    if (pathname === href) return true;
+    // Prefix match for all non-root items (Overview stays root-only).
+    return href !== `/${farmSlug}/admin` && pathname.startsWith(href);
+  }
 
   const groups = GROUP_ORDER.map((groupLabel) => ({
     label: groupLabel,
     links: navItems
       .filter((item) => item.group === groupLabel)
-      .map((item) => ({
-        href: `/${farmSlug}${item.path}`,
-        label: item.label,
-        icon: item.icon,
-        locked: isBasic && !!item.premiumOnly,
-      })),
+      .map((item) => {
+        const href = `/${farmSlug}${item.path}`;
+        return {
+          href,
+          label: item.label,
+          icon: item.icon,
+          locked: isBasic && !!item.premiumOnly,
+          isActive: isItemActive(item, href),
+        };
+      }),
   })).filter((group) => group.links.length > 0);
 
   function handleLockedClick() {
@@ -364,7 +395,7 @@ export default function AdminNav({
                       href={link.href}
                       label={link.label}
                       icon={link.icon}
-                      isActive={pathname === link.href || (link.href !== `/${farmSlug}/admin` && pathname.startsWith(link.href))}
+                      isActive={link.isActive}
                     />
                   )
                 )}

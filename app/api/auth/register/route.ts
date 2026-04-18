@@ -53,18 +53,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Farm name must be at least 2 characters' }, { status: 400 });
   }
 
-  // Check email uniqueness — return generic message to avoid email enumeration
+  // Anti-enumeration: new vs existing emails must produce byte-identical
+  // responses. We also time-match the two paths — the existing-email branch
+  // runs a dummy bcrypt hash so its latency tracks the provisioning branch's
+  // `hash(password, 12)` cost, and a subsequent attacker cannot distinguish
+  // the two by timing either.
+  //
+  // Residual timing delta: provisioning additionally writes to meta-db and
+  // creates a Turso tenant DB. bcrypt dominates wall-clock (~200ms at cost=12),
+  // but a patient attacker with low jitter and many samples could still see
+  // a small (~tens of ms) difference. Acceptable given the LOW severity and
+  // the 5/hr IP rate limit above; follow-up would add a fixed-latency sleep
+  // to fully flatten if we ever ship a threat-model that requires it.
+  //
+  // The UI no longer branches on `slug` — it unconditionally shows the
+  // "Check your email" screen whenever `success: true` is returned.
+  const ANTI_ENUM_RESPONSE = { success: true, pending: true } as const;
+
   const existing = await getUserByEmail(email);
   if (existing) {
-    // Return 200 with success-like message to prevent email enumeration
-    return NextResponse.json({ success: true, slug: null, pending: true });
+    // Time-match the happy path: hash the supplied password so the
+    // "already exists" branch spends ~the same CPU as the "provision"
+    // branch before responding. We discard the result.
+    await hash(password, 12);
+    return NextResponse.json(ANTI_ENUM_RESPONSE);
   }
 
-  // Provision — use async hash to avoid blocking the event loop
+  // Provision — use async hash to avoid blocking the event loop.
   try {
     const passwordHash = await hash(password, 12);
-    const { slug } = await provisionFarm({ name, email, username, passwordHash, farmName });
-    return NextResponse.json({ success: true, slug });
+    await provisionFarm({ name, email, username, passwordHash, farmName });
+    return NextResponse.json(ANTI_ENUM_RESPONSE);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Registration failed';
     console.error('[register] Provisioning error:', message);

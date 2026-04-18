@@ -12,6 +12,7 @@ import {
   getPendingPhotos,
   markPhotoSynced,
   setLastSyncedAt,
+  clearPendingAnimalUpdate,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
@@ -125,6 +126,14 @@ export async function syncPendingObservations(): Promise<{
       await markObservationSynced(obs.local_id!);
       localToServerId.set(obs.local_id!, serverId);
       synced++;
+      // If this observation carried an animal-level mutation (camp_move,
+      // status_change, etc.), the server has now applied it — drop the
+      // animal from the pending_animal_updates marker set so the next
+      // refresh is free to orphan-sweep it normally. Observations without
+      // an animal_id (farm-wide events) don't touch the marker set.
+      if (obs.animal_id) {
+        await clearPendingAnimalUpdate(obs.animal_id);
+      }
     } else {
       await markObservationFailed(obs.local_id!);
       failed++;

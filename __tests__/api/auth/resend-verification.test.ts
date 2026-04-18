@@ -12,7 +12,7 @@ vi.mock('@/lib/meta-db', () => ({
 }));
 
 const sendVerificationEmailMock = vi.fn();
-const generateVerificationTokenMock = vi.fn(() => ({
+const generateVerificationTokenMock = vi.fn((..._args: unknown[]) => ({
   token: 'tok-123',
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
 }));
