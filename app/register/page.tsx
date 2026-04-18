@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 export default function RegisterPage() {
@@ -16,6 +17,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -47,7 +49,13 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Registration failed.");
+      } else if (data.slug) {
+        // Push directly into onboarding. If the user's email isn't verified yet,
+        // the onboarding layout will render a "Check your email" gate.
+        router.push(`/${data.slug}/onboarding`);
       } else {
+        // Defensive fallback: backend didn't return a slug (shouldn't happen,
+        // but don't leave the user stranded).
         setSuccess(true);
       }
     } catch {
