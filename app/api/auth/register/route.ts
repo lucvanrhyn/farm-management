@@ -59,6 +59,13 @@ export async function POST(request: NextRequest) {
   // `hash(password, 12)` cost, and a subsequent attacker cannot distinguish
   // the two by timing either.
   //
+  // Residual timing delta: provisioning additionally writes to meta-db and
+  // creates a Turso tenant DB. bcrypt dominates wall-clock (~200ms at cost=12),
+  // but a patient attacker with low jitter and many samples could still see
+  // a small (~tens of ms) difference. Acceptable given the LOW severity and
+  // the 5/hr IP rate limit above; follow-up would add a fixed-latency sleep
+  // to fully flatten if we ever ship a threat-model that requires it.
+  //
   // The UI no longer branches on `slug` — it unconditionally shows the
   // "Check your email" screen whenever `success: true` is returned.
   const ANTI_ENUM_RESPONSE = { success: true, pending: true } as const;

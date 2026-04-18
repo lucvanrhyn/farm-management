@@ -55,7 +55,8 @@ export default function RegisterPage() {
         // duplicate signup → user gets no new mail, but can retry login).
         setSuccess(true);
       }
-    } catch {
+    } catch (err) {
+      console.error("[register] submit failed:", err);
       setError("Network error. Check your connection.");
     } finally {
       setLoading(false);
