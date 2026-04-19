@@ -791,14 +791,25 @@ export async function suggestPairings(
     }),
   ]);
 
-  // Gatekeeper: without pedigree seed data every COI is 0 and every pairing
-  // looks equally "safe" — a 33,656-row cartesian product of junk. Surface
-  // this as a first-class empty-state so the page can guide the farmer to
-  // import a herd book instead of silently misrepresenting the analysis.
-  const hasPedigreeSeed = allAnimals.some(
-    (a) => (a.motherId && a.motherId.length > 0) || (a.fatherId && a.fatherId.length > 0),
+  // Gatekeeper: without *sufficient* pedigree seed data every COI is 0 and
+  // every pairing looks equally "safe" — a 33,656-row cartesian product of
+  // junk. A lone animal with a recorded sire in a 200-head herd is NOT
+  // enough: the COI calculator still returns 0% for 99.9% of pairings and
+  // the farmer sees a list that looks analytical but is meaningless.
+  //
+  // Threshold scales with herd size: require at least 10% of animals to
+  // have a recorded sire or dam, floored at 1 so tiny pilot herds (<10
+  // animals) still flow through with any pedigree signal. Above ~10
+  // animals the 10% floor kicks in; a 200-head herd needs 20 with
+  // pedigree before the engine runs.
+  const pedigreeCount = allAnimals.reduce(
+    (n, a) =>
+      n +
+      ((a.motherId && a.motherId.length > 0) || (a.fatherId && a.fatherId.length > 0) ? 1 : 0),
+    0,
   );
-  if (!hasPedigreeSeed) {
+  const requiredPedigree = Math.max(1, Math.ceil(allAnimals.length * 0.1));
+  if (pedigreeCount < requiredPedigree) {
     return { pairings: [], reason: "NO_PEDIGREE_SEED" };
   }
 

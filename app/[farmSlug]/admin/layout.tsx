@@ -9,15 +9,41 @@ import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 
 /**
- * Paths that must render normally while onboardingComplete is still false.
+ * Path suffixes that must render normally while onboardingComplete is still false.
  * Admins need to be able to upgrade mid-wizard (e.g. hit the paywall, pay,
  * and come back) without being bounced back to the onboarding shell.
+ *
+ * Suffixes include their leading `/` and trailing segment — they are matched
+ * exactly (plus an optional trailing `/`) after the pathname is normalised,
+ * so `/admin/settings/subscription/../animals` cannot slip through.
  */
-const ONBOARDING_WHITELIST = ["/admin/settings/subscription"];
+const ONBOARDING_WHITELIST_SUFFIXES = ["/admin/settings/subscription"] as const;
 
-function shouldBypassOnboardingGate(pathname: string | null): boolean {
-  if (!pathname) return false;
-  return ONBOARDING_WHITELIST.some((suffix) => pathname.includes(suffix));
+/**
+ * Normalise a URL pathname enough to safely match it against a fixed
+ * whitelist. Strips any query/hash, collapses duplicate slashes, and
+ * resolves `..` / `.` segments the way a URL parser would. The resulting
+ * value is relative (no scheme/host), starts with `/`, and contains no
+ * traversal tokens.
+ */
+function normalisePathname(raw: string): string | null {
+  try {
+    // Strip query/hash and reject absolute/external URLs. URL parser
+    // needs a base, and setting one anchors the path so traversal is
+    // resolved against it rather than leaking outside.
+    const url = new URL(raw, "https://_local");
+    if (url.origin !== "https://_local") return null;
+    return url.pathname.replace(/\/+$/g, ""); // trim trailing slashes
+  } catch {
+    return null;
+  }
+}
+
+function shouldBypassOnboardingGate(rawPathname: string | null): boolean {
+  if (!rawPathname) return false;
+  const normalised = normalisePathname(rawPathname);
+  if (!normalised) return false;
+  return ONBOARDING_WHITELIST_SUFFIXES.some((suffix) => normalised.endsWith(suffix));
 }
 
 async function currentPathname(): Promise<string | null> {

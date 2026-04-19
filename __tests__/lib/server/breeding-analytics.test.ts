@@ -127,4 +127,46 @@ describe('suggestPairings — empty-state reasons', () => {
     expect(result.pairings).toEqual([]);
     expect(result.reason).toBe('NO_OPEN_COWS');
   });
+
+  it('returns NO_PEDIGREE_SEED when a 200-head herd has only 1 animal with pedigree (1%)', async () => {
+    // Regression for the code-review MEDIUM — the old `.some()` check
+    // admitted any herd with a single pedigreed animal. A 1%-seed herd
+    // still produces 99.9% of pairings at COI=0, which looks analytical
+    // but is meaningless. New threshold requires 10% with pedigree.
+    const animals: AnimalSeed[] = [];
+    for (let i = 0; i < 200; i++) {
+      animals.push(
+        seedAnimal({
+          id: `a-${i}`,
+          sex: i % 2 === 0 ? 'Female' : 'Male',
+          category: i % 2 === 0 ? 'Cow' : 'Bull',
+          motherId: i === 0 ? 'ancestor-cow' : null,
+          fatherId: null,
+        }),
+      );
+    }
+    const prisma = makeMockPrisma(animals);
+    const { suggestPairings } = await import('@/lib/server/breeding-analytics');
+    const result = await suggestPairings(prisma, 'test-farm');
+    expect(result.reason).toBe('NO_PEDIGREE_SEED');
+  });
+
+  it('flows through when a 200-head herd has 10% pedigree seed', async () => {
+    const animals: AnimalSeed[] = [];
+    for (let i = 0; i < 200; i++) {
+      animals.push(
+        seedAnimal({
+          id: `a-${i}`,
+          sex: i % 2 === 0 ? 'Female' : 'Male',
+          category: i % 2 === 0 ? 'Cow' : 'Bull',
+          motherId: i < 20 ? 'ancestor-cow' : null,
+          fatherId: null,
+        }),
+      );
+    }
+    const prisma = makeMockPrisma(animals);
+    const { suggestPairings } = await import('@/lib/server/breeding-analytics');
+    const result = await suggestPairings(prisma, 'test-farm');
+    expect(result.reason).not.toBe('NO_PEDIGREE_SEED');
+  });
 });

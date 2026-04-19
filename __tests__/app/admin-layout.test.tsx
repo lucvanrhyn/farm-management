@@ -138,6 +138,31 @@ describe('AdminLayout — onboarding gate (I7)', () => {
     expect(redirected).toBeNull();
   });
 
+  it('rejects a crafted path-traversal attempt to bypass the onboarding gate', async () => {
+    // Regression for the code-review HIGH — `pathname.includes("/admin/settings/subscription")`
+    // would have matched this attacker-controlled header, letting a fresh
+    // farm admin bypass the wizard by visiting /admin/animals with a
+    // spoofed next-url. Normalisation via URL() resolves the `..` and
+    // puts the actual target (`/admin/animals`) outside the whitelist.
+    getPrismaForFarmMock.mockResolvedValue(
+      makePrismaMock({ onboardingComplete: false }),
+    );
+    setHeader('/fresh-farm/admin/settings/subscription/../animals');
+
+    const { redirected } = await runLayout('fresh-farm');
+    expect(redirected).toBe('/fresh-farm/onboarding');
+  });
+
+  it('ignores query strings on the whitelisted path', async () => {
+    getPrismaForFarmMock.mockResolvedValue(
+      makePrismaMock({ onboardingComplete: false }),
+    );
+    setHeader('/fresh-farm/admin/settings/subscription?tier=advanced');
+
+    const { redirected } = await runLayout('fresh-farm');
+    expect(redirected).toBeNull();
+  });
+
   it('fails-open when farmSettings.findFirst throws (no bounce on DB blip)', async () => {
     getPrismaForFarmMock.mockResolvedValue(
       makePrismaMock({ onboardingComplete: null, settingsFails: true }),
