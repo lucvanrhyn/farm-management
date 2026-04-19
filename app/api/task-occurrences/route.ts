@@ -1,0 +1,60 @@
+/**
+ * GET /api/task-occurrences
+ *
+ * Returns TaskOccurrence rows joined to their parent Task, scoped to the active
+ * tenant. Ordered by occurrenceAt ASC.
+ *
+ * Query params:
+ *   from  - ISO datetime string (default: start of today UTC)
+ *   to    - ISO datetime string (default: end of today UTC + 1 day)
+ *
+ * Error codes:
+ *   MISSING_SESSION — no valid session
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+import { getPrismaWithAuth } from "@/lib/farm-prisma";
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized", code: "MISSING_SESSION" },
+      { status: 401 },
+    );
+  }
+
+  const db = await getPrismaWithAuth(session);
+  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+  const { prisma } = db;
+
+  const { searchParams } = new URL(req.url);
+
+  // Default: today UTC (midnight to midnight+1d)
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+
+  const from = fromParam ? new Date(fromParam) : todayStart;
+  const to = toParam ? new Date(toParam) : todayEnd;
+
+  const occurrences = await prisma.taskOccurrence.findMany({
+    where: {
+      occurrenceAt: {
+        gte: from,
+        lte: to,
+      },
+    },
+    include: {
+      task: true,
+    },
+    orderBy: { occurrenceAt: "asc" },
+  });
+
+  return NextResponse.json(occurrences);
+}

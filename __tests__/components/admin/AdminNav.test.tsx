@@ -197,7 +197,7 @@ describe("AdminNav", () => {
         "Camps & Grazing",
         "Finance",
         "Compliance",
-        "Admin",
+        "Today",
       ];
       for (const label of expected) {
         expect(
