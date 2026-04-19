@@ -9,12 +9,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      String   @default("viewer")
-  createdAt DateTime @default(now())
+  id         String            @id @default(cuid())
+  email      String            @unique
+  password   String
+  name       String?
+  role       String            @default("viewer")
+  createdAt  DateTime          @default(now())
+  alertPrefs AlertPreference[]
 }
 
 model Observation {
@@ -137,6 +138,11 @@ model FarmSettings {
   biomeType                String?  // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
   // Onboarding state
   onboardingComplete       Boolean  @default(false) // set true when wizard finishes OR tenant has substantial data (migration)
+  // Notification preferences (Phase J)
+  quietHoursStart          String?  @default("20:00")  // "HH:mm" local time; no non-critical push between start..end
+  quietHoursEnd            String?  @default("06:00")
+  timezone                 String?  @default("Africa/Johannesburg") // IANA tz for quiet-hour + digest scheduling
+  speciesAlertThresholds   String?                     // JSON: per-species override blob, e.g. { cattle: { daysOpenLimit: 110 }, sheep: { ... } }
 }
 
 model NvdRecord {
@@ -561,16 +567,45 @@ model It3Snapshot {
 // ── Notifications ───────────────────────────────────────────────────────────
 
 model Notification {
-  id        String   @id @default(cuid())
-  type      String   // e.g. "calving_due_7d" | "calving_overdue" | "poor_doer" | "withdrawal_expiring" | "stale_inspection"
-  severity  String   // "red" | "amber"
-  message   String
-  href      String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id          String   @id @default(cuid())
+  type        String   // e.g. "calving_due_7d" | "calving_overdue" | "poor_doer" | "withdrawal_expiring" | "stale_inspection"
+  severity    String   // "red" | "amber"
+  message     String
+  href        String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  // Phase J — dedup + digest support
+  dedupKey           String?   // stable key like "NO_WEIGHING_90D:camp-7:2026-W16" — merge+bump on collision
+  payload            String?   // JSON: { animalIds?, campId?, count?, speciesId?, ...renderer inputs }
+  collapseKey        String?   // grouping unit: campId, speciesId, tenantId — used by digest algorithm
+  updatedAt          DateTime  @updatedAt
+  // Phase J — dispatch idempotency (at-most-once delivery under Inngest retry)
+  pushDispatchedAt   DateTime? // set BEFORE push send; retries skip if non-null
+  digestDispatchedAt DateTime? // set BEFORE digest send; retries skip if non-null
 
+  @@unique([type, dedupKey], name: "unique_type_dedup")
   @@index([isRead, createdAt], name: "idx_notification_read_date")
+  @@index([collapseKey])
+}
+
+// ── Alert Preferences (Phase J) ─────────────────────────────────────────────
+
+model AlertPreference {
+  id              String   @id @default(cuid())
+  userId          String
+  category        String   // "reproduction" | "performance" | "veld" | "finance" | "compliance" | "weather" | "predator"
+  alertType       String?  // null = whole-category pref; specific type like "lambing_due_7d" for per-alert override
+  channel         String   // "bell" | "email" | "push" | "whatsapp"
+  enabled         Boolean  @default(true)
+  digestMode      String   @default("realtime") // "realtime" | "daily" | "weekly"
+  speciesOverride String?  // null = all species; "cattle" | "sheep" | "game" to scope
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, alertType, channel, speciesOverride], name: "unique_user_pref")
+  @@index([userId])
 }
 
 // ── Push Subscriptions ──────────────────────────────────────────────────────
