@@ -58,6 +58,25 @@ export interface PairingSuggestion {
   };
 }
 
+/**
+ * Result envelope for suggestPairings.
+ *
+ * Why not just return PairingSuggestion[]?
+ *
+ * When a farm has animals but zero pedigree (no animal records a fatherId or
+ * motherId), every pairing has COI = 0 by construction. The old code silently
+ * returned the full cartesian product (e.g. 33,656 pairings at 0.0% COI),
+ * which presents as a feature but is really a "no data" bug. Distinguishing
+ * the NO_PEDIGREE_SEED case lets the page render a proper empty-state that
+ * points the farmer at the pedigree importer, instead of firehosing junk.
+ */
+export type PairingEmptyReason = "NO_PEDIGREE_SEED" | "NO_BULLS" | "NO_OPEN_COWS";
+
+export interface PairingResult {
+  pairings: PairingSuggestion[];
+  reason?: PairingEmptyReason;
+}
+
 interface AnimalRow {
   id: string;
   animalId: string;
@@ -743,7 +762,7 @@ function buildCowProfileInMemory(
 export async function suggestPairings(
   prisma: PrismaClient,
   farmSlug: string,
-): Promise<PairingSuggestion[]> {
+): Promise<PairingResult> {
   void farmSlug;
 
   const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
@@ -772,6 +791,28 @@ export async function suggestPairings(
     }),
   ]);
 
+  // Gatekeeper: without *sufficient* pedigree seed data every COI is 0 and
+  // every pairing looks equally "safe" — a 33,656-row cartesian product of
+  // junk. A lone animal with a recorded sire in a 200-head herd is NOT
+  // enough: the COI calculator still returns 0% for 99.9% of pairings and
+  // the farmer sees a list that looks analytical but is meaningless.
+  //
+  // Threshold scales with herd size: require at least 10% of animals to
+  // have a recorded sire or dam, floored at 1 so tiny pilot herds (<10
+  // animals) still flow through with any pedigree signal. Above ~10
+  // animals the 10% floor kicks in; a 200-head herd needs 20 with
+  // pedigree before the engine runs.
+  const pedigreeCount = allAnimals.reduce(
+    (n, a) =>
+      n +
+      ((a.motherId && a.motherId.length > 0) || (a.fatherId && a.fatherId.length > 0) ? 1 : 0),
+    0,
+  );
+  const requiredPedigree = Math.max(1, Math.ceil(allAnimals.length * 0.1));
+  if (pedigreeCount < requiredPedigree) {
+    return { pairings: [], reason: "NO_PEDIGREE_SEED" };
+  }
+
   // Latest scan per animal
   const latestScanResult = new Map<string, string>();
   for (const obs of recentScans) {
@@ -789,6 +830,9 @@ export async function suggestPairings(
     const scan = latestScanResult.get(a.id);
     return scan !== "pregnant";
   });
+
+  if (bulls.length === 0) return { pairings: [], reason: "NO_BULLS" };
+  if (openCows.length === 0) return { pairings: [], reason: "NO_OPEN_COWS" };
 
   // Batch-fetch all trait observations in 3 queries instead of O(N) per-animal calls.
   const threeYearsAgo = new Date(Date.now() - 3 * 365 * 86_400_000);
@@ -862,5 +906,5 @@ export async function suggestPairings(
 
   // Sort by score descending and limit
   suggestions.sort((a, b) => b.score - a.score);
-  return suggestions.slice(0, MAX_PAIRINGS);
+  return { pairings: suggestions.slice(0, MAX_PAIRINGS) };
 }

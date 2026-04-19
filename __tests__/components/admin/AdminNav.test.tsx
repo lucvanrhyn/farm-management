@@ -176,4 +176,87 @@ describe("AdminNav", () => {
       expect(getLink("Overview")).not.toBeNull();
     });
   });
+
+  // ─── I8: collapsible accordion groups ────────────────────────────────────
+
+  describe("I8 — accordion groups", () => {
+    beforeEach(() => {
+      try {
+        window.localStorage.removeItem("farmtrack-nav-expanded-farm-x");
+      } catch {
+        // noop — some jsdom builds ship a read-only store
+      }
+    });
+
+    it("renders every required group header", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const expected = [
+        "Overview",
+        "Animals",
+        "Breeding",
+        "Camps & Grazing",
+        "Finance",
+        "Compliance",
+        "Admin",
+      ];
+      for (const label of expected) {
+        expect(
+          screen.queryByRole("button", { name: new RegExp(`^${label}$`, "i") }),
+        ).not.toBeNull();
+      }
+    });
+
+    it("auto-expands the group containing the active route (Overview at /admin)", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const header = screen.getByRole("button", { name: /^Overview$/i });
+      expect(header.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("auto-expands Breeding when on /admin/reproduction", () => {
+      renderNav({ pathname: "/farm-x/admin/reproduction", mode: "cattle" });
+      const breedingHeader = screen.getByRole("button", { name: /^Breeding$/i });
+      expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+      // Non-active groups stay collapsed by default.
+      const financeHeader = screen.getByRole("button", { name: /^Finance$/i });
+      expect(financeHeader.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("persists expanded set to localStorage when a group is opened", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const financeHeader = screen.getByRole("button", { name: /^Finance$/i });
+
+      // Open Finance
+      financeHeader.click();
+
+      const raw = window.localStorage.getItem("farmtrack-nav-expanded-farm-x");
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!);
+      expect(parsed).toContain("Finance");
+    });
+
+    it("restores expanded groups from localStorage on mount", () => {
+      window.localStorage.setItem(
+        "farmtrack-nav-expanded-farm-x",
+        JSON.stringify(["Finance", "Compliance"]),
+      );
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      expect(
+        screen.getByRole("button", { name: /^Finance$/i }).getAttribute("aria-expanded"),
+      ).toBe("true");
+      expect(
+        screen.getByRole("button", { name: /^Compliance$/i }).getAttribute("aria-expanded"),
+      ).toBe("true");
+    });
+
+    it("refuses to collapse the group containing the active route", () => {
+      renderNav({ pathname: "/farm-x/admin/reproduction", mode: "cattle" });
+      const breedingHeader = screen.getByRole("button", { name: /^Breeding$/i });
+      expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+
+      // User clicks to collapse — but this group holds the active item, so
+      // we keep it open to preserve orientation.
+      breedingHeader.click();
+      expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
 });
