@@ -143,6 +143,11 @@ model FarmSettings {
   quietHoursEnd            String?  @default("06:00")
   timezone                 String?  @default("Africa/Johannesburg") // IANA tz for quiet-hour + digest scheduling
   speciesAlertThresholds   String?                     // JSON: per-species override blob, e.g. { cattle: { daysOpenLimit: 110 }, sheep: { ... } }
+  // Phase K (Wave 3F) — task/map preference blobs. Nullable JSON strings
+  // (shape enforced in API route handlers). Opting for JSON blobs avoids
+  // needing a per-field migration for a grab-bag of admin-only preferences.
+  taskSettings             String?                     // JSON: { defaultReminderOffset: number, autoObservation: boolean, horizonDays: 30|60|90 }
+  mapSettings              String?                     // JSON: { eskomAreaId?: string }
 }
 
 model NvdRecord {
@@ -219,8 +224,61 @@ model Task {
   completedAt String?
   createdAt   DateTime @default(now())
 
+  // Phase K — Tasks + Geo-Map (additive, nullable)
+  taskType                String? // weighing|treatment|dipping|pregnancy_scan|shearing|crutching|vaccination|brucellosis_test|camp_inspection|camp_move|water_point_service|fence_repair|fire_break_maintenance|rainfall_reading|generic
+  lat                     Float?
+  lng                     Float?
+  recurrenceRule          String? // RFC5545 RRULE or livestock shortcut: "after:calving+21d", "before:lambing-30d", "season:spring_autumn_dip"
+  reminderOffset          Int?    // minutes before dueDate
+  assigneeIds             String? // JSON-stringified array for SQLite
+  templateId              String?
+  blockedByIds            String? // JSON-stringified array
+  completedObservationId  String?
+  recurrenceSource        String? // audit trail: rule that expanded this occurrence
+
+  occurrences TaskOccurrence[]
+
   @@index([assignedTo, status, dueDate], name: "idx_task_assignee_status_date")
   @@index([dueDate, status], name: "idx_task_date_status")
+  @@index([taskType], name: "idx_task_type")
+  @@index([templateId], name: "idx_task_template")
+}
+
+model TaskTemplate {
+  id               String   @id @default(cuid())
+  tenantSlug       String
+  name             String
+  name_af          String?
+  taskType         String
+  description      String?
+  description_af   String?
+  priorityDefault  String?  // low|medium|high
+  recurrenceRule   String?
+  reminderOffset   Int?     // minutes
+  species          String?  // cattle|sheep|game|null for any
+  isPublic         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([tenantSlug, name])
+  @@index([tenantSlug, taskType], name: "idx_task_template_tenant_type")
+}
+
+model TaskOccurrence {
+  id                    String    @id @default(cuid())
+  taskId                String
+  occurrenceAt          DateTime
+  reminderAt            DateTime?
+  status                String    @default("pending") // pending|completed|skipped
+  completedAt           DateTime?
+  reminderDispatchedAt  DateTime?
+  createdAt             DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, occurrenceAt])
+  @@index([reminderAt, reminderDispatchedAt], name: "idx_task_occurrence_reminder")
+  @@index([occurrenceAt, status], name: "idx_task_occurrence_at_status")
 }
 
 // ── Multi-Species Settings ──────────────────────────────────────────────────
@@ -524,6 +582,9 @@ model RainfallRecord {
   rainfallMm  Float
   stationName String?
   campId      String?
+  // Phase K — map layer coords (nullable, additive)
+  lat         Float?
+  lng         Float?
   createdAt   DateTime @default(now())
 
   @@map("GameRainfallRecord")

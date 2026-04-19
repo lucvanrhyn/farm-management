@@ -1,7 +1,25 @@
+/**
+ * PATCH /api/tasks/[id] — update a task (ADMIN only)
+ * DELETE /api/tasks/[id] — delete a task (ADMIN only)
+ *
+ * PATCH Phase K additions:
+ *   completionPayload — when status → "completed", runs observationFromTaskCompletion.
+ *   If the mapping returns non-null, both the task update and observation create
+ *   are executed inside a prisma.$transaction. Response includes:
+ *     { ...task, observationCreated: boolean, observationId?: string }
+ *
+ * If the payload is present but incomplete, the PATCH still succeeds with
+ *   observationCreated: false (no error — silent null is intentional).
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { observationFromTaskCompletion } from "@/lib/tasks/observation-mapping";
+import type { TaskCompletionPayload } from "@/lib/tasks/observation-mapping";
+
+// ── PATCH ─────────────────────────────────────────────────────────────────────
 
 export async function PATCH(
   req: NextRequest,
@@ -39,11 +57,14 @@ export async function PATCH(
   if (typeof data.description === "string") update.description = data.description;
   if (typeof data.dueDate === "string") update.dueDate = data.dueDate;
   if (typeof data.assignedTo === "string") update.assignedTo = data.assignedTo;
+
   const VALID_STATUSES = new Set(["pending", "in_progress", "completed"]);
   const VALID_PRIORITIES = new Set(["low", "normal", "high"]);
 
-  if (typeof data.status === "string" && VALID_STATUSES.has(data.status)) update.status = data.status;
-  if (typeof data.priority === "string" && VALID_PRIORITIES.has(data.priority)) update.priority = data.priority;
+  if (typeof data.status === "string" && VALID_STATUSES.has(data.status))
+    update.status = data.status;
+  if (typeof data.priority === "string" && VALID_PRIORITIES.has(data.priority))
+    update.priority = data.priority;
   if (typeof data.campId === "string") update.campId = data.campId || null;
   if (typeof data.animalId === "string") update.animalId = data.animalId || null;
   if (typeof data.completedAt === "string") update.completedAt = data.completedAt;
@@ -57,10 +78,78 @@ export async function PATCH(
     update.completedAt = null;
   }
 
+  // ── Phase K: observation creation on completion ──
+  const isCompletionTransition =
+    update.status === "completed" && existing.status !== "completed";
+  const completionPayload = data.completionPayload as TaskCompletionPayload | undefined;
+
+  let observationCreated = false;
+  let observationId: string | undefined;
+
+  if (isCompletionTransition && completionPayload && typeof completionPayload === "object") {
+    // Build the observation payload from the task + completion data
+    const obsPayload = observationFromTaskCompletion(
+      {
+        id: existing.id,
+        taskType: existing.taskType ?? null,
+        animalId: existing.animalId ?? null,
+        campId: existing.campId ?? null,
+        lat: existing.lat ?? null,
+        lng: existing.lng ?? null,
+        assignedTo: existing.assignedTo,
+      },
+      completionPayload,
+    );
+
+    if (obsPayload !== null) {
+      // Execute task update + observation create atomically.
+      // Prisma's interactive transaction callback receives an Omit<PrismaClient, ...>
+      // not the full PrismaClient — use Parameters<> to derive the correct type.
+      type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+      const [updatedTask, createdObs] = await prisma.$transaction(
+        async (tx: TxClient) => {
+          // Create observation first so we have its ID
+          const obs = await tx.observation.create({
+            data: {
+              type: obsPayload.type,
+              details: obsPayload.details,
+              campId: obsPayload.campId ?? existing.campId ?? "unknown",
+              animalId: obsPayload.animalId ?? null,
+              observedAt: new Date(),
+              loggedBy: obsPayload.loggedBy,
+            },
+          });
+
+          const task = await tx.task.update({
+            where: { id },
+            data: { ...update, completedObservationId: obs.id },
+          });
+
+          return [task, obs] as const;
+        },
+      );
+
+      observationCreated = true;
+      observationId = createdObs.id;
+
+      return NextResponse.json({
+        ...updatedTask,
+        observationCreated,
+        observationId,
+      });
+    }
+  }
+
+  // ── Standard update (no observation) ──
   const task = await prisma.task.update({ where: { id }, data: update });
 
-  return NextResponse.json(task);
+  return NextResponse.json({
+    ...task,
+    observationCreated: false,
+  });
 }
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
 
 export async function DELETE(
   _req: NextRequest,

@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "_source": "Placeholder DAH/DALRRD FMD red-line (Kruger buffer coarse outline). Replace when DALRRD publishes authoritative GeoJSON.",
+  "_lastRefreshed": "2026-04-19",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zoneId": "fmd-red-line-kruger-buffer",
+        "zoneType": "red-line",
+        "name": "Kruger / Lowveld FMD Protection Zone (coarse)",
+        "province": "MP/LP",
+        "authority": "DALRRD (Department of Agriculture, Land Reform & Rural Development)",
+        "effectiveFrom": "2026-01-01",
+        "notes": "Coarse outline. Not legally binding. For visual reference until Wave 4 ingests the official shapefile."
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [30.90, -22.30],
+              [32.00, -22.30],
+              [32.10, -23.40],
+              [32.05, -25.00],
+              [31.80, -25.50],
+              [31.50, -25.75],
+              [31.25, -25.50],
+              [31.05, -25.10],
+              [30.95, -24.60],
+              [30.90, -23.80],
+              [30.85, -23.00],
+              [30.90, -22.30]
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
