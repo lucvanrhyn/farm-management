@@ -1,0 +1,16 @@
+{
+  "_source": "SAWS (South African Weather Service) static fallback — all provinces default to Moderate when live fetch fails.",
+  "_note": "Wave 4 will wire https://www.weathersa.co.za/Climate/FireDangerIndex. Until then this guarantees the UI never crashes on missing data.",
+  "_lastRefreshed": "2026-04-19",
+  "provinces": {
+    "EC": { "province": "EC", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "FS": { "province": "FS", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "GP": { "province": "GP", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "KZN": { "province": "KZN", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "LP": { "province": "LP", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "MP": { "province": "MP", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "NC": { "province": "NC", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "NW": { "province": "NW", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" },
+    "WC": { "province": "WC", "fdi": 40, "band": "Moderate", "asOf": "2026-04-19T00:00:00Z" }
+  }
+}

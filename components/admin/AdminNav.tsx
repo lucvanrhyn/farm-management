@@ -40,6 +40,12 @@ import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
 import type { FarmTier } from "@/lib/tier";
 import NotificationBell from "@/components/admin/NotificationBell";
 
+interface NavChild {
+  path: string;
+  label: string;
+  premiumOnly?: boolean;
+}
+
 interface NavItem {
   path: string;
   label: string;
@@ -54,6 +60,11 @@ interface NavItem {
    * Cattle-shared items omit this field.
    */
   species?: "sheep" | "game";
+  /**
+   * Optional sub-links rendered in a `<details>`-style disclosure under
+   * the parent. Used for the Tasks submenu (Phase K Wave 3F).
+   */
+  children?: NavChild[];
 }
 
 // ── Nav items per mode ──────────────────────────────────────────────────────
@@ -68,7 +79,7 @@ const GROUP_ORDER = [
   "Camps & Grazing",
   "Finance",
   "Compliance",
-  "Admin",
+  "Today",
 ] as const;
 type GroupLabel = (typeof GROUP_ORDER)[number];
 
@@ -98,10 +109,21 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",     label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports",    label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
-  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
+  {
+    path: "/admin/tasks",
+    label: "Tasks",
+    icon: CheckSquare,
+    group: "Today",
+    children: [
+      { path: "/admin/tasks",                  label: "Tasks" },
+      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
+      { path: "/admin/map/route-today",        label: "Route Today" },
+      { path: "/admin/settings/tasks",         label: "Templates" },
+    ],
+  },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Today" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Today" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Today" },
 ];
 
 const SHEEP_NAV_ITEMS: NavItem[] = [
@@ -128,10 +150,21 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
-  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
+  {
+    path: "/admin/tasks",
+    label: "Tasks",
+    icon: CheckSquare,
+    group: "Today",
+    children: [
+      { path: "/admin/tasks",                  label: "Tasks" },
+      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
+      { path: "/admin/map/route-today",        label: "Route Today" },
+      { path: "/admin/settings/tasks",         label: "Templates" },
+    ],
+  },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Today" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Today" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Today" },
 ];
 
 const GAME_NAV_ITEMS: NavItem[] = [
@@ -157,10 +190,21 @@ const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
-  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
+  {
+    path: "/admin/tasks",
+    label: "Tasks",
+    icon: CheckSquare,
+    group: "Today",
+    children: [
+      { path: "/admin/tasks",                  label: "Tasks" },
+      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
+      { path: "/admin/map/route-today",        label: "Route Today" },
+      { path: "/admin/settings/tasks",         label: "Templates" },
+    ],
+  },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Today" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Today" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Today" },
 ];
 
 const NAV_BY_MODE: Record<FarmMode, NavItem[]> = {
@@ -219,6 +263,41 @@ function NavLink({
         <span className="hidden md:inline">{label}</span>
       </Link>
     </motion.div>
+  );
+}
+
+/**
+ * Sub-link list rendered inside a disclosure under a parent NavLink. Desktop
+ * view only; the mobile (icon-only) nav keeps children hidden because there
+ * is no room for a second tier at 48px wide.
+ */
+function NavSubLinks({
+  items,
+}: {
+  items: Array<{ href: string; label: string; isActive: boolean; locked: boolean }>;
+}) {
+  return (
+    <ul
+      className="hidden md:flex flex-col gap-0.5 pl-6 mt-0.5"
+      style={{ borderLeft: "1px solid rgba(139,105,20,0.2)", marginLeft: 10 }}
+    >
+      {items.map((child) => (
+        <li key={child.href}>
+          <Link
+            href={child.href}
+            prefetch={false}
+            className="block px-2 py-1 rounded text-xs transition-colors"
+            style={{
+              color: child.isActive ? "#F5EBD4" : "rgba(210,180,140,0.7)",
+              background: child.isActive ? "rgba(139,105,20,0.1)" : "transparent",
+              fontWeight: child.isActive ? 500 : 400,
+            }}
+          >
+            {child.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -361,12 +440,30 @@ export default function AdminNav({
       .filter((item) => item.group === groupLabel)
       .map((item) => {
         const href = `/${farmSlug}${item.path}`;
+        const children = item.children
+          ? item.children.map((c) => {
+              const childHref = `/${farmSlug}${c.path}`;
+              // Child active if pathname matches the child's path portion
+              // (strip query). We compare ignoring any ?foo=bar so
+              // `/admin/tasks?view=calendar` still highlights when the
+              // current pathname is `/farm/admin/tasks`.
+              const childPathOnly = c.path.split("?")[0];
+              const childHrefNoQuery = `/${farmSlug}${childPathOnly}`;
+              return {
+                href: childHref,
+                label: c.label,
+                isActive: pathname === childHrefNoQuery,
+                locked: isBasic && !!c.premiumOnly,
+              };
+            })
+          : undefined;
         return {
           href,
           label: item.label,
           icon: item.icon,
           locked: isBasic && !!item.premiumOnly,
           isActive: isItemActive(item, href),
+          children,
         };
       }),
   })).filter((group) => group.links.length > 0);
@@ -554,13 +651,17 @@ export default function AdminNav({
                             onClickLocked={handleLockedClick}
                           />
                         ) : (
-                          <NavLink
-                            key={link.href}
-                            href={link.href}
-                            label={link.label}
-                            icon={link.icon}
-                            isActive={link.isActive}
-                          />
+                          <div key={link.href} className="flex flex-col">
+                            <NavLink
+                              href={link.href}
+                              label={link.label}
+                              icon={link.icon}
+                              isActive={link.isActive}
+                            />
+                            {link.children && link.children.length > 0 && (
+                              <NavSubLinks items={link.children} />
+                            )}
+                          </div>
                         ),
                       )}
                     </motion.div>
