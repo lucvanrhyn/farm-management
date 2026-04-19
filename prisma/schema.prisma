@@ -135,6 +135,8 @@ model FarmSettings {
   propertyRegNumber        String?  // SA property registration / LPHS number
   farmRegion               String?  // district / province
   biomeType                String?  // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
+  // Onboarding state
+  onboardingComplete       Boolean  @default(false) // set true when wizard finishes OR tenant has substantial data (migration)
 }
 
 model NvdRecord {

@@ -468,6 +468,36 @@ export async function commitImport(
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Phase 5 — flip onboardingComplete on FarmSettings (non-fatal)
+  //
+  // I7: the admin layout gate relies on this flag. Without flipping it, a
+  // farmer who successfully imports their herd would still bounce back to
+  // the onboarding wizard every time they visit /admin. Only flip on a
+  // genuine success (at least one row inserted) so a failed import stays
+  // in the wizard.
+  // ---------------------------------------------------------------------------
+  if (inserted > 0) {
+    try {
+      // FarmSettings uses id: "singleton"; upsert handles the rare case of a
+      // tenant with no settings row yet.
+      await prisma.farmSettings.upsert({
+        where: { id: "singleton" },
+        create: { id: "singleton", onboardingComplete: true },
+        update: { onboardingComplete: true },
+      });
+    } catch (err) {
+      // Non-fatal: inserts are already committed; the gate simply won't
+      // flip for this session. Farmer will re-hit /onboarding, see the
+      // "empty farm guard" detect animals > 0, and be redirected to /admin
+      // anyway (see app/[farmSlug]/onboarding/layout.tsx).
+      // eslint-disable-next-line no-console
+      console.error("commitImport: failed to flip FarmSettings.onboardingComplete", {
+        error: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
   onProgress?.({ phase: "done", processed: total, total });
 
   return { inserted, skipped, errors };

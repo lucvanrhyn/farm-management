@@ -10,10 +10,9 @@ import { getFarmMode } from "@/lib/server/get-farm-mode";
 import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { COPY_BY_MODE } from "./copy";
 
 export const dynamic = "force-dynamic";
-
-const GESTATION_DAYS = 285;
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -74,6 +73,7 @@ export default async function ReproductionPage({
   }
 
   const mode = await getFarmMode(farmSlug);
+  const copy = COPY_BY_MODE[mode] ?? COPY_BY_MODE.cattle;
 
   // Pre-fetch animal IDs for the active species so all repro queries can be scoped.
   const speciesAnimals = await prisma.animal.findMany({
@@ -94,10 +94,16 @@ export default async function ReproductionPage({
   const observedAtFilter: Record<string, unknown> = { gte: fromDate };
   if (toDate) observedAtFilter.lte = toDate;
 
+  // Include species-specific birth events (lambing for sheep, fawning for game)
+  // alongside the shared heat/insemination/scan events so the recent-events
+  // timeline shows the correct species' birth type.
+  const birthEventTypes =
+    mode === "sheep" ? ["lambing"] : mode === "game" ? ["fawning"] : ["calving"];
+
   const [recentEvents, allCamps] = await Promise.all([
     prisma.observation.findMany({
       where: {
-        type: { in: ["heat_detection", "insemination", "pregnancy_scan", "calving"] },
+        type: { in: ["heat_detection", "insemination", "pregnancy_scan", ...birthEventTypes] },
         observedAt: observedAtFilter,
         animalId: { in: speciesAnimalIds },
       },
@@ -117,12 +123,12 @@ export default async function ReproductionPage({
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
-              Reproductive Performance
+              {copy.pageTitle}
             </h1>
             <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
               {totalEvents > 0
-                ? `SA benchmarks: ≥85% pregnancy rate · ≤365d calving interval · >22% per 21-day cycle · <90d days open`
-                : "No reproductive events recorded yet — log heat, insemination, scan or calving events via the Logger"}
+                ? copy.benchmarkLine
+                : `No reproductive events recorded yet — log heat, insemination, scan or ${copy.birthEventLower} events via the Logger`}
             </p>
           </div>
           <ExportButton farmSlug={farmSlug} exportType="calvings" label="Export" />
@@ -145,7 +151,7 @@ export default async function ReproductionPage({
             value={stats.pregnancyRate !== null ? `${stats.pregnancyRate}%` : "—"}
             sub={
               stats.pregnancyRate === null
-                ? "Log calving events via Logger"
+                ? copy.logHint
                 : stats.pregnancyRate >= 85
                 ? "SA target met (≥85%)"
                 : stats.pregnancyRate >= 70
@@ -156,11 +162,11 @@ export default async function ReproductionPage({
             icon="🔬"
           />
           <MobKPICard
-            label="Calving Rate"
+            label={`${copy.birthEvent} Rate`}
             value={stats.calvingRate !== null ? `${stats.calvingRate}%` : "—"}
             sub={
               stats.calvingRate === null
-                ? "Log calving events via Logger"
+                ? copy.logHint
                 : stats.calvingRate >= 85
                 ? "SA target met (≥85%)"
                 : stats.calvingRate >= 70
@@ -171,11 +177,11 @@ export default async function ReproductionPage({
             icon="🐮"
           />
           <MobKPICard
-            label="Avg Calving Interval"
+            label={copy.intervalLabel}
             value={stats.avgCalvingIntervalDays !== null ? `${stats.avgCalvingIntervalDays}d` : "—"}
             sub={
               stats.avgCalvingIntervalDays === null
-                ? "Need ≥2 calvings per animal"
+                ? `Need ≥2 ${copy.birthEventLower}s per animal`
                 : stats.avgCalvingIntervalDays <= 365
                 ? "ARC target met (≤365d)"
                 : stats.avgCalvingIntervalDays <= 395
@@ -190,11 +196,11 @@ export default async function ReproductionPage({
         {/* KPI grid — Row 1b: Weaning + Days Open KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <MobKPICard
-            label="Weaning Rate"
+            label={copy.weanedLabel}
             value={stats.weaningRate !== null ? `${stats.weaningRate}%` : "—"}
             sub={
               stats.weaningRate === null
-                ? "Log calving events via Logger"
+                ? copy.logHint
                 : stats.weaningRate >= 80
                 ? "SA target met (≥80%)"
                 : stats.weaningRate >= 65
@@ -214,7 +220,7 @@ export default async function ReproductionPage({
             value={stats.avgDaysOpen !== null ? `${stats.avgDaysOpen}d` : "—"}
             sub={
               stats.avgDaysOpen === null
-                ? "Need calving + scan records"
+                ? `Need ${copy.birthEventLower} + scan records`
                 : stats.avgDaysOpen <= 90
                 ? "SA target met (<90d)"
                 : stats.avgDaysOpen <= 120
@@ -248,35 +254,35 @@ export default async function ReproductionPage({
             icon="💉"
           />
           <MobKPICard
-            label="Calvings Due (30 days)"
+            label={`${copy.birthEvent}s Due (30 days)`}
             value={stats.calvingsDue30d}
             sub={
               stats.upcomingCalvings.length === 0
                 ? "No inseminations on record"
-                : `Based on scan/insem + ${GESTATION_DAYS}d gestation`
+                : `Based on scan/insem + ${copy.gestationDays}d gestation`
             }
             status={stats.calvingsDue30d > 0 ? "warning" : "neutral"}
             icon="🐄"
           />
         </div>
 
-        {/* Expected Calvings */}
+        {/* Expected Births (species-aware) */}
         <div
           className="rounded-2xl border mb-6"
           style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
         >
           <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
             <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
-              Expected Calvings
+              Expected {copy.birthEvent}s
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-              Scan date (preferred) or insemination date + {GESTATION_DAYS} days · showing next 90 days
+              Scan date (preferred) or insemination date + {copy.gestationDays} days · showing next 90 days
             </p>
           </div>
           {stats.upcomingCalvings.length === 0 ? (
             <p className="px-6 py-5 text-sm" style={{ color: "#9C8E7A" }}>
-              No upcoming calvings calculated. Log insemination or scan events via the Logger to track
-              expected calving dates.
+              No upcoming {copy.birthEventLower}s calculated. Log insemination or scan events via the Logger to track
+              expected {copy.birthEventLower} dates.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -289,7 +295,7 @@ export default async function ReproductionPage({
                     <th className="px-6 py-3 text-left">Animal</th>
                     <th className="px-4 py-3 text-left">Camp</th>
                     <th className="px-4 py-3 text-left">Source</th>
-                    <th className="px-4 py-3 text-left">Expected Calving</th>
+                    <th className="px-4 py-3 text-left">Expected {copy.birthEvent}</th>
                     <th className="px-4 py-3 text-right">Days Away</th>
                   </tr>
                 </thead>
@@ -463,7 +469,7 @@ export default async function ReproductionPage({
                 Days Open — Per Animal
               </h2>
               <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-                Days from calving to confirmed conception · SA target: &lt;90 days
+                Days from {copy.birthEventLower} to confirmed conception · SA target: &lt;90 days
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -474,7 +480,7 @@ export default async function ReproductionPage({
                     style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}
                   >
                     <th className="px-6 py-3 text-left">Animal</th>
-                    <th className="px-4 py-3 text-left">Last Calving</th>
+                    <th className="px-4 py-3 text-left">Last {copy.birthEvent}</th>
                     <th className="px-4 py-3 text-left">Conception Date</th>
                     <th className="px-4 py-3 text-right">Days Open</th>
                   </tr>
@@ -561,12 +567,16 @@ export default async function ReproductionPage({
                   insemination: "#8B6914",
                   pregnancy_scan: "#4A7C59",
                   calving: "#0D9488",
+                  lambing: "#0D9488",
+                  fawning: "#0D9488",
                 };
                 const EVENT_LABELS: Record<string, string> = {
                   heat_detection: "Heat detected",
                   insemination: "Insemination",
                   pregnancy_scan: "Pregnancy scan",
                   calving: "Calving",
+                  lambing: "Lambing",
+                  fawning: "Fawning",
                 };
                 const dotColor = DOT_COLORS[obs.type] ?? "#9C8E7A";
                 const label = EVENT_LABELS[obs.type] ?? obs.type;
@@ -579,9 +589,14 @@ export default async function ReproductionPage({
                   if (det.bullId) subDetail += ` · ${det.bullId}`;
                 } else if (obs.type === "pregnancy_scan") {
                   subDetail = det.result === "pregnant" ? "Pregnant" : det.result === "empty" ? "Empty" : "Uncertain — recheck";
-                } else if (obs.type === "calving") {
-                  subDetail = det.calf_status === "live" ? "Live calf" : "Stillborn";
-                  if (det.calf_tag) subDetail += ` · ${det.calf_tag}`;
+                } else if (obs.type === "calving" || obs.type === "lambing" || obs.type === "fawning") {
+                  // Offspring status + tag; wording uses the species copy so
+                  // sheep farmers see "Live lamb", game farmers see "Live fawn".
+                  subDetail = det.calf_status === "live" || det.offspring_status === "live"
+                    ? `Live ${copy.offspring}`
+                    : "Stillborn";
+                  const tag = det.calf_tag || det.lamb_tag || det.fawn_tag || det.offspring_tag;
+                  if (tag) subDetail += ` · ${tag}`;
                 }
 
                 return (

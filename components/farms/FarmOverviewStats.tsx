@@ -12,9 +12,24 @@ function formatHeartbeat(date: Date | null): string {
   return `${Math.floor(diffDays / 30)}mo ago`;
 }
 
-function TierBadge({ tier, subscriptionStatus }: { tier: string; subscriptionStatus: string }) {
+/**
+ * TierBadge — shows the subscription tier.
+ *
+ * Rule: never show "inactive" when the farm has recent activity. An active
+ * farmer with a lapsed subscription sees the tier label (faded), not a loud
+ * "inactive" pill that implies the *farm* is dead.
+ */
+function TierBadge({
+  tier,
+  subscriptionStatus,
+  hasRecentActivity,
+}: {
+  tier: string;
+  subscriptionStatus: string;
+  hasRecentActivity: boolean;
+}) {
   const isActive = subscriptionStatus === "active";
-  const label = isActive ? tier : "inactive";
+  const label = isActive || hasRecentActivity ? tier : "inactive";
   const style =
     tier === "advanced" && isActive
       ? { background: "rgba(139,105,20,0.18)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.3)" }
@@ -32,26 +47,70 @@ function TierBadge({ tier, subscriptionStatus }: { tier: string; subscriptionSta
 
 export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
   const unavailable = overview.activeAnimalCount === null;
+  const hasRecentActivity = overview.lastObservationAt !== null;
 
+  // Genuine error state: DB unreachable / creds missing. Tell the farmer
+  // clicking the card will retry — the card itself is the link, so a
+  // dedicated button would just fight the containing <a>.
   if (unavailable) {
     return (
-      <div className="flex items-center gap-2 mt-2">
+      <div className="flex flex-wrap items-center gap-2 mt-2">
         <span
           className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full"
-          style={{ background: "rgba(200,50,50,0.15)", color: "rgba(220,100,100,0.8)", border: "1px solid rgba(200,50,50,0.3)" }}
+          style={{
+            background: "rgba(200,50,50,0.15)",
+            color: "rgba(220,100,100,0.85)",
+            border: "1px solid rgba(200,50,50,0.3)",
+          }}
         >
-          Unavailable
+          Count unavailable
         </span>
-        <TierBadge tier={overview.tier} subscriptionStatus={overview.subscriptionStatus} />
+        <span className="text-[10px]" style={{ color: "#6A4E30" }}>
+          click to retry
+        </span>
+        <TierBadge
+          tier={overview.tier}
+          subscriptionStatus={overview.subscriptionStatus}
+          hasRecentActivity={hasRecentActivity}
+        />
       </div>
     );
   }
 
+  // Fresh/empty farm — invite the farmer to add their first animal. The
+  // whole card is already a Link so the nested copy is purely directional.
+  if (overview.activeAnimalCount === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+        <span className="text-[10px]" style={{ color: "#6A4E30" }}>
+          <span className="font-semibold" style={{ color: "#C49030" }}>0</span>{" "}
+          animals (new farm)
+        </span>
+        <Divider />
+        <span
+          className="text-[10px] font-medium"
+          style={{ color: "#C49030" }}
+          title="Click card to set up and add your first animal"
+        >
+          Add your first animal →
+        </span>
+        <Divider />
+        <TierBadge
+          tier={overview.tier}
+          subscriptionStatus={overview.subscriptionStatus}
+          hasRecentActivity={hasRecentActivity}
+        />
+      </div>
+    );
+  }
+
+  // activeAnimalCount is guaranteed non-null here (unavailable branch above
+  // handles the null case).
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
       <Stat value={overview.activeAnimalCount!} label="animals" />
       <Divider />
-      <Stat value={overview.campCount!} label="camps" />
+      <Stat value={overview.campCount ?? 0} label="camps" />
       <Divider />
       <span
         className="text-[10px]"
@@ -61,7 +120,11 @@ export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
         {formatHeartbeat(overview.lastObservationAt)}
       </span>
       <Divider />
-      <TierBadge tier={overview.tier} subscriptionStatus={overview.subscriptionStatus} />
+      <TierBadge
+        tier={overview.tier}
+        subscriptionStatus={overview.subscriptionStatus}
+        hasRecentActivity={hasRecentActivity}
+      />
     </div>
   );
 }
