@@ -8,9 +8,13 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
+import DaysOpenHistogram from "@/components/admin/charts/DaysOpenHistogram";
+import WeaningRateKPI from "@/components/admin/charts/WeaningRateKPI";
+import GestationCalculator from "@/components/admin/charts/GestationCalculator";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { COPY_BY_MODE } from "./copy";
+import type { GestationBreed } from "@/lib/species/gestation";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +49,14 @@ function calvingIntervalStatus(days: number | null): "good" | "warning" | "alert
   if (days <= 365) return "good";
   if (days <= 395) return "warning";
   return "alert";
+}
+
+// Default breed shown first in the Gestation Calculator, per species mode.
+// Avoids dropping users on an irrelevant breed ("Bonsmara" for a sheep farm).
+function defaultBreedForMode(mode: "cattle" | "sheep" | "game"): GestationBreed {
+  if (mode === "sheep") return "sheep_dohne";
+  if (mode === "game") return "kudu";
+  return "cattle_bonsmara";
 }
 
 export default async function ReproductionPage({
@@ -235,6 +247,15 @@ export default async function ReproductionPage({
             }
             icon="📆"
           />
+        </div>
+
+        {/* Weaning Rate KPI tile (§E point 3) — large value + sparkline when
+            historical data available. `history` is intentionally empty today:
+            multi-year weaning trend requires a calvings-by-year aggregation
+            that would need a new Prisma query (out of scope for J5). Tile
+            still renders the current number + legend. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <WeaningRateKPI weaningRate={stats.weaningRate} history={[]} />
         </div>
 
         {/* KPI grid — Row 2: Activity KPIs */}
@@ -458,6 +479,24 @@ export default async function ReproductionPage({
           </div>
         </div>
 
+        {/* Days Open Distribution histogram (§E point 2) */}
+        <div
+          className="rounded-2xl border mb-6"
+          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        >
+          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+              Days Open Distribution
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+              Binned by 20-day intervals · SA target ≤95d (UT Beef W973)
+            </p>
+          </div>
+          <div className="px-6 py-4">
+            <DaysOpenHistogram records={stats.daysOpen} avgDaysOpen={stats.avgDaysOpen} />
+          </div>
+        </div>
+
         {/* Days Open table */}
         {stats.daysOpen.length > 0 && (
           <div
@@ -541,6 +580,11 @@ export default async function ReproductionPage({
             </div>
           </div>
         )}
+
+        {/* Gestation Calculator (§E point 4) — breed-aware expected birth window */}
+        <div className="mb-6">
+          <GestationCalculator copy={copy} defaultBreed={defaultBreedForMode(mode)} />
+        </div>
 
         {/* Recent Events timeline */}
         <div

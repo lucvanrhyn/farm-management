@@ -98,9 +98,10 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",     label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports",    label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
 ];
 
 const SHEEP_NAV_ITEMS: NavItem[] = [
@@ -127,9 +128,10 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
 ];
 
 const GAME_NAV_ITEMS: NavItem[] = [
@@ -155,9 +157,10 @@ const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
-  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
-  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
-  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/tasks",                 label: "Tasks",          icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings",       icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",        icon: SlidersHorizontal, group: "Admin" },
+  { path: "/admin/settings/alerts",       label: "Alert Settings", icon: Bell,              group: "Admin" },
 ];
 
 const NAV_BY_MODE: Record<FarmMode, NavItem[]> = {
