@@ -37,8 +37,14 @@ export async function getOverviewForUserFarms(
         };
       }
 
+      // Animal.status is schema-default "Active" (capital A). Lowercase
+      // "active" silently matches zero rows — this was the "0 animals on a
+      // 874-animal farm" bug surfaced by the farm selector. Keep the casing
+      // aligned with the schema default and every other server query in
+      // lib/server/ (chart-data, data-health, breeding-analytics, analytics,
+      // profitability-by-animal).
       const [activeAnimalCount, campCount, latestObs] = await Promise.all([
-        prisma.animal.count({ where: { status: "active" } }),
+        prisma.animal.count({ where: { status: "Active" } }),
         prisma.camp.count(),
         prisma.observation.findFirst({
           orderBy: { createdAt: "desc" },
