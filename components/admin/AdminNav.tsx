@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ import {
   Settings,
   FileDown,
   CheckSquare,
+  ChevronDown,
   Dna,
   Users,
   Lock,
@@ -24,13 +25,7 @@ import {
   Target,
   SlidersHorizontal,
   CreditCard,
-  Scissors,
-  AlertTriangle,
-  Eye,
   Crosshair,
-  Shield,
-  Droplet,
-  Fence,
   Calculator,
   Route,
   FileCheck2,
@@ -63,74 +58,106 @@ interface NavItem {
 
 // ── Nav items per mode ──────────────────────────────────────────────────────
 
+// Group labels are the bucket names rendered as accordion headers. Keep this
+// list in sync with the `group` field on every nav item below. The order
+// here is the render order on screen.
+const GROUP_ORDER = [
+  "Overview",
+  "Animals",
+  "Breeding",
+  "Camps & Grazing",
+  "Finance",
+  "Compliance",
+  "Admin",
+] as const;
+type GroupLabel = (typeof GROUP_ORDER)[number];
+
 const CATTLE_NAV_ITEMS: NavItem[] = [
-  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
-  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
-  { path: "/admin/animals",      label: "Animals",      icon: PawPrint,        group: "Data"    },
-  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
-  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
-  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Data"    },
-  { path: "/admin/reproduction", label: "Reproduction", icon: HeartPulse,      group: "Data",   premiumOnly: true },
-  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
-  { path: "/admin/breeding-ai",  label: "Breeding AI",  icon: Dna,             group: "Data",   premiumOnly: true },
-  { path: "/admin/finansies",    label: "Finances",     icon: Receipt,         group: "Finance", premiumOnly: true },
-  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
-  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
-  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
-  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
-  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/feed-on-offer",    label: "Feed on Offer",    icon: Wheat,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/tax",              label: "SARS IT3",         icon: Landmark,           group: "Tools",  premiumOnly: true },
-  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
-  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
-  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Overview" },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Overview" },
+
+  { path: "/admin/animals",      label: "Animals",      icon: PawPrint,        group: "Animals" },
+  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Animals" },
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Animals" },
+
+  { path: "/admin/reproduction", label: "Reproduction", icon: HeartPulse,      group: "Breeding", premiumOnly: true },
+  { path: "/admin/breeding-ai",  label: "Breeding AI",  icon: Dna,             group: "Breeding", premiumOnly: true },
+
+  { path: "/admin/camps",            label: "Camps",           icon: Tent,       group: "Camps & Grazing" },
+  { path: "/tools/rotation-planner", label: "Rotation",        icon: Route,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",            icon: Sprout,     group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/feed-on-offer",    label: "Feed on Offer",   icon: Wheat,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",         icon: Cloud,      group: "Camps & Grazing", premiumOnly: true },
+
+  { path: "/admin/finansies",             label: "Finances",     icon: Receipt,    group: "Finance", premiumOnly: true },
+  { path: "/tools/break-even",            label: "Break-even",   icon: Calculator, group: "Finance", premiumOnly: true },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
+
+  { path: "/tools/nvd",        label: "NVDs",     icon: FileCheck2, group: "Compliance", premiumOnly: true },
+  { path: "/tools/tax",        label: "SARS IT3", icon: Landmark,   group: "Compliance", premiumOnly: true },
+  { path: "/admin/import",     label: "Import",   icon: Upload,     group: "Compliance" },
+  { path: "/admin/reports",    label: "Reports",  icon: FileDown,   group: "Compliance" },
+
+  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
 ];
 
 const SHEEP_NAV_ITEMS: NavItem[] = [
-  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
-  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
-  { path: "/admin/animals",      label: "Flock",        icon: Rabbit,          group: "Data"    },
-  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
-  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
-  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Data"    },
-  { path: "/sheep/reproduction", label: "Lambing",      icon: HeartPulse,      group: "Data",   premiumOnly: true, species: "sheep" },
-  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
-  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
-  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
-  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
-  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
-  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/feed-on-offer",    label: "Feed on Offer",    icon: Wheat,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/tax",              label: "SARS IT3",         icon: Landmark,           group: "Tools",  premiumOnly: true },
-  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
-  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
-  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Overview" },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Overview" },
+
+  { path: "/admin/animals",      label: "Flock",        icon: Rabbit,          group: "Animals" },
+  { path: "/admin/mobs",         label: "Mobs",         icon: Users,           group: "Animals" },
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Animals" },
+
+  { path: "/sheep/reproduction", label: "Lambing",      icon: HeartPulse,      group: "Breeding", premiumOnly: true, species: "sheep" },
+
+  { path: "/admin/camps",            label: "Camps",         icon: Tent,       group: "Camps & Grazing" },
+  { path: "/tools/rotation-planner", label: "Rotation",      icon: Route,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",          icon: Sprout,     group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/feed-on-offer",    label: "Feed on Offer", icon: Wheat,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",       icon: Cloud,      group: "Camps & Grazing", premiumOnly: true },
+
+  { path: "/tools/break-even",            label: "Break-even",   icon: Calculator, group: "Finance", premiumOnly: true },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
+
+  { path: "/tools/nvd",     label: "NVDs",     icon: FileCheck2, group: "Compliance", premiumOnly: true },
+  { path: "/tools/tax",     label: "SARS IT3", icon: Landmark,   group: "Compliance", premiumOnly: true },
+  { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
+  { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
+
+  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
 ];
 
 const GAME_NAV_ITEMS: NavItem[] = [
-  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Data"    },
-  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Data"    },
-  { path: "/game/census",        label: "Census",       icon: Crosshair,       group: "Data",   species: "game" },
-  { path: "/game/offtake",       label: "Hunting",      icon: Target,          group: "Data",   species: "game" },
-  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Data"    },
-  { path: "/admin/camps",        label: "Camps",        icon: Tent,            group: "Data"    },
-  { path: "/admin/tasks",        label: "Tasks",        icon: CheckSquare,     group: "Data"    },
-  { path: "/admin/import",           label: "Import",       icon: Upload,            group: "Tools"   },
-  { path: "/admin/reports",          label: "Reports",      icon: FileDown,          group: "Tools"   },
-  { path: "/tools/break-even",       label: "Break-even",       icon: Calculator,        group: "Tools",  premiumOnly: true },
-  { path: "/tools/rotation-planner", label: "Rotation Planner", icon: Route,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/nvd",              label: "NVDs",             icon: FileCheck2,         group: "Tools",  premiumOnly: true },
-  { path: "/tools/veld",             label: "Veld",             icon: Sprout,             group: "Tools",  premiumOnly: true },
-  { path: "/tools/feed-on-offer",    label: "Feed on Offer",    icon: Wheat,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/drought",          label: "Drought",          icon: Cloud,              group: "Tools",  premiumOnly: true },
-  { path: "/tools/tax",              label: "SARS IT3",         icon: Landmark,           group: "Tools",  premiumOnly: true },
-  { path: "/admin/settings",              label: "Settings",     icon: Settings,          group: "Tools"   },
-  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard,        group: "Tools"   },
-  { path: "/admin/settings/species",      label: "Species",      icon: SlidersHorizontal, group: "Tools"   },
+  { path: "/admin",              label: "Overview",     icon: LayoutDashboard, group: "Overview" },
+  { path: "/admin/alerts",       label: "Alerts",       icon: Bell,            group: "Overview" },
+
+  { path: "/admin/observations", label: "Observations", icon: ClipboardList,   group: "Animals" },
+
+  { path: "/game/census",        label: "Census",       icon: Crosshair,       group: "Breeding", species: "game" },
+  { path: "/game/offtake",       label: "Hunting",      icon: Target,          group: "Breeding", species: "game" },
+
+  { path: "/admin/camps",            label: "Camps",         icon: Tent,       group: "Camps & Grazing" },
+  { path: "/tools/rotation-planner", label: "Rotation",      icon: Route,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/veld",             label: "Veld",          icon: Sprout,     group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/feed-on-offer",    label: "Feed on Offer", icon: Wheat,      group: "Camps & Grazing", premiumOnly: true },
+  { path: "/tools/drought",          label: "Drought",       icon: Cloud,      group: "Camps & Grazing", premiumOnly: true },
+
+  { path: "/tools/break-even",            label: "Break-even",   icon: Calculator, group: "Finance", premiumOnly: true },
+  { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
+
+  { path: "/tools/nvd",     label: "NVDs",     icon: FileCheck2, group: "Compliance", premiumOnly: true },
+  { path: "/tools/tax",     label: "SARS IT3", icon: Landmark,   group: "Compliance", premiumOnly: true },
+  { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
+  { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
+
+  { path: "/admin/tasks",                 label: "Tasks",    icon: CheckSquare,       group: "Admin" },
+  { path: "/admin/settings",              label: "Settings", icon: Settings,          group: "Admin" },
+  { path: "/admin/settings/species",      label: "Species",  icon: SlidersHorizontal, group: "Admin" },
 ];
 
 const NAV_BY_MODE: Record<FarmMode, NavItem[]> = {
@@ -138,8 +165,6 @@ const NAV_BY_MODE: Record<FarmMode, NavItem[]> = {
   sheep: SHEEP_NAV_ITEMS,
   game: GAME_NAV_ITEMS,
 };
-
-const GROUP_ORDER = ["Data", "Finance", "Tools"];
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -257,6 +282,33 @@ function UpgradeToast({ onClose }: { onClose: () => void }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
+const EXPANDED_STORAGE_KEY = (farmSlug: string) => `farmtrack-nav-expanded-${farmSlug}`;
+
+function readStoredExpanded(farmSlug: string): Set<string> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(EXPANDED_STORAGE_KEY(farmSlug));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredExpanded(farmSlug: string, expanded: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      EXPANDED_STORAGE_KEY(farmSlug),
+      JSON.stringify(Array.from(expanded)),
+    );
+  } catch {
+    // localStorage unavailable — fail quiet, accordion still works.
+  }
+}
+
 export default function AdminNav({
   tier,
   enabledSpecies,
@@ -316,6 +368,58 @@ export default function AdminNav({
       }),
   })).filter((group) => group.links.length > 0);
 
+  // Determine which group the current route lives in. That group auto-expands
+  // on every navigation so the user always sees the active item. If no match
+  // (e.g. unknown route) we fall back to "Overview".
+  const activeGroupLabel: string =
+    groups.find((g) => g.links.some((l) => l.isActive))?.label ?? "Overview";
+
+  // Expanded-groups state. SSR-safe initial value: only the active group is
+  // open. On mount we merge in any user preference from localStorage.
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set<string>([activeGroupLabel]),
+  );
+
+  // Load persisted state on mount + re-sync whenever navigation changes the
+  // active group so a user landing mid-flow still sees their route highlighted.
+  useEffect(() => {
+    const stored = readStoredExpanded(farmSlug);
+    setExpanded((prev) => {
+      const next = new Set<string>(stored ?? prev);
+      next.add(activeGroupLabel); // active group always visible
+      return next;
+    });
+  }, [farmSlug, activeGroupLabel]);
+
+  // Ref mirror of the expanded set so toggleGroup can compute the next
+  // value synchronously and persist to localStorage in the same tick as
+  // the user's click — tests that read storage immediately after a click
+  // would otherwise race the post-commit effect.
+  const expandedRef = useRef<Set<string>>(expanded);
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+
+  const toggleGroup = useCallback(
+    (label: string) => {
+      const prev = expandedRef.current;
+      const next = new Set(prev);
+      if (next.has(label)) {
+        // Don't let the user collapse the group that contains the active
+        // route — the chevron animation just happens, then the route
+        // disappears. Keep it visible for orientation.
+        if (label === activeGroupLabel) return;
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      expandedRef.current = next;
+      writeStoredExpanded(farmSlug, next);
+      setExpanded(next);
+    },
+    [activeGroupLabel, farmSlug],
+  );
+
   function handleLockedClick() {
     setShowToast(true);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -367,41 +471,101 @@ export default function AdminNav({
         )}
 
         <motion.div
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-2"
           variants={groupVariants}
           initial="hidden"
           animate="show"
         >
-          {groups.map((group) => (
-            <div key={group.label}>
-              <p
-                className="hidden md:block px-2.5 mb-1 text-[10px] uppercase tracking-widest font-semibold"
-                style={{ color: "rgba(210,180,140,0.5)" }}
-              >
-                {group.label}
-              </p>
-              <motion.div className="flex flex-col gap-0.5" variants={groupVariants}>
-                {group.links.map((link) =>
-                  link.locked ? (
-                    <LockedNavItem
-                      key={link.href}
-                      label={link.label}
-                      icon={link.icon}
-                      onClickLocked={handleLockedClick}
-                    />
-                  ) : (
-                    <NavLink
-                      key={link.href}
-                      href={link.href}
-                      label={link.label}
-                      icon={link.icon}
-                      isActive={link.isActive}
-                    />
-                  )
-                )}
-              </motion.div>
-            </div>
-          ))}
+          {groups.map((group) => {
+            const isOpen = expanded.has(group.label);
+            const sectionId = `admin-nav-group-${group.label.replace(/\s+/g, "-").toLowerCase()}`;
+            const isActiveGroup = group.label === activeGroupLabel;
+            return (
+              <div key={group.label} className="flex flex-col">
+                {/* Header — always visible; hidden on narrow (icon-only) nav */}
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  aria-expanded={isOpen}
+                  aria-controls={sectionId}
+                  className="hidden md:flex items-center justify-between px-2.5 py-1 rounded text-[10px] uppercase tracking-widest font-semibold transition-colors"
+                  style={{
+                    color: isActiveGroup
+                      ? "rgba(210,180,140,0.9)"
+                      : "rgba(210,180,140,0.5)",
+                  }}
+                >
+                  <span>{group.label}</span>
+                  <ChevronDown
+                    className="w-3 h-3 transition-transform"
+                    style={{
+                      transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                      color: "rgba(210,180,140,0.6)",
+                    }}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {/* Mobile (icon-only) view always shows the links — there's no
+                    room for a collapsible header at 48px wide. */}
+                <div className="md:hidden flex flex-col gap-0.5">
+                  {group.links.map((link) =>
+                    link.locked ? (
+                      <LockedNavItem
+                        key={link.href}
+                        label={link.label}
+                        icon={link.icon}
+                        onClickLocked={handleLockedClick}
+                      />
+                    ) : (
+                      <NavLink
+                        key={link.href}
+                        href={link.href}
+                        label={link.label}
+                        icon={link.icon}
+                        isActive={link.isActive}
+                      />
+                    ),
+                  )}
+                </div>
+
+                {/* Collapsible panel — desktop only */}
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      id={sectionId}
+                      role="region"
+                      aria-label={`${group.label} navigation`}
+                      className="hidden md:flex flex-col gap-0.5 overflow-hidden"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                    >
+                      {group.links.map((link) =>
+                        link.locked ? (
+                          <LockedNavItem
+                            key={link.href}
+                            label={link.label}
+                            icon={link.icon}
+                            onClickLocked={handleLockedClick}
+                          />
+                        ) : (
+                          <NavLink
+                            key={link.href}
+                            href={link.href}
+                            label={link.label}
+                            icon={link.icon}
+                            isActive={link.isActive}
+                          />
+                        ),
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </motion.div>
 
         <div className="mt-auto pt-4 flex flex-col gap-2">
