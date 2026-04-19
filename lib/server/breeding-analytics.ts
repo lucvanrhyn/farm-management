@@ -58,6 +58,25 @@ export interface PairingSuggestion {
   };
 }
 
+/**
+ * Result envelope for suggestPairings.
+ *
+ * Why not just return PairingSuggestion[]?
+ *
+ * When a farm has animals but zero pedigree (no animal records a fatherId or
+ * motherId), every pairing has COI = 0 by construction. The old code silently
+ * returned the full cartesian product (e.g. 33,656 pairings at 0.0% COI),
+ * which presents as a feature but is really a "no data" bug. Distinguishing
+ * the NO_PEDIGREE_SEED case lets the page render a proper empty-state that
+ * points the farmer at the pedigree importer, instead of firehosing junk.
+ */
+export type PairingEmptyReason = "NO_PEDIGREE_SEED" | "NO_BULLS" | "NO_OPEN_COWS";
+
+export interface PairingResult {
+  pairings: PairingSuggestion[];
+  reason?: PairingEmptyReason;
+}
+
 interface AnimalRow {
   id: string;
   animalId: string;
@@ -743,7 +762,7 @@ function buildCowProfileInMemory(
 export async function suggestPairings(
   prisma: PrismaClient,
   farmSlug: string,
-): Promise<PairingSuggestion[]> {
+): Promise<PairingResult> {
   void farmSlug;
 
   const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
@@ -772,6 +791,17 @@ export async function suggestPairings(
     }),
   ]);
 
+  // Gatekeeper: without pedigree seed data every COI is 0 and every pairing
+  // looks equally "safe" — a 33,656-row cartesian product of junk. Surface
+  // this as a first-class empty-state so the page can guide the farmer to
+  // import a herd book instead of silently misrepresenting the analysis.
+  const hasPedigreeSeed = allAnimals.some(
+    (a) => (a.motherId && a.motherId.length > 0) || (a.fatherId && a.fatherId.length > 0),
+  );
+  if (!hasPedigreeSeed) {
+    return { pairings: [], reason: "NO_PEDIGREE_SEED" };
+  }
+
   // Latest scan per animal
   const latestScanResult = new Map<string, string>();
   for (const obs of recentScans) {
@@ -789,6 +819,9 @@ export async function suggestPairings(
     const scan = latestScanResult.get(a.id);
     return scan !== "pregnant";
   });
+
+  if (bulls.length === 0) return { pairings: [], reason: "NO_BULLS" };
+  if (openCows.length === 0) return { pairings: [], reason: "NO_OPEN_COWS" };
 
   // Batch-fetch all trait observations in 3 queries instead of O(N) per-animal calls.
   const threeYearsAgo = new Date(Date.now() - 3 * 365 * 86_400_000);
@@ -862,5 +895,5 @@ export async function suggestPairings(
 
   // Sort by score descending and limit
   suggestions.sort((a, b) => b.score - a.score);
-  return suggestions.slice(0, MAX_PAIRINGS);
+  return { pairings: suggestions.slice(0, MAX_PAIRINGS) };
 }

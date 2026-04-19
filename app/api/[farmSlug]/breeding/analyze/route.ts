@@ -106,7 +106,7 @@ export async function POST(
     liveCalvingsLast12Months: liveCalvings,
     inseminations90d: recentReproObs.filter((o) => o.type === "insemination").length,
     heatDetections90d: recentReproObs.filter((o) => o.type === "heat_detection").length,
-    suggestedPairingsCount: pairings.length,
+    suggestedPairingsCount: pairings.pairings.length,
     todayDate: new Date().toISOString().slice(0, 10),
   };
 
