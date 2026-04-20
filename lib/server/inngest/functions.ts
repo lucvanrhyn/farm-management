@@ -46,7 +46,7 @@ export const evaluateTenantAlerts = inngest.createFunction(
   {
     id: "evaluate-tenant-alerts",
     retries: 3,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
     triggers: [{ event: "alerts/evaluate.tenant" }],
   },
   async ({ event, step }) => {
