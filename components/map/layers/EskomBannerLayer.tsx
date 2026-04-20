@@ -12,8 +12,7 @@
  * Source shape: { stage: number, nextStart?: string, nextEnd?: string, area?: string }
  */
 
-import { useEffect, useState } from "react";
-import { fetchLayerJson, type FetchState } from "./_utils";
+import { useLayerFetch } from "./_utils";
 
 interface EskomStatus {
   stage: number;
@@ -44,17 +43,9 @@ function formatTime(iso: string | undefined): string {
 }
 
 export default function EskomBannerLayer({ areaId }: Props) {
-  const [state, setState] = useState<FetchState<EskomStatus>>({ status: "idle" });
-
-  useEffect(() => {
-    if (!areaId) return;
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<EskomStatus>(`/api/map/gis/eskom-se-push/status/${encodeURIComponent(areaId)}`).then((r) => {
-      if (!cancelled) setState(r);
-    });
-    return () => { cancelled = true; };
-  }, [areaId]);
+  const state = useLayerFetch<EskomStatus>(
+    areaId ? `/api/map/gis/eskom-se-push/status/${encodeURIComponent(areaId)}` : null,
+  );
 
   if (!areaId) return null;
   if (state.status !== "ready") return null;

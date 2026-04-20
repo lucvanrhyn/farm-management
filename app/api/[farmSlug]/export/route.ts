@@ -41,9 +41,7 @@ import { getCogByCamp, getCogByAnimal } from "@/lib/server/financial-analytics";
 import { isCogScope } from "@/lib/calculators/cost-of-gain";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 import { getMergedLsuValues } from "@/lib/species/registry";
-// @ts-ignore
 import { jsPDF } from "jspdf";
-// @ts-ignore
 import { autoTable } from "jspdf-autotable";
 
 export const dynamic = "force-dynamic";

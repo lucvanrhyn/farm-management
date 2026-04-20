@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Compiled service worker (Serwist emits a minified bundle into public/sw.js
+    // on build). Linting minified code floods the output and catches nothing
+    // useful.
+    "public/sw.js",
+    "public/sw.js.map",
+    "public/workbox-*.js",
   ]),
 ]);
 

@@ -11,9 +11,8 @@
  * accept both and render lines + points in separate layers.
  */
 
-import { useEffect, useState } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
-import { fetchLayerJson, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, EMPTY_FC } from "./_utils";
 
 interface InfraPayload {
   infrastructure?: GeoJSON.FeatureCollection | GeoJSON.Feature[];
@@ -68,16 +67,9 @@ function normalise(payload: InfraPayload | null): GeoJSON.FeatureCollection {
 }
 
 export default function InfrastructureLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<InfraPayload>>({ status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<InfraPayload>(`/api/${encodeURIComponent(farmSlug)}/map/infrastructure`).then((r) => {
-      if (!cancelled) setState(r);
-    });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+  const state = useLayerFetch<InfraPayload>(
+    `/api/${encodeURIComponent(farmSlug)}/map/infrastructure`,
+  );
 
   if (state.status !== "ready") return null;
 

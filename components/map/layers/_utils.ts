@@ -5,6 +5,7 @@
  * forbidden (see Wave 2D scope).
  */
 
+import { useEffect, useState } from "react";
 import { centroid } from "@turf/centroid";
 import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
 import type { Camp } from "@/lib/types";
@@ -31,6 +32,29 @@ export async function fetchLayerJson<T>(url: string): Promise<FetchState<T>> {
   } catch (e) {
     return { status: "error", error: e instanceof Error ? e.message : "fetch_failed" };
   }
+}
+
+/**
+ * React hook that fetches a layer endpoint and returns a FetchState. Initial
+ * state is "loading" — which means callers don't need a synchronous setState
+ * inside the effect (the React 19 compiler warns about that pattern because
+ * it forces a cascading render). Re-renders the URL when it changes.
+ *
+ * Pass null to defer fetching (e.g. while the farmSlug is still resolving).
+ */
+export function useLayerFetch<T>(url: string | null): FetchState<T> {
+  const [state, setState] = useState<FetchState<T>>({ status: "loading" });
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    fetchLayerJson<T>(url).then((result) => {
+      if (!cancelled) setState(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+  return state;
 }
 
 // ── Centroid helpers ──────────────────────────────────────────────────────────

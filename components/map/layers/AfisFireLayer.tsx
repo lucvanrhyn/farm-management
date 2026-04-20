@@ -12,9 +12,9 @@
  * (as red circles).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
-import { fetchLayerJson, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, EMPTY_FC } from "./_utils";
 
 interface AfisPayload {
   fires?: GeoJSON.FeatureCollection | GeoJSON.Feature[];
@@ -60,19 +60,12 @@ function normalise(payload: AfisPayload | null): GeoJSON.FeatureCollection {
 }
 
 export default function AfisFireLayer({ bbox, onStaleChange }: Props) {
-  const [state, setState] = useState<FetchState<AfisPayload>>({ status: "idle" });
+  const qs = bbox ? `?bbox=${bbox.join(",")}` : "";
+  const state = useLayerFetch<AfisPayload>(`/api/map/gis/afis${qs}`);
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    const qs = bbox ? `?bbox=${bbox.join(",")}` : "";
-    fetchLayerJson<AfisPayload>(`/api/map/gis/afis${qs}`).then((r) => {
-      if (cancelled) return;
-      setState(r);
-      if (r.status === "ready" && onStaleChange) onStaleChange(Boolean(r.stale));
-    });
-    return () => { cancelled = true; };
-  }, [bbox, onStaleChange]);
+    if (state.status === "ready" && onStaleChange) onStaleChange(Boolean(state.stale));
+  }, [state, onStaleChange]);
 
   if (state.status !== "ready") return null;
   const fc = normalise(state.data);

@@ -13,14 +13,26 @@ import { Inngest } from "inngest";
 
 // In production, Inngest's cloud mode requires INNGEST_EVENT_KEY (to send events)
 // and INNGEST_SIGNING_KEY (to verify signed webhooks). The SDK only throws when
-// you try to send — we want a loud startup signal if they're missing so a bad
-// deploy surfaces immediately instead of at the first cron fire.
-if (process.env.NODE_ENV === "production") {
+// you try to send — we fail-fast at module load time so a bad deploy surfaces
+// immediately. Missing INNGEST_SIGNING_KEY would otherwise allow unsigned POSTs
+// to /api/inngest to execute functions, which is a real webhook-signature bypass.
+//
+// Guarded by SKIP_INNGEST_STARTUP_CHECK so one-off scripts (migrations, seeds)
+// that load server modules in a production-like env but don't serve webhooks
+// can still run. The app runtime never sets this flag.
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.SKIP_INNGEST_STARTUP_CHECK !== "1"
+) {
   if (!process.env.INNGEST_EVENT_KEY) {
-    console.error("[inngest] INNGEST_EVENT_KEY is not set — cloud event sends will fail");
+    throw new Error(
+      "[inngest] INNGEST_EVENT_KEY is not set in production — refusing to start, cloud event sends will silently fail",
+    );
   }
   if (!process.env.INNGEST_SIGNING_KEY) {
-    console.error("[inngest] INNGEST_SIGNING_KEY is not set — /api/inngest cannot verify signed webhooks");
+    throw new Error(
+      "[inngest] INNGEST_SIGNING_KEY is not set in production — refusing to start, /api/inngest cannot verify webhook signatures",
+    );
   }
 }
 

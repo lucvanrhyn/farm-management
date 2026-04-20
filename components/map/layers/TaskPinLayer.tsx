@@ -12,10 +12,9 @@
  *  - Else → skip the task (no pin).
  */
 
-import { useEffect, useState } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
 import type { Camp } from "@/lib/types";
-import { fetchLayerJson, buildCampCentroidMap, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, buildCampCentroidMap, EMPTY_FC } from "./_utils";
 
 interface TaskPin {
   id: string;
@@ -75,19 +74,10 @@ const labelLayer: LayerProps = {
 };
 
 export default function TaskPinLayer({ farmSlug, camps, statusFilter }: Props) {
-  const [state, setState] = useState<FetchState<TaskPinsPayload>>({ status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    const url = statusFilter
-      ? `/api/${encodeURIComponent(farmSlug)}/map/task-pins?status=${encodeURIComponent(statusFilter)}`
-      : `/api/${encodeURIComponent(farmSlug)}/map/task-pins`;
-    fetchLayerJson<TaskPinsPayload>(url).then((result) => {
-      if (!cancelled) setState(result);
-    });
-    return () => { cancelled = true; };
-  }, [farmSlug, statusFilter]);
+  const url = statusFilter
+    ? `/api/${encodeURIComponent(farmSlug)}/map/task-pins?status=${encodeURIComponent(statusFilter)}`
+    : `/api/${encodeURIComponent(farmSlug)}/map/task-pins`;
+  const state = useLayerFetch<TaskPinsPayload>(url);
 
   if (state.status !== "ready") return null;
 

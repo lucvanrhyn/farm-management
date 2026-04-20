@@ -1,6 +1,23 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
+// First-path segments that are NOT farm slugs. Any other first segment is treated
+// as a farm slug and requires the authenticated user to have access to that farm.
+// Keep this in sync with the top-level directories under `app/`.
+const RESERVED_FIRST_SEGMENTS = new Set([
+  "api",
+  "login",
+  "register",
+  "farms",
+  "offline",
+  "verify-email",
+  "subscribe",
+  "_next",
+  "favicon.ico",
+  "manifest.json",
+  "sw.js",
+]);
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -14,10 +31,14 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Enforce tenant isolation: verify user has access to the farm in the URL
-  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)/);
-  if (farmRouteMatch) {
-    const farmSlug = farmRouteMatch[1];
+  // Enforce tenant isolation on every path whose first segment is NOT reserved.
+  // We treat any non-reserved first segment as a farm slug and require membership.
+  // This is the inverse of an allowlist: adding a new subtree under [farmSlug]
+  // (onboarding, subscribe, a future /[farmSlug]/reports, etc.) is automatically
+  // gated instead of silently opening a hole.
+  const firstSegment = pathname.split("/")[1] ?? "";
+  if (firstSegment && !RESERVED_FIRST_SEGMENTS.has(firstSegment)) {
+    const farmSlug = firstSegment;
     const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string }>;
     const farm = farms.find((f) => f.slug === farmSlug);
 

@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { getPrismaWithAuth } from '@/lib/farm-prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
@@ -19,6 +20,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Resolve and verify the active farm from the session + active_farm_slug cookie.
+  // Using session.user.farms[0] here would cause multi-farm users (platform admins,
+  // consultants) to always write into the first farm's namespace regardless of
+  // which farm they're working in.
+  const db = await getPrismaWithAuth(session);
+  if ('error' in db) {
+    return NextResponse.json({ error: db.error }, { status: db.status });
+  }
+  const farmSlug = db.slug;
+
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
   if (!file) {
@@ -35,8 +46,6 @@ export async function POST(req: NextRequest) {
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  // Scope blobs to the active farm slug to prevent cross-farm namespace collisions
-  const farmSlug = (session.user as { farms?: Array<{ slug: string }> }).farms?.[0]?.slug ?? 'unknown';
 
   try {
     const blob = await put(`farm-photos/${farmSlug}/${Date.now()}-${safeName}`, file, { access: 'public' });

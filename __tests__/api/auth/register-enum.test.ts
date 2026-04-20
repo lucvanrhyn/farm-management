@@ -120,8 +120,8 @@ describe('POST /api/auth/register — anti-enumeration', () => {
   // Sanity: validation failures still return distinct errors — enumeration is
   // only about "is this email registered", not "is this email shaped correctly".
   it('still returns 400 on invalid email', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await POST(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       buildRequest({ ...VALID_BODY, email: 'not-an-email' }) as any,
     );
     expect(res.status).toBe(400);

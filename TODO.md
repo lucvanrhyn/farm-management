@@ -1,108 +1,71 @@
 # FarmTrack — Active To-Do List
 
-Last updated: 2026-03-20
+Last updated: 2026-04-20
 
 ---
 
-## Priority 1 — Production Blockers (fix before any client goes live)
+## Priority 1 — Audit fixes (2026-04-20)
 
-### A. Logger Bug: Stale Animals Persist After Deletion
+Findings from the 2026-04-20 health audit. Work lives on `claude/sharp-bell-onlhV`.
 
-**Root cause (confirmed):**
-`seedAnimals()` in `lib/offline-store.ts` uses `db.put()` — which upserts but never deletes.
-When animals are removed in Admin → DB → `/api/animals` returns the updated list — but
-`refreshCachedData()` in `lib/sync-manager.ts` calls `seedAnimals(freshList)` which only
-adds/updates records. Animals deleted from the DB remain in IndexedDB forever.
+### A. Proxy tenant-gate regex is incomplete
 
-**Fix required (one place):**
-In `lib/sync-manager.ts` → `refreshCachedData()`, after fetching `/api/animals`, clear the
-entire `animals` IndexedDB store before reseeding. Or diff the incoming list and delete orphans.
-`seedCamps()` has the same problem — camps deleted from DB persist in IndexedDB.
+`proxy.ts:18` matches only `(admin|dashboard|logger|home|tools|sheep|game)` as the second
+path segment. `/[farmSlug]/onboarding` and `/[farmSlug]/subscribe/*` bypass the
+per-farm membership check, and `app/[farmSlug]/layout.tsx` happily reads
+`farmSpeciesSettings` from whatever slug is in the URL.
 
-**File:** `lib/offline-store.ts` → `seedAnimals()` and `seedCamps()` (both need orphan cleanup)
+**Fix:** Invert the rule — match every `/[farmSlug]/*` except a reserved first-segment
+allowlist (`api`, `login`, `register`, `farms`, `offline`, `verify-email`, `subscribe`,
+`_next`, static assets). Add a unit test asserting `/farmB/onboarding` redirects when
+the session only has Farm A.
 
----
+### B. `app/[farmSlug]/layout.tsx` has no session check
 
-### B. Logger Bug: Camp Conditions Reset After Upload/Sync
+The layout fetches per-farm data with no `getServerSession` call. It relies entirely on
+`proxy.ts` for tenant isolation, so any regex gap becomes a data leak. Add an explicit
+membership check as defense-in-depth.
 
-**Root cause (confirmed):**
-`updateCampCondition()` in `offline-store.ts` merges condition fields (grazing_quality,
-water_status, fence_status, last_inspected_at) directly into the camp record in IndexedDB
-using `{ ...camp, ...condition }`. This is local state only.
+### C. `/api/photos/upload` always writes to `farms[0]`
 
-When the upload button is pressed → `syncAndRefresh()` → `refreshCachedData()` → fetches
-camps from `/api/camps` (which returns bare camp metadata, no condition fields) → `seedCamps()`
-calls `put()` for each camp → overwrites the entire record including the merged condition fields.
+`app/api/photos/upload/route.ts:39` scopes blob paths by `session.user.farms?.[0]?.slug`
+instead of the `active_farm_slug` cookie. For multi-farm users (platform admins,
+consultants) photos land in the wrong farm's namespace.
 
-Result: conditions revert to undefined/default after every sync.
+**Fix:** Use `getPrismaWithAuth(session)` to resolve + verify the active slug, then use
+that slug in the blob path.
 
-**Fix required:**
-Option A (minimal): In `seedCamps()`, for each incoming camp from the API, read the
-existing IndexedDB record and re-merge any condition fields before `put()`. Condition fields
-survive the sync; new camp metadata is still applied.
-Option B (clean): Move condition state to a separate `camp_conditions` IndexedDB store.
-`updateCampCondition()` writes there. `seedCamps()` never touches it. Logger reads both.
+### D. `@types/geojson` not installed
 
-Recommend Option A for speed. Option B is architecturally cleaner if we have time.
+Three files type-import `"geojson"` but the package is absent, causing `tsc` to fail.
+Add `@types/geojson` as a dev dep and use `import type`.
 
-**Files:** `lib/offline-store.ts` → `seedCamps()` | `lib/sync-manager.ts` → `refreshCachedData()`
+### E. Inngest missing-key behaviour is silent
 
----
+`lib/server/inngest/client.ts` logs `console.error` when `INNGEST_SIGNING_KEY` is
+missing in production. That allows unsigned POSTs through `/api/inngest`. Throw in
+production so a bad deploy fails loudly.
 
-## Priority 2 — Multi-Tenant Architecture
+### F. ESLint — 49 errors
 
-**Decision log:**
-- Each farm = fully isolated, separate Turso database
-- No self-serve signup — Luc manually provisions each new client
-- Login flow: farmtrack website → "Log in" → `/farms` farm selector page → click farm → individual farm login
-- PWA: each client adds their farm's URL to their home screen
-
-**Do NOT use Supabase.** We are already on Turso + Prisma + next-auth. Supabase is a full
-platform replacement (Postgres + Auth + Storage + Realtime) — adding it now means rewriting
-the entire data layer. It's not compatible with the current stack without a major refactor.
-
-**Architecture to implement:**
-1. **Meta DB** — a lightweight store (can be a dedicated Turso DB or small Postgres) mapping:
-   `farmSlug → { turso_url, turso_auth_token, display_name, logo_url }`
-   This is what Luc manages when onboarding a new client.
-
-2. **Middleware** (proxy.ts / route handler) — reads `farmSlug` from URL path or session,
-   looks up the farm's Turso credentials from the meta DB, creates a scoped Prisma client
-   per request. All queries are automatically isolated to that farm's database.
-
-3. **Routing pattern** — path-based (simplest to start):
-   `farmtrack.app/farms` → farm selector (lists all active farms)
-   `farmtrack.app/[farmSlug]/login` → farm-specific login
-   `farmtrack.app/[farmSlug]/logger` → Dicky's logger
-   `farmtrack.app/[farmSlug]/dashboard` → management dashboard
-   `farmtrack.app/[farmSlug]/admin` → admin panel
-
-4. **Farm selector page** — does NOT exist yet. Needs to be built at `/farms/page.tsx`.
-   Lists all farms from the meta DB. Click a farm card → `/[farmSlug]/login`.
-
-5. **Data isolation** — each farm's Prisma client points at their own Turso DB.
-   No `farmId` column needed — isolation is at the database level.
-
-**Onboarding a new client (Luc's workflow):**
-1. Create a new Turso DB for them: `turso db create [farm-slug]`
-2. Run schema migrations on their DB
-3. Add their entry to the meta DB
-4. Import their animal/camp data via admin import
-5. Create their user account (next-auth)
-6. Hand over their URL: `farmtrack.app/[farm-slug]`
+Four categories:
+- React 19 compiler: `setState synchronously within an effect` in map layers and admin
+  charts. Fix by moving the loading-state set into the fetch callback.
+- `@ts-ignore` → `@ts-expect-error` (mechanical sweep in `lib/server/*-pdf.ts`,
+  `lib/server/open-meteo.ts`, scripts).
+- A minified bundle is being linted — exclude it in `eslint.config.mjs`.
+- A handful of remaining `any`s in `app/api/[farmSlug]/export/route.ts` and peers.
 
 ---
 
-## Priority 3 — Website v2 Fixes & Deploy
+## Priority 2 — Website v2 Fixes & Deploy
 
 **Status:** Built and running on port 3002, not yet deployed (needs its own Vercel project).
 
 **Known issues:**
-- "Log in" CTA → should route to `/farms` (farm selector), not a login page
-  Because a visitor to the marketing site is not necessarily a Trio B client.
-- `/farms` page doesn't exist yet (built as part of Priority 2)
-- Full visual QA pass before deploy
-- Needs its own Vercel project (separate from farm-management)
+- "Log in" CTA → should route to `/farms` (farm selector), not a login page.
+- Full visual QA pass before deploy.
+- Needs its own Vercel project (separate from farm-management).
 
 ---
 
@@ -124,3 +87,9 @@ the entire data layer. It's not compatible with the current stack without a majo
 | Data refactor phases 1–4 | `4e10d17` | Camp model, API routes, dummy-data removal |
 | Phase 5 — Camp CRUD UI | `1eb8e3d` | AddCampForm, CampsTableClient, SchematicMap/DashboardClient fixes |
 | Phase 6 — CLAUDE.md | `cde9e54` | Rewrote with FarmTrack-specific principles |
+| Multi-tenant rollout | — | Meta DB + per-farm Turso + `getPrismaWithAuth` / `getPrismaForSlugWithAuth` |
+| Logger orphan-sweep (ex-P1 bug A) | — | `seedAnimals`/`seedCamps` in `lib/offline-store.ts` already delete server-orphaned rows and preserve local condition fields on refresh (ex-P1 bug B) |
+| Phase H — hardening | `132d479` | logger + auth + nav + ops pre-launch sprint |
+| Phase I — first-impression sprint | `7312071` | 8 Day-1 trust bugs |
+| Phase J — notifications + repro KPI | `9788640` / `79f6dc7` | Notification Engine + Inngest fix |
+| Phase K — tasks + geo-map | `9f1f370` | Recurrence engine + 8 SA moat layers |

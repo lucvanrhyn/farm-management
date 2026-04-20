@@ -7,9 +7,8 @@
  * Source shape: { waterPoints: Array<{ id, name?, kind, lat, lng, status? }> }
  */
 
-import { useEffect, useState } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
-import { fetchLayerJson, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, EMPTY_FC } from "./_utils";
 
 interface WaterPoint {
   id: string;
@@ -64,16 +63,9 @@ const labelLayer: LayerProps = {
 };
 
 export default function WaterPointLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<WaterPointsPayload>>({ status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<WaterPointsPayload>(`/api/${encodeURIComponent(farmSlug)}/map/water-points`).then((r) => {
-      if (!cancelled) setState(r);
-    });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+  const state = useLayerFetch<WaterPointsPayload>(
+    `/api/${encodeURIComponent(farmSlug)}/map/water-points`,
+  );
 
   if (state.status !== "ready") return null;
 

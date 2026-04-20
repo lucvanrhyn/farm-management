@@ -7,9 +7,8 @@
  * Source shape: { gauges: Array<{ id, name, lat, lng, mm24h?, mm7d? }> }
  */
 
-import { useEffect, useState } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
-import { fetchLayerJson, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, EMPTY_FC } from "./_utils";
 
 interface Gauge {
   id: string;
@@ -58,16 +57,9 @@ const labelLayer: LayerProps = {
 };
 
 export default function RainfallGaugeLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<GaugesPayload>>({ status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<GaugesPayload>(`/api/${encodeURIComponent(farmSlug)}/map/rainfall-gauges`).then((r) => {
-      if (!cancelled) setState(r);
-    });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+  const state = useLayerFetch<GaugesPayload>(
+    `/api/${encodeURIComponent(farmSlug)}/map/rainfall-gauges`,
+  );
 
   if (state.status !== "ready") return null;
 

@@ -8,9 +8,8 @@
  * Source shape: { zones: FeatureCollection } | FeatureCollection
  */
 
-import { useEffect, useState } from "react";
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
-import { fetchLayerJson, EMPTY_FC, type FetchState } from "./_utils";
+import { useLayerFetch, EMPTY_FC } from "./_utils";
 
 interface FmdPayload {
   zones?: GeoJSON.FeatureCollection | GeoJSON.Feature[];
@@ -37,16 +36,7 @@ function normalise(payload: FmdPayload | null): GeoJSON.FeatureCollection {
 }
 
 export default function FmdZoneLayer() {
-  const [state, setState] = useState<FetchState<FmdPayload>>({ status: "idle" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<FmdPayload>("/api/map/gis/fmd-zones").then((r) => {
-      if (!cancelled) setState(r);
-    });
-    return () => { cancelled = true; };
-  }, []);
+  const state = useLayerFetch<FmdPayload>("/api/map/gis/fmd-zones");
 
   if (state.status !== "ready") return null;
   const fc = normalise(state.data);
