@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useState } from "react";
-import type { FarmTaskSettings } from "@/app/api/farm-settings/tasks/route";
+import type { FarmTaskSettings } from "@/lib/farm-settings/defaults";
 
 export interface TaskTemplateRow {
   id: string;

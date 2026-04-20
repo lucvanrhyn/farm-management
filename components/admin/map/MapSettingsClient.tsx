@@ -24,7 +24,7 @@ import {
   readLayerState,
 } from "@/components/map/LayerToggle";
 import type { FarmTier } from "@/lib/tier";
-import type { FarmMapSettings } from "@/app/api/farm-settings/map/route";
+import type { FarmMapSettings } from "@/lib/farm-settings/defaults";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
