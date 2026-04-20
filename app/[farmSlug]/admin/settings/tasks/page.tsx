@@ -17,8 +17,7 @@ import { getUserRoleForFarm } from "@/lib/auth";
 import TaskSettingsClient, {
   type TaskTemplateRow,
 } from "@/components/admin/tasks/TaskSettingsClient";
-import type { FarmTaskSettings } from "@/app/api/farm-settings/tasks/route";
-import { DEFAULT_TASK_SETTINGS } from "@/app/api/farm-settings/tasks/route";
+import { DEFAULT_TASK_SETTINGS, type FarmTaskSettings } from "@/lib/farm-settings/defaults";
 
 export const dynamic = "force-dynamic";
 
