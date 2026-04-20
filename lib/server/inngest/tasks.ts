@@ -97,7 +97,7 @@ export const regenerateTaskOccurrencesForTenant = inngest.createFunction(
   {
     id: "regenerate-task-occurrences-tenant",
     retries: 3,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
     triggers: [{ event: TENANT_EVENT_REGENERATE }],
   },
   async ({ event, step }) => {
@@ -118,7 +118,7 @@ export const dispatchTaskRemindersForTenant = inngest.createFunction(
   {
     id: "dispatch-task-reminders-tenant",
     retries: 3,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
     triggers: [{ event: TENANT_EVENT_REMINDERS }],
   },
   async ({ event, step }) => {
