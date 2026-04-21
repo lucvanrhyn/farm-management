@@ -17,6 +17,19 @@ Deployed: https://farm-management-lilac.vercel.app
 
 ---
 
+## Workflow: Verify Then Commit to Main
+
+After implementing any fix, before committing:
+
+1. **Verify root cause, not symptom.** Re-read the diff and ask: does this change address *why* the bug happened, or just mask what the user noticed? Symptom-patches go back in the queue.
+2. **Prove it works.** Run the relevant layer — `npx tsc --noEmit` for type changes, `pnpm vitest run <path>` for logic changes, `pnpm lint` for style/compiler-rule changes. For UI changes start the dev server and click through the feature.
+3. **Re-audit the diff.** Look for collateral damage, dead code left behind, TODO comments that should be resolved, and tests that should have been added.
+4. **Only then commit** — and commit directly to `main` unless the session explicitly pins a different branch (e.g. a harness-provided feature branch). A single verified fix on `main` is better than a stack of unverified commits on a branch nobody reviews.
+
+If verification fails, fix the underlying issue and re-verify. Don't commit a "good enough" fix and open a follow-up TODO unless the user explicitly accepts that trade-off.
+
+---
+
 ## Data Principles (No Dummy Data)
 
 **`dummy-data.ts` must never be imported anywhere in the app.** All camp and farm data
