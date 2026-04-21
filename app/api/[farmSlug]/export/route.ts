@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isPaidTier } from "@/lib/tier";
 import type { SessionFarm } from "@/types/next-auth";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
@@ -109,11 +110,11 @@ export async function GET(
   const url = new URL(req.url);
   const type = (url.searchParams.get("type") ?? "animals") as ExportType;
 
-  // Tier check for advanced-only exports
+  // Tier check for advanced-only exports (Consulting also allowed — Phase L tier extension)
   const ADVANCED_ONLY_EXPORTS = new Set(["rotation-plan", "cost-of-gain", "veld-score", "performance", "reproduction", "drought", "sars-it3"]);
   if (ADVANCED_ONLY_EXPORTS.has(type)) {
     const creds = await getFarmCreds(farmSlug);
-    if (!creds || creds.tier !== "advanced") {
+    if (!creds || !isPaidTier(creds.tier)) {
       return new Response(JSON.stringify({ error: "This export requires an Advanced subscription." }), { status: 403 });
     }
   }

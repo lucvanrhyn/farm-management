@@ -1,0 +1,142 @@
+[
+  {
+    "id": "g-001",
+    "question": "What was the last death observation recorded?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["observation"],
+    "category": "repro"
+  },
+  {
+    "id": "g-002",
+    "question": "How many animals are currently in camp 'I-1'?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["camp", "animal"],
+    "category": "repro"
+  },
+  {
+    "id": "g-003",
+    "question": "Which camp is the largest by hectares?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["camp"],
+    "category": "veld"
+  },
+  {
+    "id": "g-004",
+    "question": "What is the water source for camp 'Bloukom'?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["camp"],
+    "category": "veld"
+  },
+  {
+    "id": "g-005",
+    "question": "Were there any health issues observed in the last 60 days?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["observation"],
+    "category": "repro"
+  },
+  {
+    "id": "g-006",
+    "question": "How many hectares is camp 'I-1'?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["camp"],
+    "category": "veld"
+  },
+  {
+    "id": "g-007",
+    "question": "Watter diere is in kamp 'I-1' geregistreer?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["animal"],
+    "category": "repro"
+  },
+  {
+    "id": "g-008",
+    "question": "Hoeveel observasies is in kamp 'B' aangeteken?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["observation", "camp"],
+    "category": "repro"
+  },
+  {
+    "id": "g-009",
+    "question": "Which animals had a pregnancy scan recorded?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["observation", "animal"],
+    "category": "repro"
+  },
+  {
+    "id": "g-010",
+    "question": "Have there been any NO_WEIGHING_90D alerts for this farm?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["notification"],
+    "category": "finance"
+  },
+  {
+    "id": "g-011",
+    "question": "Which camps use a dam as their water source?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["camp"],
+    "category": "veld"
+  },
+  {
+    "id": "g-012",
+    "question": "Which animal had its weight recorded most recently?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["observation", "animal"],
+    "category": "repro"
+  },
+  {
+    "id": "g-013",
+    "question": "What legacy alerts have been generated for this farm?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["notification"],
+    "category": "repro"
+  },
+  {
+    "id": "g-014",
+    "question": "Show me the IT3 tax summary for this year.",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "out-of-scope"
+  },
+  {
+    "id": "g-015",
+    "question": "What is the current NO_WEIGHING_90D alert status?",
+    "expectedGroundedAnswer": true,
+    "expectedCitationEntityTypes": ["notification"],
+    "category": "veld"
+  },
+  {
+    "id": "g-016",
+    "question": "What is the weather forecast for tomorrow at my farm?",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "out-of-scope"
+  },
+  {
+    "id": "g-017",
+    "question": "What is my neighbour's farm stocking rate?",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "out-of-scope"
+  },
+  {
+    "id": "g-018",
+    "question": "What did I weigh the bull last Tuesday?",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "ambiguous"
+  },
+  {
+    "id": "g-019",
+    "question": "Tell me everything about every farm in the country.",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "out-of-scope"
+  },
+  {
+    "id": "g-020",
+    "question": "What is the current Bitcoin price in Rand?",
+    "expectedGroundedAnswer": false,
+    "expectedCitationEntityTypes": [],
+    "category": "out-of-scope"
+  }
+]

@@ -265,3 +265,7 @@ test.skip("Step 7 — toggle AFIS layer with mocked upstream GeoJSON", async () 
 //    Restore the real import: import { test, expect } from "@playwright/test";
 //
 // 7. Run: pnpm test:e2e
+
+// Make this file a TS module so its stub type declarations don't conflict with
+// other e2e spec files that use the same global stub pattern.
+export {};

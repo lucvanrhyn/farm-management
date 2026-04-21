@@ -2,6 +2,9 @@
   "name": "farm-management",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "rm -f .next/dev/lock && next dev --webpack --port 3001",
     "prebuild": "tsx scripts/create-template.ts",
@@ -23,6 +26,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
     "@libsql/client": "^0.8.1",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@prisma/adapter-libsql": "^5.22.0",

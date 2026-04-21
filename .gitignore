@@ -64,3 +64,10 @@ next-env.d.ts
 # stray screenshots
 *.png
 *.jpg
+
+# Playwright CLI snapshot artifacts (transient, per-run)
+*.yaml.log
+login*.yaml
+relog.yaml
+fresh.yaml
+tmp/

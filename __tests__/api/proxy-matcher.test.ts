@@ -158,6 +158,8 @@ const KNOWN_PUBLIC_ROUTES: Array<{ label: string; path: string }> = [
   { label: "NextAuth CSRF", path: "/api/auth/csrf" },
   { label: "NextAuth callback", path: "/api/auth/callback/credentials" },
   { label: "Inngest webhook (Phase J hotfix)", path: "/api/inngest" },
+  { label: "Einstein ask (Phase L Wave 2B)", path: "/api/einstein/ask" },
+  { label: "Einstein feedback (Phase L Wave 2B)", path: "/api/einstein/feedback" },
   { label: "Observations logger (public write)", path: "/api/observations" },
   { label: "PayFast webhook", path: "/api/webhooks/payfast" },
   { label: "Login page", path: "/login" },

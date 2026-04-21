@@ -2,11 +2,16 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import { TierProvider } from "@/components/tier-provider";
+import { AssistantNameProvider } from "@/hooks/useAssistantName";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getSession } from "@/lib/auth";
 import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
+import {
+  effectiveAssistantName,
+  parseAiSettings,
+} from "@/lib/einstein/settings-schema";
 
 /**
  * Path suffixes that must render normally while onboardingComplete is still false.
@@ -81,6 +86,7 @@ export default async function AdminLayout({
   let tier: FarmTier = "basic"; // fail-safe: minimum privilege on error
   let enabledSpecies: string[] | undefined;
   let onboardingComplete = true; // fail-open: if settings fetch fails, do NOT bounce
+  let assistantName: string | null = null; // null → provider falls back to "Einstein"
 
   const [credsResult, prismaResult] = await Promise.allSettled([
     getFarmCreds(farmSlug),
@@ -113,7 +119,12 @@ export default async function AdminLayout({
     // tenant — bounce to wizard).
     const [speciesRes, settingsRes] = await Promise.allSettled([
       prisma.farmSpeciesSettings.findMany(),
-      prisma.farmSettings.findFirst({ select: { onboardingComplete: true } }),
+      // Also read aiSettings so we can hydrate the AssistantNameProvider below
+      // — one round trip covers both onboardingComplete and the blob.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma as any).farmSettings.findFirst({
+        select: { onboardingComplete: true, aiSettings: true },
+      }),
     ]);
 
     if (speciesRes.status === "fulfilled") {
@@ -123,7 +134,16 @@ export default async function AdminLayout({
     if (settingsRes.status === "fulfilled") {
       // A brand-new tenant with no FarmSettings row is treated as "onboarding
       // not complete" — guide the admin through the wizard on first visit.
-      onboardingComplete = settingsRes.value?.onboardingComplete ?? false;
+      const row = settingsRes.value as
+        | { onboardingComplete: boolean | null; aiSettings: string | null }
+        | null;
+      onboardingComplete = row?.onboardingComplete ?? false;
+      // Parse is fail-soft — malformed JSON collapses to empty + default name.
+      const aiBlob = parseAiSettings(row?.aiSettings);
+      const resolved = effectiveAssistantName(aiBlob);
+      // effectiveAssistantName returns the default when unset — passing the
+      // default through the provider is fine (it normalises again).
+      assistantName = resolved;
     } else {
       console.error(
         `[AdminLayout] farmSettings.findFirst failed for "${farmSlug}":`,
@@ -131,6 +151,7 @@ export default async function AdminLayout({
       );
       // fail-open: a transient DB error must NOT trap an established admin
       // in /onboarding. Leave onboardingComplete=true so the page renders.
+      // assistantName stays null → provider normalises to "Einstein".
     }
   }
   // fail-open: if prisma unavailable, enabledSpecies stays undefined → AdminNav shows all,
@@ -146,11 +167,13 @@ export default async function AdminLayout({
   }
 
   return (
-    <TierProvider tier={tier}>
-      <div className="flex min-h-screen">
-        <AdminNav tier={tier} enabledSpecies={enabledSpecies} />
-        <main className="flex-1">{children}</main>
-      </div>
-    </TierProvider>
+    <AssistantNameProvider name={assistantName}>
+      <TierProvider tier={tier}>
+        <div className="flex min-h-screen">
+          <AdminNav tier={tier} enabledSpecies={enabledSpecies} />
+          <main className="flex-1">{children}</main>
+        </div>
+      </TierProvider>
+    </AssistantNameProvider>
   );
 }
