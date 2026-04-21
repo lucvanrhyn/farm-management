@@ -247,6 +247,7 @@ export async function setLastSyncedAt(iso: string): Promise<void> {
 export interface CachedFarmSettings {
   farmName: string;
   breed: string;
+  heroImageUrl?: string;
 }
 
 export async function seedFarmSettings(settings: CachedFarmSettings): Promise<void> {

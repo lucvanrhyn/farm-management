@@ -2,27 +2,39 @@
 
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
-import { OfflineProvider } from '@/components/logger/OfflineProvider';
-import { useEffect, useRef, useState } from 'react';
+import { OfflineProvider, useOffline } from '@/components/logger/OfflineProvider';
+import { useEffect, useRef } from 'react';
 import type { Camp } from '@/lib/types';
 
-export default function LoggerLayout({ children }: { children: React.ReactNode }) {
-  const params = useParams();
-  const farmSlug = params.farmSlug as string;
+// Hero image lives inside OfflineProvider so it can be pulled from the
+// IndexedDB cache — no duplicate /api/farm fetch on every logger mount.
+// Previously this layout fired its own /api/farm in parallel with the one
+// OfflineProvider triggers via refreshCachedData; that duplicate is gone.
+function LoggerHero() {
+  const { heroImageUrl } = useOffline();
+  const src = heroImageUrl ?? '/farm-hero.jpg';
+  return (
+    <div className="fixed inset-0 z-0 overflow-hidden">
+      <Image
+        src={src}
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover scale-105"
+        style={{ filter: 'blur(5px)' }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(26, 13, 5, 0.45)' }}
+        suppressHydrationWarning
+      />
+    </div>
+  );
+}
+
+function CampWarmup({ farmSlug }: { farmSlug: string }) {
   const warmedUp = useRef(false);
-  const [heroImage, setHeroImage] = useState("/farm-hero.jpg");
-
-  useEffect(() => {
-    fetch("/api/farm")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.heroImageUrl && typeof data.heroImageUrl === "string" && data.heroImageUrl.startsWith("/")) {
-          setHeroImage(data.heroImageUrl);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     // Pre-fetch camp pages into the SW "pages" cache so they load instantly
     // offline. Root-cause-fix for a previous fan-out that fired N parallel
@@ -82,26 +94,18 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
 
     return () => { cancelled = true; };
   }, [farmSlug]);
+  return null;
+}
+
+export default function LoggerLayout({ children }: { children: React.ReactNode }) {
+  const params = useParams();
+  const farmSlug = params.farmSlug as string;
 
   return (
     <OfflineProvider>
-      {/* Fixed blurred farm background */}
-      <div className="fixed inset-0 z-0 overflow-hidden">
-        <Image
-          src={heroImage}
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover scale-105"
-          style={{ filter: 'blur(5px)' }}
-        />
-        <div className="absolute inset-0" style={{ backgroundColor: 'rgba(26, 13, 5, 0.45)' }} suppressHydrationWarning />
-      </div>
-      {/* Scrollable content layer */}
-      <div className="relative z-10">
-        {children}
-      </div>
+      <LoggerHero />
+      <CampWarmup farmSlug={farmSlug} />
+      <div className="relative z-10">{children}</div>
     </OfflineProvider>
   );
 }
