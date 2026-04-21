@@ -20,29 +20,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
-
-export interface FarmMapSettings {
-  eskomAreaId: string | null;
-}
-
-export const DEFAULT_MAP_SETTINGS: FarmMapSettings = {
-  eskomAreaId: null,
-};
-
-function parseStoredMapSettings(raw: string | null | undefined): FarmMapSettings {
-  if (!raw) return DEFAULT_MAP_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw) as Partial<FarmMapSettings>;
-    return {
-      eskomAreaId:
-        typeof parsed.eskomAreaId === "string" && parsed.eskomAreaId.trim()
-          ? parsed.eskomAreaId.trim()
-          : null,
-    };
-  } catch {
-    return DEFAULT_MAP_SETTINGS;
-  }
-}
+import {
+  DEFAULT_MAP_SETTINGS,
+  parseStoredMapSettings,
+  type FarmMapSettings,
+} from "./schema";
 
 export async function GET() {
   const session = await getServerSession(authOptions);

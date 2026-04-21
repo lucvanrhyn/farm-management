@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BreedingSnapshot, InbreedingRisk, PairingSuggestion } from "@/lib/server/breeding-analytics";
-import type { BreedingAIResponse } from "@/app/api/[farmSlug]/breeding/analyze/route";
+import type { BreedingAIResponse } from "@/app/api/[farmSlug]/breeding/analyze/schema";
 
 interface BreedingDashboardProps {
   snapshot: BreedingSnapshot;

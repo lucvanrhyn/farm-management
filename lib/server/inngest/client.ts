@@ -20,8 +20,13 @@ import { Inngest } from "inngest";
 // Guarded by SKIP_INNGEST_STARTUP_CHECK so one-off scripts (migrations, seeds)
 // that load server modules in a production-like env but don't serve webhooks
 // can still run. The app runtime never sets this flag.
+//
+// Also skipped during `next build` (NEXT_PHASE === 'phase-production-build')
+// because Next.js collects page data in production mode before the runtime
+// env has been wired up on the host — failing here would break the build.
 if (
   process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build" &&
   process.env.SKIP_INNGEST_STARTUP_CHECK !== "1"
 ) {
   if (!process.env.INNGEST_EVENT_KEY) {

@@ -16,6 +16,7 @@ function resetEnv() {
   delete process.env.INNGEST_EVENT_KEY;
   delete process.env.INNGEST_SIGNING_KEY;
   delete process.env.SKIP_INNGEST_STARTUP_CHECK;
+  delete process.env.NEXT_PHASE;
 }
 
 beforeEach(() => {
@@ -61,6 +62,13 @@ describe("inngest client startup", () => {
   it("SKIP_INNGEST_STARTUP_CHECK=1 bypasses the check in production (scripts)", async () => {
     (process.env as Record<string, string>).NODE_ENV = "production";
     process.env.SKIP_INNGEST_STARTUP_CHECK = "1";
+    const mod = await import("@/lib/server/inngest/client");
+    expect(mod.inngest).toBeDefined();
+  });
+
+  it("NEXT_PHASE=phase-production-build bypasses the check during `next build`", async () => {
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    process.env.NEXT_PHASE = "phase-production-build";
     const mod = await import("@/lib/server/inngest/client");
     expect(mod.inngest).toBeDefined();
   });

@@ -21,8 +21,8 @@ import type { FarmTier } from "@/lib/tier";
 import MapSettingsClient, {
   type FmdZoneResult,
 } from "@/components/admin/map/MapSettingsClient";
-import type { FarmMapSettings } from "@/app/api/farm-settings/map/route";
-import { DEFAULT_MAP_SETTINGS } from "@/app/api/farm-settings/map/route";
+import type { FarmMapSettings } from "@/app/api/farm-settings/map/schema";
+import { DEFAULT_MAP_SETTINGS } from "@/app/api/farm-settings/map/schema";
 import { computeFarmCentroid, pointInFmdZone } from "@/lib/map/fmd-zones";
 
 export const dynamic = "force-dynamic";

@@ -7,15 +7,9 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { SessionFarm } from "@/types/next-auth";
 
-export const dynamic = "force-dynamic";
+import type { BreedingAIResponse } from "./schema";
 
-export interface BreedingAIResponse {
-  summary: string;
-  bullRecommendations: string[];
-  calvingAlerts: string[];
-  breedingWindowSuggestion: string;
-  riskFlags: string[];
-}
+export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
