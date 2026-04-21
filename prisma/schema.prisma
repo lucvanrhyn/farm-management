@@ -153,6 +153,14 @@ model FarmSettings {
   // needing a per-field migration for a grab-bag of admin-only preferences.
   taskSettings             String?                     // JSON: { defaultReminderOffset: number, autoObservation: boolean, horizonDays: 30|60|90 }
   mapSettings              String?                     // JSON: { eskomAreaId?: string }
+  // Phase L (Wave 1) — Farm Einstein settings + Farm Methodology Object.
+  // JSON blob shape enforced in lib/einstein/settings-schema.ts:
+  //   { assistantName: string (default "Einstein"),
+  //     responseLanguage: "en"|"af"|"auto",
+  //     methodology: { tier, speciesMix, breedingCalendar?, rotationPolicy?, lsuThresholds?, farmerNotes? },
+  //     ragConfig: { enabled, budgetCapZarPerMonth (default 100), monthSpentZar, currentMonthKey },
+  //     learnedPreferences?: { swipeHistory } }
+  aiSettings               String?
 }
 
 model NvdRecord {
@@ -768,4 +776,63 @@ model CustomField {
   createdAt DateTime @default(now())
 
   @@unique([farmId, appliesTo, name])
+}
+
+// ── Phase L — Farm Einstein (RAG substrate + chat) ────────────────────────
+//
+// EinsteinChunk: one row per embedded chunk. `entityType` + `entityId` point
+// back to the source row (FK-style, not enforced). `langTag` supports the
+// Afrikaans-dual-embedding rule — same source entity may have 2 chunks (en+af)
+// pointing at the same entityId, hence the unique key includes langTag.
+//
+// `embedding` is stored as Bytes in the Prisma schema (maps to BLOB in
+// SQLite / libSQL). The actual DDL uses libSQL's native F32_BLOB(1536) type
+// declared in scripts/migrate-phase-l-einstein.ts (Wave 4) with a
+// libsql_vector_idx cosine index. All vector queries use $queryRawUnsafe
+// with libSQL's vector_distance_cos() function.
+
+model EinsteinChunk {
+  id              String   @id @default(cuid())
+  entityType      String   // "observation" | "camp" | "animal" | "task" | "task_template" | "notification" | "it3_snapshot"
+  entityId        String
+  langTag         String   @default("en") // "en" | "af"
+  text            String
+  embedding       Bytes    // libSQL F32_BLOB(1536) under the hood — see Wave 4 migration
+  tokensUsed      Int
+  modelId         String   // "text-embedding-3-small"
+  sourceUpdatedAt DateTime // source row's updatedAt/editedAt at embed time — drives stale detection
+  createdAt       DateTime @default(now())
+
+  @@unique([entityType, entityId, langTag], name: "einstein_chunk_entity_lang")
+  @@index([entityType, entityId], name: "idx_einstein_chunk_entity")
+  @@index([sourceUpdatedAt], name: "idx_einstein_chunk_stale")
+}
+
+// RagQueryLog: one row per Einstein question. Append-only audit + billing.
+// `assistantName` snapshot at query time so renames don't rewrite history.
+// `citations` is a JSON array of { entityType, entityId, quote, relevance }.
+// `errorCode` uses typed error strings per silent-failure cure pattern.
+
+model RagQueryLog {
+  id                 String   @id @default(cuid())
+  userId             String
+  assistantName      String   // snapshot of aiSettings.assistantName at query time
+  question           String
+  answerText         String?
+  citations          String   // JSON array of Citation objects (empty [] on refusal)
+  retrievalLatencyMs Int
+  answerLatencyMs    Int
+  inputTokens        Int
+  outputTokens       Int
+  cachedInputTokens  Int      @default(0)
+  costZar            Float    // rand cost (embed + planner + answer combined)
+  modelId            String   // e.g. "claude-sonnet-4-6"
+  feedback           String?  // "up" | "down" | null
+  feedbackNote       String?
+  errorCode          String?  // typed per silent-failure pattern
+  refusedReason      String?  // "NO_GROUNDED_EVIDENCE" | "OUT_OF_SCOPE" | "TIER_LIMIT" | null
+  createdAt          DateTime @default(now())
+
+  @@index([userId, createdAt], name: "idx_rag_query_user_date")
+  @@index([createdAt], name: "idx_rag_query_date")
 }

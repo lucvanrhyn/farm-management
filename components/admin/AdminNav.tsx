@@ -33,6 +33,7 @@ import {
   Wheat,
   Cloud,
   Landmark,
+  Sparkles,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
@@ -109,6 +110,7 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",     label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports",    label: "Reports",  icon: FileDown,   group: "Compliance" },
 
+  { path: "/admin/einstein", label: "Einstein", icon: Sparkles, group: "Today", premiumOnly: true },
   {
     path: "/admin/tasks",
     label: "Tasks",
@@ -150,6 +152,7 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
+  { path: "/admin/einstein", label: "Einstein", icon: Sparkles, group: "Today", premiumOnly: true },
   {
     path: "/admin/tasks",
     label: "Tasks",
@@ -190,6 +193,7 @@ const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/admin/import",  label: "Import",   icon: Upload,     group: "Compliance" },
   { path: "/admin/reports", label: "Reports",  icon: FileDown,   group: "Compliance" },
 
+  { path: "/admin/einstein", label: "Einstein", icon: Sparkles, group: "Today", premiumOnly: true },
   {
     path: "/admin/tasks",
     label: "Tasks",

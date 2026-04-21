@@ -9,6 +9,7 @@ import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueIt3Snapshot } from "@/lib/server/sars-it3";
+import { isPaidTier } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +68,9 @@ export async function POST(
   if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
   if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Tier gate: advanced+ only
+  // Tier gate: advanced+ only (Consulting also allowed — Phase L tier extension)
   const creds = await getFarmCreds(farmSlug);
-  if (!creds || creds.tier !== "advanced") {
+  if (!creds || !isPaidTier(creds.tier)) {
     return NextResponse.json(
       { error: "SARS IT3 Tax Export requires an Advanced subscription." },
       { status: 403 },

@@ -14,8 +14,13 @@ import { serve } from "inngest/next";
 import { inngest } from "@/lib/server/inngest/client";
 import { ALL_FUNCTIONS } from "@/lib/server/inngest/functions";
 import { ALL_TASK_FUNCTIONS } from "@/lib/server/inngest/tasks";
+import { ALL_EINSTEIN_FUNCTIONS } from "@/lib/server/inngest/einstein";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [...ALL_FUNCTIONS, ...ALL_TASK_FUNCTIONS],
+  functions: [
+    ...ALL_FUNCTIONS,
+    ...ALL_TASK_FUNCTIONS,
+    ...ALL_EINSTEIN_FUNCTIONS,
+  ],
 });

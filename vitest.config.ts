@@ -17,6 +17,16 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['__tests__/setup-jsdom.ts'],
+    // Exclude git worktrees — sibling sessions may check out the repo into
+    // `.worktrees/<name>/` (Luc's perf-foundation flow); those directories
+    // contain their own `__tests__/**` which pollute the main-branch run.
+    // Also exclude vitest/ts defaults kept explicitly.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/.worktrees/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'json-summary'],
