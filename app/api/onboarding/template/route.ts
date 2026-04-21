@@ -1,5 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 export const runtime = "nodejs"; // need node:fs
 
@@ -13,6 +15,17 @@ const TEMPLATE_PATH = path.join(
 const FILENAME = "farmtrack-import-template.xlsx";
 
 export async function GET(): Promise<Response> {
+  // Gate behind an authenticated session: the template leaks the exact column
+  // schema the import pipeline expects, which is information we only want to
+  // hand to logged-in tenants walking through onboarding.
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   try {
     await stat(TEMPLATE_PATH);
   } catch {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { NextRequest } from 'next/server';
 
 // ─── Mock deps before importing the route ───────────────────────────────────
 const getUserByEmailMock = vi.fn();
@@ -31,12 +32,16 @@ vi.mock('bcryptjs', () => ({
 
 const { POST } = await import('@/app/api/auth/register/route');
 
-function buildRequest(body: Record<string, unknown>): Request {
+function buildRequest(body: Record<string, unknown>): NextRequest {
+  // The route only touches `headers`, `json()`, and `.headers.get()` on the
+  // request, so a standard Request is structurally compatible with NextRequest
+  // for these tests. Cast here (once, at construction) so call sites don't
+  // need per-line eslint disables.
   return new Request('http://localhost/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.2.3.4' },
     body: JSON.stringify(body),
-  });
+  }) as unknown as NextRequest;
 }
 
 const VALID_BODY = {
@@ -58,8 +63,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'rietfontein-boerdery' });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await POST(buildRequest(VALID_BODY) as any);
+    const res = await POST(buildRequest(VALID_BODY));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true, pending: true });
@@ -73,8 +77,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
       passwordHash: '$2a$12$existinghash',
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await POST(buildRequest(VALID_BODY) as any);
+    const res = await POST(buildRequest(VALID_BODY));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true, pending: true });
@@ -86,8 +89,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     // NEW
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'x' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newRes = await POST(buildRequest(VALID_BODY) as any);
+    const newRes = await POST(buildRequest(VALID_BODY));
     const newText = await newRes.text();
 
     // EXISTING
@@ -97,8 +99,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
       username: 'e',
       passwordHash: '$2a$12$h',
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existingRes = await POST(buildRequest(VALID_BODY) as any);
+    const existingRes = await POST(buildRequest(VALID_BODY));
     const existingText = await existingRes.text();
 
     expect(newRes.status).toBe(existingRes.status);
@@ -109,8 +110,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'secret-slug-do-not-leak' });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await POST(buildRequest(VALID_BODY) as any);
+    const res = await POST(buildRequest(VALID_BODY));
     const body = await res.json();
     expect(body.slug).toBeUndefined();
     const raw = JSON.stringify(body);
@@ -120,10 +120,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
   // Sanity: validation failures still return distinct errors — enumeration is
   // only about "is this email registered", not "is this email shaped correctly".
   it('still returns 400 on invalid email', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await POST(
-      buildRequest({ ...VALID_BODY, email: 'not-an-email' }) as any,
-    );
+    const res = await POST(buildRequest({ ...VALID_BODY, email: 'not-an-email' }));
     expect(res.status).toBe(400);
   });
 });

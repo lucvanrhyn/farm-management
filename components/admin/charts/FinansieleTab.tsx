@@ -85,37 +85,45 @@ function DonutChart({ slices, total }: { slices: DonutSlice[]; total: number }) 
   const RADIUS = 68;
   const INNER = 42;
 
-  let startAngle = -Math.PI / 2;
+  // Reduce accumulates the running `startAngle` without mutating a captured
+  // variable during render — the React compiler flags mid-render reassignment
+  // as non-idempotent.
+  const paths = slices.reduce<
+    { paths: Array<{ d: string; color: string; label: string; count: number }>; angle: number }
+  >(
+    (acc, slice) => {
+      const fraction = slice.count / total;
+      const sweepAngle = fraction * 2 * Math.PI;
+      const startAngle = acc.angle;
+      const endAngle = startAngle + sweepAngle;
 
-  const paths = slices.map((slice) => {
-    const fraction = slice.count / total;
-    const sweepAngle = fraction * 2 * Math.PI;
-    const endAngle = startAngle + sweepAngle;
+      const x1 = CENTER + RADIUS * Math.cos(startAngle);
+      const y1 = CENTER + RADIUS * Math.sin(startAngle);
+      const x2 = CENTER + RADIUS * Math.cos(endAngle);
+      const y2 = CENTER + RADIUS * Math.sin(endAngle);
+      const xi1 = CENTER + INNER * Math.cos(startAngle);
+      const yi1 = CENTER + INNER * Math.sin(startAngle);
+      const xi2 = CENTER + INNER * Math.cos(endAngle);
+      const yi2 = CENTER + INNER * Math.sin(endAngle);
 
-    const x1 = CENTER + RADIUS * Math.cos(startAngle);
-    const y1 = CENTER + RADIUS * Math.sin(startAngle);
-    const x2 = CENTER + RADIUS * Math.cos(endAngle);
-    const y2 = CENTER + RADIUS * Math.sin(endAngle);
-    const xi1 = CENTER + INNER * Math.cos(startAngle);
-    const yi1 = CENTER + INNER * Math.sin(startAngle);
-    const xi2 = CENTER + INNER * Math.cos(endAngle);
-    const yi2 = CENTER + INNER * Math.sin(endAngle);
+      const largeArc = sweepAngle > Math.PI ? 1 : 0;
 
-    const largeArc = sweepAngle > Math.PI ? 1 : 0;
+      const d = [
+        `M ${xi1} ${yi1}`,
+        `L ${x1} ${y1}`,
+        `A ${RADIUS} ${RADIUS} 0 ${largeArc} 1 ${x2} ${y2}`,
+        `L ${xi2} ${yi2}`,
+        `A ${INNER} ${INNER} 0 ${largeArc} 0 ${xi1} ${yi1}`,
+        "Z",
+      ].join(" ");
 
-    const d = [
-      `M ${xi1} ${yi1}`,
-      `L ${x1} ${y1}`,
-      `A ${RADIUS} ${RADIUS} 0 ${largeArc} 1 ${x2} ${y2}`,
-      `L ${xi2} ${yi2}`,
-      `A ${INNER} ${INNER} 0 ${largeArc} 0 ${xi1} ${yi1}`,
-      "Z",
-    ].join(" ");
-
-    const result = { d, color: slice.color, label: slice.label, count: slice.count };
-    startAngle = endAngle;
-    return result;
-  });
+      return {
+        paths: [...acc.paths, { d, color: slice.color, label: slice.label, count: slice.count }],
+        angle: endAngle,
+      };
+    },
+    { paths: [], angle: -Math.PI / 2 },
+  ).paths;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>

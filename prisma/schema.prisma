@@ -34,6 +34,9 @@ model Observation {
 
   @@index([type, campId, observedAt], name: "idx_obs_type_camp_date")
   @@index([type, animalId, observedAt], name: "idx_obs_type_animal_date")
+  @@index([campId], name: "idx_obs_camp")
+  @@index([animalId], name: "idx_obs_animal")
+  @@index([loggedBy], name: "idx_obs_logged_by")
 }
 
 model Animal {
@@ -90,6 +93,8 @@ model Transaction {
   animalIds     String?  // JSON array of animal IDs for batch transactions
 
   @@index([date], name: "idx_transaction_date")
+  @@index([animalId], name: "idx_transaction_animal")
+  @@index([campId], name: "idx_transaction_camp")
 }
 
 model TransactionCategory {

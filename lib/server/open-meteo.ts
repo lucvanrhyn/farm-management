@@ -129,16 +129,10 @@ async function _fetchOrComputeClimatology(
   lng: number,
 ): Promise<Record<number, MonthClimatology>> {
   // Step 1: check DB cache
-  const existing = await (prisma as any).rainfallNormal.findMany({
+  const existing = await prisma.rainfallNormal.findMany({
     where: { latitude: lat, longitude: lng },
     orderBy: { computedAt: 'asc' },
-  }) as Array<{
-    monthIdx: number;
-    meanMm: number;
-    stdDevMm: number;
-    sampleYears: number;
-    computedAt: Date;
-  }>;
+  });
 
   if (existing.length === 12) {
     const ageMs = Date.now() - existing[0].computedAt.getTime();
@@ -162,7 +156,7 @@ async function _fetchOrComputeClimatology(
   await Promise.all(
     Array.from({ length: 12 }, (_, i) => i + 1).map((monthIdx) => {
       const c = climatology[monthIdx];
-      return (prisma as any).rainfallNormal.upsert({
+      return prisma.rainfallNormal.upsert({
         where: {
           rain_norm_latlng_month: {
             latitude: lat,

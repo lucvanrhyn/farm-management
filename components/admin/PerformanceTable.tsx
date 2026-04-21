@@ -29,6 +29,29 @@ function daysRemainingStyle(days: number) {
   return { color: "#4A7C59", bg: "rgba(74,124,89,0.15)" };
 }
 
+function SortHeader({
+  k,
+  label,
+  sortKey,
+  asc,
+  onToggle,
+}: {
+  k: SortKey;
+  label: string;
+  sortKey: SortKey;
+  asc: boolean;
+  onToggle: (key: SortKey) => void;
+}) {
+  return (
+    <th
+      className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-[#8B6914] transition-colors"
+      onClick={() => onToggle(k)}
+    >
+      {label} {sortKey === k ? (asc ? "↑" : "↓") : ""}
+    </th>
+  );
+}
+
 export default function PerformanceTable({ rows, farmSlug }: { rows: PerfRow[]; farmSlug: string }) {
   const [sortKey, setSortKey] = useState<SortKey>("campName");
   const [asc, setAsc] = useState(true);
@@ -44,28 +67,19 @@ export default function PerformanceTable({ rows, farmSlug }: { rows: PerfRow[]; 
     return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
   });
 
-  const H = ({ k, label }: { k: SortKey; label: string }) => (
-    <th
-      className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:text-[#8B6914] transition-colors"
-      onClick={() => toggleSort(k)}
-    >
-      {label} {sortKey === k ? (asc ? "↑" : "↓") : ""}
-    </th>
-  );
-
   return (
     <div className="overflow-x-auto rounded-2xl" style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}>
       <table className="w-full text-sm">
         <thead className="text-xs uppercase tracking-wide" style={{ borderBottom: "1px solid #E0D5C8", background: "#F5F2EE", color: "#9C8E7A" }}>
           <tr>
-            <H k="campName" label="Camp" />
-            <H k="animalCount" label="Animals" />
-            <H k="stockingDensity" label="LSU/ha" />
-            <H k="grazingQuality" label="Grazing" />
-            <H k="fenceStatus" label="Fence" />
-            <H k="coverCategory" label="Cover" />
-            <H k="daysGrazingRemaining" label="Days Remaining" />
-            <H k="lastInspection" label="Last Inspection" />
+            <SortHeader k="campName" label="Camp" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="animalCount" label="Animals" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="stockingDensity" label="LSU/ha" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="grazingQuality" label="Grazing" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="fenceStatus" label="Fence" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="coverCategory" label="Cover" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="daysGrazingRemaining" label="Days Remaining" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
+            <SortHeader k="lastInspection" label="Last Inspection" sortKey={sortKey} asc={asc} onToggle={toggleSort} />
             <th className="px-4 py-3" />
           </tr>
         </thead>

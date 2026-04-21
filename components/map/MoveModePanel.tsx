@@ -44,6 +44,14 @@ function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: bool
   return { mobs, loading };
 }
 
+function Heading({ text }: { text: string }) {
+  return (
+    <p style={{ color: "#F0DEB8", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+      {text}
+    </p>
+  );
+}
+
 const PANEL_STYLE: React.CSSProperties = {
   position: "absolute",
   top: 60,
@@ -107,12 +115,6 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
       actions.resetToSourceSelect();
     }
   }
-
-  const Heading = ({ text }: { text: string }) => (
-    <p style={{ color: "#F0DEB8", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-      {text}
-    </p>
-  );
 
   if (phase.tag === "idle") return null;
 

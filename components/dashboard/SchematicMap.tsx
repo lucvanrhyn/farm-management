@@ -229,6 +229,7 @@ function ExpandedCampCard({
   filterBy,
   liveCondition,
   onViewDetails,
+  nowMs,
 }: {
   camp: Camp;
   colors: ReturnType<typeof getCampColors>;
@@ -236,11 +237,12 @@ function ExpandedCampCard({
   filterBy: FilterMode;
   liveCondition?: LiveCampStatus;
   onViewDetails: (id: string) => void;
+  nowMs: number;
 }) {
   const grazingQ  = liveCondition?.grazing_quality ?? "—";
   const waterS    = liveCondition?.water_status    ?? "—";
   const daysAgo   = liveCondition?.last_inspected_at
-    ? Math.floor((Date.now() - new Date(liveCondition.last_inspected_at).getTime()) / 86400000)
+    ? Math.floor((nowMs - new Date(liveCondition.last_inspected_at).getTime()) / 86400000)
     : null;
   const inspector = liveCondition?.last_inspected_by ?? null;
   const lastLabel = daysAgo === null ? "—" : daysAgo === 0 ? "Today" : `${daysAgo}d ago${inspector ? ` · ${inspector}` : ""}`;
@@ -368,6 +370,12 @@ export default function SchematicMap({
   const unknownCamps = camps.filter((c) => !CAMP_CENTERS[c.camp_id]);
   const fallbackIndexMap = new Map(unknownCamps.map((c, i) => [c.camp_id, i]));
 
+  // Capture wall-clock once per render so the "X days ago" labels in each
+  // camp card use a consistent reference. The component re-renders whenever
+  // props change (which is also when the value could meaningfully shift).
+  // eslint-disable-next-line react-hooks/purity -- intentional render-time wall-clock
+  const nowMs = Date.now();
+
   return (
     <div
       ref={containerRef}
@@ -405,7 +413,7 @@ export default function SchematicMap({
             ? (animalCount / (camp.size_hectares ?? 120)).toFixed(2)
             : "—";
           const daysAgo       = liveCondition?.last_inspected_at
-            ? Math.floor((Date.now() - new Date(liveCondition.last_inspected_at).getTime()) / 86400000)
+            ? Math.floor((nowMs - new Date(liveCondition.last_inspected_at).getTime()) / 86400000)
             : null;
 
           const leftPct = ((center.cx - w / 2) / CANVAS_W) * 100;
@@ -447,6 +455,7 @@ export default function SchematicMap({
                   filterBy={filterBy}
                   liveCondition={liveCondition}
                   onViewDetails={onViewDetails ?? onCampClick}
+                  nowMs={nowMs}
                 />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "5px 7px 4px" }}>
