@@ -64,10 +64,17 @@ export default async function CampDetailPage({
 
   const mode = await getFarmMode(farmSlug);
 
-  const thirtyDaysAgo = new Date();
+  // Capture wall-clock once so every derived value in this render uses a
+  // consistent "now". Server components render once per request and never
+  // rehydrate — wall-clock impurity is intentional here, not a correctness
+  // hazard.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+
+  const thirtyDaysAgo = new Date(nowMs);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const thisMonthStart = new Date();
+  const thisMonthStart = new Date(nowMs);
   thisMonthStart.setDate(1);
   thisMonthStart.setHours(0, 0, 0, 0);
 
@@ -126,7 +133,7 @@ export default async function CampDetailPage({
       : 0;
 
   const daysSince = latestInspection
-    ? Math.floor((Date.now() - new Date(latestInspection.observedAt).getTime()) / 86_400_000)
+    ? Math.floor((nowMs - new Date(latestInspection.observedAt).getTime()) / 86_400_000)
     : null;
 
   let conditionDetails: Record<string, string> = {};

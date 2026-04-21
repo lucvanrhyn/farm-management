@@ -1,55 +1,62 @@
 # FarmTrack — Active To-Do List
 
-Last updated: 2026-03-20
+Last updated: 2026-04-21
 
 ---
 
-## Priority 1 — Production Blockers (fix before any client goes live)
+## Priority 1 — Code Quality & Correctness (Health-Audit 2026-04-21)
 
-### A. Logger Bug: Stale Animals Persist After Deletion
+### Audit sweep 2026-04-21 — results
 
-**Root cause (confirmed):**
-`seedAnimals()` in `lib/offline-store.ts` uses `db.put()` — which upserts but never deletes.
-When animals are removed in Admin → DB → `/api/animals` returns the updated list — but
-`refreshCachedData()` in `lib/sync-manager.ts` calls `seedAnimals(freshList)` which only
-adds/updates records. Animals deleted from the DB remain in IndexedDB forever.
+| Workstream | Status | Notes |
+|---|---|---|
+| A. React compiler violations — mechanical | ✅ Done | 28 errors fixed: `@ts-ignore` → `@ts-expect-error` retired, static-components hoisted (`PerformanceTable`, `MoveModePanel`), impure wall-clock calls cordoned with justified disables, reassign-after-render refactored to `reduce` (`FinansieleTab`), AdminNav `useCallback` dropped. Unused `@ts-expect-error` directives were removed once the upstream types worked. |
+| B. Prisma integrity — additive indexes | ✅ Done | FK indexes added to `prisma/schema.prisma` + hand-written idempotent SQL in `scripts/migrations/2026-04-21-add-fk-indexes.sql`. Migration README documents the policy. |
+| C. DTO convention | ✅ Scaffold | `lib/api/dto.ts` provides `toCampDTO`, `toPrismaAnimalDTO`, `toAnimalSummaryDTO`, `toPrismaObservationDTO`. Non-breaking — existing hand-mapped routes untouched. Migrate route-by-route opportunistically. |
+| D. Multi-farm photo upload | ✅ Fixed | `app/api/photos/upload/route.ts` now reads `active_farm_slug` cookie and fails closed if the cookie slug isn't in the user's session farms. |
+| E. Auth hardening | ✅ Done | `/api/onboarding/template` gated behind `getServerSession`. `/api/auth/resend-verification` already had stacked per-IP + per-email rate limits with timing-constant anti-enumeration (verified, no change needed). |
+| E2. `/api/auth/forgot-password` | ⏳ Pending | No reset flow — account lockout still requires admin intervention. Separate workstream. |
 
-**Fix required (one place):**
-In `lib/sync-manager.ts` → `refreshCachedData()`, after fetching `/api/animals`, clear the
-entire `animals` IndexedDB store before reseeding. Or diff the incoming list and delete orphans.
-`seedCamps()` has the same problem — camps deleted from DB persist in IndexedDB.
+### A-cont. React compiler `react-hooks/set-state-in-effect` (21 errors)
 
-**File:** `lib/offline-store.ts` → `seedAnimals()` and `seedCamps()` (both need orphan cleanup)
+All remaining `pnpm lint` errors are `react-hooks/set-state-in-effect`: effects that fetch data
+and call `setState`. This is the canonical "fetch in useEffect" pattern, and the compiler
+flags it because it can trigger cascading renders.
+
+**Files:** `verify-email/page.tsx`, `AdminNav.tsx`, `AnimatedNumber.tsx`,
+`FinancialAnalyticsPanel.tsx`, `NotificationBell.tsx`, `MapSettingsClient.tsx`,
+`NextToGrazeQueue.tsx`, `AnimalProfile.tsx` (×2), `WeatherWidget.tsx`, `LayerToggle.tsx`,
+`MoveModePanel.tsx`, all `components/map/layers/*` (7 files), `lib/farm-mode.tsx` (×2).
+
+**Fix strategy (architectural, ~2–3 day workstream):**
+
+1. **Data fetches** (most of them): adopt SWR or React Query. One hook per resource, swap
+   `useState + useEffect(fetch)` → `useSWR("/api/foo", fetcher)`. Strongly-typed response
+   DTOs come from `lib/api/dto.ts` (just shipped). Gains: dedup, revalidation, optimistic
+   updates, correct Suspense boundaries.
+2. **Animation** (`AnimatedNumber.tsx`): this is a legitimate animation frame loop. Either
+   migrate to `framer-motion`'s `useMotionValue` (which the project already depends on), or
+   add a documented `eslint-disable-next-line` with a link back to this TODO.
+3. **Persistent UI state** (`AdminNav` expanded-groups, `LayerToggle`, `MoveModePanel`
+   source-select): these are effects that restore state from `localStorage` on mount. The
+   correct primitive is a custom `useLocalStorage` hook that returns synchronous initial
+   state (no effect needed).
+4. **Scheduled re-fetch** (`NotificationBell` interval): SWR's `refreshInterval` replaces
+   the manual `setInterval` loop entirely.
+
+Until that workstream lands these are the only errors `pnpm lint` emits — the repo's
+quality baseline is otherwise clean.
+
+### F. xlsx CVE (deferred workstream)
+
+`xlsx@0.18.5` has an unpatched prototype-pollution CVE (GHSA-4r6h-8v6p-xvw6). Used in
+`app/api/animals/import/route.ts`, `app/api/onboarding/commit-import/route.ts`, and three
+scripts. Replacement candidates: `@e965/xlsx` fork, `exceljs`. Deferred to its own
+regression-tested workstream — deliberately noted in `package.json`.
 
 ---
 
-### B. Logger Bug: Camp Conditions Reset After Upload/Sync
-
-**Root cause (confirmed):**
-`updateCampCondition()` in `offline-store.ts` merges condition fields (grazing_quality,
-water_status, fence_status, last_inspected_at) directly into the camp record in IndexedDB
-using `{ ...camp, ...condition }`. This is local state only.
-
-When the upload button is pressed → `syncAndRefresh()` → `refreshCachedData()` → fetches
-camps from `/api/camps` (which returns bare camp metadata, no condition fields) → `seedCamps()`
-calls `put()` for each camp → overwrites the entire record including the merged condition fields.
-
-Result: conditions revert to undefined/default after every sync.
-
-**Fix required:**
-Option A (minimal): In `seedCamps()`, for each incoming camp from the API, read the
-existing IndexedDB record and re-merge any condition fields before `put()`. Condition fields
-survive the sync; new camp metadata is still applied.
-Option B (clean): Move condition state to a separate `camp_conditions` IndexedDB store.
-`updateCampCondition()` writes there. `seedCamps()` never touches it. Logger reads both.
-
-Recommend Option A for speed. Option B is architecturally cleaner if we have time.
-
-**Files:** `lib/offline-store.ts` → `seedCamps()` | `lib/sync-manager.ts` → `refreshCachedData()`
-
----
-
-## Priority 2 — Multi-Tenant Architecture
+## Priority 2 — Multi-Tenant Architecture (in progress)
 
 **Decision log:**
 - Each farm = fully isolated, separate Turso database
@@ -57,50 +64,29 @@ Recommend Option A for speed. Option B is architecturally cleaner if we have tim
 - Login flow: farmtrack website → "Log in" → `/farms` farm selector page → click farm → individual farm login
 - PWA: each client adds their farm's URL to their home screen
 
-**Do NOT use Supabase.** We are already on Turso + Prisma + next-auth. Supabase is a full
-platform replacement (Postgres + Auth + Storage + Realtime) — adding it now means rewriting
-the entire data layer. It's not compatible with the current stack without a major refactor.
+**Do NOT use Supabase.** We are on Turso + Prisma + next-auth. Supabase is a full
+platform replacement — adding it means rewriting the entire data layer.
 
 **Architecture to implement:**
-1. **Meta DB** — a lightweight store (can be a dedicated Turso DB or small Postgres) mapping:
-   `farmSlug → { turso_url, turso_auth_token, display_name, logo_url }`
-   This is what Luc manages when onboarding a new client.
+1. **Meta DB** — `lib/meta-db.ts` exists. Maps `farmSlug → { turso_url, turso_auth_token, display_name, logo_url }`.
+2. **Middleware** — `proxy.ts` + `lib/farm-prisma.ts` scope Prisma clients per tenant.
+3. **Routing** — `/[farmSlug]/(logger|dashboard|admin)` path-based isolation.
+4. **Farm selector page `/farms`** — exists at `app/farms/page.tsx`.
+5. **Data isolation** — database-level, no `farmId` columns.
 
-2. **Middleware** (proxy.ts / route handler) — reads `farmSlug` from URL path or session,
-   looks up the farm's Turso credentials from the meta DB, creates a scoped Prisma client
-   per request. All queries are automatically isolated to that farm's database.
-
-3. **Routing pattern** — path-based (simplest to start):
-   `farmtrack.app/farms` → farm selector (lists all active farms)
-   `farmtrack.app/[farmSlug]/login` → farm-specific login
-   `farmtrack.app/[farmSlug]/logger` → Dicky's logger
-   `farmtrack.app/[farmSlug]/dashboard` → management dashboard
-   `farmtrack.app/[farmSlug]/admin` → admin panel
-
-4. **Farm selector page** — does NOT exist yet. Needs to be built at `/farms/page.tsx`.
-   Lists all farms from the meta DB. Click a farm card → `/[farmSlug]/login`.
-
-5. **Data isolation** — each farm's Prisma client points at their own Turso DB.
-   No `farmId` column needed — isolation is at the database level.
-
-**Onboarding a new client (Luc's workflow):**
-1. Create a new Turso DB for them: `turso db create [farm-slug]`
-2. Run schema migrations on their DB
-3. Add their entry to the meta DB
-4. Import their animal/camp data via admin import
-5. Create their user account (next-auth)
-6. Hand over their URL: `farmtrack.app/[farm-slug]`
+**Remaining work:**
+- Password-reset flow (see Priority 1.E)
+- Upstash Redis-backed rate limiter (current one resets on cold start)
+- Cross-tenant blob-storage audit (photos path)
 
 ---
 
 ## Priority 3 — Website v2 Fixes & Deploy
 
-**Status:** Built and running on port 3002, not yet deployed (needs its own Vercel project).
+**Status:** Built and running on port 3002, not yet deployed.
 
 **Known issues:**
-- "Log in" CTA → should route to `/farms` (farm selector), not a login page
-  Because a visitor to the marketing site is not necessarily a Trio B client.
-- `/farms` page doesn't exist yet (built as part of Priority 2)
+- "Log in" CTA → should route to `/farms`, not a per-farm login page
 - Full visual QA pass before deploy
 - Needs its own Vercel project (separate from farm-management)
 
@@ -114,6 +100,8 @@ the entire data layer. It's not compatible with the current stack without a majo
 - **Treatment withdrawal tracking** — flag animals in withdrawal on the dashboard
 - **Rainfall tracking** — manual entry or weather API
 - **Offline sync conflict resolution** — better UX for Dicky when sync fails
+- **xlsx replacement** — see Priority 1.F
+- **Accessibility pass** — icon-only buttons need aria-labels, color-only status needs text
 
 ---
 
@@ -124,3 +112,9 @@ the entire data layer. It's not compatible with the current stack without a majo
 | Data refactor phases 1–4 | `4e10d17` | Camp model, API routes, dummy-data removal |
 | Phase 5 — Camp CRUD UI | `1eb8e3d` | AddCampForm, CampsTableClient, SchematicMap/DashboardClient fixes |
 | Phase 6 — CLAUDE.md | `cde9e54` | Rewrote with FarmTrack-specific principles |
+| Phase H — Hardening | `132d479` | Logger + auth + nav + ops pre-launch sprint |
+| Phase I — First-Impression | `7312071` | 8 Day-1 trust bugs |
+| Phase J — Notifications | `9788640` | Notification Engine + Repro KPI Pack |
+| Phase K — Tasks + Geo-Map | `9f1f370` | Recurrence engine + 8 SA moat layers |
+| P1 Logger Bug A (stale animals) | — | `seedAnimals()` / `seedCamps()` now do orphan sweep in IndexedDB |
+| P1 Logger Bug B (condition reset) | — | `seedCamps()` merges existing condition fields; sync pulls `/api/camps/status` |

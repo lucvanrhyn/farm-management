@@ -10,9 +10,7 @@
  * drift because of later transaction edits.
  */
 
-// @ts-ignore
 import { jsPDF } from "jspdf";
-// @ts-ignore
 import { autoTable } from "jspdf-autotable";
 import { formatZar } from "@/lib/calculators/sars-it3";
 import type { It3SnapshotPayload } from "./sars-it3";

@@ -53,17 +53,29 @@ export function TodaysTasks() {
   }, [userEmail, fetchTasks]);
 
   const handleComplete = useCallback(async (taskId: string) => {
-    // Optimistic update
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    // Optimistic update — snapshot the task so we can restore it on failure.
+    // Without the rollback the task vanishes from the UI until the next refetch
+    // cycle (or forever, if the user is offline and the fetch is swallowed).
+    let snapshot: Task | undefined;
+    setTasks((prev) => {
+      snapshot = prev.find((t) => t.id === taskId);
+      return prev.filter((t) => t.id !== taskId);
+    });
 
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
+      if (!res.ok) throw new Error(`PATCH /api/tasks/${taskId} failed: ${res.status}`);
     } catch {
-      // If it fails, the task will reappear on next fetch — acceptable for offline-first UX
+      // Restore the task so the user can retry. We deliberately append at the
+      // end rather than re-sorting — the list is short-lived and re-sort on
+      // every retry would be noisier than a stable "retry here" affordance.
+      if (snapshot) {
+        setTasks((prev) => (prev.some((t) => t.id === taskId) ? prev : [...prev, snapshot!]));
+      }
     }
   }, []);
 

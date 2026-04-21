@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -500,25 +500,25 @@ export default function AdminNav({
     expandedRef.current = expanded;
   }, [expanded]);
 
-  const toggleGroup = useCallback(
-    (label: string) => {
-      const prev = expandedRef.current;
-      const next = new Set(prev);
-      if (next.has(label)) {
-        // Don't let the user collapse the group that contains the active
-        // route — the chevron animation just happens, then the route
-        // disappears. Keep it visible for orientation.
-        if (label === activeGroupLabel) return;
-        next.delete(label);
-      } else {
-        next.add(label);
-      }
-      expandedRef.current = next;
-      writeStoredExpanded(farmSlug, next);
-      setExpanded(next);
-    },
-    [activeGroupLabel, farmSlug],
-  );
+  // React 19's compiler will auto-memoize this; manual useCallback here
+  // tripped `react-hooks/preserve-manual-memoization` because the compiler
+  // couldn't prove the closure was stable across renders.
+  function toggleGroup(label: string) {
+    const prev = expandedRef.current;
+    const next = new Set(prev);
+    if (next.has(label)) {
+      // Don't let the user collapse the group that contains the active
+      // route — the chevron animation just happens, then the route
+      // disappears. Keep it visible for orientation.
+      if (label === activeGroupLabel) return;
+      next.delete(label);
+    } else {
+      next.add(label);
+    }
+    expandedRef.current = next;
+    writeStoredExpanded(farmSlug, next);
+    setExpanded(next);
+  }
 
   function handleLockedClick() {
     setShowToast(true);

@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated Serwist service worker bundle — hand-lint would chase moving
+    // output. The source lives in src/sw.ts and is covered by normal lint.
+    "public/sw.js",
+    "public/sw.js.map",
   ]),
 ]);
 

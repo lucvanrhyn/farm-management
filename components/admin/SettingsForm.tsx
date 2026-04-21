@@ -284,7 +284,7 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             {geoLoading ? "Detecting…" : "Use My Location"}
           </button>
           <p className="text-xs mt-1.5" style={{ color: "#9C8E7A" }}>
-            Fills latitude and longitude from your browser's GPS.
+            Fills latitude and longitude from your browser&apos;s GPS.
           </p>
         </div>
       </Section>

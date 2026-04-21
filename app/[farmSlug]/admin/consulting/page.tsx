@@ -87,6 +87,9 @@ export default async function ConsultingAdminPage({
   ).length;
 
   // Rough revenue estimate: sum of setup fees + (retainer * months elapsed) across engagements.
+  // Server components render once per request — wall-clock impurity here is
+  // intentional (the reduce below compares engagement startedAt to "now").
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const estimatedRevenue = engagements.reduce((sum, e) => {
     const setup = e.setupFeeZar ?? 0;

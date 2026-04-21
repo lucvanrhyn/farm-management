@@ -8,9 +8,7 @@
  * point in time without touching live Animal or FarmSettings data.
  */
 
-// @ts-ignore
 import { jsPDF } from "jspdf";
-// @ts-ignore
 import { autoTable } from "jspdf-autotable";
 import type { SellerSnapshot, AnimalSnapshotEntry } from "./nvd";
 

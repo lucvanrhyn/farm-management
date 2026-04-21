@@ -77,6 +77,9 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
         className="relative flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
         style={{ color: "rgba(210,180,140,0.65)" }}
         title="Notifications"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
@@ -119,6 +122,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                 type="button"
                 onClick={() => setOpen(false)}
                 style={{ color: "rgba(210,180,140,0.5)" }}
+                aria-label="Close notifications"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -169,6 +173,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                         className="shrink-0 p-0.5 rounded"
                         style={{ color: "rgba(210,180,140,0.4)" }}
                         title="Mark as read"
+                        aria-label="Mark notification as read"
                       >
                         <X className="w-3 h-3" />
                       </button>

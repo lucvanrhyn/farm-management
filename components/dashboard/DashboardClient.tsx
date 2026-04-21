@@ -246,6 +246,10 @@ export default function DashboardClient({
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [liveConditions, setLiveConditions]     = useState<Record<string, LiveCampStatus>>({});
   const [conditionsError, setConditionsError]   = useState(false);
+  // Distinguishes "first response not yet received" from "server returned an
+  // empty object." Without this the header KPIs render as 0/0/0 for 2–3s on
+  // slow connections and users read that as "my farm has no activity."
+  const [conditionsLoading, setConditionsLoading] = useState(true);
 
   useEffect(() => {
     function fetchConditions() {
@@ -254,8 +258,12 @@ export default function DashboardClient({
         .then((data) => {
           setConditionsError(false);
           setLiveConditions(data ?? {});
+          setConditionsLoading(false);
         })
-        .catch(() => setConditionsError(true));
+        .catch(() => {
+          setConditionsError(true);
+          setConditionsLoading(false);
+        });
     }
     fetchConditions();
     const interval = setInterval(fetchConditions, 10_000);
@@ -280,6 +288,10 @@ export default function DashboardClient({
   const campData = camps.map((camp) => {
     const cond = liveConditions[camp.camp_id];
     const lastDate = cond?.last_inspected_at ? new Date(cond.last_inspected_at) : null;
+    // Wall-clock here is intentional: `daysSince` is a UI-only derived value
+    // that updates when `liveConditions` changes. Days-granularity drift is
+    // acceptable without a ticking effect.
+    // eslint-disable-next-line react-hooks/purity
     const daysSince = lastDate ? Math.floor((Date.now() - lastDate.getTime()) / 86_400_000) : undefined;
 
     return {
@@ -399,8 +411,16 @@ export default function DashboardClient({
           style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
         >
           <StatChip label="Total Animals"   value={filteredTotal}                        />
-          <StatChip label="Inspected"       value={`${inspectedToday}/${camps.length}`} />
-          <StatChip label="Active Alerts"   value={alertCount} accent={alertCount > 0} pulse={alertCount > 0} />
+          <StatChip
+            label="Inspected"
+            value={conditionsLoading ? "—" : `${inspectedToday}/${camps.length}`}
+          />
+          <StatChip
+            label="Active Alerts"
+            value={conditionsLoading ? "—" : alertCount}
+            accent={!conditionsLoading && alertCount > 0}
+            pulse={!conditionsLoading && alertCount > 0}
+          />
         </motion.div>
         {conditionsError && (
           <span style={{ fontSize: 10, color: "rgba(239,68,68,0.7)", whiteSpace: "nowrap" }}>
