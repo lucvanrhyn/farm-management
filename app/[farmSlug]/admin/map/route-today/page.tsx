@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 
 /**
  * Route Today — Wave 3E

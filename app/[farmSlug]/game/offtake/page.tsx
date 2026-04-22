@@ -7,7 +7,6 @@ import {
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import QuotaUtilizationTable from "@/components/game/QuotaUtilizationTable";
 
-export const dynamic = "force-dynamic";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

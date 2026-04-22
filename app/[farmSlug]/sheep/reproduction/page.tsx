@@ -8,7 +8,6 @@ import UpcomingLambingsTable from "@/components/sheep/UpcomingLambingsTable";
 import OverdueLambingsTable from "@/components/sheep/OverdueLambingsTable";
 import type { SpeciesAlert } from "@/lib/species/types";
 
-export const dynamic = "force-dynamic";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

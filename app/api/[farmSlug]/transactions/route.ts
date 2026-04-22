@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +106,6 @@ export async function POST(
     },
   });
 
-  revalidatePath(`/${farmSlug}/admin/finansies`);
+  revalidateTransactionWrite(farmSlug);
   return NextResponse.json(transaction, { status: 201 });
 }

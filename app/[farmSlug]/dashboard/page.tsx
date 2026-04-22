@@ -4,9 +4,9 @@ import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
+import { getCachedDashboardData } from "@/lib/server/cached";
+import { isCacheEnabled } from "@/lib/flags";
 import type { Camp } from "@/lib/types";
-
-export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({
   params,
@@ -14,6 +14,32 @@ export default async function DashboardPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  // ── Cached path ─────────────────────────────────────────────────────────────
+  // When FARM_CACHE_ENABLED_SLUGS includes this slug, delegate to the cached
+  // helper that packages all 8 queries behind unstable_cache (30s TTL, tagged
+  // by animals + camps + observations — any mutation clears the entry).
+  if (isCacheEnabled(farmSlug)) {
+    const data = await getCachedDashboardData(farmSlug);
+    return (
+      <DashboardClient
+        totalAnimals={data.totalAll}
+        totalBySpecies={data.totalBySpecies}
+        campAnimalCounts={data.campAnimalCounts}
+        campCountsBySpecies={data.campCountsBySpecies}
+        camps={data.camps}
+        latitude={data.latitude}
+        longitude={data.longitude}
+        censusCountByCamp={data.censusCountByCamp}
+        rotationByCampId={data.rotationByCampId}
+        veldScoreByCamp={data.veldScoreByCamp}
+        feedOnOfferKgDmPerHaByCamp={data.feedOnOfferKgDmPerHaByCamp}
+      />
+    );
+  }
+
+  // ── Uncached path (flag off) ─────────────────────────────────────────────────
+  // Preserved exactly as-is so disabling the flag is a true rollback.
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="p-8 text-red-500">Farm not found.</p>;
 

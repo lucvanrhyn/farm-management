@@ -26,6 +26,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { expandRule } from "@/lib/tasks/recurrence";
+import { revalidateTaskWrite } from "@/lib/server/revalidate";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  revalidateTaskWrite(db.slug);
   return NextResponse.json(parseTaskArrayFields(task), { status: 201 });
 }
 

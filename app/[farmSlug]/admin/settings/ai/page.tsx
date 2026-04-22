@@ -27,7 +27,6 @@ import {
 } from "@/lib/einstein/settings-schema";
 import AiSettingsForm from "@/components/einstein/settings/AiSettingsForm";
 
-export const dynamic = "force-dynamic";
 
 export default async function AiSettingsPage({
   params,

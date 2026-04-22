@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { performMobMove, MobNotFoundError } from "@/lib/server/mob-move";
+import { revalidateRotationWrite } from "@/lib/server/revalidate";
 export const dynamic = "force-dynamic";
 
 export async function POST(
@@ -74,6 +75,7 @@ export async function POST(
     },
   });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json({
     step: updatedStep,
     move: {

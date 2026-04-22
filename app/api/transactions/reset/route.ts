@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { verifyFreshAdminRole } from "@/lib/auth";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export async function DELETE() {
   const session = await getServerSession(authOptions);
@@ -20,9 +20,7 @@ export async function DELETE() {
   await prisma.transaction.deleteMany({});
   await prisma.transactionCategory.deleteMany({});
 
-  revalidatePath("/admin");
-  revalidatePath("/admin/finansies");
-  revalidatePath("/admin/grafieke");
+  revalidateTransactionWrite(db.slug);
 
   return NextResponse.json({ success: true });
 }

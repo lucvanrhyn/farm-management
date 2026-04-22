@@ -16,7 +16,6 @@ import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { COPY_BY_MODE } from "./copy";
 import type { GestationBreed } from "@/lib/species/gestation";
 
-export const dynamic = "force-dynamic";
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });

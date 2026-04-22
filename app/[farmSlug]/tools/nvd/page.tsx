@@ -6,7 +6,6 @@ import { getUserRoleForFarm } from "@/lib/auth";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import NvdPageClient from "./NvdPageClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function NvdPage({
   params,

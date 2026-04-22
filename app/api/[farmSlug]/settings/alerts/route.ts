@@ -32,6 +32,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { verifyFreshAdminRole } from "@/lib/auth";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -363,6 +364,8 @@ export async function PATCH(
       },
     });
   }
+
+  revalidateSettingsWrite(farmSlug);
 
   const [prefs, settings] = await Promise.all([
     db.prisma.alertPreference.findMany({

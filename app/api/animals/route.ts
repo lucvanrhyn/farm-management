@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 
 // Pagination tunables. Default 500/request balances payload size (~100KB JSON
 // for a typical cattle row) against round-trip count on large herds. Max
@@ -139,9 +139,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  revalidatePath('/admin');
-  revalidatePath('/admin/animals');
-  revalidatePath('/admin/grafieke');
-  revalidatePath('/dashboard');
+  revalidateAnimalWrite(db.slug);
   return NextResponse.json({ success: true, animal }, { status: 201 });
 }

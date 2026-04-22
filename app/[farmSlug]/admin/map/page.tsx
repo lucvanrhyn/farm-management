@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 
 /**
  * Admin Map — Wave 3E scaffold.

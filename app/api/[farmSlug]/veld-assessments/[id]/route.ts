@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import type { SessionFarm } from '@/types/next-auth';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
 export async function DELETE(
   _req: Request,
@@ -20,6 +21,7 @@ export async function DELETE(
   if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
   try {
     await prisma.veldAssessment.delete({ where: { id } });
+    revalidateObservationWrite(farmSlug);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });

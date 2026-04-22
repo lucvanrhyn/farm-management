@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export async function POST(
     },
   });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json(step, { status: 201 });
 }
 
@@ -122,5 +124,6 @@ export async function PUT(
     orderBy: { sequence: "asc" },
   });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json(steps);
 }

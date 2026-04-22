@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
 
 const zarFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",

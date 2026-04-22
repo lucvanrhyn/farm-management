@@ -5,7 +5,6 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import ObservationsPageClient from "./ObservationsPageClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function AdminObservationsPage({
   params,

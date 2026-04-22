@@ -1,7 +1,6 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import SettingsForm, { type FarmSettingsData } from "@/components/admin/SettingsForm";
 
-export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({
   params,

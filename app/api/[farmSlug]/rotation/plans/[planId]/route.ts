@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm, getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,7 @@ export async function PATCH(
     include: { steps: { orderBy: { sequence: "asc" } } },
   });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json(updated);
 }
 
@@ -100,5 +102,6 @@ export async function DELETE(
   await prisma.rotationPlanStep.deleteMany({ where: { planId } });
   await prisma.rotationPlan.delete({ where: { id: planId } });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json({ success: true });
 }

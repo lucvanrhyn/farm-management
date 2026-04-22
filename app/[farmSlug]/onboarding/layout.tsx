@@ -7,7 +7,6 @@ import { OnboardingProvider } from "@/components/onboarding/OnboardingProvider";
 import { StepperFromPathname } from "@/components/onboarding/Stepper";
 import { ONBOARDING_GLOW } from "@/components/onboarding/theme";
 
-export const dynamic = "force-dynamic";
 
 // ---------------------------------------------------------------------------
 // Early-exit panels — stay inline so the server layout is self-contained.

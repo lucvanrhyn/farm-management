@@ -3,7 +3,6 @@ import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/util
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { AnimalCategory } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
 
 export default async function AnimalProfilePage({
   params,

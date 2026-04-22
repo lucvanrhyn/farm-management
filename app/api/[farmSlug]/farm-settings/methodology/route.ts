@@ -28,6 +28,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, type FarmTier } from "@/lib/tier";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 import {
   mergeAiSettings,
   parseAiSettings,
@@ -186,6 +187,7 @@ export async function PUT(
       });
     }
 
+    revalidateSettingsWrite(farmSlug);
     return NextResponse.json({
       success: true,
       methodology: validation.value,

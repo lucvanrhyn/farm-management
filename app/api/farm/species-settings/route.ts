@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAllSpeciesConfigs } from "@/lib/species/registry";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -83,5 +84,6 @@ export async function PATCH(req: NextRequest) {
     create: { species, enabled },
   });
 
+  revalidateSettingsWrite(farmSlug);
   return NextResponse.json({ species: updated.species, enabled: updated.enabled });
 }

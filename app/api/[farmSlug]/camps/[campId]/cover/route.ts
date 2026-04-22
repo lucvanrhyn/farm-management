@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { randomUUID } from "crypto";
 import type { SessionFarm } from "@/types/next-auth";
+import { revalidateCampWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,7 @@ export async function POST(
     ? calcDaysRemaining(kgDmPerHa, camp.sizeHectares, animalCount, DEFAULT_USE_FACTOR)
     : null;
 
+  revalidateCampWrite(farmSlug);
   return NextResponse.json({ reading, daysRemaining }, { status: 201 });
 }
 
@@ -164,5 +166,6 @@ export async function DELETE(
   }
 
   await prisma.campCoverReading.delete({ where: { id: readingId } });
+  revalidateCampWrite(farmSlug);
   return NextResponse.json({ ok: true });
 }

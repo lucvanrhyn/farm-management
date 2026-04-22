@@ -25,6 +25,7 @@ import {
   parseStoredMapSettings,
   type FarmMapSettings,
 } from "@/lib/farm-settings/defaults";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -114,5 +115,6 @@ export async function PUT(req: NextRequest) {
     },
   });
 
+  revalidateSettingsWrite(db.slug);
   return NextResponse.json(next);
 }

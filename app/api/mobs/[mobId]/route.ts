@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { performMobMove, MobNotFoundError } from "@/lib/server/mob-move";
+import { revalidateMobWrite } from "@/lib/server/revalidate";
 
 export async function PATCH(
   req: NextRequest,
@@ -46,10 +46,7 @@ export async function PATCH(
     ? await prisma.mob.update({ where: { id: mobId }, data: nameUpdate })
     : await prisma.mob.findUniqueOrThrow({ where: { id: mobId } });
 
-  revalidatePath("/admin/mobs");
-  revalidatePath("/admin/animals");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateMobWrite(db.slug);
 
   return NextResponse.json({
     id: updatedMob.id,
@@ -88,8 +85,7 @@ export async function DELETE(
 
   await prisma.mob.delete({ where: { id: mobId } });
 
-  revalidatePath("/admin/mobs");
-  revalidatePath("/admin");
+  revalidateMobWrite(db.slug);
 
   return NextResponse.json({ success: true });
 }

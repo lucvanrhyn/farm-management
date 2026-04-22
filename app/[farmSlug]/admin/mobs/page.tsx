@@ -3,7 +3,6 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
 
 export default async function AdminMobsPage({
   params,

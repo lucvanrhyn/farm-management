@@ -12,7 +12,6 @@ import { getCostPerAnimal } from "@/lib/server/financial-analytics";
 import AnimalInvestment from "@/components/admin/AnimalInvestment";
 import CostOfGainCard from "@/components/admin/CostOfGainCard";
 
-export const dynamic = "force-dynamic";
 
 const BASE_TABS = [
   { key: "overview",      label: "Overview" },
