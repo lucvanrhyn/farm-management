@@ -102,7 +102,7 @@ platform replacement — adding it means rewriting the entire data layer.
 - **Offline sync conflict resolution** — better UX for Dicky when sync fails
 - **xlsx replacement** — see Priority 1.F
 - **Accessibility pass** — icon-only buttons need aria-labels, color-only status needs text
-- **Schema-default change**: drop the DB-level `@default("Brangus")` on Animal.breed now that app code reads breed from FarmSettings (new `migrations/*.sql` — SQLite needs table-recreate for default changes)
+- **Schema-default change**: drop the DB-level `@default("Brangus")` on Animal.breed now that app code reads breed from FarmSettings (new `migrations/00NN_*.sql` — SQLite needs table-recreate for default changes)
 
 ---
 
@@ -123,3 +123,4 @@ platform replacement — adding it means rewriting the entire data layer.
 | Bug-fix chunk 2 — weighing + treatment | `3a75c31` | Route WeighingForm + TreatmentForm through offline queue (onSubmit callback pattern); handleWeighSubmit + handleTreatmentSubmit in logger page |
 | Bug-fix chunk 3 — cover readings | `7dfb95b` | Route CampCoverLogForm through offline queue: pending_cover_readings IDB store (DB_VERSION 5), syncPendingCoverReadings, new PATCH attachment route, 7 unit tests |
 | Bug-fix chunk 4 — hygiene | `35cfadf` | Remove hardcoded "Brangus" breed defaults; rotation/plans GET uses getPrismaForSlugWithAuth; getDBName throws on missing slug + persists to sessionStorage |
+| Migration framework | `3432def` | Multi-tenant SQL migration runner (`lib/migrator.ts` + `scripts/migrate.ts`); replaces hand-rolled `scripts/migrate-*.ts` per-change scripts. First migration: `0001_camp_cover_reading_attachment_url.sql`. 12 unit tests against in-memory libsql. |
