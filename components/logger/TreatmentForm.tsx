@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
-import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
-  animalId: string;
   animalTag: string;
-  campId: string;
-  farmSlug: string;
-  onSuccess: () => void;
+  onSubmit: (data: {
+    treatmentType: TreatmentType;
+    product: string;
+    dose: string;
+    withdrawalDays: number;
+    photoBlob: Blob | null;
+  }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -68,7 +70,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
   );
 }
 
-export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, onSuccess, onCancel }: Props) {
+export default function TreatmentForm({ animalTag, onSubmit, onCancel }: Props) {
   const [treatmentType, setTreatmentType] = useState<TreatmentType>("Antibiotic");
   const [product, setProduct] = useState("");
   const [dose, setDose] = useState("");
@@ -87,41 +89,14 @@ export default function TreatmentForm({ animalId, animalTag, campId, farmSlug, o
     setSubmitting(true);
     setError("");
     try {
-      const detailsObj: Record<string, unknown> = {
-        treatment_type: treatmentType,
-        product: product.trim(),
-        dose: dose.trim(),
-        withdrawal_days: withdrawalDays,
-      };
-
-      const res = await fetch(`/api/observations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "treatment",
-          camp_id: campId,
-          animal_id: animalId,
-          details: JSON.stringify(detailsObj),
-          created_at: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        setError(e.error ?? "Failed to save — try again");
-        return;
-      }
-      const resData = await res.json().catch(() => ({}));
-      if (photoBlob && resData.id) {
-        await queuePhoto(resData.id, photoBlob).catch(() => {/* non-fatal */});
-      }
+      await onSubmit({ treatmentType, product: product.trim(), dose: dose.trim(), withdrawalDays, photoBlob });
       setTreatmentType("Antibiotic");
       setProduct("");
       setDose("");
       setWithdrawalDays(DEFAULT_WITHDRAWAL_DAYS["Antibiotic"]);
       setPhotoBlob(null);
-      onSuccess();
     } catch {
-      setError("Network error — try again");
+      setError("Failed to queue — try again");
     } finally {
       setSubmitting(false);
     }

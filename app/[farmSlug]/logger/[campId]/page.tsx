@@ -225,6 +225,47 @@ export default function CampInspectionPage({
     getAnimalsByCampCached(decodedId).then((all) => setAnimals(all.filter((a) => (a.species ?? "cattle") === mode)));
   }
 
+  async function handleWeighSubmit(data: { weightKg: number; photoBlob: Blob | null }) {
+    const localId = await queueObservation({
+      type: "weighing",
+      camp_id: decodedId,
+      animal_id: selectedAnimalId,
+      details: JSON.stringify({ weight_kg: data.weightKg }),
+      created_at: new Date().toISOString(),
+      synced_at: null,
+      sync_status: "pending",
+    });
+    if (data.photoBlob) await queuePhoto(localId, data.photoBlob).catch(() => {/* non-fatal */});
+    markAnimalFlagged(selectedAnimalId);
+    refreshPendingCount();
+    if (isOnline) syncNow();
+    setActiveModal(null);
+  }
+
+  async function handleTreatmentSubmit(data: {
+    treatmentType: string;
+    product: string;
+    dose: string;
+    withdrawalDays: number;
+    photoBlob: Blob | null;
+  }) {
+    const { photoBlob, ...obsFields } = data;
+    const localId = await queueObservation({
+      type: "treatment",
+      camp_id: decodedId,
+      animal_id: selectedAnimalId,
+      details: JSON.stringify(obsFields),
+      created_at: new Date().toISOString(),
+      synced_at: null,
+      sync_status: "pending",
+    });
+    if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
+    markAnimalFlagged(selectedAnimalId);
+    refreshPendingCount();
+    if (isOnline) syncNow();
+    setActiveModal(null);
+  }
+
   async function handleReproSubmit(data: ReproSubmitData) {
     const localId = await queueObservation({
       type: data.type,
@@ -540,27 +581,15 @@ export default function CampInspectionPage({
       )}
       {activeModal === "weigh" && (
         <WeighingForm
-          animalId={selectedAnimalId}
           animalTag={selectedAnimalId}
-          campId={decodedId}
-          farmSlug={farmSlug}
-          onSuccess={() => {
-            markAnimalFlagged(selectedAnimalId);
-            setActiveModal(null);
-          }}
+          onSubmit={handleWeighSubmit}
           onCancel={() => setActiveModal(null)}
         />
       )}
       {activeModal === "treat" && (
         <TreatmentForm
-          animalId={selectedAnimalId}
           animalTag={selectedAnimalId}
-          campId={decodedId}
-          farmSlug={farmSlug}
-          onSuccess={() => {
-            markAnimalFlagged(selectedAnimalId);
-            setActiveModal(null);
-          }}
+          onSubmit={handleTreatmentSubmit}
           onCancel={() => setActiveModal(null)}
         />
       )}
