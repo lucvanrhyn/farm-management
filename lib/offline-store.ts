@@ -350,12 +350,18 @@ export async function markAnimalCreateFailed(localId: number): Promise<void> {
 
 export interface PendingPhoto {
   local_id?: number;
-  observation_local_id: string | number;
+  // Always the numeric IDB local_id returned by queueObservation — never a
+  // server-assigned string ID. Narrowed from string|number to number so the
+  // sync loop can look it up in localToServerId without a type-switch.
+  observation_local_id: number;
   blob: Blob;
+  // Populated after a successful upload to Vercel Blob. If set, the upload
+  // step is skipped on retry so we don't create duplicate blobs.
+  blob_url?: string;
   sync_status: 'pending' | 'synced' | 'failed';
 }
 
-export async function queuePhoto(observationLocalId: string | number, blob: Blob): Promise<number> {
+export async function queuePhoto(observationLocalId: number, blob: Blob): Promise<number> {
   const db = await getDB();
   return db.add('pending_photos', {
     observation_local_id: observationLocalId,
@@ -378,7 +384,25 @@ export async function markPhotoSynced(localId: number): Promise<void> {
   }
 }
 
-export async function getPhotoForObservation(observationLocalId: string | number): Promise<Blob | null> {
+// Persists the uploaded blob URL without flipping sync_status so the
+// attachment PATCH can be retried independently if it fails.
+export async function markPhotoUploaded(localId: number, url: string): Promise<void> {
+  const db = await getDB();
+  const photo = await db.get('pending_photos', localId);
+  if (photo) {
+    await db.put('pending_photos', { ...photo, blob_url: url });
+  }
+}
+
+export async function markPhotoFailed(localId: number): Promise<void> {
+  const db = await getDB();
+  const photo = await db.get('pending_photos', localId);
+  if (photo) {
+    await db.put('pending_photos', { ...photo, sync_status: 'failed' });
+  }
+}
+
+export async function getPhotoForObservation(observationLocalId: number): Promise<Blob | null> {
   const db = await getDB();
   const results = await db.getAllFromIndex('pending_photos', 'by_observation', observationLocalId);
   const pending = results.find((p) => p.sync_status === 'pending' || p.sync_status === 'failed');
