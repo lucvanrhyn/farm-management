@@ -11,7 +11,7 @@ Deployed: https://farm-management-lilac.vercel.app
 ## Critical Build Rules
 
 - **Build command:** `pnpm build --webpack` — Turbopack breaks Serwist. Never use `turbo` flag for builds.
-- **Schema changes:** Use `turso db shell trio-b-boerdery "ALTER TABLE ..."` directly. Do NOT run `prisma db push` — it will break the Turso remote database.
+- **Schema changes:** Add a numbered SQL file under `migrations/` (e.g. `migrations/0002_add_foo.sql`) and run `pnpm db:migrate`. The runner (`scripts/migrate.ts` + `lib/migrator.ts`) iterates every tenant via the meta DB, tracks applied migrations in a per-farm `_migrations` table, and applies each file atomically. Do NOT write new hand-rolled `scripts/migrate-*.ts` scripts (the existing ones are historical) and do NOT run `prisma db push` — it will break the Turso remote database. Update `prisma/schema.prisma` in the same commit as the migration so the Prisma client stays in sync.
 - **tsc gotcha:** `tsconfig.json` has `incremental: true`. Always run `rm -rf .next/cache/tsbuildinfo .tsbuildinfo` before trusting a clean `tsc` result.
 - **Next.js 16 params:** Must be awaited — `{ params }: { params: Promise<{ campId: string }> }`.
 
