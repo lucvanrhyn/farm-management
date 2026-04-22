@@ -2,14 +2,10 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
-import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
-  animalId: string;
   animalTag: string;
-  campId: string;
-  farmSlug: string;
-  onSuccess: () => void;
+  onSubmit: (data: { weightKg: number; photoBlob: Blob | null }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -48,7 +44,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
   );
 }
 
-export default function WeighingForm({ animalId, animalTag, campId, farmSlug, onSuccess, onCancel }: Props) {
+export default function WeighingForm({ animalTag, onSubmit, onCancel }: Props) {
   const [weightKg, setWeightKg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -61,34 +57,11 @@ export default function WeighingForm({ animalId, animalTag, campId, farmSlug, on
     setSubmitting(true);
     setError("");
     try {
-      const detailsObj: Record<string, unknown> = { weight_kg: weight };
-
-      const res = await fetch(`/api/observations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "weighing",
-          camp_id: campId,
-          animal_id: animalId,
-          details: JSON.stringify(detailsObj),
-          created_at: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        setError(e.error ?? "Failed to save — try again");
-        return;
-      }
-      const resData = await res.json().catch(() => ({}));
-      if (photoBlob && resData.id) {
-        // Queue photo linked to the server observation id for sync
-        await queuePhoto(resData.id, photoBlob).catch(() => {/* non-fatal */});
-      }
+      await onSubmit({ weightKg: weight, photoBlob });
       setWeightKg("");
       setPhotoBlob(null);
-      onSuccess();
     } catch {
-      setError("Network error — try again");
+      setError("Failed to queue — try again");
     } finally {
       setSubmitting(false);
     }
