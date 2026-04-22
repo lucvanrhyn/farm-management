@@ -5,11 +5,15 @@ import type { SessionFarm } from "@/types/next-auth";
 import { FarmCard } from "./FarmCard";
 import { getOverviewForUserFarms } from "@/lib/server/multi-farm-overview";
 import type { FarmOverview } from "@/lib/server/multi-farm-overview";
+import { getCachedMultiFarmOverview } from "@/lib/server/cached";
+import { isCacheEnabled } from "@/lib/flags";
 
 // ── Overview loader (only rendered for 2+ farms) ──────────────────────────────
 
-async function OverviewCards({ farms }: { farms: SessionFarm[] }) {
-  const overviews = await getOverviewForUserFarms(farms);
+async function OverviewCards({ userId, farms }: { userId: string; farms: SessionFarm[] }) {
+  const overviews = isCacheEnabled(farms[0]?.slug ?? "")
+    ? await getCachedMultiFarmOverview(userId, farms)
+    : await getOverviewForUserFarms(farms);
   const overviewBySlug = Object.fromEntries(overviews.map((o) => [o.slug, o]));
 
   return (
@@ -46,6 +50,7 @@ export default async function FarmsPage() {
 
   const farms: SessionFarm[] = session.user.farms ?? [];
   const isMultiFarm = farms.length >= 2;
+  const userId = session.user.id ?? session.user.email ?? "unknown";
 
   return (
     <div
@@ -117,7 +122,7 @@ export default async function FarmsPage() {
             {isMultiFarm ? (
               // Multi-farm: load overview stats in Suspense so picker renders immediately
               <Suspense fallback={<CardSkeletons farms={farms} />}>
-                <OverviewCards farms={farms} />
+                <OverviewCards userId={userId} farms={farms} />
               </Suspense>
             ) : (
               // Single farm: no Suspense overhead, instant tap

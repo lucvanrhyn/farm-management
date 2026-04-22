@@ -7,9 +7,20 @@ import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import PregnancyRateCycleChart from "@/components/admin/charts/PregnancyRateCycleChart";
-import DaysOpenHistogram from "@/components/admin/charts/DaysOpenHistogram";
-import WeaningRateKPI from "@/components/admin/charts/WeaningRateKPI";
+import dynamic from "next/dynamic";
+
+const PregnancyRateCycleChart = dynamic(
+  () => import("@/components/admin/charts/PregnancyRateCycleChart"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
+const DaysOpenHistogram = dynamic(
+  () => import("@/components/admin/charts/DaysOpenHistogram"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
+const WeaningRateKPI = dynamic(
+  () => import("@/components/admin/charts/WeaningRateKPI"),
+  { loading: () => <div className="h-12 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 import GestationCalculator from "@/components/admin/charts/GestationCalculator";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";

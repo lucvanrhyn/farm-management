@@ -11,6 +11,8 @@ import { unstable_cache } from "next/cache";
 import { withFarmPrisma } from "@/lib/farm-prisma";
 import { farmTag } from "@/lib/server/cache-tags";
 import { getLatestCampConditions, type LiveCampStatus } from "@/lib/server/camp-status";
+import { getOverviewForUserFarms, type FarmOverview } from "@/lib/server/multi-farm-overview";
+import type { SessionFarm } from "@/types/next-auth";
 import { getReproStats, type ReproStats } from "@/lib/server/reproduction-analytics";
 import {
   getDashboardAlerts,
@@ -412,6 +414,37 @@ export async function getCachedFarmSpeciesSettings(
     { revalidate: 300, tags: [farmTag(farmSlug, "settings")] },
   );
   return fetcher(farmSlug);
+}
+
+// ── Cached: Multi-farm overview for /farms page (60s) ────────────────────────
+// Eliminates the N×3 Turso fan-out on the /farms page.
+// Tagged with animals+camps+observations for each farm in the user's list —
+// any mutation to any of those scopes clears the entry.
+
+export async function getCachedMultiFarmOverview(
+  userId: string,
+  farms: SessionFarm[],
+): Promise<FarmOverview[]> {
+  const slugs = farms.slice(0, 8).map((f) => f.slug);
+
+  const fetcher = unstable_cache(
+    async (uid: string, farmSlugs: string[], farmsData: SessionFarm[]): Promise<FarmOverview[]> => {
+      void uid;
+      void farmSlugs;
+      return getOverviewForUserFarms(farmsData);
+    },
+    ["multi-farm-overview", userId],
+    {
+      revalidate: 60,
+      tags: slugs.flatMap((slug) => [
+        farmTag(slug, "animals"),
+        farmTag(slug, "camps"),
+        farmTag(slug, "observations"),
+      ]),
+    },
+  );
+
+  return fetcher(userId, slugs, farms.slice(0, 8));
 }
 
 // ── Cached: Dashboard Page Data (30s) ─────────────────────────────────────────
