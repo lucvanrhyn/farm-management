@@ -1,6 +1,6 @@
 # FarmTrack — Active To-Do List
 
-Last updated: 2026-04-21
+Last updated: 2026-04-22
 
 ---
 
@@ -102,6 +102,7 @@ platform replacement — adding it means rewriting the entire data layer.
 - **Offline sync conflict resolution** — better UX for Dicky when sync fails
 - **xlsx replacement** — see Priority 1.F
 - **Accessibility pass** — icon-only buttons need aria-labels, color-only status needs text
+- **Schema-default change**: drop the DB-level `@default("Brangus")` on Animal.breed now that app code reads breed from FarmSettings (new `migrations/*.sql` — SQLite needs table-recreate for default changes)
 
 ---
 
@@ -118,3 +119,7 @@ platform replacement — adding it means rewriting the entire data layer.
 | Phase K — Tasks + Geo-Map | `9f1f370` | Recurrence engine + 8 SA moat layers |
 | P1 Logger Bug A (stale animals) | — | `seedAnimals()` / `seedCamps()` now do orphan sweep in IndexedDB |
 | P1 Logger Bug B (condition reset) | — | `seedCamps()` merges existing condition fields; sync pulls `/api/camps/status` |
+| Bug-fix chunk 1 — photo-sync orphan | `fe3ec07` | Narrow PendingPhoto.observation_local_id to number, add markPhotoUploaded/markPhotoFailed, rewrite syncPendingPhotos to persist blob_url and fail properly on PATCH error |
+| Bug-fix chunk 2 — weighing + treatment | `3a75c31` | Route WeighingForm + TreatmentForm through offline queue (onSubmit callback pattern); handleWeighSubmit + handleTreatmentSubmit in logger page |
+| Bug-fix chunk 3 — cover readings | `7dfb95b` | Route CampCoverLogForm through offline queue: pending_cover_readings IDB store (DB_VERSION 5), syncPendingCoverReadings, new PATCH attachment route, 7 unit tests |
+| Bug-fix chunk 4 — hygiene | `35cfadf` | Remove hardcoded "Brangus" breed defaults; rotation/plans GET uses getPrismaForSlugWithAuth; getDBName throws on missing slug + persists to sessionStorage |

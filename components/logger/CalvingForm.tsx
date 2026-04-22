@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AnimalSex, EaseOfBirth } from "@/lib/types";
+import { getCachedFarmSettings } from "@/lib/offline-store";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Bull {
@@ -159,7 +160,10 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [ease, setEase] = useState<EaseOfBirth>("Unassisted");
   const [fatherId, setFatherId] = useState<string>("");
   const [dateOfBirth, setDateOfBirth] = useState(today);
-  const [breed, setBreed] = useState("Brangus");
+  const [breed, setBreed] = useState("");
+  useEffect(() => {
+    getCachedFarmSettings().then((s) => { if (s?.breed) setBreed(s.breed); });
+  }, []);
   const [category, setCategory] = useState("Heifer"); // synced with calfSex (Female → Heifer, Male → Bull Calf)
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [calvingDifficulty, setCalvingDifficulty] = useState("1");
@@ -181,7 +185,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         easeOfBirth: ease,
         fatherId: fatherId || null,
         dateOfBirth,
-        breed: breed || "Brangus",
+        breed: breed || "",
         category: category || "Calf",
         photoBlob,
         calvingDifficulty: parseInt(calvingDifficulty, 10),

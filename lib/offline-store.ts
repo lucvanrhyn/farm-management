@@ -12,13 +12,18 @@ export function setActiveFarmSlug(slug: string): void {
 }
 
 function getDBName(): string {
-  if (_activeFarmSlug) return `farmtrack-${_activeFarmSlug}`;
-  // Fallback: extract from URL path (e.g. /my-farm/logger → "my-farm")
+  if (_activeFarmSlug) {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('activeFarmSlug', _activeFarmSlug);
+    return `farmtrack-${_activeFarmSlug}`;
+  }
   if (typeof window !== 'undefined') {
+    // Restore after a hard reload before OfflineProvider has mounted
+    const stored = sessionStorage.getItem('activeFarmSlug');
+    if (stored) return `farmtrack-${stored}`;
     const seg = window.location.pathname.split('/')[1];
     if (seg) return `farmtrack-${seg}`;
   }
-  return 'farmtrack-offline-db';
+  throw new Error('No active farm slug — call setActiveFarmSlug() before using offline-store');
 }
 
 export interface PendingObservation {

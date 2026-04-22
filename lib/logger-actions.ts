@@ -118,7 +118,7 @@ export async function submitCalvingObservation(
       fatherId: data.fatherId || null,
       dateOfBirth: data.dateOfBirth,
       dateAdded: data.dateOfBirth,
-      breed: data.breed || "Brangus",
+      breed: data.breed || "",
       status: "Active",
       species: ctx.mode,
     };
