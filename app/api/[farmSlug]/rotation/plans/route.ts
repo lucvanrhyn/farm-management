@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm, getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,9 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { farmSlug } = await params;
-  const accessible = session.user.farms.some((f) => f.slug === farmSlug);
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const auth = await getPrismaForSlugWithAuth(session, farmSlug);
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { prisma } = auth;
 
   const plans = await prisma.rotationPlan.findMany({
     include: { steps: { orderBy: { sequence: "asc" } } },

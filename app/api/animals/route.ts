@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       name: name ?? null,
       sex,
       dateOfBirth: dateOfBirth ?? null,
-      breed: breed ?? "Brangus",
+      breed: breed || undefined,
       category,
       currentCamp,
       status: status ?? "Active",
