@@ -203,13 +203,14 @@ model Camp {
 }
 
 model CampCoverReading {
-  id           String   @id @default(cuid())
-  campId       String
+  id            String  @id @default(cuid())
+  campId        String
   coverCategory String  // "Good" | "Fair" | "Poor"
-  kgDmPerHa    Float    // derived from category or manually set
-  useFactor    Float    @default(0.35)
-  recordedAt   String
-  recordedBy   String
+  kgDmPerHa     Float   // derived from category or manually set
+  useFactor     Float   @default(0.35)
+  recordedAt    String
+  recordedBy    String
+  attachmentUrl String? // optional photo uploaded from the logger
 
   @@index([campId, recordedAt], name: "idx_cover_camp_date")
 }

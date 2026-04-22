@@ -13,11 +13,16 @@ import {
   markPhotoSynced,
   markPhotoUploaded,
   markPhotoFailed,
+  getPendingCoverReadings,
+  markCoverReadingSynced,
+  markCoverReadingFailed,
+  markCoverReadingPosted,
   setLastSyncedAt,
   clearPendingAnimalUpdate,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
+
 import type { Camp, Animal, AnimalSex, GrazingQuality, WaterStatus, FenceStatus } from './types';
 import type { PrismaAnimal } from './types';
 
@@ -248,15 +253,82 @@ async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<
   }
 }
 
+export async function syncPendingCoverReadings(): Promise<{ synced: number; failed: number }> {
+  const pending = await getPendingCoverReadings();
+  let synced = 0;
+  let failed = 0;
+
+  for (const reading of pending) {
+    try {
+      // If a previous cycle posted the reading but failed the photo PATCH,
+      // server_reading_id is already set — skip re-creating the reading row.
+      let serverId = reading.server_reading_id;
+      if (!serverId) {
+        const res = await fetch(
+          `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coverCategory: reading.cover_category }),
+          },
+        );
+        if (!res.ok) {
+          await markCoverReadingFailed(reading.local_id!);
+          failed++;
+          continue;
+        }
+        const data = await res.json();
+        serverId = (data.reading?.id ?? data.id) as string;
+        // Persist so a subsequent photo-PATCH retry doesn't duplicate the row.
+        await markCoverReadingPosted(reading.local_id!, serverId);
+      }
+
+      // Upload photo if one was captured with this reading.
+      if (reading.photo_blob) {
+        const formData = new FormData();
+        formData.append('file', reading.photo_blob, `cover-${reading.local_id}.jpg`);
+        const uploadRes = await fetch('/api/photos/upload', { method: 'POST', body: formData });
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json();
+          const patchRes = await fetch(
+            `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover/${serverId}/attachment`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ attachmentUrl: url }),
+            },
+          );
+          if (!patchRes.ok) {
+            // Leave as failed — reading row exists, next cycle retries photo only.
+            await markCoverReadingFailed(reading.local_id!);
+            failed++;
+            continue;
+          }
+        }
+      }
+
+      await markCoverReadingSynced(reading.local_id!);
+      synced++;
+    } catch (e) {
+      console.error('[sync] cover reading failed:', e);
+      await markCoverReadingFailed(reading.local_id!);
+      failed++;
+    }
+  }
+
+  return { synced, failed };
+}
+
 export async function syncAndRefresh(): Promise<{ synced: number; failed: number }> {
-  const [obsResult, animalsResult] = await Promise.all([
+  const [obsResult, animalsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
     syncPendingAnimals(),
+    syncPendingCoverReadings(),
   ]);
   await syncPendingPhotos(obsResult.localToServerId);
   await refreshCachedData(); // now server is up to date before we pull
   return {
-    synced: obsResult.synced + animalsResult.synced,
-    failed: obsResult.failed + animalsResult.failed,
+    synced: obsResult.synced + animalsResult.synced + coversResult.synced,
+    failed: obsResult.failed + animalsResult.failed + coversResult.failed,
   };
 }

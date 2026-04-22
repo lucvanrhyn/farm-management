@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 // Multi-tenant: each farm gets its own IndexedDB so switching farms in the
 // same browser never leaks data across tenants.
@@ -83,6 +83,15 @@ function getDB(): Promise<IDBPDatabase> {
         // during orphan-sweep in seedAnimals without scanning.
         if (!db.objectStoreNames.contains('pending_animal_updates')) {
           db.createObjectStore('pending_animal_updates', { keyPath: 'animal_id' });
+        }
+      }
+      if (oldVersion < 5) {
+        // Offline pasture-cover readings. Separate from pending_observations
+        // because CampCoverReading is a typed domain object (kgDmPerHa,
+        // useFactor, daysRemaining) that the FeedOnOffer page queries directly
+        // — it cannot be collapsed into the generic observation JSON blob.
+        if (!db.objectStoreNames.contains('pending_cover_readings')) {
+          db.createObjectStore('pending_cover_readings', { keyPath: 'local_id', autoIncrement: true });
         }
       }
     },
@@ -211,9 +220,12 @@ export async function markObservationFailed(localId: number): Promise<void> {
 }
 
 export async function getPendingCount(): Promise<number> {
-  const pending = await getPendingObservations();
-  const pendingAnimals = await getPendingAnimalCreates();
-  return pending.length + pendingAnimals.length;
+  const [pending, pendingAnimals, pendingCovers] = await Promise.all([
+    getPendingObservations(),
+    getPendingAnimalCreates(),
+    getPendingCoverReadings(),
+  ]);
+  return pending.length + pendingAnimals.length + pendingCovers.length;
 }
 
 export async function getLastSyncedAt(): Promise<string | null> {
@@ -407,4 +419,61 @@ export async function getPhotoForObservation(observationLocalId: number): Promis
   const results = await db.getAllFromIndex('pending_photos', 'by_observation', observationLocalId);
   const pending = results.find((p) => p.sync_status === 'pending' || p.sync_status === 'failed');
   return pending?.blob ?? null;
+}
+
+// ── Pending Cover Readings (offline pasture-cover logging) ───────────────────
+
+export interface PendingCoverReading {
+  local_id?: number;
+  farm_slug: string;
+  camp_id: string;
+  cover_category: 'Good' | 'Fair' | 'Poor';
+  created_at: string; // ISO
+  photo_blob?: Blob;
+  // Populated after a successful cover-reading POST so a subsequent photo
+  // attachment PATCH can retry without re-creating the reading row.
+  server_reading_id?: string;
+  sync_status: 'pending' | 'synced' | 'failed';
+}
+
+export async function queueCoverReading(
+  reading: Omit<PendingCoverReading, 'local_id'>,
+): Promise<number> {
+  const db = await getDB();
+  return db.add('pending_cover_readings', reading) as Promise<number>;
+}
+
+export async function getPendingCoverReadings(): Promise<PendingCoverReading[]> {
+  const db = await getDB();
+  const all = await db.getAll('pending_cover_readings');
+  return all.filter((r) => r.sync_status === 'pending' || r.sync_status === 'failed');
+}
+
+export async function markCoverReadingSynced(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_cover_readings', localId);
+  if (rec) {
+    await db.put('pending_cover_readings', { ...rec, sync_status: 'synced' });
+  }
+}
+
+export async function markCoverReadingFailed(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_cover_readings', localId);
+  if (rec) {
+    await db.put('pending_cover_readings', { ...rec, sync_status: 'failed' });
+  }
+}
+
+export async function markCoverReadingPosted(localId: number, serverId: string): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_cover_readings', localId);
+  if (rec) {
+    await db.put('pending_cover_readings', { ...rec, server_reading_id: serverId });
+  }
+}
+
+export async function getPendingCoverReadingCount(): Promise<number> {
+  const readings = await getPendingCoverReadings();
+  return readings.length;
 }
