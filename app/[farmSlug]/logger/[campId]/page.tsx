@@ -16,7 +16,7 @@ import MobMoveModal from "@/components/logger/MobMoveModal";
 import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
-import { getAnimalsByCampCached, queueObservation, queuePhoto, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
+import { getAnimalsByCampCached, queueObservation, queuePhoto, queueCoverReading, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -278,6 +278,20 @@ export default function CampInspectionPage({
     });
     if (data.photoBlob) await queuePhoto(localId, data.photoBlob).catch(() => {/* non-fatal */});
     markAnimalFlagged(selectedAnimalId);
+    refreshPendingCount();
+    if (isOnline) syncNow();
+    setActiveModal(null);
+  }
+
+  async function handleCoverSubmit(data: { coverCategory: "Good" | "Fair" | "Poor"; photoBlob: Blob | null }) {
+    await queueCoverReading({
+      farm_slug: farmSlug,
+      camp_id: decodedId,
+      cover_category: data.coverCategory,
+      created_at: new Date().toISOString(),
+      photo_blob: data.photoBlob ?? undefined,
+      sync_status: "pending",
+    });
     refreshPendingCount();
     if (isOnline) syncNow();
     setActiveModal(null);
@@ -595,10 +609,8 @@ export default function CampInspectionPage({
       )}
       {activeModal === "cover" && (
         <CampCoverLogForm
-          campId={decodedId}
           campName={camp.camp_name}
-          farmSlug={farmSlug}
-          onSuccess={() => setActiveModal(null)}
+          onSubmit={handleCoverSubmit}
           onCancel={() => setActiveModal(null)}
         />
       )}

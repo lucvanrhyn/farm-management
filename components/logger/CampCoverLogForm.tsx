@@ -2,13 +2,10 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
-import { queuePhoto } from "@/lib/offline-store";
 
 interface Props {
-  campId: string;
   campName: string;
-  farmSlug: string;
-  onSuccess: () => void;
+  onSubmit: (data: { coverCategory: CoverCategory; photoBlob: Blob | null }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -76,7 +73,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
   );
 }
 
-export default function CampCoverLogForm({ campId, campName, farmSlug, onSuccess, onCancel }: Props) {
+export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props) {
   const [coverCategory, setCoverCategory] = useState<CoverCategory | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -88,28 +85,11 @@ export default function CampCoverLogForm({ campId, campName, farmSlug, onSuccess
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch(`/api/${farmSlug}/camps/${campId}/cover`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coverCategory,
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        setError(e.error ?? "Failed to save — try again");
-        return;
-      }
-      const resData = await res.json().catch(() => ({}));
-      const recordId = resData.reading?.id ?? resData.id;
-      if (photoBlob && recordId) {
-        await queuePhoto(String(recordId), photoBlob).catch(() => {/* non-fatal */});
-      }
+      await onSubmit({ coverCategory, photoBlob });
       setCoverCategory(null);
       setPhotoBlob(null);
-      onSuccess();
     } catch {
-      setError("Network error — try again");
+      setError("Failed to queue — try again");
     } finally {
       setSubmitting(false);
     }
