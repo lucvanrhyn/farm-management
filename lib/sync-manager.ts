@@ -11,6 +11,8 @@ import {
   markAnimalCreateFailed,
   getPendingPhotos,
   markPhotoSynced,
+  markPhotoUploaded,
+  markPhotoFailed,
   setLastSyncedAt,
   clearPendingAnimalUpdate,
   PendingObservation,
@@ -196,33 +198,52 @@ async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<
   const pendingPhotos = await getPendingPhotos();
   for (const photo of pendingPhotos) {
     try {
-      const formData = new FormData();
-      formData.append('file', photo.blob, `photo-${photo.local_id}.jpg`);
-      const res = await fetch('/api/photos/upload', { method: 'POST', body: formData });
-      if (!res.ok) continue;
+      // Legacy rows from before the type narrowing may have a string id.
+      // They are unrecoverable (the server already created the observation
+      // without an attachment URL), so mark failed and move on.
+      if (typeof photo.observation_local_id !== 'number') {
+        await markPhotoFailed(photo.local_id!);
+        continue;
+      }
 
-      const { url } = await res.json();
+      // If a previous sync cycle uploaded the blob but failed the PATCH,
+      // blob_url is already set — skip the upload to avoid duplicate blobs.
+      let blobUrl = photo.blob_url;
+      if (!blobUrl) {
+        const formData = new FormData();
+        formData.append('file', photo.blob, `photo-${photo.local_id}.jpg`);
+        const uploadRes = await fetch('/api/photos/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) continue; // leave pending, retry next cycle
 
-      // Resolve the server observation ID from the local_id map
-      const observationLocalId = photo.observation_local_id;
-      const serverId =
-        typeof observationLocalId === 'number'
-          ? localToServerId.get(observationLocalId)
-          : undefined;
+        const uploadData = await uploadRes.json();
+        blobUrl = uploadData.url as string;
+        // Persist the URL so retries skip re-upload even if PATCH fails below.
+        await markPhotoUploaded(photo.local_id!, blobUrl);
+      }
 
-      if (serverId) {
-        const patchRes = await fetch(`/api/observations/${serverId}/attachment`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attachmentUrl: url }),
-        });
-        // If the PATCH fails, don't mark as synced — retry on next sync cycle
-        if (!patchRes.ok) continue;
+      // Resolve the server observation ID. If the corresponding observation
+      // sync failed this cycle, serverId will be missing — leave the photo
+      // as pending so it retries alongside the observation on the next cycle.
+      const serverId = localToServerId.get(photo.observation_local_id);
+      if (!serverId) continue;
+
+      const patchRes = await fetch(`/api/observations/${serverId}/attachment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attachmentUrl: blobUrl }),
+      });
+
+      if (!patchRes.ok) {
+        // PATCH failed — mark as failed so it retries, but blob_url is
+        // already persisted so the next retry skips the upload step.
+        await markPhotoFailed(photo.local_id!);
+        continue;
       }
 
       await markPhotoSynced(photo.local_id!);
     } catch (e) {
       console.error('Photo sync failed', e);
+      await markPhotoFailed(photo.local_id!);
     }
   }
 }
