@@ -18,14 +18,17 @@ export default defineConfig({
     globals: true,
     setupFiles: ['__tests__/setup-jsdom.ts'],
     // Exclude git worktrees — sibling sessions may check out the repo into
-    // `.worktrees/<name>/` (Luc's perf-foundation flow); those directories
-    // contain their own `__tests__/**` which pollute the main-branch run.
+    // `.worktrees/<name>/` (manual perf-foundation flow) or
+    // `.claude/worktrees/agent-*/` (harness-created isolated agent worktrees).
+    // Both can contain their own `__tests__/**` that would pollute the
+    // main-branch run with duplicate/stale suites.
     // Also exclude vitest/ts defaults kept explicitly.
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
       '**/.worktrees/**',
+      '**/.claude/worktrees/**',
     ],
     coverage: {
       provider: 'v8',
