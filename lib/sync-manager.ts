@@ -37,10 +37,13 @@ interface ServerCampCondition {
 // Pull /api/animals in fixed-size batches and upsert each batch into IDB
 // as it arrives. Paired with the cursor pagination on the server side, this
 // keeps peak memory bounded on large herds and lets the logger paint the
-// first screenful of animals before the full list lands. Batch size matches
-// the server DEFAULT_LIMIT so a typical small herd still completes in a
-// single request.
-const ANIMALS_PAGE_SIZE = 500;
+// first screenful of animals before the full list lands.
+//
+// P2 perf de-dupe (2026-04-23): raised from 500 → 1000 so that herds up to
+// ~1000 animals (including Trio B's 874) fit in a single round trip instead
+// of two sequential pages on every cold visit to /logger. Pagination remains
+// the correct fallback for farms larger than a single page.
+const ANIMALS_PAGE_SIZE = 1000;
 
 interface AnimalsPage {
   items: PrismaAnimal[];
@@ -67,8 +70,8 @@ function mapPrismaAnimal(a: PrismaAnimal): Animal {
 async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
   const collected: Animal[] = [];
   let cursor: string | null = null;
-  // Defensive upper bound on loop iterations. At 500 rows per page this
-  // caps at 50k animals per sync — well beyond any realistic SA herd,
+  // Defensive upper bound on loop iterations. At 1000 rows per page this
+  // caps at 100k animals per sync — well beyond any realistic SA herd,
   // and guarantees we never spin forever if the server mis-reports
   // `hasMore`.
   const MAX_PAGES = 100;
