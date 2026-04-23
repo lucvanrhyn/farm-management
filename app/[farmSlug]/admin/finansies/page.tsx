@@ -16,19 +16,25 @@ import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
+// Finance transactions page size. 50 keeps the initial HTML payload bounded
+// while the visible ledger (TransactionLedger) is ordered newest-first, so
+// users looking at recent activity never need to "Load more". The ledger's
+// in-page filters work over whatever window the SSR returned; streaming
+// older transactions via cursor-pagination is tracked as a follow-up.
+const PAGE_SIZE = 50;
 
 export default async function FinansiesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
-  searchParams?: Promise<{ from?: string; to?: string; cogScope?: string }>;
+  searchParams?: Promise<{ from?: string; to?: string; cogScope?: string; cursor?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const { farmSlug } = await params;
-  const { from, to, cogScope } = searchParams ? await searchParams : {};
+  const { from, to, cogScope, cursor } = searchParams ? await searchParams : {};
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
@@ -50,7 +56,17 @@ export default async function FinansiesPage({
   }
 
   const [transactions, categories] = await Promise.all([
-    prisma.transaction.findMany({ orderBy: { date: "desc" } }),
+    prisma.transaction.findMany({
+      // Newest first. Secondary sort on `id desc` gives us a deterministic
+      // total order even when two rows share the exact same `date`, which
+      // matters for stable cursor pagination.
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+      take: PAGE_SIZE,
+      ...(cursor
+        ? { cursor: { id: cursor }, skip: 1 }
+        : {}),
+    }),
+    // audit-allow-findmany: category list is bounded (~30 default categories per farm).
     prisma.transactionCategory.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
   ]);
 

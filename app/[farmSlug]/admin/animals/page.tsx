@@ -9,13 +9,21 @@ import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 
+// SSR page size. 50 keeps the initial HTML payload under ~100 KB for trio-b
+// (measured baseline: 557 KB with the old unbounded findMany). The matching
+// /api/animals endpoint already supports `?limit=<n>&cursor=<animalId>` for
+// subsequent batches so the client "Load more" control streams the rest.
+const PAGE_SIZE = 50;
 
 export default async function AdminAnimalsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ cursor?: string }>;
 }) {
   const { farmSlug } = await params;
+  const { cursor } = (searchParams ? await searchParams : {}) ?? {};
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
@@ -27,10 +35,26 @@ export default async function AdminAnimalsPage({
 
   const mode = await getFarmMode(farmSlug);
 
+  // Cursor pagination over `animalId` (unique). We order only by `animalId`
+  // when paginating so a single monotonic cursor is sufficient — matching
+  // the shape of /api/animals?cursor=<animalId>. When there is no cursor we
+  // can still keep the richer `[category, animalId]` sort for the first
+  // page because the cursor is empty.
   const [animals, prismaCamps, withdrawalAnimals, prismaMobs] = await Promise.all([
-    prisma.animal.findMany({ where: { species: mode }, orderBy: [{ category: "asc" }, { animalId: "asc" }] }),
+    prisma.animal.findMany({
+      where: { species: mode },
+      orderBy: cursor
+        ? { animalId: "asc" }
+        : [{ category: "asc" }, { animalId: "asc" }],
+      take: PAGE_SIZE,
+      ...(cursor
+        ? { cursor: { animalId: cursor }, skip: 1 }
+        : {}),
+    }),
+    // audit-allow-findmany: camp list is per-tenant and bounded (trio-b ≈ 36 camps); needed for filter dropdown.
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     getAnimalsInWithdrawal(prisma),
+    // audit-allow-findmany: mob list is per-tenant and bounded (≤20 typical); needed for table column map.
     prisma.mob.findMany({ orderBy: { name: "asc" } }),
   ]);
 
@@ -49,13 +73,19 @@ export default async function AdminAnimalsPage({
     current_camp: m.currentCamp,
   }));
 
+  // A full page came back ⇒ there is probably more. The API endpoint returns
+  // a definitive `hasMore`, so the client can drop the button the moment it
+  // runs out. Pass `nextCursor` only when we saw a full page.
+  const nextCursor =
+    animals.length === PAGE_SIZE ? animals[animals.length - 1].animalId : null;
+
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
           <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-            {animals.filter((a) => a.status !== "Deceased").length.toLocaleString()} active · {animals.filter((a) => a.status === "Deceased").length.toLocaleString()} deceased
+            Showing first {animals.length.toLocaleString()} · scroll or Load more to see the rest
           </p>
         </div>
         <div className="flex gap-2 items-center">
@@ -64,7 +94,15 @@ export default async function AdminAnimalsPage({
           <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
         </div>
       </div>
-      <AnimalsTable animals={animals as unknown as PrismaAnimal[]} camps={camps} farmSlug={farmSlug} withdrawalIds={withdrawalIds} mobs={mobs} />
+      <AnimalsTable
+        animals={animals as unknown as PrismaAnimal[]}
+        camps={camps}
+        farmSlug={farmSlug}
+        withdrawalIds={withdrawalIds}
+        mobs={mobs}
+        initialNextCursor={nextCursor}
+        species={mode}
+      />
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>

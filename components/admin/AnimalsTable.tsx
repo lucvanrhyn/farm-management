@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useDeferredValue } from "react";
+import { useState, useMemo, useDeferredValue, useCallback } from "react";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
@@ -16,6 +16,17 @@ interface Props {
   farmSlug: string;
   withdrawalIds?: Set<string>;
   mobs?: Mob[];
+  /**
+   * Cursor (`animalId`) pointing at the first row *past* the SSR-hydrated
+   * batch. When null, there are no more rows to load. Optional so callers
+   * that haven't been migrated to cursor pagination yet still compile.
+   */
+  initialNextCursor?: string | null;
+  /**
+   * Species filter already applied server-side. Forwarded to /api/animals so
+   * the "Load more" fetch returns the same-species batch.
+   */
+  species?: string;
 }
 
 const farmInput =
@@ -23,7 +34,15 @@ const farmInput =
 const farmSelect =
   "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
 
-export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, mobs }: Props) {
+export default function AnimalsTable({
+  animals: initialAnimals,
+  camps,
+  farmSlug,
+  withdrawalIds,
+  mobs,
+  initialNextCursor,
+  species,
+}: Props) {
   const { mode } = useFarmModeSafe();
   const [tab, setTab] = useState<"active" | "deceased">("active");
   const [search, setSearch] = useState("");
@@ -33,6 +52,38 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
   const [sortKey, setSortKey] = useState<string>("animalId");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
+
+  // Streaming animals state: SSR hands us the first PAGE_SIZE rows plus a
+  // `nextCursor` (or null when the tenant has fewer than PAGE_SIZE). The
+  // `loadMore` handler appends subsequent pages from /api/animals and
+  // advances the cursor.
+  const [animals, setAnimals] = useState<PrismaAnimal[]>(initialAnimals);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    initialNextCursor ?? null,
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const url = new URL("/api/animals", window.location.origin);
+      url.searchParams.set("limit", String(PAGE_SIZE));
+      url.searchParams.set("cursor", nextCursor);
+      if (species) url.searchParams.set("species", species);
+      const res = await fetch(url.pathname + url.search);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items: PrismaAnimal[];
+        nextCursor: string | null;
+        hasMore: boolean;
+      };
+      setAnimals((prev) => [...prev, ...data.items]);
+      setNextCursor(data.hasMore ? data.nextCursor : null);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, species]);
 
   // Precompute a lowercase search index so we don't call toLowerCase() on
   // every animal on every keystroke. Keyed off `animals` identity.
@@ -340,7 +391,8 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* In-page pagination (client-side slice of the already-hydrated
+          batch) */}
       {totalPages > 1 && (
         <div className="flex items-center gap-2 justify-center">
           <button
@@ -369,6 +421,26 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
             }}
           >
             Next →
+          </button>
+        </div>
+      )}
+
+      {/* Server-side "Load more" — fetches the next cursor window from
+          /api/animals. Rendered only when the SSR page hinted there's more
+          beyond the initial PAGE_SIZE rows. */}
+      {nextCursor && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            style={{
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
+              background: "#FFFFFF",
+            }}
+          >
+            {loadingMore ? "Loading…" : `Load more (${animals.length.toLocaleString()} loaded)`}
           </button>
         </div>
       )}
