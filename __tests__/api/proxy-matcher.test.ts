@@ -26,7 +26,7 @@ import * as path from "node:path";
 let matcherRegex: RegExp;
 
 beforeAll(() => {
-  const proxyPath = path.resolve(__dirname, "../../middleware.ts");
+  const proxyPath = path.resolve(__dirname, "../../proxy.ts");
   const src = fs.readFileSync(proxyPath, "utf8");
 
   // Extract the first string inside config.matcher: ["..."]
