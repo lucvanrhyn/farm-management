@@ -5,13 +5,26 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import ObservationsPageClient from "./ObservationsPageClient";
 
+// Page size for the animals autocomplete prefetch that's serialised into the
+// observation-create modal. The visible observations timeline itself is
+// paginated client-side via /api/observations?limit=50&offset=…, so the only
+// SSR payload driver on this page is this animals prefetch. Without a cap,
+// trio-b's 874 Active animals add ~120 KB to the HTML document. Cap at 50
+// here and let the modal fetch additional rows on demand via /api/animals.
+// TODO(modal): wire the modal's animal picker to /api/animals?search=<q>
+// so users can still target animals outside the first 50 without a page
+// reload. Today the modal falls back to the raw animalId text field.
+const PAGE_SIZE = 50;
 
 export default async function AdminObservationsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
+  searchParams?: Promise<{ cursor?: string }>;
 }) {
   const { farmSlug } = await params;
+  const { cursor } = (searchParams ? await searchParams : {}) ?? {};
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
@@ -31,8 +44,17 @@ export default async function AdminObservationsPage({
   const mode = await getFarmMode(farmSlug);
 
   const [prismaCamps, prismaAnimals] = await Promise.all([
+    // audit-allow-findmany: camps are bounded per tenant (trio-b ≈ 36); dropdown needs full list.
     prisma.camp.findMany({ orderBy: { campName: "asc" }, select: { campId: true, campName: true } }),
-    prisma.animal.findMany({ where: { status: "Active", species: mode }, orderBy: { animalId: "asc" }, select: { animalId: true, currentCamp: true } }),
+    prisma.animal.findMany({
+      where: { status: "Active", species: mode },
+      orderBy: { animalId: "asc" },
+      take: PAGE_SIZE,
+      select: { animalId: true, currentCamp: true },
+      ...(cursor
+        ? { cursor: { animalId: cursor }, skip: 1 }
+        : {}),
+    }),
   ]);
 
   const camps = prismaCamps.map((c) => ({ id: c.campId, name: c.campName }));
