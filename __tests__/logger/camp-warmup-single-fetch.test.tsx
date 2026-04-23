@@ -30,22 +30,19 @@ const mockContextRef: {
   heroImageUrl: string | null;
 } = { camps: [], campsLoaded: false, heroImageUrl: null };
 
-vi.mock('@/components/logger/OfflineProvider', () => {
-  const React = require('react') as typeof import('react');
-  return {
-    OfflineProvider: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
-    useOffline: () => mockContextRef,
-  };
-});
+vi.mock('@/components/logger/OfflineProvider', () => ({
+  OfflineProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  useOffline: () => mockContextRef,
+}));
 
 // Next.js <Image> needs a stub because jsdom has no image loader.
 vi.mock('next/image', () => ({
   __esModule: true,
   default: (props: Record<string, unknown>) => {
     const { src, alt, ...rest } = props as { src: string; alt: string };
-    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+    // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={alt} {...(rest as Record<string, unknown>)} />;
   },
 }));
