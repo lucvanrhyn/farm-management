@@ -4,7 +4,6 @@ import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useOffline } from "./OfflineProvider";
 import { getGrazingDot, relativeTime } from "@/lib/utils";
-import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
 
@@ -92,15 +91,6 @@ export default function CampSelector() {
               boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,248,235,0.15)',
             }}
           >
-            <GlowingEffect
-              variant="white"
-              disabled={false}
-              glow={true}
-              spread={40}
-              proximity={64}
-              inactiveZone={0.01}
-              borderWidth={2}
-            />
             {/* Grazing status dot */}
             <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${dotColor}`} />
 

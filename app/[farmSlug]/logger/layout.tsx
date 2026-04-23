@@ -24,20 +24,63 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    // Pre-fetch all camp pages into the SW "pages" cache while online so they
-    // load instantly offline — no manual prep required by the user.
-    if (warmedUp.current || !navigator.onLine) return;
+    // Pre-fetch camp pages into the SW "pages" cache so they load instantly
+    // offline. Root-cause-fix for a previous fan-out that fired N parallel
+    // full-HTML fetches on every layout mount:
+    //   1. Guard with sessionStorage so it runs once per tab, not per nav.
+    //   2. Skip on saveData / slow connections and when offline.
+    //   3. Walk sequentially inside requestIdleCallback so the real navigation
+    //      never competes with the warm-up queue.
+    if (warmedUp.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    const sessionKey = `farmtrack:loggerWarmed:${farmSlug}`;
+    try {
+      if (sessionStorage.getItem(sessionKey) === "1") {
+        warmedUp.current = true;
+        return;
+      }
+    } catch { /* sessionStorage may be unavailable */ }
+
+    const conn = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (conn?.saveData) return;
+    if (conn?.effectiveType && /(^|-)2g$/.test(conn.effectiveType)) return;
+
     warmedUp.current = true;
+
+    let cancelled = false;
+    const schedule = (cb: () => void) => {
+      const ric = (window as Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      }).requestIdleCallback;
+      if (ric) ric(cb, { timeout: 2000 });
+      else setTimeout(cb, 0);
+    };
+
     fetch("/api/camps")
       .then((r) => r.ok ? r.json() : [])
       .then((camps: Camp[]) => {
-        camps.forEach((camp) => {
+        if (cancelled) return;
+        let i = 0;
+        const warmNext = () => {
+          if (cancelled || i >= camps.length) {
+            try { sessionStorage.setItem(sessionKey, "1"); } catch { /* ignore */ }
+            return;
+          }
+          const camp = camps[i++];
           fetch(`/${farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`, {
             credentials: "same-origin",
-          }).catch(() => {});
-        });
+          })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) schedule(warmNext); });
+        };
+        schedule(warmNext);
       })
       .catch(() => {});
+
+    return () => { cancelled = true; };
   }, [farmSlug]);
 
   return (

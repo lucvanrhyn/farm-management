@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
@@ -34,26 +34,47 @@ export default function AnimalsTable({ animals, camps, farmSlug, withdrawalIds, 
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
 
-  const activeAnimals = useMemo(() => animals.filter((a) => a.status !== "Deceased"), [animals]);
-  const deceasedAnimals = useMemo(() => animals.filter((a) => a.status === "Deceased"), [animals]);
+  // Precompute a lowercase search index so we don't call toLowerCase() on
+  // every animal on every keystroke. Keyed off `animals` identity.
+  const indexed = useMemo(
+    () =>
+      animals.map((a) => ({
+        animal: a,
+        idLower: a.animalId.toLowerCase(),
+        nameLower: (a.name ?? "").toLowerCase(),
+      })),
+    [animals],
+  );
+  const activeAnimals = useMemo(
+    () => indexed.filter((e) => e.animal.status !== "Deceased"),
+    [indexed],
+  );
+  const deceasedAnimals = useMemo(
+    () => indexed.filter((e) => e.animal.status === "Deceased"),
+    [indexed],
+  );
+
+  // Defer the search query so the input stays responsive under large lists.
+  const deferredSearch = useDeferredValue(search);
 
   const filtered = useMemo(() => {
     const source = tab === "deceased" ? deceasedAnimals : activeAnimals;
-    const q = search.toLowerCase();
+    const q = deferredSearch.toLowerCase();
     return source
-      .filter((a) => {
-        if (q && !a.animalId.toLowerCase().includes(q) && !(a.name ?? "").toLowerCase().includes(q)) return false;
+      .filter(({ animal: a, idLower, nameLower }) => {
+        if (q && !idLower.includes(q) && !nameLower.includes(q)) return false;
         if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
         if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
         if (tab === "active" && statusFilter !== "all" && a.status !== statusFilter) return false;
         return true;
       })
+      .map((e) => e.animal)
       .sort((a, b) => {
         const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? "");
         const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [tab, activeAnimals, deceasedAnimals, search, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
+  }, [tab, activeAnimals, deceasedAnimals, deferredSearch, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
