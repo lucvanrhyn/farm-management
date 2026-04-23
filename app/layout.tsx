@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
-import { SWRegistrar } from "@/components/SWRegistrar";
-import { ReportWebVitals } from "@/components/ReportWebVitals";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+
+/**
+ * Minimal root layout. ONLY renders <html>, <body>, fonts and metadata.
+ *
+ * The SessionProvider, service-worker registrar and web-vitals reporter
+ * used to live here, which meant every route — including the ~715 KB
+ * login page — bundled the full app shell.
+ *
+ * Heavy providers now live in <AppShell> (components/AppShell.tsx) and
+ * are only pulled into non-auth route subtrees via their own layout
+ * files. `/login`, `/register` and `/verify-email` live under the
+ * `(auth)` route group (see app/(auth)/layout.tsx) and therefore never
+ * import SessionProvider / SWRegistrar / ReportWebVitals.
+ */
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,20 +58,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession(authOptions);
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
-        <SWRegistrar />
-        <ReportWebVitals />
-        <Providers session={session}>{children}</Providers>
+        {children}
       </body>
     </html>
   );
