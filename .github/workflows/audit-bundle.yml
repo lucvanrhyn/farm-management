@@ -1,0 +1,45 @@
+name: Bundle budget
+
+# Enforces the first-load JS budgets declared in scripts/audit-bundle.ts.
+# Fails CI when /login or /register regress past their brotli ceilings.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  audit-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build with Webpack
+        # Turbopack breaks Serwist — matches the workflow used locally.
+        run: pnpm build --webpack
+        env:
+          # Build-time only. The audit just reads .next output so no
+          # real DB or secrets are required; stub everything that
+          # prisma generate / next build expect.
+          DATABASE_URL: "file:./prisma/dev.db"
+          TURSO_DATABASE_URL: "libsql://stub"
+          TURSO_AUTH_TOKEN: "stub"
+          NEXTAUTH_SECRET: "stub-ci-secret"
+          NEXTAUTH_URL: "http://localhost:3000"
+
+      - name: Audit first-load JS budgets
+        run: pnpm tsx scripts/audit-bundle.ts
