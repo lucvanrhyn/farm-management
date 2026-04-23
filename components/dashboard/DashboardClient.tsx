@@ -252,11 +252,24 @@ export default function DashboardClient({
   const [conditionsLoading, setConditionsLoading] = useState(true);
 
   useEffect(() => {
+    // /api/camps/status is server-cached for 60s (see lib/server/cached.ts).
+    // Polling faster than the cache TTL just burns requests without ever
+    // seeing fresh data.
+    const POLL_INTERVAL_MS = 60_000;
+    let lastPayload = "";
+
     function fetchConditions() {
+      // Skip while the tab is hidden — no user to show updates to.
+      if (typeof document !== "undefined" && document.hidden) return;
       fetch("/api/camps/status")
         .then((r) => r.ok ? r.json() : {})
         .then((data) => {
           setConditionsError(false);
+          // Preserve referential identity when nothing changed so React can
+          // bail out and SchematicMap / side panel don't re-render.
+          const serialized = JSON.stringify(data ?? {});
+          if (serialized === lastPayload) return;
+          lastPayload = serialized;
           setLiveConditions(data ?? {});
           setConditionsLoading(false);
         })
@@ -266,8 +279,14 @@ export default function DashboardClient({
         });
     }
     fetchConditions();
-    const interval = setInterval(fetchConditions, 10_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchConditions, POLL_INTERVAL_MS);
+    // Refresh immediately when the user tabs back in.
+    const onVisible = () => { if (!document.hidden) fetchConditions(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   // Reset zoom when switching views
