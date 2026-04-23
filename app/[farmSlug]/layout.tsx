@@ -2,6 +2,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { FarmModeProvider } from "@/lib/farm-mode";
 import { getCachedFarmSpeciesSettings } from "@/lib/server/cached";
 import { isCacheEnabled } from "@/lib/flags";
+import AppShell from "@/components/AppShell";
 
 export default async function FarmSlugLayout({
   children,
@@ -35,9 +36,15 @@ export default async function FarmSlugLayout({
     // Fail-open: default to cattle-only if species settings unavailable
   }
 
+  // AppShell wraps in SessionProvider + SWRegistrar + ReportWebVitals.
+  // Added as part of the P5 perf work: the root layout no longer ships
+  // the authenticated shell to unauthenticated routes. All farmSlug
+  // pages need the session context (useSession in logger).
   return (
-    <FarmModeProvider farmSlug={farmSlug} enabledSpecies={enabledSpecies}>
-      {children}
-    </FarmModeProvider>
+    <AppShell>
+      <FarmModeProvider farmSlug={farmSlug} enabledSpecies={enabledSpecies}>
+        {children}
+      </FarmModeProvider>
+    </AppShell>
   );
 }

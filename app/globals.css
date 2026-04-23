@@ -102,6 +102,24 @@ body {
   background: rgba(122,92,30,0.05) !important;
 }
 
+/* Auth pages entrance animations — CSS-only replacement for
+   framer-motion on /login and /register. Keeping the JS bundle under
+   the 100 KB brotli budget is worth the small CSS cost. */
+@keyframes authRiseIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes authPopIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.auth-rise-in {
+  animation: authRiseIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.auth-pop-in {
+  animation: authPopIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 /* Warm farm design tokens (admin light palette — matches website v2) */
 :root {
   --farm-bg:      #FAFAF8;
