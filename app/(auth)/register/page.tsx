@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+
+// framer-motion removed for bundle-budget compliance — see P5 perf
+// work. CSS-based fade/rise-in is defined in app/globals.css as
+// `.auth-rise-in` and `.auth-pop-in`.
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -89,10 +92,8 @@ export default function RegisterPage() {
         className="min-h-screen flex flex-col items-center justify-center px-5"
         style={{ background: "#1A1510" }}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm px-8 py-10 flex flex-col items-center gap-6"
+        <div
+          className="w-full max-w-sm px-8 py-10 flex flex-col items-center gap-6 auth-pop-in"
           style={{
             borderRadius: "2rem",
             background: "#241C14",
@@ -150,7 +151,7 @@ export default function RegisterPage() {
           >
             Back to login
           </Link>
-        </motion.div>
+        </div>
       </div>
     );
   }
@@ -171,12 +172,9 @@ export default function RegisterPage() {
       />
 
       {/* Logo */}
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.05 }}
-        className="relative flex flex-col items-center gap-1 mb-6"
-        style={{ zIndex: 10 }}
+      <div
+        className="relative flex flex-col items-center gap-1 mb-6 auth-rise-in"
+        style={{ zIndex: 10, animationDelay: "0.05s" }}
       >
         <h1
           style={{
@@ -206,16 +204,14 @@ export default function RegisterPage() {
           <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: "rgba(196,144,48,0.40)" }} />
           <div style={{ height: "1px", width: "32px", background: "rgba(196,144,48,0.25)" }} />
         </div>
-      </motion.div>
+      </div>
 
       {/* Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 32 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 180, damping: 22, delay: 0.12 }}
-        className="relative w-full max-w-sm px-8 py-8 flex flex-col gap-6"
+      <div
+        className="relative w-full max-w-sm px-8 py-8 flex flex-col gap-6 auth-rise-in"
         style={{
           zIndex: 10,
+          animationDelay: "0.12s",
           borderRadius: "2rem",
           background: "#241C14",
           border: "1px solid rgba(196,144,48,0.18)",
@@ -383,7 +379,7 @@ export default function RegisterPage() {
             Sign in
           </Link>
         </p>
-      </motion.div>
+      </div>
 
       <footer
         className="mt-6 text-xs text-center"
