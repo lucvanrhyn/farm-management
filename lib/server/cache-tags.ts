@@ -6,14 +6,16 @@
  * codebase — import from here.
  *
  * Tag taxonomy:
- *   farm-<slug>              — broad invalidation (use only for global ops like reset)
- *   farm-<slug>-dashboard    — dashboard aggregates + alert counts
- *   farm-<slug>-camps        — camp list, conditions, cover
- *   farm-<slug>-animals      — animal roster, repro stats
- *   farm-<slug>-observations — observation feed, veld assessments
- *   farm-<slug>-settings     — farm settings, species settings, alert thresholds
- *   farm-<slug>-tasks        — tasks + occurrences
- *   farm-<slug>-alerts       — alert rules + notification state
+ *   farm-<slug>                — broad invalidation (use only for global ops like reset)
+ *   farm-<slug>-dashboard      — dashboard aggregates + alert counts
+ *   farm-<slug>-camps          — camp list, conditions, cover
+ *   farm-<slug>-animals        — animal roster, repro stats
+ *   farm-<slug>-observations   — observation feed, veld assessments
+ *   farm-<slug>-settings       — farm settings, species settings, alert thresholds
+ *   farm-<slug>-tasks          — tasks + occurrences
+ *   farm-<slug>-alerts         — alert rules + notification state
+ *   farm-<slug>-notifications  — unread notification feed served to /api/notifications
+ *   user-notifications-<email> — per-user overlay for mark-read mutations
  */
 
 export type FarmCacheScope =
@@ -24,7 +26,8 @@ export type FarmCacheScope =
   | "observations"
   | "settings"
   | "tasks"
-  | "alerts";
+  | "alerts"
+  | "notifications";
 
 /**
  * Build a farm-scoped cache tag.
@@ -68,3 +71,21 @@ export const alertWriteTags = (slug: string) =>
 
 export const rotationWriteTags = (slug: string) =>
   [farmTag(slug, "camps"), farmTag(slug, "dashboard")] as const;
+
+/**
+ * Per-user notification tag.
+ *
+ * The notification feed served by `/api/notifications` is both farm-scoped
+ * (cron writes new rows for the whole farm) and user-scoped (the mark-read
+ * mutation only affects the current user's view). We tag cache entries with
+ * BOTH so that either class of write can invalidate the correct slice.
+ */
+export function notificationTag(userEmail: string): string {
+  return `user-notifications-${userEmail}`;
+}
+
+export const notificationWriteTags = (slug: string, userEmail?: string) => {
+  const base: string[] = [farmTag(slug, "notifications")];
+  if (userEmail) base.push(notificationTag(userEmail));
+  return base as readonly string[];
+};
