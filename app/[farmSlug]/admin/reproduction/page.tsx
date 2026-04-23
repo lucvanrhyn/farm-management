@@ -98,6 +98,10 @@ export default async function ReproductionPage({
   const copy = COPY_BY_MODE[mode] ?? COPY_BY_MODE.cattle;
 
   // Pre-fetch animal IDs for the active species so all repro queries can be scoped.
+  // This is an analytics-scoping scan (not a rendered list), so pagination
+  // would break stats computation. The `select: { animalId: true }` keeps
+  // the payload tiny (~20 bytes per animal).
+  // audit-allow-findmany: species-scoped ID prefetch for reproduction analytics.
   const speciesAnimals = await prisma.animal.findMany({
     where: { species: mode },
     select: { animalId: true },
@@ -133,6 +137,7 @@ export default async function ReproductionPage({
       take: 15,
       select: { id: true, type: true, animalId: true, campId: true, observedAt: true, loggedBy: true, details: true },
     }),
+    // audit-allow-findmany: bounded per-tenant camp list for name lookup (~36 camps).
     prisma.camp.findMany({ select: { campId: true, campName: true } }),
   ]);
 

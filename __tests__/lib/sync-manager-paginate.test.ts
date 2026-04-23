@@ -102,7 +102,7 @@ describe('refreshCachedData — animals pagination', () => {
 
     const animalsCalls = fetchCalls.filter((c) => c.url.startsWith('/api/animals'));
     expect(animalsCalls).toHaveLength(1);
-    expect(animalsCalls[0].url).toContain('limit=500');
+    expect(animalsCalls[0].url).toContain('limit=1000');
     expect(seededAnimalBatches).toHaveLength(1);
     expect(seededAnimalBatches[0]).toHaveLength(2);
   });

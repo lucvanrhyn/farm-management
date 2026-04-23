@@ -5,21 +5,24 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { getCachedCampList } from "@/lib/server/cached";
 import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
+import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withServerTiming(async () => {
+    const session = await timeAsync("session", () => getServerSession(authOptions));
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+    const db = await getPrismaWithAuth(session);
+    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
 
-  const { searchParams } = new URL(req.url);
-  const species = searchParams.get("species") ?? undefined;
+    const { searchParams } = new URL(req.url);
+    const species = searchParams.get("species") ?? undefined;
 
-  const result = await getCachedCampList(db.slug, species);
-  return NextResponse.json(result);
+    const result = await timeAsync("query", () => getCachedCampList(db.slug, species));
+    return NextResponse.json(result);
+  });
 }
 
 export async function POST(req: NextRequest) {

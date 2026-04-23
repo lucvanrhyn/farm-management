@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { OfflineProvider, useOffline } from '@/components/logger/OfflineProvider';
 import { useEffect, useRef } from 'react';
-import type { Camp } from '@/lib/types';
 
 // Hero image lives inside OfflineProvider so it can be pulled from the
 // IndexedDB cache — no duplicate /api/farm fetch on every logger mount.
@@ -34,6 +33,13 @@ function LoggerHero() {
 }
 
 function CampWarmup({ farmSlug }: { farmSlug: string }) {
+  // P2 perf de-dupe (2026-04-23): previously this component fired its own
+  // `GET /api/camps` in parallel with the one OfflineProvider's
+  // refreshCachedData triggers. On a cold visit to /logger the two
+  // requests raced (measured 2535ms + 3125ms on Trio B). The fix is to
+  // read camps from the same OfflineProvider context that drives the
+  // rest of the logger — a single authoritative fetch per cold visit.
+  const { camps, campsLoaded } = useOffline();
   const warmedUp = useRef(false);
   useEffect(() => {
     // Pre-fetch camp pages into the SW "pages" cache so they load instantly
@@ -44,6 +50,11 @@ function CampWarmup({ farmSlug }: { farmSlug: string }) {
     //   3. Walk sequentially inside requestIdleCallback so the real navigation
     //      never competes with the warm-up queue.
     if (warmedUp.current) return;
+    // Wait for the context's initial cache-read to settle. `campsLoaded` is
+    // a one-shot signal — false until the first IDB read resolves, then
+    // permanently true.
+    if (!campsLoaded) return;
+    if (camps.length === 0) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
 
     const sessionKey = `farmtrack:loggerWarmed:${farmSlug}`;
@@ -71,29 +82,26 @@ function CampWarmup({ farmSlug }: { farmSlug: string }) {
       else setTimeout(cb, 0);
     };
 
-    fetch("/api/camps")
-      .then((r) => r.ok ? r.json() : [])
-      .then((camps: Camp[]) => {
-        if (cancelled) return;
-        let i = 0;
-        const warmNext = () => {
-          if (cancelled || i >= camps.length) {
-            try { sessionStorage.setItem(sessionKey, "1"); } catch { /* ignore */ }
-            return;
-          }
-          const camp = camps[i++];
-          fetch(`/${farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`, {
-            credentials: "same-origin",
-          })
-            .catch(() => {})
-            .finally(() => { if (!cancelled) schedule(warmNext); });
-        };
-        schedule(warmNext);
+    // Snapshot the camps list so a later context update (e.g. a background
+    // refreshCachedData merging in new camp data) doesn't restart the walk.
+    const campsSnapshot = [...camps];
+    let i = 0;
+    const warmNext = () => {
+      if (cancelled || i >= campsSnapshot.length) {
+        try { sessionStorage.setItem(sessionKey, "1"); } catch { /* ignore */ }
+        return;
+      }
+      const camp = campsSnapshot[i++];
+      fetch(`/${farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`, {
+        credentials: "same-origin",
       })
-      .catch(() => {});
+        .catch(() => {})
+        .finally(() => { if (!cancelled) schedule(warmNext); });
+    };
+    schedule(warmNext);
 
     return () => { cancelled = true; };
-  }, [farmSlug]);
+  }, [farmSlug, campsLoaded, camps]);
   return null;
 }
 
