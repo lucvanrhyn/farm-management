@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
+import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
 // Pagination tunables. Default 500/request balances payload size (~100KB JSON
 // for a typical cattle row) against round-trip count on large herds. Max
@@ -12,70 +13,76 @@ const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withServerTiming(async () => {
+    const session = await timeAsync("session", () => getServerSession(authOptions));
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+    const db = await getPrismaWithAuth(session);
+    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+    const { prisma } = db;
 
-  const { searchParams } = new URL(req.url);
-  const camp = searchParams.get("camp");
-  const category = searchParams.get("category");
-  const status = searchParams.get("status") ?? "Active";
-  const species = searchParams.get("species");
+    const { searchParams } = new URL(req.url);
+    const camp = searchParams.get("camp");
+    const category = searchParams.get("category");
+    const status = searchParams.get("status") ?? "Active";
+    const species = searchParams.get("species");
 
-  // Pagination is opt-in. When neither `limit` nor `cursor` is present, the
-  // handler returns the unbounded array shape so existing callers (NVD
-  // picker, per-camp drill-down) don't break. The sync-manager and any
-  // future bulk caller passes `?limit=` to receive `{ items, nextCursor }`
-  // instead. On a large herd this lets the client stream batches rather than
-  // blocking on a single multi-MB JSON parse.
-  const limitParam = searchParams.get("limit");
-  const cursorParam = searchParams.get("cursor");
-  const paginated = limitParam !== null || cursorParam !== null;
+    // Pagination is opt-in. When neither `limit` nor `cursor` is present, the
+    // handler returns the unbounded array shape so existing callers (NVD
+    // picker, per-camp drill-down) don't break. The sync-manager and any
+    // future bulk caller passes `?limit=` to receive `{ items, nextCursor }`
+    // instead. On a large herd this lets the client stream batches rather than
+    // blocking on a single multi-MB JSON parse.
+    const limitParam = searchParams.get("limit");
+    const cursorParam = searchParams.get("cursor");
+    const paginated = limitParam !== null || cursorParam !== null;
 
-  const baseWhere = {
-    ...(camp ? { currentCamp: camp } : {}),
-    ...(category ? { category } : {}),
-    ...(status !== "all" ? { status } : {}),
-    ...(species ? { species } : {}),
-  };
+    const baseWhere = {
+      ...(camp ? { currentCamp: camp } : {}),
+      ...(category ? { category } : {}),
+      ...(status !== "all" ? { status } : {}),
+      ...(species ? { species } : {}),
+    };
 
-  if (!paginated) {
-    const animals = await prisma.animal.findMany({
-      where: baseWhere,
-      orderBy: [{ category: "asc" }, { animalId: "asc" }],
-    });
-    return NextResponse.json(animals);
-  }
+    if (!paginated) {
+      const animals = await timeAsync("query", () =>
+        prisma.animal.findMany({
+          where: baseWhere,
+          orderBy: [{ category: "asc" }, { animalId: "asc" }],
+        }),
+      );
+      return NextResponse.json(animals);
+    }
 
-  const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
-  if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
-    return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
-  }
-  const limit = Math.min(rawLimit, MAX_LIMIT);
+    const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
+    if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
+      return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+    }
+    const limit = Math.min(rawLimit, MAX_LIMIT);
 
-  // Cursor is the last `animalId` returned in the previous batch. We order
-  // ONLY by animalId when paginating (dropping the category tie-breaker) so
-  // a single monotonic cursor is sufficient. Fetch `limit + 1` rows to
-  // detect "has more" without a second COUNT round-trip.
-  const items = await prisma.animal.findMany({
-    where: {
-      ...baseWhere,
-      ...(cursorParam ? { animalId: { gt: cursorParam } } : {}),
-    },
-    orderBy: { animalId: "asc" },
-    take: limit + 1,
+    // Cursor is the last `animalId` returned in the previous batch. We order
+    // ONLY by animalId when paginating (dropping the category tie-breaker) so
+    // a single monotonic cursor is sufficient. Fetch `limit + 1` rows to
+    // detect "has more" without a second COUNT round-trip.
+    const items = await timeAsync("query", () =>
+      prisma.animal.findMany({
+        where: {
+          ...baseWhere,
+          ...(cursorParam ? { animalId: { gt: cursorParam } } : {}),
+        },
+        orderBy: { animalId: "asc" },
+        take: limit + 1,
+      }),
+    );
+
+    const hasMore = items.length > limit;
+    const trimmed = hasMore ? items.slice(0, limit) : items;
+    const nextCursor = hasMore ? trimmed[trimmed.length - 1]!.animalId : null;
+
+    return NextResponse.json({ items: trimmed, nextCursor, hasMore });
   });
-
-  const hasMore = items.length > limit;
-  const trimmed = hasMore ? items.slice(0, limit) : items;
-  const nextCursor = hasMore ? trimmed[trimmed.length - 1]!.animalId : null;
-
-  return NextResponse.json({ items: trimmed, nextCursor, hasMore });
 }
 
 export async function POST(req: NextRequest) {

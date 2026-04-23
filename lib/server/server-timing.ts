@@ -126,3 +126,48 @@ export async function timeAsync<T>(label: string, fn: () => Promise<T>): Promise
     recordTiming(label, performance.now() - start);
   }
 }
+
+// ── Route-handler integration ────────────────────────────────────────────
+
+/**
+ * Minimal shape needed from a Response-like object for header attachment.
+ * We don't import NextResponse here because this module is intentionally
+ * framework-free (used by tests and scripts as well).
+ */
+type ResponseLike = { headers: { set(name: string, value: string): void } };
+
+/**
+ * Wrap a route-handler body so it runs with a fresh timing bag and the
+ * resulting Response gets a `Server-Timing` header attached.
+ *
+ * Usage:
+ *   export async function GET(req: NextRequest) {
+ *     return withServerTiming(async () => {
+ *       // ...usual handler code...
+ *       return NextResponse.json(data);
+ *     });
+ *   }
+ *
+ * If the inner handler throws, the error propagates unchanged — we never
+ * swallow. The `Server-Timing` header is only attached on a successful
+ * response (there's no header to attach once we've thrown).
+ */
+export async function withServerTiming<T extends ResponseLike>(
+  handler: () => Promise<T>,
+): Promise<T> {
+  const bag = createTimingBag();
+  const start = performance.now();
+  const response = await runWithTimingBag(bag, handler);
+  try {
+    // Record total handler wall time as a floor reference. Written
+    // directly to the bag we own since the ALS store has been exited
+    // by the time the response resolves.
+    const total = performance.now() - start;
+    if (Number.isFinite(total)) bag["total"] = total;
+    const header = emitServerTiming(bag);
+    if (header) response.headers.set("Server-Timing", header);
+  } catch {
+    // Header attachment failures must never break the response.
+  }
+  return response;
+}
