@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { auditSource, type Offender } from "../audit-findmany-no-take";
+import { auditSource, offenderKey, type Offender } from "../audit-findmany-no-take";
 
 /**
  * The audit helper is a pure string → offender[] function. Tests therefore
@@ -106,5 +106,12 @@ describe("auditSource", () => {
     ].join("\n");
     const offenders = auditSource("multiline-take.ts", source);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("offenderKey", () => {
+  it("composes a stable `path:line` string for baseline diffing", () => {
+    const o: Offender = { path: "foo/bar.ts", line: 42, snippet: "…" };
+    expect(offenderKey(o)).toBe("foo/bar.ts:42");
   });
 });

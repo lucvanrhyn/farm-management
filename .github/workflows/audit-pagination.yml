@@ -1,0 +1,35 @@
+name: audit-pagination
+
+# Gate every PR to main on the `prisma.<model>.findMany` static check. Adding
+# a new unbounded `findMany` without either `take:`, a unique-column where,
+# or an explicit `// audit-allow-findmany:` pragma will fail this job.
+#
+# Related: tasks/perf-root-cause-2026-04-23.md entry #4.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit prisma.findMany call-sites
+        run: pnpm tsx scripts/audit-findmany-no-take.ts

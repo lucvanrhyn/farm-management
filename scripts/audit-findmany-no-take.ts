@@ -4,13 +4,17 @@
  * ──────────────────────
  * Static check that every `prisma.<model>.findMany(...)` in the repo either
  *   1. passes an explicit `take:` so the payload is bounded, OR
- *   2. filters by a unique column (`id` / `animalId` / `slug`) so the result
- *      set is known to contain ≤1 row, OR
+ *   2. filters by a unique column (`id` / `animalId` / `slug` / `email` /
+ *      `fingerprint` / `dedupeKey`) so the result set is known to contain
+ *      ≤1 row, OR
  *   3. is preceded by an `// audit-allow-findmany:` comment that documents a
- *      deliberate full-scan (bulk analytics, migrations, seed scripts).
+ *      deliberate full-scan (bulk analytics, migrations, seed scripts), OR
+ *   4. is listed in the `.audit-findmany-baseline.json` file (known
+ *      legacy offenders pending migration).
  *
  * Offenders stream out on stdout with `path:line snippet`, and the process
- * exits non-zero so CI can gate PRs.
+ * exits non-zero so CI can gate PRs. New offenders outside the baseline
+ * fail the build — the baseline can only shrink over time, never grow.
  *
  * The analyser (`auditSource`) is exported for unit tests; the CLI portion
  * below only runs when the file is invoked directly. Keep them separate so
@@ -240,8 +244,35 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
   return out;
 }
 
+interface BaselineFile {
+  /**
+   * Set of `path:line` keys captured at baseline time. Anything present here
+   * is silenced; anything not present is a new offender and fails CI.
+   */
+  allowlist: string[];
+}
+
+async function loadBaseline(root: string): Promise<Set<string>> {
+  const file = path.join(root, ".audit-findmany-baseline.json");
+  try {
+    const raw = await fs.readFile(file, "utf8");
+    const parsed = JSON.parse(raw) as BaselineFile;
+    return new Set(parsed.allowlist ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function offenderKey(o: Offender): string {
+  return `${o.path}:${o.line}`;
+}
+
 async function runCli(): Promise<void> {
-  const root = process.argv[2] ? path.resolve(process.argv[2]) : DEFAULT_ROOT;
+  const args = process.argv.slice(2);
+  const updateBaseline = args.includes("--update-baseline");
+  const showAll = args.includes("--all");
+  const rootArg = args.find((a) => !a.startsWith("--"));
+  const root = rootArg ? path.resolve(rootArg) : DEFAULT_ROOT;
   const files = await collectFiles(root);
 
   const allOffenders: Offender[] = [];
@@ -253,18 +284,42 @@ async function runCli(): Promise<void> {
     allOffenders.push(...offenders);
   }
 
-  if (allOffenders.length === 0) {
+  if (updateBaseline) {
+    const keys = Array.from(new Set(allOffenders.map(offenderKey))).sort();
+    const out: BaselineFile = { allowlist: keys };
+    await fs.writeFile(
+      path.join(root, ".audit-findmany-baseline.json"),
+      JSON.stringify(out, null, 2) + "\n",
+      "utf8",
+    );
     // eslint-disable-next-line no-console
-    console.log("audit-findmany-no-take: no offenders");
+    console.log(`audit-findmany-no-take: wrote baseline with ${keys.length} entries`);
     process.exit(0);
   }
 
-  for (const o of allOffenders) {
+  const baseline = await loadBaseline(root);
+  const newOffenders = showAll
+    ? allOffenders
+    : allOffenders.filter((o) => !baseline.has(offenderKey(o)));
+
+  if (newOffenders.length === 0) {
+    // eslint-disable-next-line no-console
+    console.log(
+      showAll
+        ? `audit-findmany-no-take: ${allOffenders.length} offender(s) (--all, baseline ignored)`
+        : `audit-findmany-no-take: no new offenders${baseline.size ? ` (${baseline.size} grandfathered)` : ""}`,
+    );
+    process.exit(0);
+  }
+
+  for (const o of newOffenders) {
     // eslint-disable-next-line no-console
     console.log(`${o.path}:${o.line}  ${o.snippet}`);
   }
   // eslint-disable-next-line no-console
-  console.log(`\n${allOffenders.length} offender(s)`);
+  console.log(
+    `\n${newOffenders.length} new offender(s) not covered by .audit-findmany-baseline.json`,
+  );
   process.exit(1);
 }
 
