@@ -8,6 +8,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueNvd } from "@/lib/server/nvd";
+import { revalidateObservationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,7 @@ export async function POST(
       transactionId: typeof body.transactionId === "string" ? body.transactionId : undefined,
     });
 
+    revalidateObservationWrite(farmSlug);
     return NextResponse.json(record, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to issue NVD";

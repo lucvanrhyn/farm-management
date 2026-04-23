@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getUserRoleForFarm, verifyFreshAdminRole } from "@/lib/auth";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -308,6 +309,7 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
+  revalidateSettingsWrite(farmSlug);
   // Never return the raw API key — mirror the GET response shape
   return NextResponse.json({
     ...updated,

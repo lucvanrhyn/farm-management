@@ -2,17 +2,31 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import AnimalChecklist from "@/components/logger/AnimalChecklist";
-import HealthIssueForm from "@/components/logger/HealthIssueForm";
-import MovementForm from "@/components/logger/MovementForm";
-import CalvingForm from "@/components/logger/CalvingForm";
-import CampConditionForm from "@/components/logger/CampConditionForm";
-import WeighingForm from "@/components/logger/WeighingForm";
-import TreatmentForm from "@/components/logger/TreatmentForm";
-import CampCoverLogForm from "@/components/logger/CampCoverLogForm";
-import ReproductionForm, { type ReproSubmitData } from "@/components/logger/ReproductionForm";
-import DeathModal from "@/components/logger/DeathModal";
-import MobMoveModal from "@/components/logger/MobMoveModal";
+
+// Modal forms are lazy-loaded: each chunk is only fetched the first time
+// the user opens the corresponding modal. Before this split, opening a
+// camp page shipped ~200KB of form JS up front (validation, date pickers,
+// photo capture, breed-specific repro logic) that most visits never used.
+// `{ ssr: false }` because these are pure client-side forms — SSRing them
+// would bloat the server render without any hydration benefit.
+//
+// Type-only imports stay at the top (`type` is erased at runtime and has
+// zero bundle cost) so we don't accidentally drag the full module into the
+// initial chunk just to reference a type.
+import type { ReproSubmitData } from "@/components/logger/ReproductionForm";
+const HealthIssueForm = dynamic(() => import("@/components/logger/HealthIssueForm"), { ssr: false });
+const MovementForm = dynamic(() => import("@/components/logger/MovementForm"), { ssr: false });
+const CalvingForm = dynamic(() => import("@/components/logger/CalvingForm"), { ssr: false });
+const CampConditionForm = dynamic(() => import("@/components/logger/CampConditionForm"), { ssr: false });
+const WeighingForm = dynamic(() => import("@/components/logger/WeighingForm"), { ssr: false });
+const TreatmentForm = dynamic(() => import("@/components/logger/TreatmentForm"), { ssr: false });
+const CampCoverLogForm = dynamic(() => import("@/components/logger/CampCoverLogForm"), { ssr: false });
+const ReproductionForm = dynamic(() => import("@/components/logger/ReproductionForm"), { ssr: false });
+const DeathModal = dynamic(() => import("@/components/logger/DeathModal"), { ssr: false });
+const MobMoveModal = dynamic(() => import("@/components/logger/MobMoveModal"), { ssr: false });
+
 import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
@@ -570,13 +584,15 @@ export default function CampInspectionPage({
           onSubmit={handleCalvingSubmit}
         />
       )}
-      <DeathModal
-        isOpen={activeModal === "death"}
-        animalId={selectedAnimalId}
-        causes={DEATH_CAUSES_BY_SPECIES[mode] ?? DEATH_CAUSES_BY_SPECIES.cattle}
-        onSelect={handleDeathSubmit}
-        onClose={() => setActiveModal(null)}
-      />
+      {activeModal === "death" && (
+        <DeathModal
+          isOpen
+          animalId={selectedAnimalId}
+          causes={DEATH_CAUSES_BY_SPECIES[mode] ?? DEATH_CAUSES_BY_SPECIES.cattle}
+          onSelect={handleDeathSubmit}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
       {activeModal === "reproduction" && (
         <ReproductionForm
           animalId={selectedAnimalId}
@@ -614,17 +630,19 @@ export default function CampInspectionPage({
           onCancel={() => setActiveModal(null)}
         />
       )}
-      <MobMoveModal
-        isOpen={activeModal === "mob_move"}
-        mob={selectedMob}
-        camps={camps}
-        currentCampId={decodedId}
-        destCamp={mobDestCamp}
-        onDestCampChange={setMobDestCamp}
-        onConfirm={handleMobMove}
-        onClose={() => { setActiveModal(null); setSelectedMob(null); }}
-        isSubmitting={mobMoving}
-      />
+      {activeModal === "mob_move" && (
+        <MobMoveModal
+          isOpen
+          mob={selectedMob}
+          camps={camps}
+          currentCampId={decodedId}
+          destCamp={mobDestCamp}
+          onDestCampChange={setMobDestCamp}
+          onConfirm={handleMobMove}
+          onClose={() => { setActiveModal(null); setSelectedMob(null); }}
+          isSubmitting={mobMoving}
+        />
+      )}
     </div>
   );
 }

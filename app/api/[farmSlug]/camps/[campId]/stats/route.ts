@@ -43,54 +43,59 @@ export async function GET(
   thisMonthStart.setDate(1);
   thisMonthStart.setHours(0, 0, 0, 0);
 
-  // Active animals in this camp
-  const activeAnimals = await prisma.animal.findMany({
-    where: { currentCamp: campId, status: "Active" },
-    select: { category: true },
-  });
+  // Fire all independent DB queries in parallel (~5 Turso round-trips → 1)
+  const [
+    activeAnimals,
+    healthCount,
+    calvingCount,
+    visitCount,
+    latestInspection,
+    latestCondition,
+  ] = await Promise.all([
+    // Active animals in this camp
+    prisma.animal.findMany({
+      where: { currentCamp: campId, status: "Active" },
+      select: { category: true },
+    }),
+    // Health events (last 30 days)
+    prisma.observation.count({
+      where: { campId, type: "health_issue", observedAt: { gte: thirtyDaysAgo } },
+    }),
+    // Calving / reproduction events (this month)
+    prisma.observation.count({
+      where: {
+        campId,
+        type: { in: ["reproduction", "calving"] as string[] },
+        observedAt: { gte: thisMonthStart },
+      },
+    }),
+    // Camp visits (last 30 days) — both check-ins and condition records
+    prisma.observation.count({
+      where: {
+        campId,
+        type: { in: ["camp_check", "camp_condition"] },
+        observedAt: { gte: thirtyDaysAgo },
+      },
+    }),
+    // Latest inspection (any camp_check or camp_condition)
+    prisma.observation.findFirst({
+      where: { campId, type: { in: ["camp_check", "camp_condition"] } },
+      orderBy: { observedAt: "desc" },
+      select: { observedAt: true, loggedBy: true },
+    }),
+    // Latest camp condition record (grazing/water/fence)
+    prisma.observation.findFirst({
+      where: { campId, type: "camp_condition" },
+      orderBy: { observedAt: "desc" },
+      select: { details: true, observedAt: true },
+    }),
+  ]);
 
   const byCategory: Partial<Record<AnimalCategory, number>> = {};
   for (const a of activeAnimals) {
     const cat = a.category as AnimalCategory;
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
   }
-
-  // Health events (last 30 days)
-  const healthCount = await prisma.observation.count({
-    where: { campId, type: "health_issue", observedAt: { gte: thirtyDaysAgo } },
-  });
-
-  // Calving / reproduction events (this month)
-  const calvingCount = await prisma.observation.count({
-    where: {
-      campId,
-      type: { in: ["reproduction", "calving"] as string[] },
-      observedAt: { gte: thisMonthStart },
-    },
-  });
-
-  // Camp visits (last 30 days) — both check-ins and condition records
-  const visitCount = await prisma.observation.count({
-    where: {
-      campId,
-      type: { in: ["camp_check", "camp_condition"] },
-      observedAt: { gte: thirtyDaysAgo },
-    },
-  });
-
-  // Latest inspection (any camp_check or camp_condition)
-  const latestInspection = await prisma.observation.findFirst({
-    where: { campId, type: { in: ["camp_check", "camp_condition"] } },
-    orderBy: { observedAt: "desc" },
-    select: { observedAt: true, loggedBy: true },
-  });
-
-  // Latest camp condition record (grazing/water/fence)
-  const latestCondition = await prisma.observation.findFirst({
-    where: { campId, type: "camp_condition" },
-    orderBy: { observedAt: "desc" },
-    select: { details: true, observedAt: true },
-  });
 
   let conditionDetails: Record<string, string> = {};
   if (latestCondition) {

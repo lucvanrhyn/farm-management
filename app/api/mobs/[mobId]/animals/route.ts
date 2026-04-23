@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { revalidateMobWrite } from "@/lib/server/revalidate";
 
 export async function POST(
   req: NextRequest,
@@ -36,10 +36,7 @@ export async function POST(
     data: { mobId, currentCamp: mob.currentCamp },
   });
 
-  revalidatePath("/admin/mobs");
-  revalidatePath("/admin/animals");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateMobWrite(db.slug);
 
   return NextResponse.json({ success: true, count: body.animalIds.length });
 }
@@ -75,10 +72,7 @@ export async function DELETE(
     data: { mobId: null },
   });
 
-  revalidatePath("/admin/mobs");
-  revalidatePath("/admin/animals");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateMobWrite(db.slug);
 
   return NextResponse.json({ success: true, count: body.animalIds.length });
 }

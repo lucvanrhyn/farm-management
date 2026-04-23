@@ -15,7 +15,6 @@ import { VeldTab } from "@/components/admin/camps/VeldTab";
 import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { FeedOnOfferTab } from "@/components/admin/camps/FeedOnOfferTab";
 
-export const dynamic = "force-dynamic";
 
 // Advanced-tier only tabs. The `camps` overview and `rainfall` tab stay
 // accessible to all tiers; the tabs below mirror gated /tools/* routes and

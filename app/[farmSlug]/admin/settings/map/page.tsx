@@ -24,7 +24,6 @@ import MapSettingsClient, {
 import { DEFAULT_MAP_SETTINGS, type FarmMapSettings } from "@/lib/farm-settings/defaults";
 import { computeFarmCentroid, pointInFmdZone } from "@/lib/map/fmd-zones";
 
-export const dynamic = "force-dynamic";
 
 function parseMapSettings(raw: string | null | undefined): FarmMapSettings {
   if (!raw) return DEFAULT_MAP_SETTINGS;

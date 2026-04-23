@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getPrismaWithAuth } from '@/lib/farm-prisma';
+import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
 export async function PATCH(
   request: NextRequest,
@@ -35,6 +36,7 @@ export async function PATCH(
       data: { attachmentUrl },
     });
 
+    revalidateObservationWrite(db.slug);
     return NextResponse.json({ success: true, attachmentUrl: updated.attachmentUrl });
   } catch (err) {
     console.error('[observations/attachment PATCH] DB error:', err);

@@ -2,10 +2,17 @@
 // Cached wrappers for expensive server functions.
 // Each wrapper resolves the PrismaClient internally from the farm slug
 // so that only serializable arguments + return values cross the cache boundary.
+//
+// Tags follow the taxonomy in lib/server/cache-tags.ts.
+// Mutations must call the corresponding revalidate*Write() helper in
+// lib/server/revalidate.ts after every successful DB write.
 
 import { unstable_cache } from "next/cache";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { withFarmPrisma } from "@/lib/farm-prisma";
+import { farmTag } from "@/lib/server/cache-tags";
 import { getLatestCampConditions, type LiveCampStatus } from "@/lib/server/camp-status";
+import { getOverviewForUserFarms, type FarmOverview } from "@/lib/server/multi-farm-overview";
+import type { SessionFarm } from "@/types/next-auth";
 import { getReproStats, type ReproStats } from "@/lib/server/reproduction-analytics";
 import {
   getDashboardAlerts,
@@ -14,14 +21,21 @@ import {
   type PreFetchedAlertData,
 } from "@/lib/server/dashboard-alerts";
 import { getDataHealthScore, type DataHealthScore } from "@/lib/server/data-health";
+import {
+  countHealthIssuesSince,
+  countInspectedToday,
+  getRecentHealthObservations,
+  getLowGrazingCampCount,
+  type HealthObservation,
+} from "@/lib/server/camp-status";
+import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
+import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
+import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/rotation-engine";
+import { getLatestByCamp } from "@/lib/server/veld-score";
+import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
+import type { Camp } from "@/lib/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function requirePrisma(farmSlug: string) {
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) throw new Error(`Farm not found: ${farmSlug}`);
-  return prisma;
-}
 
 // Map is not JSON-serializable so we convert to/from a plain record.
 type LiveCampStatusRecord = Record<string, LiveCampStatus>;
@@ -45,12 +59,13 @@ export async function getCachedCampConditions(
 ): Promise<Map<string, LiveCampStatus>> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<LiveCampStatusRecord> => {
-      const prisma = await requirePrisma(slug);
-      const map = await getLatestCampConditions(prisma);
-      return mapToRecord(map);
+      return withFarmPrisma(slug, async (prisma) => {
+        const map = await getLatestCampConditions(prisma);
+        return mapToRecord(map);
+      });
     },
     ["camp-conditions"],
-    { revalidate: 60, tags: ["camp-status", `farm-${farmSlug}`] },
+    { revalidate: 60, tags: [farmTag(farmSlug, "camps")] },
   );
   const record = await fetcher(farmSlug);
   return recordToMap(record);
@@ -63,11 +78,10 @@ export async function getCachedReproStats(
 ): Promise<ReproStats> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<ReproStats> => {
-      const prisma = await requirePrisma(slug);
-      return getReproStats(prisma);
+      return withFarmPrisma(slug, (prisma) => getReproStats(prisma));
     },
     ["repro-stats"],
-    { revalidate: 60, tags: ["farm-data", `farm-${farmSlug}`] },
+    { revalidate: 60, tags: [farmTag(farmSlug, "animals")] },
   );
   return fetcher(farmSlug);
 }
@@ -81,17 +95,19 @@ export async function getCachedDashboardAlerts(
 ): Promise<DashboardAlerts> {
   // When pre-fetched data is provided we skip caching (data is already fresh)
   if (preFetched && (preFetched.reproStats || preFetched.campConditions)) {
-    const prisma = await requirePrisma(farmSlug);
-    return getDashboardAlerts(prisma, farmSlug, thresholds, preFetched);
+    return withFarmPrisma(farmSlug, (prisma) =>
+      getDashboardAlerts(prisma, farmSlug, thresholds, preFetched),
+    );
   }
 
   const fetcher = unstable_cache(
     async (slug: string, t: AlertThresholds): Promise<DashboardAlerts> => {
-      const prisma = await requirePrisma(slug);
-      return getDashboardAlerts(prisma, slug, t);
+      return withFarmPrisma(slug, (prisma) =>
+        getDashboardAlerts(prisma, slug, t),
+      );
     },
     ["dashboard-alerts"],
-    { revalidate: 30, tags: ["dashboard", `farm-${farmSlug}`] },
+    { revalidate: 30, tags: [farmTag(farmSlug, "dashboard"), farmTag(farmSlug, "alerts")] },
   );
   return fetcher(farmSlug, thresholds);
 }
@@ -103,25 +119,16 @@ export async function getCachedDataHealth(
 ): Promise<DataHealthScore> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<DataHealthScore> => {
-      const prisma = await requirePrisma(slug);
-      return getDataHealthScore(prisma);
+      return withFarmPrisma(slug, (prisma) => getDataHealthScore(prisma));
     },
     ["data-health"],
-    { revalidate: 60, tags: ["farm-data", `farm-${farmSlug}`] },
+    { revalidate: 60, tags: [farmTag(farmSlug, "dashboard")] },
   );
   return fetcher(farmSlug);
 }
 
-// ── Cached: Dashboard Overview (30s) — single cache entry for entire admin page ──
-
-import {
-  countHealthIssuesSince,
-  countInspectedToday,
-  getRecentHealthObservations,
-  getLowGrazingCampCount,
-  type HealthObservation,
-} from "@/lib/server/camp-status";
-import { getWithdrawalCount } from "@/lib/server/treatment-analytics";
+// ── Cached: Dashboard Overview (30s) ─────────────────────────────────────────
+// Admin dashboard health/stats widget — not the main /dashboard page data.
 
 export interface DashboardOverview {
   totalAnimals: number;
@@ -145,84 +152,89 @@ export async function getCachedDashboardOverview(
 ): Promise<DashboardOverview> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<DashboardOverview> => {
-      const prisma = await requirePrisma(slug);
+      return withFarmPrisma(slug, async (prisma) => {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const currentMonth = new Date().toISOString().slice(0, 7);
 
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const currentMonth = new Date().toISOString().slice(0, 7);
+        const [
+          totalAnimals,
+          totalCamps,
+          settingsRow,
+          reproStats,
+          campConditions,
+          healthIssuesThisWeek,
+          inspectedToday,
+          recentHealth,
+          lowGrazingCount,
+          deathsToday,
+          birthsToday,
+          withdrawalCount,
+          mtdTransactions,
+          dataHealth,
+        ] = await Promise.all([
+          prisma.animal.count({ where: { status: "Active" } }),
+          prisma.camp.count(),
+          prisma.farmSettings.findFirst(),
+          getReproStats(prisma),
+          getLatestCampConditions(prisma),
+          countHealthIssuesSince(prisma, sevenDaysAgo),
+          countInspectedToday(prisma),
+          getRecentHealthObservations(prisma, 8),
+          getLowGrazingCampCount(prisma),
+          prisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
+          prisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
+          getWithdrawalCount(prisma),
+          prisma.transaction.findMany({
+            where: { date: { startsWith: currentMonth } },
+            select: { type: true, amount: true },
+          }),
+          getDataHealthScore(prisma),
+        ]);
 
-      const [
-        totalAnimals,
-        totalCamps,
-        settingsRow,
-        reproStats,
-        campConditions,
-        healthIssuesThisWeek,
-        inspectedToday,
-        recentHealth,
-        lowGrazingCount,
-        deathsToday,
-        birthsToday,
-        withdrawalCount,
-        mtdTransactions,
-        dataHealth,
-      ] = await Promise.all([
-        prisma.animal.count({ where: { status: "Active" } }),
-        prisma.camp.count(),
-        prisma.farmSettings.findFirst(),
-        getReproStats(prisma),
-        getLatestCampConditions(prisma),
-        countHealthIssuesSince(prisma, sevenDaysAgo),
-        countInspectedToday(prisma),
-        getRecentHealthObservations(prisma, 8),
-        getLowGrazingCampCount(prisma),
-        prisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
-        prisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
-        getWithdrawalCount(prisma),
-        prisma.transaction.findMany({
-          where: { date: { startsWith: currentMonth } },
-          select: { type: true, amount: true },
-        }),
-        getDataHealthScore(prisma),
-      ]);
+        const settings = settingsRow ?? {
+          adgPoorDoerThreshold: 0.7,
+          calvingAlertDays: 14,
+          daysOpenLimit: 365,
+          campGrazingWarningDays: 7,
+          alertThresholdHours: 48,
+        };
 
-      const settings = settingsRow ?? {
-        adgPoorDoerThreshold: 0.7,
-        calvingAlertDays: 14,
-        daysOpenLimit: 365,
-        campGrazingWarningDays: 7,
-        alertThresholdHours: 48,
-      };
+        const dashboardAlerts = await getDashboardAlerts(
+          prisma,
+          slug,
+          {
+            adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
+            calvingAlertDays: settings.calvingAlertDays,
+            daysOpenLimit: settings.daysOpenLimit,
+            campGrazingWarningDays: settings.campGrazingWarningDays,
+            staleCampInspectionHours: settings.alertThresholdHours,
+          },
+          { reproStats, campConditions },
+        );
 
-      const dashboardAlerts = await getDashboardAlerts(prisma, slug, {
-        adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
-        calvingAlertDays: settings.calvingAlertDays,
-        daysOpenLimit: settings.daysOpenLimit,
-        campGrazingWarningDays: settings.campGrazingWarningDays,
-        staleCampInspectionHours: settings.alertThresholdHours,
-      }, { reproStats, campConditions });
-
-      return {
-        totalAnimals,
-        totalCamps,
-        reproStats,
-        liveConditions: mapToRecord(campConditions),
-        healthIssuesThisWeek,
-        inspectedToday,
-        recentHealth,
-        lowGrazingCount,
-        deathsToday,
-        birthsToday,
-        withdrawalCount,
-        mtdTransactions: mtdTransactions.map((t) => ({ type: t.type, amount: t.amount })),
-        dataHealth,
-        dashboardAlerts,
-      };
+        return {
+          totalAnimals,
+          totalCamps,
+          reproStats,
+          liveConditions: mapToRecord(campConditions),
+          healthIssuesThisWeek,
+          inspectedToday,
+          recentHealth,
+          lowGrazingCount,
+          deathsToday,
+          birthsToday,
+          withdrawalCount,
+          mtdTransactions: mtdTransactions.map((t) => ({ type: t.type, amount: t.amount })),
+          dataHealth,
+          dashboardAlerts,
+        };
+      });
     },
     ["dashboard-overview"],
-    { revalidate: 30, tags: ["dashboard", `farm-${farmSlug}`] },
+    { revalidate: 30, tags: [farmTag(farmSlug, "dashboard")] },
   );
   return fetcher(farmSlug);
 }
@@ -254,21 +266,22 @@ export async function getCachedFarmSettings(
 ): Promise<FarmSettingsData> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<FarmSettingsData> => {
-      const prisma = await requirePrisma(slug);
-      const row = await prisma.farmSettings.findFirst();
-      if (!row) return SETTINGS_DEFAULTS;
-      return {
-        adgPoorDoerThreshold: row.adgPoorDoerThreshold,
-        calvingAlertDays: row.calvingAlertDays,
-        daysOpenLimit: row.daysOpenLimit,
-        campGrazingWarningDays: row.campGrazingWarningDays,
-        alertThresholdHours: row.alertThresholdHours,
-        farmName: row.farmName,
-        breed: row.breed,
-      };
+      return withFarmPrisma(slug, async (prisma) => {
+        const row = await prisma.farmSettings.findFirst();
+        if (!row) return SETTINGS_DEFAULTS;
+        return {
+          adgPoorDoerThreshold: row.adgPoorDoerThreshold,
+          calvingAlertDays: row.calvingAlertDays,
+          daysOpenLimit: row.daysOpenLimit,
+          campGrazingWarningDays: row.campGrazingWarningDays,
+          alertThresholdHours: row.alertThresholdHours,
+          farmName: row.farmName,
+          breed: row.breed,
+        };
+      });
     },
     ["farm-settings"],
-    { revalidate: 300, tags: ["farm-settings", `farm-${farmSlug}`] },
+    { revalidate: 300, tags: [farmTag(farmSlug, "settings")] },
   );
   return fetcher(farmSlug);
 }
@@ -291,37 +304,46 @@ export async function getCachedCampList(
 ): Promise<CachedCamp[]> {
   const fetcher = unstable_cache(
     async (slug: string, sp: string): Promise<CachedCamp[]> => {
-      const prisma = await requirePrisma(slug);
-      const [camps, animalGroups] = await Promise.all([
-        prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-        prisma.animal.groupBy({
-          by: ["currentCamp"],
-          where: {
-            status: "Active",
-            ...(sp ? { species: sp } : {}),
-          },
-          _count: { _all: true },
-        }),
-      ]);
-      const countByCamp: Record<string, number> = {};
-      for (const g of animalGroups) {
-        countByCamp[g.currentCamp] = g._count._all;
-      }
-      return camps.map((camp) => ({
-        camp_id: camp.campId,
-        camp_name: camp.campName,
-        size_hectares: camp.sizeHectares,
-        water_source: camp.waterSource,
-        geojson: camp.geojson,
-        color: camp.color ?? null,
-        animal_count: countByCamp[camp.campId] ?? 0,
-      }));
+      return withFarmPrisma(slug, async (prisma) => {
+        const [camps, animalGroups] = await Promise.all([
+          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          prisma.animal.groupBy({
+            by: ["currentCamp"],
+            where: {
+              status: "Active",
+              ...(sp ? { species: sp } : {}),
+            },
+            _count: { _all: true },
+          }),
+        ]);
+        const countByCamp: Record<string, number> = {};
+        for (const g of animalGroups) {
+          countByCamp[g.currentCamp] = g._count._all;
+        }
+        return camps.map((camp) => ({
+          camp_id: camp.campId,
+          camp_name: camp.campName,
+          size_hectares: camp.sizeHectares,
+          water_source: camp.waterSource,
+          geojson: camp.geojson,
+          color: camp.color ?? null,
+          animal_count: countByCamp[camp.campId] ?? 0,
+        }));
+      });
     },
     ["camp-list"],
-    { revalidate: 30, tags: ["camps", `farm-${farmSlug}`] },
+    { revalidate: 30, tags: [farmTag(farmSlug, "camps")] },
   );
   return fetcher(farmSlug, species ?? "");
 }
+
+/**
+ * Logger-specific camp list alias — exposes the same cached data as
+ * getCachedCampList (all species) under a dedicated name for the logger path.
+ * Tags: farm-<slug>-camps (same invalidation as any camp write).
+ */
+export const getCachedLoggerCampList = (farmSlug: string) =>
+  getCachedCampList(farmSlug);
 
 // ── Cached: Farm Summary (30s) — animal + camp counts for /api/farm ──────────
 
@@ -338,22 +360,233 @@ export async function getCachedFarmSummary(
 ): Promise<FarmSummary> {
   const fetcher = unstable_cache(
     async (slug: string): Promise<FarmSummary> => {
-      const prisma = await requirePrisma(slug);
-      const [settings, animalCount, campCount] = await Promise.all([
-        prisma.farmSettings.findFirst(),
-        prisma.animal.count({ where: { status: "Active" } }),
-        prisma.camp.count(),
-      ]);
-      return {
-        farmName: settings?.farmName ?? "My Farm",
-        breed: settings?.breed ?? "Mixed",
-        heroImageUrl: settings?.heroImageUrl ?? "/farm-hero.jpg",
-        animalCount,
-        campCount,
-      };
+      return withFarmPrisma(slug, async (prisma) => {
+        const [settings, animalCount, campCount] = await Promise.all([
+          prisma.farmSettings.findFirst(),
+          prisma.animal.count({ where: { status: "Active" } }),
+          prisma.camp.count(),
+        ]);
+        return {
+          farmName: settings?.farmName ?? "My Farm",
+          breed: settings?.breed ?? "Mixed",
+          heroImageUrl: settings?.heroImageUrl ?? "/farm-hero.jpg",
+          animalCount,
+          campCount,
+        };
+      });
     },
     ["farm-summary"],
-    { revalidate: 30, tags: ["farm-data", `farm-${farmSlug}`] },
+    {
+      revalidate: 30,
+      tags: [
+        farmTag(farmSlug, "settings"),
+        farmTag(farmSlug, "animals"),
+        farmTag(farmSlug, "camps"),
+      ],
+    },
+  );
+  return fetcher(farmSlug);
+}
+
+// ── Cached: Farm Species Settings (5 min) ─────────────────────────────────────
+// Used by [farmSlug]/layout.tsx to populate FarmModeProvider.
+// Species list changes rarely — 300s revalidate is appropriate.
+
+export interface FarmSpeciesSettingsData {
+  enabledSpecies: string[];
+}
+
+export async function getCachedFarmSpeciesSettings(
+  farmSlug: string,
+): Promise<FarmSpeciesSettingsData> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<FarmSpeciesSettingsData> => {
+      return withFarmPrisma(slug, async (prisma) => {
+        const settings = await prisma.farmSpeciesSettings.findMany();
+        const enabled = settings
+          .filter((s) => s.enabled)
+          .map((s) => s.species);
+        if (!enabled.includes("cattle")) enabled.unshift("cattle");
+        return { enabledSpecies: enabled };
+      });
+    },
+    ["farm-species-settings"],
+    { revalidate: 300, tags: [farmTag(farmSlug, "settings")] },
+  );
+  return fetcher(farmSlug);
+}
+
+// ── Cached: Multi-farm overview for /farms page (60s) ────────────────────────
+// Eliminates the N×3 Turso fan-out on the /farms page.
+// Tagged with animals+camps+observations for each farm in the user's list —
+// any mutation to any of those scopes clears the entry.
+
+export async function getCachedMultiFarmOverview(
+  userId: string,
+  farms: SessionFarm[],
+): Promise<FarmOverview[]> {
+  const slugs = farms.slice(0, 8).map((f) => f.slug);
+
+  const fetcher = unstable_cache(
+    async (uid: string, farmSlugs: string[], farmsData: SessionFarm[]): Promise<FarmOverview[]> => {
+      void uid;
+      void farmSlugs;
+      return getOverviewForUserFarms(farmsData);
+    },
+    ["multi-farm-overview", userId],
+    {
+      revalidate: 60,
+      tags: slugs.flatMap((slug) => [
+        farmTag(slug, "animals"),
+        farmTag(slug, "camps"),
+        farmTag(slug, "observations"),
+      ]),
+    },
+  );
+
+  return fetcher(userId, slugs, farms.slice(0, 8));
+}
+
+// ── Cached: Dashboard Page Data (30s) ─────────────────────────────────────────
+// Packages all 8 queries that [farmSlug]/dashboard/page.tsx runs on every
+// request. The result is fully serializable — Maps are converted to Records
+// and the DashboardClient-ready shape is returned directly.
+//
+// Tags: farm-<slug>-animals (species counts), farm-<slug>-camps (camp list),
+//       farm-<slug>-observations (veld/cover/census/rotation).
+// Any mutation to animals, camps, or observations will clear this entry.
+
+export interface DashboardData {
+  totalAll: number;
+  totalBySpecies: Record<string, number>;
+  campAnimalCounts: Record<string, number>;
+  campCountsBySpecies: Record<string, Record<string, number>>;
+  camps: Camp[];
+  latitude: number | null;
+  longitude: number | null;
+  censusCountByCamp: Record<string, number>;
+  rotationByCampId: Record<
+    string,
+    { status: CampRotationStatus["status"]; days: number | null }
+  >;
+  veldScoreByCamp: Record<string, number>;
+  feedOnOfferKgDmPerHaByCamp: Record<string, number>;
+}
+
+export async function getCachedDashboardData(
+  farmSlug: string,
+): Promise<DashboardData> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<DashboardData> => {
+      return withFarmPrisma(slug, async (prisma) => {
+        const [
+          totalAnimals,
+          animalGroupsBySpecies,
+          prismaCamps,
+          farmSettings,
+          censusPopByCamp,
+          rotationPayload,
+          veldLatestByCamp,
+          feedOnOfferLatestByCamp,
+        ] = await Promise.all([
+          prisma.animal.groupBy({
+            by: ["species"],
+            where: { status: "Active" },
+            _count: { _all: true },
+          }),
+          prisma.animal.groupBy({
+            by: ["species", "currentCamp"],
+            where: { status: "Active" },
+            _count: { _all: true },
+          }),
+          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }),
+          getCensusPopulationByCamp(prisma),
+          getRotationStatusByCamp(prisma),
+          getLatestByCamp(prisma),
+          getLatestCoverByCamp(prisma),
+        ]);
+
+        // Species totals
+        const totalBySpecies: Record<string, number> = {};
+        let totalAll = 0;
+        for (const g of totalAnimals) {
+          const sp = g.species || "cattle";
+          totalBySpecies[sp] = g._count._all;
+          totalAll += g._count._all;
+        }
+
+        // Per-species camp counts + combined animal counts
+        const campCountsBySpecies: Record<string, Record<string, number>> = {};
+        const campAnimalCounts: Record<string, number> = {};
+        for (const g of animalGroupsBySpecies) {
+          const sp = g.species || "cattle";
+          if (!campCountsBySpecies[sp]) campCountsBySpecies[sp] = {};
+          campCountsBySpecies[sp][g.currentCamp] = g._count._all;
+          campAnimalCounts[g.currentCamp] = (campAnimalCounts[g.currentCamp] ?? 0) + g._count._all;
+        }
+
+        // Census game population per camp
+        const censusCountByCamp: Record<string, number> = {};
+        for (const row of censusPopByCamp) {
+          censusCountByCamp[row.campId] = row.totalPopulation;
+        }
+
+        // Camps in snake_case for Camp type
+        const camps: Camp[] = prismaCamps.map((c) => ({
+          camp_id: c.campId,
+          camp_name: c.campName,
+          size_hectares: c.sizeHectares ?? undefined,
+          water_source: c.waterSource ?? undefined,
+          geojson: c.geojson ?? undefined,
+          color: c.color ?? undefined,
+        }));
+
+        // Rotation status per camp
+        const rotationByCampId: DashboardData["rotationByCampId"] = {};
+        for (const c of rotationPayload.camps) {
+          rotationByCampId[c.campId] = {
+            status: c.status,
+            days: c.daysGrazed ?? c.daysRested ?? null,
+          };
+        }
+
+        // Veld scores per camp (Map → Record)
+        const veldScoreByCamp: Record<string, number> = {};
+        for (const [campId, entry] of veldLatestByCamp.entries()) {
+          veldScoreByCamp[campId] = entry.score;
+        }
+
+        // Feed-on-offer per camp (Map → Record)
+        const feedOnOfferKgDmPerHaByCamp: Record<string, number> = {};
+        for (const [campId, entry] of feedOnOfferLatestByCamp.entries()) {
+          feedOnOfferKgDmPerHaByCamp[campId] = entry.kgDmPerHa;
+        }
+
+        return {
+          totalAll,
+          totalBySpecies,
+          campAnimalCounts,
+          campCountsBySpecies,
+          camps,
+          latitude: farmSettings?.latitude ?? null,
+          longitude: farmSettings?.longitude ?? null,
+          censusCountByCamp,
+          rotationByCampId,
+          veldScoreByCamp,
+          feedOnOfferKgDmPerHaByCamp,
+        };
+      });
+    },
+    ["dashboard-data"],
+    {
+      revalidate: 30,
+      tags: [
+        farmTag(farmSlug, "animals"),
+        farmTag(farmSlug, "camps"),
+        farmTag(farmSlug, "observations"),
+      ],
+    },
   );
   return fetcher(farmSlug);
 }

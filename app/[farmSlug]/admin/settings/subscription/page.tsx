@@ -3,7 +3,6 @@ import { Check, Minus } from "lucide-react";
 import type { FarmTier } from "@/lib/tier";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
-export const dynamic = "force-dynamic";
 
 type TierKey = "basic" | "advanced" | "consulting";
 

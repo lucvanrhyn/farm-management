@@ -4,8 +4,16 @@ import {
   getCostPerCamp,
   getProfitabilityByCategory,
 } from "@/lib/server/financial-analytics";
-import CampCostAnalysis from "@/components/admin/CampCostAnalysis";
-import CategoryProfitability from "@/components/admin/CategoryProfitability";
+import dynamic from "next/dynamic";
+
+const CampCostAnalysis = dynamic(
+  () => import("@/components/admin/CampCostAnalysis"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
+const CategoryProfitability = dynamic(
+  () => import("@/components/admin/CategoryProfitability"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 
 function kpiColor(value: number, positiveGood = true): string {
   if (value === 0) return "#9C8E7A";

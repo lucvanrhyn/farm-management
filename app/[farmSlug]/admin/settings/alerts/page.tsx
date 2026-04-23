@@ -19,7 +19,6 @@ import AlertSettingsForm, {
 } from "@/components/admin/AlertSettingsForm";
 import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
 
 export default async function AlertsSettingsPage({
   params,

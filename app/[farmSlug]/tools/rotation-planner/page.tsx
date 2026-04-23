@@ -8,7 +8,6 @@ import RotationPlannerClient from "@/components/rotation/RotationPlannerClient";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import type { RotationPlan } from "@/components/rotation/types";
 
-export const dynamic = "force-dynamic";
 
 export default async function RotationPlannerPage({
   params,

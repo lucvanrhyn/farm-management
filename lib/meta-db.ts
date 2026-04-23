@@ -1,29 +1,26 @@
 import { createClient, type Client } from '@libsql/client';
 
 let _client: Client | null = null;
-let _lastProbe = 0;
 let hasWarnedAboutPlatformAdminFallback = false;
 
-/** Probe interval — match farm-prisma.ts VALIDATION_INTERVAL_MS. */
-const META_PROBE_INTERVAL_MS = 30_000;
+// There is intentionally NO eager probe on this path. The previous
+// implementation ran a SELECT 1 once per 30s to detect token expiry, but
+// the window meant any real query hitting an expired token still 401'd
+// until the probe re-ran. Correctness is now on the error path:
+// `withMetaDb` catches libSQL auth errors, evicts the client, and retries
+// once against a fresh client (which re-reads env vars — if the deploy
+// rotated the token, the fresh client picks it up). Non-critical callers
+// still get `getMetaClient()` directly and surface 401s to their handler.
 
-function getMetaClient(): Client {
-  if (_client) return _client;
-  const url = process.env.META_TURSO_URL;
-  const authToken = process.env.META_TURSO_AUTH_TOKEN;
-  if (!url || !authToken) {
-    throw new Error(
-      'META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.',
-    );
+/** Internal error-classifier shared with `withMetaDb`. */
+export function isMetaAuthError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = String((err as Record<string, unknown>).code ?? '').toLowerCase();
+  const msg = String((err as Record<string, unknown>).message ?? '').toLowerCase();
+  if (code === 'server_error' && (msg.includes('401') || msg.includes('unauthorized'))) {
+    return true;
   }
-  _client = createClient({ url, authToken });
-  _lastProbe = Date.now();
-  return _client;
-}
-
-function isTokenExpiredError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
+  if (code === 'token_expired' || code === 'sqlite_auth') return true;
   return (
     msg.includes('expired') ||
     msg.includes('invalid token') ||
@@ -33,39 +30,55 @@ function isTokenExpiredError(err: unknown): boolean {
 }
 
 /**
- * Evict the cached meta client. Subsequent calls will re-read env vars and
- * construct a fresh client with the (hopefully rotated) token.
+ * Resolve the singleton meta-DB client, constructing it on first use.
+ * Exported so auxiliary modules (telemetry route, helper scripts) can issue
+ * simple writes without taking the retry wrapper. Prefer `withMetaDb` for
+ * auth-critical reads.
  */
-function evictMetaClient(): void {
-  _client = null;
-  _lastProbe = 0;
+export function getMetaClient(): Client {
+  if (_client) return _client;
+  const url = process.env.META_TURSO_URL;
+  const authToken = process.env.META_TURSO_AUTH_TOKEN;
+  if (!url || !authToken) {
+    throw new Error(
+      'META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.',
+    );
+  }
+  _client = createClient({ url, authToken });
+  return _client;
 }
 
 /**
- * Return a validated meta-DB client. Runs a SELECT 1 probe at most once per
- * META_PROBE_INTERVAL_MS; on token-expiry errors, evicts the cached client
- * so the next call picks up a rotated token. Mirrors the pattern in
- * `farm-prisma.ts` — without it, an expired meta token silently breaks every
- * login until the Vercel instance recycles.
+ * Evict the cached meta client. Subsequent calls will re-read env vars and
+ * construct a fresh client with the (hopefully rotated) token.
  */
-async function getValidatedMetaClient(): Promise<Client> {
-  const client = getMetaClient();
-  const now = Date.now();
-  if (now - _lastProbe > META_PROBE_INTERVAL_MS) {
-    try {
-      await client.execute('SELECT 1');
-      _lastProbe = now;
-    } catch (err) {
-      _lastProbe = now; // prevent probe storms on transient failures
-      if (isTokenExpiredError(err)) {
-        console.warn('[meta-db] Token appears expired — evicting cached client');
-        evictMetaClient();
-        return getMetaClient();
-      }
-      throw err;
-    }
+export function evictMetaClient(): void {
+  _client = null;
+}
+
+/**
+ * Run a meta-DB operation with automatic retry on token-expiry errors.
+ * If the callback throws a libSQL auth error, the cached client is evicted,
+ * a fresh one is constructed, and the callback runs once more. Any other
+ * error — or a second auth error on retry — propagates.
+ *
+ * Use this for auth-critical paths (login, email verification, tier gates)
+ * where a single 401 during Turso credential rotation would block the user.
+ */
+export async function withMetaDb<T>(fn: (client: Client) => Promise<T>): Promise<T> {
+  try {
+    return await fn(getMetaClient());
+  } catch (err) {
+    if (!isMetaAuthError(err)) throw err;
+    console.warn('[meta-db] auth error — evicting client and retrying once');
+    evictMetaClient();
+    return await fn(getMetaClient());
   }
-  return client;
+}
+
+// Test-only hook. Never call from app code.
+export function __resetMetaClient(): void {
+  _client = null;
 }
 
 export interface MetaUser {
@@ -94,26 +107,26 @@ export interface FarmCreds {
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getUserByIdentifier(identifier: string): Promise<MetaUser | null> {
-  // Use the validated client for auth-critical lookups so expired tokens
-  // self-heal rather than silently blocking login.
-  const client = await getValidatedMetaClient();
-  // accepts either email or username
-  const result = await client.execute({
-    sql: `SELECT id, email, username, password_hash, name
-          FROM users
-          WHERE email = ? OR username = ?
-          LIMIT 1`,
-    args: [identifier, identifier],
+  // Auth-critical lookup: use withMetaDb so an expired token self-heals
+  // rather than silently blocking login.
+  return withMetaDb(async (client) => {
+    const result = await client.execute({
+      sql: `SELECT id, email, username, password_hash, name
+            FROM users
+            WHERE email = ? OR username = ?
+            LIMIT 1`,
+      args: [identifier, identifier],
+    });
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: row.id as string,
+      email: (row.email as string) || null,
+      username: row.username as string,
+      passwordHash: row.password_hash as string,
+      name: row.name as string | null,
+    };
   });
-  if (result.rows.length === 0) return null;
-  const row = result.rows[0];
-  return {
-    id: row.id as string,
-    email: (row.email as string) || null,
-    username: row.username as string,
-    passwordHash: row.password_hash as string,
-    name: row.name as string | null,
-  };
 }
 
 export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {
@@ -390,13 +403,15 @@ export async function updateFarmSubscription(
 }
 
 export async function isEmailVerified(userId: string): Promise<boolean> {
-  const client = await getValidatedMetaClient();
-  const result = await client.execute({
-    sql: `SELECT email_verified FROM users WHERE id = ? LIMIT 1`,
-    args: [userId],
+  // Auth-critical: retry on token expiry so login isn't blocked by rotation.
+  return withMetaDb(async (client) => {
+    const result = await client.execute({
+      sql: `SELECT email_verified FROM users WHERE id = ? LIMIT 1`,
+      args: [userId],
+    });
+    if (result.rows.length === 0) return false;
+    return (result.rows[0].email_verified as number) === 1;
   });
-  if (result.rows.length === 0) return false;
-  return (result.rows[0].email_verified as number) === 1;
 }
 
 // ─── Consulting Leads (D4) ───────────────────────────────────────────

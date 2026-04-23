@@ -11,11 +11,26 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { openDB } from 'idb';
-import { getPendingCount, getLastSyncedAt, getCachedCamps, setActiveFarmSlug } from '@/lib/offline-store';
+import {
+  getPendingCount,
+  getLastSyncedAt,
+  getCachedCamps,
+  getCachedFarmSettings,
+  setActiveFarmSlug,
+} from '@/lib/offline-store';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
+
+// Skip the on-mount /api/{camps,animals,farm,camps/status} fan-out when the
+// cached data was refreshed within the last minute. Covers the common pattern
+// of navigating between logger pages in quick succession — previously every
+// mount burned a fresh 4-request fan-out, saturating function concurrency on
+// large farms and making the logger feel sluggish on re-entry. The `online`
+// listener still always triggers a fresh sync on reconnect, so users coming
+// back from offline never serve stale data.
+const REFRESH_TTL_MS = 60_000;
 
 interface SyncResult {
   synced: number;
@@ -43,6 +58,7 @@ interface OfflineContextType {
   camps: Camp[];
   campsLoaded: boolean;
   tasks: CachedTask[];
+  heroImageUrl: string | null;
   syncNow: () => Promise<void>;
   refreshData: () => Promise<void>;
   refreshPendingCount: () => Promise<void>;
@@ -80,6 +96,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campsLoaded, setCampsLoaded] = useState(false);
   const [tasks, setTasks] = useState<CachedTask[]>([]);
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshPendingCount = useCallback(async () => {
@@ -90,6 +107,14 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const refreshCampsState = useCallback(async () => {
     const updated = await getCachedCamps();
     setCamps(updated);
+  }, []);
+
+  // Pull the hero image URL out of cached farm settings. `heroImageUrl` is
+  // seeded by refreshCachedData → seedFarmSettings on every sync, so the
+  // logger layout no longer needs its own /api/farm fetch.
+  const refreshHeroImage = useCallback(async () => {
+    const settings = await getCachedFarmSettings();
+    setHeroImageUrl(settings?.heroImageUrl ?? null);
   }, []);
 
   const refreshData = useCallback(async () => {
@@ -106,15 +131,16 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       const iso = new Date().toISOString();
       setLastSyncedAtState(iso);
       await refreshPendingCount();
-      // Reload camps into context after refresh
+      // Reload camps + hero image into context after refresh
       const updated = await getCachedCamps();
       setCamps(updated);
+      await refreshHeroImage();
       setSyncStatus('idle');
     } catch (err) {
       console.error('refreshData error:', err);
       setSyncStatus('error');
     }
-  }, [pendingCount, syncStatus, refreshPendingCount]);
+  }, [pendingCount, syncStatus, refreshPendingCount, refreshHeroImage]);
 
   const syncNow = useCallback(async () => {
     if (syncStatus === 'syncing') return;
@@ -126,15 +152,16 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
         syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 4000);
       }
-      // Reload camps into context after refresh
+      // Reload camps + hero image into context after refresh
       const updated = await getCachedCamps();
       setCamps(updated);
+      await refreshHeroImage();
       await refreshPendingCount();
       setSyncStatus('idle');
     } catch {
       setSyncStatus('error');
     }
-  }, [syncStatus, refreshPendingCount]);
+  }, [syncStatus, refreshPendingCount, refreshHeroImage]);
 
   // Initialize on farm switch — set farm slug for IndexedDB isolation BEFORE any DB calls.
   // The `cancelled` flag discards async results that resolve after a subsequent farm switch,
@@ -148,17 +175,27 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     setIsOnline(navigator.onLine);
 
     refreshPendingCount();
-    getLastSyncedAt().then((ts) => {
-      if (!cancelled) setLastSyncedAtState(ts);
-    });
 
-    // Load camps: paint instantly with cache, always pull fresh in background
-    getCachedCamps().then((existing) => {
-      if (cancelled) return;
-      if (existing.length > 0) setCamps(existing);
-      setCampsLoaded(true);
-      refreshData();
-    });
+    // Paint instantly from cache, then pull fresh IFF the last full sync is
+    // older than REFRESH_TTL_MS. A user navigating between logger pages
+    // inside the same minute should not trigger four back-to-back
+    // /api/camps + /api/animals + /api/farm + /api/camps/status fan-outs.
+    // Cache-first is correct here and online-reconnect schedules its own
+    // refresh, so users coming back from offline never serve stale data.
+    Promise.all([getCachedCamps(), getCachedFarmSettings(), getLastSyncedAt()]).then(
+      ([cachedCamps, cachedSettings, lastSyncedIso]) => {
+        if (cancelled) return;
+        if (cachedCamps.length > 0) setCamps(cachedCamps);
+        setHeroImageUrl(cachedSettings?.heroImageUrl ?? null);
+        setCampsLoaded(true);
+        setLastSyncedAtState(lastSyncedIso);
+        const lastSyncedMs = lastSyncedIso ? Date.parse(lastSyncedIso) : 0;
+        const staleMs = Date.now() - lastSyncedMs;
+        if (Number.isNaN(lastSyncedMs) || staleMs > REFRESH_TTL_MS) {
+          refreshData();
+        }
+      },
+    );
 
     // Load tasks from IndexedDB if available (tasks store added in DB v3)
     getCachedTasks(farmSlug).then((cachedTasks) => {
@@ -196,6 +233,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         camps,
         campsLoaded,
         tasks,
+        heroImageUrl,
         syncNow,
         refreshData,
         refreshPendingCount,

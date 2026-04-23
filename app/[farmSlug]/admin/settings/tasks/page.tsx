@@ -19,7 +19,6 @@ import TaskSettingsClient, {
 } from "@/components/admin/tasks/TaskSettingsClient";
 import { DEFAULT_TASK_SETTINGS, type FarmTaskSettings } from "@/lib/farm-settings/defaults";
 
-export const dynamic = "force-dynamic";
 
 function parseTaskSettings(raw: string | null | undefined): FarmTaskSettings {
   if (!raw) return DEFAULT_TASK_SETTINGS;

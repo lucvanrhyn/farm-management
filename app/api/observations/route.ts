@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // Allowlist of valid observation type strings to prevent arbitrary type injection
@@ -123,10 +123,7 @@ export async function POST(request: NextRequest) {
         loggedBy: session.user?.email ?? null,
       },
     });
-    revalidatePath('/admin');
-    revalidatePath('/admin/observations');
-    revalidatePath('/admin/grafieke');
-    revalidatePath('/dashboard');
+    revalidateObservationWrite(db.slug);
     return NextResponse.json({ success: true, id: record.id });
   } catch (err) {
     console.error("[observations] DB error:", err);

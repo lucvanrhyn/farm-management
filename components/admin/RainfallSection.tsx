@@ -1,6 +1,11 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import type { Camp } from "@/lib/types";
-import RainfallClient from "./RainfallClient";
+import dynamic from "next/dynamic";
+
+const RainfallClient = dynamic(
+  () => import("./RainfallClient"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 
 interface Props {
   farmSlug: string;

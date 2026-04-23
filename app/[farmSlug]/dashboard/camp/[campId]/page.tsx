@@ -6,7 +6,6 @@ import { getFarmMode } from "@/lib/server/get-farm-mode";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
 
 export default async function CampDetailPage({
   params,

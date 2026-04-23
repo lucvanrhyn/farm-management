@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { voidIt3Snapshot } from "@/lib/server/sars-it3";
+import { revalidateObservationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -54,5 +55,6 @@ export async function POST(
 
   await voidIt3Snapshot(prisma, id, reason);
 
+  revalidateObservationWrite(farmSlug);
   return NextResponse.json({ ok: true });
 }

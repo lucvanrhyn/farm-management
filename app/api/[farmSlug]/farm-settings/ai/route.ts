@@ -32,6 +32,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, isBudgetExempt, type FarmTier } from "@/lib/tier";
+import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 import {
   ASSISTANT_NAME_MAX_LEN,
   ASSISTANT_NAME_REGEX,
@@ -255,6 +256,7 @@ export async function PUT(
       });
     }
 
+    revalidateSettingsWrite(farmSlug);
     return NextResponse.json({
       success: true,
       settings: {

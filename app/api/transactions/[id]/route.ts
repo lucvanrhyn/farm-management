@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export async function PATCH(
   request: NextRequest,
@@ -52,8 +52,7 @@ export async function PATCH(
     data,
   });
 
-  revalidatePath('/admin');
-  revalidatePath('/admin/finansies');
+  revalidateTransactionWrite(db.slug);
   return NextResponse.json(transaction);
 }
 
@@ -77,7 +76,6 @@ export async function DELETE(
   }
 
   await prisma.transaction.delete({ where: { id } });
-  revalidatePath('/admin');
-  revalidatePath('/admin/finansies');
+  revalidateTransactionWrite(db.slug);
   return NextResponse.json({ ok: true });
 }

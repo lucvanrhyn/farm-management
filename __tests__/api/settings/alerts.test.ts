@@ -39,6 +39,13 @@ vi.mock("@/lib/auth", () => ({
   verifyFreshAdminRole: (...args: unknown[]) => mockVerifyFreshAdminRole(...args),
 }));
 
+// Stub next/cache so revalidateTag calls don't blow up outside a Next.js runtime
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+  unstable_cache: vi.fn().mockImplementation((fn: (...args: unknown[]) => unknown) => fn),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 function req(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/trio-b-boerdery/settings/alerts", {

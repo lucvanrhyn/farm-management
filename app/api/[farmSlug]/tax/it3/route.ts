@@ -10,6 +10,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueIt3Snapshot } from "@/lib/server/sars-it3";
 import { isPaidTier } from "@/lib/tier";
+import { revalidateObservationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,7 @@ export async function POST(
       taxYear,
       generatedBy: session.user?.email ?? null,
     });
+    revalidateObservationWrite(farmSlug);
     return NextResponse.json(record, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to issue IT3 snapshot";

@@ -6,13 +6,20 @@ import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import type { ADGResult, WeightRecord } from "@/lib/server/weight-analytics";
-import WeightTrendChart from "@/components/admin/charts/WeightTrendChart";
+import dynamic from "next/dynamic";
 import type { WeightPoint } from "@/components/admin/charts/WeightTrendChart";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
-import AnimalInvestment from "@/components/admin/AnimalInvestment";
+
+const WeightTrendChart = dynamic(
+  () => import("@/components/admin/charts/WeightTrendChart"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
+const AnimalInvestment = dynamic(
+  () => import("@/components/admin/AnimalInvestment"),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 import CostOfGainCard from "@/components/admin/CostOfGainCard";
 
-export const dynamic = "force-dynamic";
 
 const BASE_TABS = [
   { key: "overview",      label: "Overview" },

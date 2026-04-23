@@ -18,6 +18,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { observationFromTaskCompletion } from "@/lib/tasks/observation-mapping";
 import type { TaskCompletionPayload } from "@/lib/tasks/observation-mapping";
+import { revalidateTaskWrite } from "@/lib/server/revalidate";
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export async function PATCH(
       observationCreated = true;
       observationId = createdObs.id;
 
+      revalidateTaskWrite(db.slug);
       return NextResponse.json({
         ...updatedTask,
         observationCreated,
@@ -143,6 +145,7 @@ export async function PATCH(
   // ── Standard update (no observation) ──
   const task = await prisma.task.update({ where: { id }, data: update });
 
+  revalidateTaskWrite(db.slug);
   return NextResponse.json({
     ...task,
     observationCreated: false,
@@ -172,5 +175,6 @@ export async function DELETE(
 
   await prisma.task.delete({ where: { id } });
 
+  revalidateTaskWrite(db.slug);
   return NextResponse.json({ success: true });
 }

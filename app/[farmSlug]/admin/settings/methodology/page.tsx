@@ -18,7 +18,6 @@ import {
 } from "@/lib/einstein/settings-schema";
 import MethodologyForm from "@/components/einstein/settings/MethodologyForm";
 
-export const dynamic = "force-dynamic";
 
 export default async function MethodologyPage({
   params,

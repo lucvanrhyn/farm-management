@@ -5,7 +5,6 @@ import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import type { FarmTier } from "@/lib/tier";
 
-export const dynamic = "force-dynamic";
 
 // ── Skeleton components ───────────────────────────────────────────────────────
 

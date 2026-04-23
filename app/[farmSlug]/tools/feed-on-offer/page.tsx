@@ -6,7 +6,12 @@ import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { FeedOnOfferSummaryCards } from '@/components/feed-on-offer/FeedOnOfferSummaryCards';
 import { FeedOnOfferCampTable } from '@/components/feed-on-offer/FeedOnOfferCampTable';
 import { CoverReadingForm } from '@/components/feed-on-offer/CoverReadingForm';
-import { FeedOnOfferTrendChart } from '@/components/feed-on-offer/FeedOnOfferTrendChart';
+import nextDynamic from 'next/dynamic';
+
+const FeedOnOfferTrendChart = nextDynamic(
+  () => import('@/components/feed-on-offer/FeedOnOfferTrendChart').then((m) => ({ default: m.FeedOnOfferTrendChart })),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 
 export const dynamic = 'force-dynamic';
 

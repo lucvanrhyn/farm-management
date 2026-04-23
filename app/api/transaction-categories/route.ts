@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
-import { revalidatePath } from "next/cache";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -48,6 +48,6 @@ export async function POST(request: NextRequest) {
     data: { name: name.trim(), type, isDefault: false },
   });
 
-  revalidatePath('/admin/finansies');
+  revalidateTransactionWrite(db.slug);
   return NextResponse.json(category, { status: 201 });
 }

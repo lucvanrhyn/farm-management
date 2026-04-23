@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { revalidateCampWrite } from "@/lib/server/revalidate";
 
 export async function PATCH(
   req: NextRequest,
@@ -71,9 +71,7 @@ export async function PATCH(
     },
   });
 
-  revalidatePath("/admin/camps");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateCampWrite(db.slug);
 
   return NextResponse.json({ success: true });
 }
@@ -109,9 +107,7 @@ export async function DELETE(
 
   await prisma.camp.delete({ where: { campId } });
 
-  revalidatePath("/admin/camps");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateCampWrite(db.slug);
 
   return NextResponse.json({ success: true });
 }

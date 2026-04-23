@@ -3,43 +3,61 @@ import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 import { cookies, headers } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
+import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
 import type { Session } from "next-auth";
 import type { SessionFarm } from "@/types/next-auth";
 
-// Cache Prisma clients per farm slug to avoid creating a new connection on every request.
-// Uses globalThis so the cache survives Next.js hot-reload in development.
+// Cache Prisma clients per farm slug to avoid creating a new connection on
+// every request. Uses globalThis so the cache survives Next.js hot-reload.
+//
+// Note: there is intentionally NO eager `SELECT 1` probe on this path.
+// The previous implementation ran a probe every 5 minutes, taxing the happy
+// path with a serial round-trip before real work. The probe never actually
+// prevented token-expiry errors — queries between probe windows still failed
+// with 401. Correctness is now on the error path: `withFarmPrisma` catches
+// libSQL auth failures, evicts the cached client + credentials, and retries
+// once against a freshly-loaded client. Callers that use `getPrismaForFarm`
+// directly surface the 401 to their own handler (same behaviour as before,
+// minus the wasted probes).
 const globalForPrisma = globalThis as unknown as {
   farmClients?: Map<string, PrismaClient>;
-  lastValidated?: Map<string, number>;
   inflightCreation?: Map<string, Promise<PrismaClient | null>>;
 };
 if (!globalForPrisma.farmClients) globalForPrisma.farmClients = new Map();
-if (!globalForPrisma.lastValidated) globalForPrisma.lastValidated = new Map();
 if (!globalForPrisma.inflightCreation) globalForPrisma.inflightCreation = new Map();
 
-const VALIDATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const AUTH_ERROR_MESSAGES = [
+  "401",
+  "unauthorized",
+  "invalid token",
+  "expired",
+  "authentication",
+  "sqlite_auth",
+];
 
-function isTokenExpiredError(err: unknown): boolean {
-  const msg = String((err as Record<string, unknown>)?.message ?? "");
-  const code = String((err as Record<string, unknown>)?.code ?? "");
-  // Turso/libSQL wraps 401 responses as SERVER_ERROR with "401" in the message
-  if (code === "SERVER_ERROR" && (msg.includes("401") || msg.toLowerCase().includes("unauthorized"))) return true;
-  return false;
+export function isTokenExpiredError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = String((err as Record<string, unknown>).code ?? "").toLowerCase();
+  const msg = String((err as Record<string, unknown>).message ?? "").toLowerCase();
+  if (code === "server_error" && (msg.includes("401") || msg.includes("unauthorized"))) {
+    return true;
+  }
+  if (code === "token_expired" || code === "sqlite_auth") return true;
+  return AUTH_ERROR_MESSAGES.some((needle) => msg.includes(needle));
 }
 
 async function createFarmClient(slug: string): Promise<PrismaClient | null> {
-  // Deduplicate concurrent creation requests for the same slug
+  // Deduplicate concurrent creation requests for the same slug.
   const inflight = globalForPrisma.inflightCreation!.get(slug);
   if (inflight) return inflight;
 
   const promise = (async () => {
-    const creds = await getFarmCreds(slug);
+    const creds = await getCachedFarmCreds(slug, getFarmCreds);
     if (!creds) return null;
     const libsql = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
     const adapter = new PrismaLibSQL(libsql);
     const client = new PrismaClient({ adapter });
     globalForPrisma.farmClients!.set(slug, client);
-    globalForPrisma.lastValidated!.set(slug, Date.now());
     return client;
   })();
 
@@ -51,30 +69,51 @@ async function createFarmClient(slug: string): Promise<PrismaClient | null> {
   }
 }
 
+/**
+ * Resolve a scoped Prisma client for the given farm slug.
+ *
+ * Consider using `withFarmPrisma(slug, fn)` instead for new code — it adds
+ * automatic one-shot retry on token-expiry errors. This bare accessor is
+ * preserved for backward compatibility with existing call sites.
+ */
 export async function getPrismaForFarm(slug: string): Promise<PrismaClient | null> {
   const cached = globalForPrisma.farmClients!.get(slug);
-  if (cached) {
-    const now = Date.now();
-    const lastCheck = globalForPrisma.lastValidated!.get(slug) ?? 0;
-    if (now - lastCheck > VALIDATION_INTERVAL_MS) {
-      try {
-        await cached.$queryRawUnsafe("SELECT 1");
-        globalForPrisma.lastValidated!.set(slug, now);
-      } catch (err) {
-        // Update timestamp on any error to prevent probe storms on transient failures
-        globalForPrisma.lastValidated!.set(slug, now);
-        if (isTokenExpiredError(err)) {
-          console.warn(`[farm-prisma] Token expired for "${slug}", evicting cached client`);
-          evictFarmClient(slug);
-          return createFarmClient(slug);
-        }
-        throw err;
-      }
-    }
-    return cached;
-  }
-
+  if (cached) return cached;
   return createFarmClient(slug);
+}
+
+/**
+ * Run a Prisma query against a farm's database with auto-retry on token
+ * expiry. If the callback throws a libSQL auth error (401 / token expired),
+ * the cached client and credentials are evicted, a fresh client is
+ * constructed, and the callback runs once more. Any other error — or a
+ * second auth error on retry — propagates to the caller.
+ *
+ * Prefer this over calling `getPrismaForFarm` + running queries directly;
+ * it handles the Turso credential-rotation edge case without exposing it
+ * to application code.
+ */
+export async function withFarmPrisma<T>(
+  slug: string,
+  fn: (prisma: PrismaClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPrismaForFarm(slug);
+  if (!client) {
+    throw new Error(`withFarmPrisma: farm "${slug}" not found`);
+  }
+  try {
+    return await fn(client);
+  } catch (err) {
+    if (!isTokenExpiredError(err)) throw err;
+    console.warn(
+      `[farm-prisma] auth error for "${slug}" — evicting client + creds and retrying once`,
+    );
+    evictFarmClient(slug);
+    evictFarmCreds(slug);
+    const fresh = await createFarmClient(slug);
+    if (!fresh) throw err;
+    return await fn(fresh);
+  }
 }
 
 /**
@@ -84,10 +123,8 @@ export async function getPrismaForFarm(slug: string): Promise<PrismaClient | nul
  */
 export function evictFarmClient(slug: string): void {
   globalForPrisma.farmClients!.delete(slug);
-  globalForPrisma.lastValidated!.delete(slug);
 }
 
-// Farm-slug validator mirrors the one in getPrismaForSlugWithAuth.
 const FARM_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // First path segment after a Referer origin when the user is inside a farm shell.
 // Must stay in sync with proxy.ts's farmRouteMatch regex.
@@ -112,7 +149,6 @@ function slugFromReferer(referer: string | null): string | null {
 // /[farmSlug]/* routes without ever letting proxy.ts refresh the cookie. The
 // caller (getPrismaWithAuth) still enforces that the session user has access
 // to the resolved slug, so Referer spoofing cannot widen access.
-// Returns { error, status } if neither source yields a slug or the farm is not found.
 export async function getPrismaForRequest(): Promise<
   { prisma: PrismaClient; slug: string } | { error: string; status: number }
 > {
@@ -155,7 +191,7 @@ export async function getPrismaForSlugWithAuth(
 ): Promise<
   { prisma: PrismaClient; slug: string; role: string } | { error: string; status: number }
 > {
-  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(slug)) {
+  if (!FARM_SLUG_RE.test(slug)) {
     return { error: "Invalid farm slug", status: 400 };
   }
 
@@ -167,4 +203,10 @@ export async function getPrismaForSlugWithAuth(
   if (!prisma) return { error: "Farm not found", status: 404 };
 
   return { prisma, slug, role: farm.role };
+}
+
+// Test-only hook. Never call from app code.
+export function __clearFarmClientCache(): void {
+  globalForPrisma.farmClients!.clear();
+  globalForPrisma.inflightCreation!.clear();
 }

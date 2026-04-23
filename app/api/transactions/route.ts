@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -96,7 +96,6 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  revalidatePath('/admin');
-  revalidatePath('/admin/finansies');
+  revalidateTransactionWrite(db.slug);
   return NextResponse.json(transaction, { status: 201 });
 }

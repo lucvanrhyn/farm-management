@@ -10,7 +10,6 @@ import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { AnimalCategory } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
 
 const CATEGORY_ORDER: AnimalCategory[] = ["Cow", "Bull", "Heifer", "Calf", "Ox"];
 const CATEGORY_LABELS: Record<AnimalCategory, string> = {
