@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,10 @@ export async function POST() {
     where: { isRead: false },
     data: { isRead: true },
   });
+
+  // Invalidate the cached /api/notifications response so the bell reflects
+  // the new isRead state without waiting out the 30s server TTL.
+  revalidateNotificationWrite(db.slug);
 
   return NextResponse.json({ success: true });
 }
