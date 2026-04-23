@@ -27,95 +27,102 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { expandRule } from "@/lib/tasks/recurrence";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
+import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
-
-  const { searchParams } = new URL(req.url);
-  const assignee = searchParams.get("assignee");
-  const status = searchParams.get("status");
-  const date = searchParams.get("date");
-  const campId = searchParams.get("campId");
-  const taskType = searchParams.get("taskType");
-  const asParam = searchParams.get("as");
-  const fromParam = searchParams.get("from");
-  const toParam = searchParams.get("to");
-
-  // Geo-filter params
-  const latParam = searchParams.get("lat");
-  const lngParam = searchParams.get("lng");
-  const radiusKmParam = searchParams.get("radiusKm");
-
-  // ── Occurrences mode ──
-  if (asParam === "occurrences") {
-    const now = new Date();
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-
-    const from = fromParam ? new Date(fromParam) : todayStart;
-    const to = toParam ? new Date(toParam) : todayEnd;
-
-    const occurrences = await prisma.taskOccurrence.findMany({
-      where: {
-        occurrenceAt: { gte: from, lte: to },
-      },
-      include: { task: true },
-      orderBy: { occurrenceAt: "asc" },
-    });
-    return NextResponse.json(occurrences);
-  }
-
-  // ── Standard task list mode ──
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {};
-
-  if (assignee) where.assignedTo = assignee;
-
-  if (status) {
-    const statuses = status
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
-  }
-
-  if (date) where.dueDate = date;
-  if (campId) where.campId = campId;
-  if (taskType) where.taskType = taskType;
-
-  // Bounding-box geo filter — small-angle approximation
-  // 1 degree latitude ≈ 111 km; longitude varies by cos(lat) but we use lat
-  // as an approximation (acceptable error < 5% within SA at ~30°S).
-  if (latParam && lngParam && radiusKmParam) {
-    const lat = parseFloat(latParam);
-    const lng = parseFloat(lngParam);
-    const radiusKm = parseFloat(radiusKmParam);
-    if (!isNaN(lat) && !isNaN(lng) && !isNaN(radiusKm) && radiusKm > 0) {
-      const deltaLat = radiusKm / 111;
-      const deltaLng = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
-      where.lat = { gte: lat - deltaLat, lte: lat + deltaLat };
-      where.lng = { gte: lng - deltaLng, lte: lng + deltaLng };
+  return withServerTiming(async () => {
+    const session = await timeAsync("session", () => getServerSession(authOptions));
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  }
 
-  const tasks = await prisma.task.findMany({
-    where,
-    orderBy: [{ dueDate: "asc" }, { priority: "asc" }, { createdAt: "asc" }],
+    const db = await getPrismaWithAuth(session);
+    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+    const { prisma } = db;
+
+    const { searchParams } = new URL(req.url);
+    const assignee = searchParams.get("assignee");
+    const status = searchParams.get("status");
+    const date = searchParams.get("date");
+    const campId = searchParams.get("campId");
+    const taskType = searchParams.get("taskType");
+    const asParam = searchParams.get("as");
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+
+    // Geo-filter params
+    const latParam = searchParams.get("lat");
+    const lngParam = searchParams.get("lng");
+    const radiusKmParam = searchParams.get("radiusKm");
+
+    // ── Occurrences mode ──
+    if (asParam === "occurrences") {
+      const now = new Date();
+      const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      const from = fromParam ? new Date(fromParam) : todayStart;
+      const to = toParam ? new Date(toParam) : todayEnd;
+
+      const occurrences = await timeAsync("query", () =>
+        prisma.taskOccurrence.findMany({
+          where: {
+            occurrenceAt: { gte: from, lte: to },
+          },
+          include: { task: true },
+          orderBy: { occurrenceAt: "asc" },
+        }),
+      );
+      return NextResponse.json(occurrences);
+    }
+
+    // ── Standard task list mode ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: Record<string, any> = {};
+
+    if (assignee) where.assignedTo = assignee;
+
+    if (status) {
+      const statuses = status
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
+    }
+
+    if (date) where.dueDate = date;
+    if (campId) where.campId = campId;
+    if (taskType) where.taskType = taskType;
+
+    // Bounding-box geo filter — small-angle approximation
+    // 1 degree latitude ≈ 111 km; longitude varies by cos(lat) but we use lat
+    // as an approximation (acceptable error < 5% within SA at ~30°S).
+    if (latParam && lngParam && radiusKmParam) {
+      const lat = parseFloat(latParam);
+      const lng = parseFloat(lngParam);
+      const radiusKm = parseFloat(radiusKmParam);
+      if (!isNaN(lat) && !isNaN(lng) && !isNaN(radiusKm) && radiusKm > 0) {
+        const deltaLat = radiusKm / 111;
+        const deltaLng = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+        where.lat = { gte: lat - deltaLat, lte: lat + deltaLat };
+        where.lng = { gte: lng - deltaLng, lte: lng + deltaLng };
+      }
+    }
+
+    const tasks = await timeAsync("query", () =>
+      prisma.task.findMany({
+        where,
+        orderBy: [{ dueDate: "asc" }, { priority: "asc" }, { createdAt: "asc" }],
+      }),
+    );
+
+    // Parse JSON-stringified arrays before returning
+    const parsed = tasks.map(parseTaskArrayFields);
+
+    return NextResponse.json(parsed);
   });
-
-  // Parse JSON-stringified arrays before returning
-  const parsed = tasks.map(parseTaskArrayFields);
-
-  return NextResponse.json(parsed);
 }
 
 // ── POST ──────────────────────────────────────────────────────────────────────

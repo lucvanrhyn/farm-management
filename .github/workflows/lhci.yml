@@ -1,0 +1,154 @@
+# Lighthouse CI — cold-perf observability gate.
+#
+# Triggers: every pull request targeting `main` and every push to `main`.
+# What it does:
+#   1. Installs deps (pnpm), builds the app (webpack — turbopack breaks Serwist).
+#   2. Logs in as the bench user via the sign-in API, captures the session
+#      cookie, and injects it as `LHCI_EXTRA_HEADERS` so LHCI can probe
+#      authenticated pages.
+#   3. Starts the production server, runs `lhci autorun` (which in turn
+#      loads `lighthouserc.js`).
+#   4. Distils the results into `tasks/bench/latest.json` via
+#      `scripts/bench-snapshot.ts` and uploads the full LHCI report +
+#      the snapshot as workflow artifacts.
+#
+# Required secrets:
+#   BENCH_PASSWORD — password for `e2e-bench@farmtrack.app`. Add via
+#     GitHub → repo Settings → Secrets and variables → Actions.
+#   NEXTAUTH_SECRET, TURSO_DATABASE_URL, TURSO_AUTH_TOKEN,
+#   META_TURSO_DATABASE_URL, META_TURSO_AUTH_TOKEN — same values used
+#   by production; LHCI cannot boot the app without them.
+
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  # Only one LHCI run per branch at a time — saves CI minutes.
+  group: lhci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lhci:
+    name: lhci-cold
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # Build-time env. Matches Vercel Production settings.
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      META_TURSO_DATABASE_URL: ${{ secrets.META_TURSO_DATABASE_URL }}
+      META_TURSO_AUTH_TOKEN: ${{ secrets.META_TURSO_AUTH_TOKEN }}
+      # Flag parity with production so the cache path is on.
+      FARM_CACHE_ENABLED_SLUGS: "*"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22 + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Get pnpm store dir
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (webpack — turbopack breaks Serwist)
+        run: pnpm build --webpack
+
+      - name: Fetch session cookie for bench user
+        id: session
+        env:
+          BENCH_EMAIL: e2e-bench@farmtrack.app
+          BENCH_PASSWORD: ${{ secrets.BENCH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BENCH_PASSWORD:-}" ]; then
+            echo "::warning::BENCH_PASSWORD secret is not set — skipping LHCI run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Start the server in the background just to mint a cookie.
+          pnpm start -p 3001 >/tmp/next.log 2>&1 &
+          NEXT_PID=$!
+          # Wait for ready signal (max ~60s).
+          for _ in $(seq 1 60); do
+            if grep -q 'Ready' /tmp/next.log 2>/dev/null; then break; fi
+            sleep 1
+          done
+
+          # next-auth credentials-provider sign-in flow: GET csrf → POST callback.
+          CSRF_JSON=$(curl -sS -c /tmp/cookies.txt http://localhost:3001/api/auth/csrf)
+          CSRF_TOKEN=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).csrfToken)" "$CSRF_JSON")
+
+          curl -sS -L \
+            -c /tmp/cookies.txt -b /tmp/cookies.txt \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "csrfToken=${CSRF_TOKEN}" \
+            --data-urlencode "email=${BENCH_EMAIL}" \
+            --data-urlencode "password=${BENCH_PASSWORD}" \
+            --data-urlencode "redirect=false" \
+            --data-urlencode "json=true" \
+            http://localhost:3001/api/auth/callback/credentials >/dev/null
+
+          # Build a Cookie header string from every cookie in the jar.
+          COOKIE=$(awk 'NF && $1 !~ /^#/ { printf "%s=%s; ", $6, $7 }' /tmp/cookies.txt | sed 's/; $//')
+          if [ -z "$COOKIE" ]; then
+            echo "::error::Failed to mint session cookie for bench user."
+            kill $NEXT_PID || true
+            exit 1
+          fi
+
+          # Emit headers JSON for LHCI's extraHeaders setting.
+          HEADERS_JSON=$(node -e "console.log(JSON.stringify({ Cookie: process.argv[1] }))" "$COOKIE")
+          echo "headers=$HEADERS_JSON" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          kill $NEXT_PID || true
+          # Give the port a moment to release.
+          sleep 2
+
+      - name: Run Lighthouse CI
+        if: steps.session.outputs.skip != 'true'
+        env:
+          LHCI_EXTRA_HEADERS: ${{ steps.session.outputs.headers }}
+        run: pnpm dlx @lhci/cli@0.15.x autorun --config=lighthouserc.js
+
+      - name: Distil bench snapshot
+        if: always() && steps.session.outputs.skip != 'true'
+        run: pnpm exec tsx scripts/bench-snapshot.ts --lhci-dir=.lighthouseci --out=tasks/bench
+
+      - name: Upload LHCI report
+        if: always() && steps.session.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lhci-report
+          path: |
+            .lighthouseci/
+            tasks/bench/latest.json
+          retention-days: 14
