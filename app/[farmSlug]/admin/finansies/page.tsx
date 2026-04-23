@@ -16,7 +16,6 @@ import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
-export const dynamic = "force-dynamic";
 
 export default async function FinansiesPage({
   params,

@@ -9,7 +9,6 @@ import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
 
 export default async function AdminAnimalsPage({
   params,

@@ -69,6 +69,13 @@ vi.mock("@/lib/farm-prisma", () => ({
   }),
 }));
 
+// Stub next/cache so revalidateTag calls don't blow up outside a Next.js runtime
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+  unstable_cache: vi.fn().mockImplementation((fn: (...args: unknown[]) => unknown) => fn),
+}));
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeReq(url: string, options?: Record<string, any>): NextRequest {

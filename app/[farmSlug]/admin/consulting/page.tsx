@@ -6,7 +6,6 @@ import {
 } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
 
 const MS_PER_APPROX_MONTH = 1000 * 60 * 60 * 24 * 30; // ~30-day approximation for revenue estimates
 

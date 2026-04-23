@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { revalidateMobWrite } from "@/lib/server/revalidate";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -61,8 +61,7 @@ export async function POST(req: NextRequest) {
     data: { name, currentCamp },
   });
 
-  revalidatePath("/admin/mobs");
-  revalidatePath("/admin");
+  revalidateMobWrite(db.slug);
 
   return NextResponse.json(
     { id: mob.id, name: mob.name, current_camp: mob.currentCamp, animal_count: 0 },

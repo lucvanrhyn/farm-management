@@ -18,7 +18,6 @@ import SpeciesPopulationTable from "@/components/game/SpeciesPopulationTable";
 import OverdueCensusTable from "@/components/game/OverdueCensusTable";
 import type { SpeciesAlert } from "@/lib/species/types";
 
-export const dynamic = "force-dynamic";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

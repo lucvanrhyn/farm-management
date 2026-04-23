@@ -16,6 +16,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { SEED_TEMPLATES } from "@/lib/tasks/seed-templates";
+import { revalidateTaskWrite } from "@/lib/server/revalidate";
 
 export async function POST(req: NextRequest) {
   // Suppress unused parameter warning — no body needed for this route
@@ -79,5 +80,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  revalidateTaskWrite(db.slug);
   return NextResponse.json({ installed, skipped });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { revalidatePath } from "next/cache";
+import { revalidateCampWrite } from "@/lib/server/revalidate";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
 import { getCachedCampList } from "@/lib/server/cached";
@@ -65,9 +65,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  revalidatePath("/admin/camps");
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
+  revalidateCampWrite(db.slug);
 
   // Return snake_case to match the GET /api/camps response shape
   return NextResponse.json({

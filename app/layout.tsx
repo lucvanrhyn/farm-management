@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display } from "
 import "./globals.css";
 import { Providers } from "./providers";
 import { SWRegistrar } from "@/components/SWRegistrar";
+import { ReportWebVitals } from "@/components/ReportWebVitals";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 
@@ -60,6 +61,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
         <SWRegistrar />
+        <ReportWebVitals />
         <Providers session={session}>{children}</Providers>
       </body>
     </html>

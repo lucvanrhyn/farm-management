@@ -8,7 +8,6 @@ import It3ExportCard from "@/components/admin/It3ExportCard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmCreds } from "@/lib/meta-db";
 
-export const dynamic = "force-dynamic";
 
 interface ReportCard {
   title: string;

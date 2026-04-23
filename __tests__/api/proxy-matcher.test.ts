@@ -5,7 +5,7 @@
  *
  * Rationale: Phase J memory "Proxy matcher blind spot" — new /api/* routes
  * silently 307 to /login when the Next.js middleware matcher excludes them.
- * This test parses the ACTUAL config.matcher[0] string from proxy.ts at test
+ * This test parses the ACTUAL config.matcher[0] string from middleware.ts at test
  * time (via fs), converts it to a regexp, and asserts each Phase K route has
  * the expected auth disposition so regressions are caught at CI rather than
  * after preview deploy.
@@ -19,7 +19,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-// ── Read proxy.ts config.matcher at test time ─────────────────────────────────
+// ── Read middleware.ts config.matcher at test time ─────────────────────────────────
 // We extract the raw string from the source so any edits to proxy.ts are
 // automatically picked up without updating this file.
 
@@ -176,7 +176,7 @@ const KNOWN_PUBLIC_ROUTES: Array<{ label: string; path: string }> = [
 // Assertions
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("proxy.ts config.matcher — Phase K route auth disposition", () => {
+describe("middleware.ts config.matcher — Phase K route auth disposition", () => {
   it("parses a valid regex from proxy.ts", () => {
     expect(matcherRegex).toBeInstanceOf(RegExp);
     // Sanity: the regex should at minimum match some paths
@@ -195,7 +195,7 @@ describe("proxy.ts config.matcher — Phase K route auth disposition", () => {
   }
 });
 
-describe("proxy.ts config.matcher — known public routes must NOT trigger proxy", () => {
+describe("middleware.ts config.matcher — known public routes must NOT trigger proxy", () => {
   for (const route of KNOWN_PUBLIC_ROUTES) {
     it(`[PUBLIC] ${route.label} — proxy skips ${route.path}`, () => {
       expect(matchesProxy(route.path)).toBe(false);
@@ -203,7 +203,7 @@ describe("proxy.ts config.matcher — known public routes must NOT trigger proxy
   }
 });
 
-describe("proxy.ts config.matcher — edge cases", () => {
+describe("middleware.ts config.matcher — edge cases", () => {
   it("matches arbitrary authenticated pages", () => {
     expect(matchesProxy("/delta-livestock/admin/tasks")).toBe(true);
     expect(matchesProxy("/farms")).toBe(true);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
-import { revalidatePath } from "next/cache";
+import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +131,7 @@ export async function POST(
     },
   });
 
-  revalidatePath(`/${farmSlug}/admin/finansies`);
+  revalidateTransactionWrite(farmSlug);
   return NextResponse.json(record, { status: 201 });
 }
 
@@ -176,7 +176,7 @@ export async function PATCH(
 
   try {
     const record = await prisma.budget.update({ where: { id }, data });
-    revalidatePath(`/${farmSlug}/admin/finansies`);
+    revalidateTransactionWrite(farmSlug);
     return NextResponse.json(record);
   } catch {
     return NextResponse.json({ error: "Record not found" }, { status: 404 });
@@ -211,6 +211,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete budget record" }, { status: 500 });
   }
 
-  revalidatePath(`/${farmSlug}/admin/finansies`);
+  revalidateTransactionWrite(farmSlug);
   return NextResponse.json({ ok: true });
 }

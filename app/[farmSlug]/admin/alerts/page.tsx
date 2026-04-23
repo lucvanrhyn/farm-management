@@ -4,7 +4,6 @@ import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
 import AlertsFilterClient from "@/components/admin/AlertsFilterClient";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 
-export const dynamic = "force-dynamic";
 
 export default async function AlertsPage({
   params,

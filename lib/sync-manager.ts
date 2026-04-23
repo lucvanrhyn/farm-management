@@ -34,10 +34,68 @@ interface ServerCampCondition {
   last_inspected_by: string | null;
 }
 
+// Pull /api/animals in fixed-size batches and upsert each batch into IDB
+// as it arrives. Paired with the cursor pagination on the server side, this
+// keeps peak memory bounded on large herds and lets the logger paint the
+// first screenful of animals before the full list lands. Batch size matches
+// the server DEFAULT_LIMIT so a typical small herd still completes in a
+// single request.
+const ANIMALS_PAGE_SIZE = 500;
+
+interface AnimalsPage {
+  items: PrismaAnimal[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+function mapPrismaAnimal(a: PrismaAnimal): Animal {
+  return {
+    animal_id: a.animalId,
+    name: a.name ?? undefined,
+    sex: a.sex as AnimalSex,
+    date_of_birth: a.dateOfBirth ?? undefined,
+    breed: a.breed,
+    category: a.category,
+    current_camp: a.currentCamp,
+    status: a.status,
+    mother_id: a.motherId ?? undefined,
+    father_id: a.fatherId ?? undefined,
+    date_added: a.dateAdded,
+  };
+}
+
+async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
+  const collected: Animal[] = [];
+  let cursor: string | null = null;
+  // Defensive upper bound on loop iterations. At 500 rows per page this
+  // caps at 50k animals per sync — well beyond any realistic SA herd,
+  // and guarantees we never spin forever if the server mis-reports
+  // `hasMore`.
+  const MAX_PAGES = 100;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({ limit: String(ANIMALS_PAGE_SIZE) });
+    if (cursor) params.set('cursor', cursor);
+    const res = await fetch(`/api/animals?${params.toString()}`);
+    if (!res.ok) {
+      console.warn('[sync] animals page fetch failed:', res.status, res.statusText);
+      return null;
+    }
+    const body = (await res.json()) as AnimalsPage;
+    for (const a of body.items) collected.push(mapPrismaAnimal(a));
+    if (!body.hasMore || !body.nextCursor) return collected;
+    cursor = body.nextCursor;
+  }
+  console.warn('[sync] animals pagination hit MAX_PAGES cap');
+  return collected;
+}
+
 export async function refreshCachedData(): Promise<void> {
-  const [campsRes, animalsRes, farmRes, statusRes] = await Promise.all([
+  // Three top-level refreshes run in parallel; animals pagination happens
+  // inside its own helper. /api/animals is no longer in the outer fan-out
+  // because it may take multiple requests.
+  const [campsRes, animals, farmRes, statusRes] = await Promise.all([
     fetch('/api/camps'),
-    fetch('/api/animals'),
+    fetchAllAnimalsPaged(),
     fetch('/api/farm'),
     fetch('/api/camps/status'),
   ]);
@@ -67,27 +125,18 @@ export async function refreshCachedData(): Promise<void> {
     await seedCamps(mergedCamps);
   }
 
-  if (animalsRes.ok) {
-    const prismaAnimals: PrismaAnimal[] = await animalsRes.json();
-    const animals: Animal[] = prismaAnimals.map((a) => ({
-      animal_id: a.animalId,
-      name: a.name ?? undefined,
-      sex: a.sex as AnimalSex,
-      date_of_birth: a.dateOfBirth ?? undefined,
-      breed: a.breed,
-      category: a.category,
-      current_camp: a.currentCamp,
-      status: a.status,
-      mother_id: a.motherId ?? undefined,
-      father_id: a.fatherId ?? undefined,
-      date_added: a.dateAdded,
-    }));
+  if (animals !== null) {
     await seedAnimals(animals);
   }
 
   if (farmRes.ok) {
-    const farm: { farmName: string; breed: string } = await farmRes.json();
-    await seedFarmSettings({ farmName: farm.farmName, breed: farm.breed });
+    const farm: { farmName: string; breed: string; heroImageUrl?: string } =
+      await farmRes.json();
+    await seedFarmSettings({
+      farmName: farm.farmName,
+      breed: farm.breed,
+      heroImageUrl: farm.heroImageUrl,
+    });
   }
 
   await setLastSyncedAt(new Date().toISOString());

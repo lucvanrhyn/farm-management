@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import type { SessionFarm } from '@/types/next-auth';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { calcVeldScore, calcGrazingCapacity, type BiomeType } from '@/lib/calculators/veld-score';
+import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
 interface PostBody {
   campId: string;
@@ -131,5 +132,6 @@ export async function POST(
       createdBy: session.user?.email ?? null,
     },
   });
+  revalidateObservationWrite(farmSlug);
   return NextResponse.json({ assessment: created }, { status: 201 });
 }

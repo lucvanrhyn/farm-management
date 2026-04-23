@@ -6,8 +6,13 @@ import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { VeldAssessmentForm } from '@/components/veld/VeldAssessmentForm';
 import { VeldCampSummaryCards } from '@/components/veld/VeldCampSummaryCards';
 import { VeldHistoryTable } from '@/components/veld/VeldHistoryTable';
-import { VeldTrendChart } from '@/components/veld/VeldTrendChart';
 import type { BiomeType } from '@/lib/calculators/veld-score';
+import nextDynamic from 'next/dynamic';
+
+const VeldTrendChart = nextDynamic(
+  () => import('@/components/veld/VeldTrendChart').then((m) => ({ default: m.VeldTrendChart })),
+  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+);
 
 export const dynamic = 'force-dynamic';
 

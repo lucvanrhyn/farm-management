@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
-
-export const dynamic = "force-dynamic";
+import { getPrismaForFarm, getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
 export async function GET(
   _req: NextRequest,
@@ -83,5 +82,6 @@ export async function POST(
     include: { steps: { orderBy: { sequence: "asc" } } },
   });
 
+  revalidateRotationWrite(farmSlug);
   return NextResponse.json(plan, { status: 201 });
 }

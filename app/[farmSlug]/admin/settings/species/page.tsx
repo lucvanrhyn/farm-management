@@ -2,7 +2,6 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAllSpeciesConfigs } from "@/lib/species/registry";
 import SpeciesSettingsForm, { type SpeciesRow } from "@/components/admin/SpeciesSettingsForm";
 
-export const dynamic = "force-dynamic";
 
 export default async function SpeciesSettingsPage({
   params,

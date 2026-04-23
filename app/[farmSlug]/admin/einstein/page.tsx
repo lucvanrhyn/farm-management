@@ -25,7 +25,6 @@ import {
 } from "@/lib/einstein/settings-schema";
 import { EinsteinChat } from "@/components/einstein/EinsteinChat";
 
-export const dynamic = "force-dynamic";
 
 export default async function EinsteinPage({
   params,

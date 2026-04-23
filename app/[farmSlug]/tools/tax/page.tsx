@@ -6,7 +6,6 @@ import { getUserRoleForFarm } from "@/lib/auth";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import It3PageClient from "./It3PageClient";
 
-export const dynamic = "force-dynamic";
 
 export default async function TaxPage({
   params,

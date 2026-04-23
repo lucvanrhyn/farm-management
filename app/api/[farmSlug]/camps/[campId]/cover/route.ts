@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { randomUUID } from "crypto";
 import type { SessionFarm } from "@/types/next-auth";
+import { revalidateCampWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -48,20 +49,21 @@ export async function GET(
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
 
-  const readings = await prisma.campCoverReading.findMany({
-    where: { campId },
-    orderBy: { recordedAt: "desc" },
-    take: 30,
-  });
-
-  const camp = await prisma.camp.findUnique({
-    where: { campId },
-    select: { sizeHectares: true },
-  });
-
-  const animalCount = await prisma.animal.count({
-    where: { currentCamp: campId, status: "Active" },
-  });
+  // Fire all three independent queries in parallel (~3 Turso round-trips → 1)
+  const [readings, camp, animalCount] = await Promise.all([
+    prisma.campCoverReading.findMany({
+      where: { campId },
+      orderBy: { recordedAt: "desc" },
+      take: 30,
+    }),
+    prisma.camp.findUnique({
+      where: { campId },
+      select: { sizeHectares: true },
+    }),
+    prisma.animal.count({
+      where: { currentCamp: campId, status: "Active" },
+    }),
+  ]);
 
   const latest = readings[0] ?? null;
   const daysRemaining = latest && camp?.sizeHectares
@@ -108,15 +110,17 @@ export async function POST(
     ? kgDmPerHaOverride
     : CATEGORY_KG_DM[coverCategory];
 
-  const camp = await prisma.camp.findUnique({
-    where: { campId },
-    select: { sizeHectares: true },
-  });
+  // Fetch camp and animal count in parallel (both needed before the create)
+  const [camp, animalCount] = await Promise.all([
+    prisma.camp.findUnique({
+      where: { campId },
+      select: { sizeHectares: true },
+    }),
+    prisma.animal.count({
+      where: { currentCamp: campId, status: "Active" },
+    }),
+  ]);
   if (!camp) return NextResponse.json({ error: "Camp not found" }, { status: 404 });
-
-  const animalCount = await prisma.animal.count({
-    where: { currentCamp: campId, status: "Active" },
-  });
 
   const reading = await prisma.campCoverReading.create({
     data: {
@@ -134,6 +138,7 @@ export async function POST(
     ? calcDaysRemaining(kgDmPerHa, camp.sizeHectares, animalCount, DEFAULT_USE_FACTOR)
     : null;
 
+  revalidateCampWrite(farmSlug);
   return NextResponse.json({ reading, daysRemaining }, { status: 201 });
 }
 
@@ -164,5 +169,6 @@ export async function DELETE(
   }
 
   await prisma.campCoverReading.delete({ where: { id: readingId } });
+  revalidateCampWrite(farmSlug);
   return NextResponse.json({ ok: true });
 }
