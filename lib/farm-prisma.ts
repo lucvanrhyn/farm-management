@@ -4,6 +4,7 @@ import { createClient } from "@libsql/client";
 import { cookies, headers } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
+import { recordTiming, getTimingBag } from "@/lib/server/server-timing";
 import type { Session } from "next-auth";
 import type { SessionFarm } from "@/types/next-auth";
 
@@ -75,11 +76,26 @@ async function createFarmClient(slug: string): Promise<PrismaClient | null> {
  * Consider using `withFarmPrisma(slug, fn)` instead for new code — it adds
  * automatic one-shot retry on token-expiry errors. This bare accessor is
  * preserved for backward compatibility with existing call sites.
+ *
+ * Observability: when a request-scoped timing bag is active (see
+ * `lib/server/server-timing.ts`), the client-acquisition duration is
+ * recorded under the `prisma-acquire` label. Zero overhead when no bag
+ * is active — the timing probe is a single AsyncLocalStorage lookup that
+ * returns `undefined` and short-circuits.
  */
 export async function getPrismaForFarm(slug: string): Promise<PrismaClient | null> {
   const cached = globalForPrisma.farmClients!.get(slug);
   if (cached) return cached;
-  return createFarmClient(slug);
+
+  // Only pay the `performance.now()` cost when there's a bag to write to.
+  if (!getTimingBag()) return createFarmClient(slug);
+
+  const start = performance.now();
+  try {
+    return await createFarmClient(slug);
+  } finally {
+    recordTiming("prisma-acquire", performance.now() - start);
+  }
 }
 
 /**

@@ -1,0 +1,5 @@
+{
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "runs": [],
+  "note": "Placeholder — overwritten by scripts/bench-snapshot.ts once the first LHCI run completes. Committed so that tasks/bench/ exists before CI first fires."
+}

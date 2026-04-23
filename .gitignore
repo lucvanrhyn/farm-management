@@ -71,3 +71,9 @@ login*.yaml
 relog.yaml
 fresh.yaml
 tmp/
+
+# Bench snapshots (LHCI output). Keep `latest.json` in source control
+# so we can diff it between PRs; ignore every timestamped run to avoid
+# flooding git with noise. `scripts/bench-snapshot.ts` writes both.
+tasks/bench/*.json
+!tasks/bench/latest.json
