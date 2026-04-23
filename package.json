@@ -109,5 +109,15 @@
       "vite": ">=8.0.5"
     }
   },
+  "browserslist": [
+    "chrome >= 90",
+    "edge >= 90",
+    "firefox >= 90",
+    "safari >= 14",
+    "ios_saf >= 14",
+    "not dead",
+    "not ie > 0",
+    "not op_mini all"
+  ],
   "//xlsx-note": "xlsx@0.18.5 has an unpatched prototype-pollution CVE (GHSA-4r6h-8v6p-xvw6) with no fix available on the npm registry. It is actively used by app/api/animals/import/route.ts and scripts/{create-template,seed-animals,export-dummy-to-excel}.ts for Excel import/export. Replacement (e.g. @e965/xlsx fork, exceljs, or sheetjs CDN build) is deferred to a dedicated workstream."
 }
