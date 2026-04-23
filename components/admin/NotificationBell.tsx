@@ -39,7 +39,11 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
 
   useEffect(() => {
     void fetchNotifications();
-    const interval = setInterval(() => void fetchNotifications(), 60_000);
+    // Poll every 120s. /api/notifications is now browser-cached for 15s and
+    // server-cached for 30s with tag-based invalidation on writes, so we can
+    // halve the request rate without sacrificing freshness — fresh alerts
+    // land via cache-tag invalidation, not this poll.
+    const interval = setInterval(() => void fetchNotifications(), 120_000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 

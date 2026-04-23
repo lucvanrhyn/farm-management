@@ -9,7 +9,7 @@
 
 import { unstable_cache } from "next/cache";
 import { withFarmPrisma } from "@/lib/farm-prisma";
-import { farmTag } from "@/lib/server/cache-tags";
+import { farmTag, notificationTag } from "@/lib/server/cache-tags";
 import { getLatestCampConditions, type LiveCampStatus } from "@/lib/server/camp-status";
 import { getOverviewForUserFarms, type FarmOverview } from "@/lib/server/multi-farm-overview";
 import type { SessionFarm } from "@/types/next-auth";
@@ -589,4 +589,58 @@ export async function getCachedDashboardData(
     },
   );
   return fetcher(farmSlug);
+}
+
+// ── Cached: Notifications feed (30s) ─────────────────────────────────────────
+// Served to the NotificationBell via /api/notifications.
+// Tagged with both the farm-scoped notifications tag (cron writes fresh rows
+// for the whole farm) and the per-user tag (mark-read mutations only affect
+// the current user's view), so either mutation class can invalidate precisely
+// what it changed without nuking the whole farm's cache.
+
+export interface CachedNotification {
+  id: string;
+  type: string;
+  severity: string;
+  message: string;
+  href: string;
+  isRead: boolean;
+  createdAt: string | Date;
+  expiresAt?: string | Date | null;
+}
+
+export interface CachedNotificationsPayload {
+  notifications: CachedNotification[];
+  unreadCount: number;
+}
+
+export async function getCachedNotifications(
+  farmSlug: string,
+  userEmail: string,
+): Promise<CachedNotificationsPayload> {
+  const fetcher = unstable_cache(
+    async (slug: string, email: string): Promise<CachedNotificationsPayload> => {
+      void email; // key-only: the feed is shared per farm but we key by user
+                  // so per-user invalidations (mark-read) land on distinct entries.
+      return withFarmPrisma(slug, async (prisma) => {
+        const now = new Date();
+        const rows = (await prisma.notification.findMany({
+          where: { expiresAt: { gt: now } },
+          orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
+          take: 30,
+        })) as CachedNotification[];
+        const unreadCount = rows.filter((n) => !n.isRead).length;
+        return { notifications: rows, unreadCount };
+      });
+    },
+    ["notifications-feed"],
+    {
+      revalidate: 30,
+      tags: [
+        farmTag(farmSlug, "notifications"),
+        notificationTag(userEmail),
+      ],
+    },
+  );
+  return fetcher(farmSlug, userEmail);
 }

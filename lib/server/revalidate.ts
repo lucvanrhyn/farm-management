@@ -20,6 +20,7 @@ import {
   transactionWriteTags,
   alertWriteTags,
   rotationWriteTags,
+  notificationWriteTags,
   farmTag,
 } from "./cache-tags";
 
@@ -73,6 +74,23 @@ export function revalidateAlertWrite(slug: string): void {
 /** Rotation plan / step / execute */
 export function revalidateRotationWrite(slug: string): void {
   for (const tag of rotationWriteTags(slug)) revalidateTag(tag, REVALIDATE_PROFILE);
+}
+
+/**
+ * Notification create / mark-read / expire.
+ *
+ * Pass `userEmail` for user-specific mutations (e.g. mark-as-read) so only
+ * that user's cached feed is invalidated. Omit for farm-wide mutations (e.g.
+ * the cron that generates new alerts for the whole farm) — which will only
+ * bust the farm-scoped tag and leave per-user overlays untouched.
+ */
+export function revalidateNotificationWrite(
+  slug: string,
+  userEmail?: string,
+): void {
+  for (const tag of notificationWriteTags(slug, userEmail)) {
+    revalidateTag(tag, REVALIDATE_PROFILE);
+  }
 }
 
 /**

@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
 import type { AlertThresholds } from "@/lib/server/dashboard-alerts";
 import { sendPushToFarm } from "@/lib/server/push-sender";
+import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 
 const DEFAULT_THRESHOLDS: AlertThresholds = {
   adgPoorDoerThreshold: 0.7,
@@ -72,6 +73,11 @@ export async function generateNotifications(
 
   if (toCreate.length > 0) {
     await prisma.notification.createMany({ data: toCreate });
+    // Bust the cached /api/notifications feed for this farm so the
+    // NotificationBell surfaces fresh alerts without waiting for the
+    // 30s TTL. Farm-wide invalidation only — per-user mark-read flows
+    // through a separate code path.
+    revalidateNotificationWrite(farmSlug);
   }
   const created = toCreate.length;
 
