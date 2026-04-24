@@ -3,19 +3,24 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Camp, Mob } from "@/lib/types";
+import { useFarmModeSafe } from "@/lib/farm-mode";
+import AddAnimalToMobPicker from "./AddAnimalToMobPicker";
 
-interface AnimalSummary {
+// Narrow membership row: only what's needed to render "in this mob" lists
+// on the page. Unassigned animals used to live in this same array so the
+// client could filter/search them for the "add to mob" picker; phase I.2
+// moved that to a paginated /api/animals call to stop SSRing the whole
+// active roster.
+interface MembershipRow {
   animalId: string;
   name: string | null;
-  currentCamp: string;
   mobId: string | null;
-  category: string;
 }
 
 interface Props {
   initialMobs: Mob[];
   camps: Camp[];
-  animals: AnimalSummary[];
+  membership: MembershipRow[];
   farmSlug: string;
 }
 
@@ -26,7 +31,11 @@ type ModalState =
   | { type: "animals"; mob: Mob }
   | null;
 
-export default function MobsManager({ initialMobs, camps, animals, farmSlug }: Props) {
+export default function MobsManager({ initialMobs, camps, membership }: Props) {
+  // Farm species is used by the paginated picker so it only shows relevant
+  // animals (cattle/sheep/game). Safe hook falls back to "cattle" outside a
+  // provider, which matches the historical default.
+  const { mode } = useFarmModeSafe();
   const router = useRouter();
   const [mobs, setMobs] = useState<Mob[]>(initialMobs);
   const [modal, setModal] = useState<ModalState>(null);
@@ -43,12 +52,21 @@ export default function MobsManager({ initialMobs, camps, animals, farmSlug }: P
   // Edit mob state
   const [editName, setEditName] = useState("");
 
-  // Animals modal state
+  // Animals modal state — selection is managed here because the submit
+  // button lives in this component. The picker component reports toggles.
   const [selectedAnimalIds, setSelectedAnimalIds] = useState<Set<string>>(new Set());
-  const [animalSearch, setAnimalSearch] = useState("");
 
   function campName(campId: string): string {
     return camps.find((c) => c.camp_id === campId)?.camp_name ?? campId;
+  }
+
+  function toggleAnimal(animalId: string): void {
+    setSelectedAnimalIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(animalId)) next.delete(animalId);
+      else next.add(animalId);
+      return next;
+    });
   }
 
   async function handleCreate() {
@@ -199,23 +217,10 @@ export default function MobsManager({ initialMobs, camps, animals, farmSlug }: P
     }
   }
 
-  // Animals available to add to current mob (not already in another mob)
-  function getAvailableAnimals(mob: Mob) {
-    const q = animalSearch.toLowerCase();
-    return animals
-      .filter(
-        (a) =>
-          !a.mobId &&
-          (q === "" ||
-            a.animalId.toLowerCase().includes(q) ||
-            (a.name ?? "").toLowerCase().includes(q)),
-      )
-      .slice(0, 50);
-  }
-
-  // Animals currently in a mob
+  // Animals currently in a mob — derived from the narrow membership roster
+  // the server sends. Unassigned animals arrive via the paginated picker.
   function getMobAnimals(mob: Mob) {
-    return animals.filter((a) => a.mobId === mob.id);
+    return membership.filter((a) => a.mobId === mob.id);
   }
 
   return (
@@ -349,7 +354,6 @@ export default function MobsManager({ initialMobs, camps, animals, farmSlug }: P
                       <button
                         onClick={() => {
                           setSelectedAnimalIds(new Set());
-                          setAnimalSearch("");
                           setError(null);
                           setModal({ type: "animals", mob });
                         }}
@@ -643,78 +647,27 @@ export default function MobsManager({ initialMobs, camps, animals, farmSlug }: P
                   );
                 })()}
 
-                {/* Add animals section */}
-                <div
-                  className="rounded-xl p-3"
-                  style={{ border: "1px solid #E0D5C8", background: "#FFFFFF" }}
-                >
-                  <p
-                    className="text-xs font-semibold mb-2"
-                    style={{ color: "#9C8E7A" }}
+                {/* Add animals section — paginated picker backed by
+                    /api/animals?unassigned=1&search=… so we don't SSR the
+                    full active roster on page load. */}
+                <AddAnimalToMobPicker
+                  species={mode}
+                  selectedIds={selectedAnimalIds}
+                  onToggle={toggleAnimal}
+                  campLabel={campName}
+                />
+                {selectedAnimalIds.size > 0 && (
+                  <button
+                    onClick={() => handleAddAnimals(modal.mob)}
+                    disabled={loading}
+                    className="mt-2 w-full px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+                    style={{ background: "#4A7C59", color: "#FFFFFF" }}
                   >
-                    Add animals (unassigned only)
-                  </p>
-                  <input
-                    type="text"
-                    placeholder="Search by ID or name..."
-                    value={animalSearch}
-                    onChange={(e) => setAnimalSearch(e.target.value)}
-                    className="w-full rounded-lg px-3 py-1.5 text-sm mb-2 focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
-                    style={{
-                      background: "#FAFAF8",
-                      border: "1px solid #E0D5C8",
-                      color: "#1C1815",
-                    }}
-                  />
-                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                    {getAvailableAnimals(modal.mob).map((a) => {
-                      const checked = selectedAnimalIds.has(a.animalId);
-                      return (
-                        <label
-                          key={a.animalId}
-                          className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-[rgba(122,92,30,0.05)]"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setSelectedAnimalIds((prev) => {
-                                const next = new Set(prev);
-                                if (checked) next.delete(a.animalId);
-                                else next.add(a.animalId);
-                                return next;
-                              });
-                            }}
-                            className="rounded"
-                          />
-                          <span className="text-sm font-mono" style={{ color: "#1C1815" }}>
-                            {a.animalId}
-                          </span>
-                          {a.name && (
-                            <span className="text-xs" style={{ color: "#9C8E7A" }}>
-                              {a.name}
-                            </span>
-                          )}
-                          <span className="text-[10px] ml-auto" style={{ color: "#9C8E7A" }}>
-                            {a.category} - {campName(a.currentCamp)}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {selectedAnimalIds.size > 0 && (
-                    <button
-                      onClick={() => handleAddAnimals(modal.mob)}
-                      disabled={loading}
-                      className="mt-2 w-full px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
-                      style={{ background: "#4A7C59", color: "#FFFFFF" }}
-                    >
-                      {loading
-                        ? "Adding..."
-                        : `Add ${selectedAnimalIds.size} animal${selectedAnimalIds.size > 1 ? "s" : ""} to mob`}
-                    </button>
-                  )}
-                </div>
+                    {loading
+                      ? "Adding..."
+                      : `Add ${selectedAnimalIds.size} animal${selectedAnimalIds.size > 1 ? "s" : ""} to mob`}
+                  </button>
+                )}
 
                 <button
                   onClick={() => setModal(null)}
