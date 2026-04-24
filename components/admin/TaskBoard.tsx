@@ -25,7 +25,20 @@ interface Camp {
 interface TaskBoardProps {
   initialTasks: Task[];
   camps: Camp[];
+  /**
+   * Opaque cursor pointing one-past the last SSR-hydrated row. When null,
+   * there are no more tasks to stream from /api/tasks. Optional so callers
+   * that pre-date Phase I.1 pagination still compile.
+   */
+  nextCursor?: string | null;
+  /**
+   * Whether the SSR query saw a `take + 1` lookahead row. Drives whether
+   * the "Load more" control is rendered at all.
+   */
+  hasMore?: boolean;
 }
+
+const PAGE_SIZE = 50;
 
 const PRIORITY_STYLES: Record<string, { label: string; bg: string; text: string }> = {
   low:    { label: "Low",    bg: "rgba(156,142,122,0.12)", text: "#9C8E7A" },
@@ -62,7 +75,12 @@ const EMPTY_FORM: CreateFormState = {
   campId: "",
 };
 
-export function TaskBoard({ initialTasks, camps }: TaskBoardProps) {
+export function TaskBoard({
+  initialTasks,
+  camps,
+  nextCursor: initialNextCursor = null,
+  hasMore: initialHasMore = false,
+}: TaskBoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterAssignee, setFilterAssignee] = useState("");
@@ -70,6 +88,31 @@ export function TaskBoard({ initialTasks, camps }: TaskBoardProps) {
   const [form, setForm] = useState<CreateFormState>(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
+  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const url = new URL("/api/tasks", window.location.origin);
+      url.searchParams.set("limit", String(PAGE_SIZE));
+      url.searchParams.set("cursor", nextCursor);
+      const res = await fetch(url.pathname + url.search);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        tasks: Task[];
+        nextCursor: string | null;
+        hasMore: boolean;
+      };
+      setTasks((prev) => [...prev, ...data.tasks]);
+      setNextCursor(data.hasMore ? data.nextCursor : null);
+      setHasMore(data.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore]);
 
   const filtered = tasks.filter((t) => {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
@@ -412,6 +455,26 @@ export function TaskBoard({ initialTasks, camps }: TaskBoardProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Server-side "Load more" — fetches the next cursor window from
+          /api/tasks. Rendered only when the SSR page hinted there's more
+          beyond the initial PAGE_SIZE rows. */}
+      {hasMore && nextCursor && (
+        <div className="flex justify-center pt-4">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            style={{
+              border: "1px solid #E0D5C8",
+              color: "#6B5C4E",
+              background: "#FFFFFF",
+            }}
+          >
+            {loadingMore ? "Loading…" : `Load more (${tasks.length.toLocaleString()} loaded)`}
+          </button>
         </div>
       )}
     </div>
