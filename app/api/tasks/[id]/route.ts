@@ -109,6 +109,16 @@ export async function PATCH(
       type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
       const [updatedTask, createdObs] = await prisma.$transaction(
         async (tx: TxClient) => {
+          // Phase I.3 — denormalise species onto Observation at write time
+          // so species-scoped repro queries hit the composite index.
+          let species: string | null = null;
+          if (obsPayload.animalId) {
+            const animal = await tx.animal.findUnique({
+              where: { animalId: obsPayload.animalId },
+              select: { species: true },
+            });
+            species = animal?.species ?? null;
+          }
           // Create observation first so we have its ID
           const obs = await tx.observation.create({
             data: {
@@ -118,6 +128,7 @@ export async function PATCH(
               animalId: obsPayload.animalId ?? null,
               observedAt: new Date(),
               loggedBy: obsPayload.loggedBy,
+              species,
             },
           });
 

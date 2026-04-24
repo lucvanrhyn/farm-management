@@ -97,18 +97,12 @@ export default async function ReproductionPage({
   const mode = await getFarmMode(farmSlug);
   const copy = COPY_BY_MODE[mode] ?? COPY_BY_MODE.cattle;
 
-  // Pre-fetch animal IDs for the active species so all repro queries can be scoped.
-  // This is an analytics-scoping scan (not a rendered list), so pagination
-  // would break stats computation. The `select: { animalId: true }` keeps
-  // the payload tiny (~20 bytes per animal).
-  // audit-allow-findmany: species-scoped ID prefetch for reproduction analytics.
-  const speciesAnimals = await prisma.animal.findMany({
-    where: { species: mode },
-    select: { animalId: true },
-  });
-  const speciesAnimalIds = speciesAnimals.map((a) => a.animalId);
-
-  const stats = await getReproStats(prisma, { animalIds: speciesAnimalIds });
+  // Phase I.3 — scope repro queries via the denormalised Observation.species
+  // column instead of prefetching every animalId of the active species and
+  // threading an animalId-IN list of ~874 entries through every sub-query.
+  // The composite index `idx_observation_species_animal` (migration 0003)
+  // serves the predicate.
+  const stats = await getReproStats(prisma, { species: mode });
 
   // Fetch recent events (last 15) — includes heat/insem/scan/calving
   // Default to 12 months when no date range is selected
@@ -131,7 +125,7 @@ export default async function ReproductionPage({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan", ...birthEventTypes] },
         observedAt: observedAtFilter,
-        animalId: { in: speciesAnimalIds },
+        species: mode,
       },
       orderBy: { observedAt: "desc" },
       take: 15,
@@ -512,8 +506,22 @@ export default async function ReproductionPage({
           </div>
         </div>
 
-        {/* Days Open table */}
-        {stats.daysOpen.length > 0 && (
+        {/* Days Open table — Phase I.4: SSR is capped at DAYS_OPEN_SSR_LIMIT.
+            Prior implementation rendered one <tr> per animal unbounded; on a
+            tenant with several hundred cows this blew the HTML payload. The
+            full list is still available via the CSV/PDF export (header
+            "Export" button). */}
+        {stats.daysOpen.length > 0 && (() => {
+          const DAYS_OPEN_SSR_LIMIT = 50;
+          // `sort` mutates in place, which surprises React's strict-mode
+          // double-render. Defensively copy first, then slice the top-N by
+          // days-open descending (null treated as "still open" → largest).
+          const sorted = [...stats.daysOpen].sort(
+            (a, b) => (b.daysOpen ?? 9999) - (a.daysOpen ?? 9999),
+          );
+          const visible = sorted.slice(0, DAYS_OPEN_SSR_LIMIT);
+          const hiddenCount = sorted.length - visible.length;
+          return (
           <div
             className="rounded-2xl border mb-6"
             style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
@@ -524,6 +532,11 @@ export default async function ReproductionPage({
               </h2>
               <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
                 Days from {copy.birthEventLower} to confirmed conception · SA target: &lt;90 days
+                {hiddenCount > 0 && (
+                  <>
+                    {" · "}showing worst {visible.length} of {sorted.length}
+                  </>
+                )}
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -540,9 +553,7 @@ export default async function ReproductionPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.daysOpen
-                    .sort((a, b) => (b.daysOpen ?? 9999) - (a.daysOpen ?? 9999))
-                    .map((row) => (
+                  {visible.map((row) => (
                       <tr
                         key={row.animalId}
                         className="border-b last:border-0"
@@ -593,8 +604,18 @@ export default async function ReproductionPage({
                 </tbody>
               </table>
             </div>
+            {hiddenCount > 0 && (
+              <div
+                className="px-6 py-3 text-xs border-t"
+                style={{ color: "#9C8E7A", borderColor: "#F0EAE0" }}
+              >
+                {hiddenCount} more {hiddenCount === 1 ? "animal" : "animals"} not shown —
+                use the Export button for the full list.
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Gestation Calculator (§E point 4) — breed-aware expected birth window */}
         <div className="mb-6">
