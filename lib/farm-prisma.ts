@@ -5,6 +5,7 @@ import { cookies, headers } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
 import { recordTiming, getTimingBag } from "@/lib/server/server-timing";
+import { recordFarmDbRegion } from "@/lib/server/region-timing";
 import type { Session } from "next-auth";
 import type { SessionFarm } from "@/types/next-auth";
 
@@ -55,6 +56,10 @@ async function createFarmClient(slug: string): Promise<PrismaClient | null> {
   const promise = (async () => {
     const creds = await getCachedFarmCreds(slug, getFarmCreds);
     if (!creds) return null;
+    // Phase E: tag the request with the farm's Turso region so the bench
+    // harness + Lighthouse CI can detect any farm still served from the
+    // legacy primary after the cutover. No-op off the request path.
+    recordFarmDbRegion(creds.tursoUrl);
     const libsql = createClient({ url: creds.tursoUrl, authToken: creds.tursoAuthToken });
     const adapter = new PrismaLibSQL(libsql);
     const client = new PrismaClient({ adapter });
