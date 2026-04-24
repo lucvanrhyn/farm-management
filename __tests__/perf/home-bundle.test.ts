@@ -56,4 +56,14 @@ describe("/home first-load bundle", () => {
     const src = read("components/dashboard/SchematicMap.tsx");
     expect(src).not.toMatch(STATIC_FRAMER_IMPORT);
   });
+
+  // Phase M.2: AnimatedHero is rendered directly (not via next/dynamic) from
+  // app/[farmSlug]/home/page.tsx. Phase M missed this path, so framer-motion
+  // still entered /home's initial JS graph via a static import on line 12 of
+  // components/ui/animated-hero.tsx. Animations are simple fades/slides + a
+  // word-rotator — replaced with CSS keyframes + transitions, no JS weight.
+  it("components/ui/animated-hero.tsx does not statically import framer-motion", () => {
+    const src = read("components/ui/animated-hero.tsx");
+    expect(src).not.toMatch(STATIC_FRAMER_IMPORT);
+  });
 });
