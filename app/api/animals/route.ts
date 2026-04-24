@@ -21,6 +21,11 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const status = searchParams.get("status") ?? "Active";
     const species = searchParams.get("species");
+    // Phase I.2: free-text search (ID or name contains) and `unassigned=1`
+    // toggle. These power the client-side "add animal to mob" picker so the
+    // mobs admin page no longer SSRs the full active roster.
+    const search = searchParams.get("search")?.trim() ?? "";
+    const unassigned = searchParams.get("unassigned") === "1";
 
     // Pagination is opt-in. When neither `limit` nor `cursor` is present, the
     // handler returns the unbounded array shape so existing callers (NVD
@@ -37,6 +42,15 @@ export async function GET(req: NextRequest) {
       ...(category ? { category } : {}),
       ...(status !== "all" ? { status } : {}),
       ...(species ? { species } : {}),
+      ...(unassigned ? { mobId: null } : {}),
+      ...(search
+        ? {
+            OR: [
+              { animalId: { contains: search } },
+              { name: { contains: search } },
+            ],
+          }
+        : {}),
     };
 
     if (!paginated) {
