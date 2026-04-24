@@ -46,8 +46,6 @@ jobs:
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
       META_TURSO_DATABASE_URL: ${{ secrets.META_TURSO_DATABASE_URL }}
       META_TURSO_AUTH_TOKEN: ${{ secrets.META_TURSO_AUTH_TOKEN }}
-      # Flag parity with production so the cache path is on.
-      FARM_CACHE_ENABLED_SLUGS: "*"
 
     steps:
       - name: Checkout repo
