@@ -43,8 +43,43 @@ import { createTursoDatabase, deleteTursoDatabase } from "@/lib/turso-api";
 import {
   isTargetRegion,
   parseTursoRegion,
+  TURSO_REGIONS,
   type TursoRegion,
 } from "@/lib/turso-region";
+
+/**
+ * Short-code → single-location group name. Mirrors lib/turso-api.ts's
+ * GROUP_BY_REGION but kept inline here because the script talks to the
+ * CLI directly (not via the SDK) so it needs the raw group name. Operators
+ * must provision the group once before running the migration:
+ *   turso group create eu-dub --location aws-eu-west-1
+ */
+const GROUP_BY_REGION: Partial<Record<TursoRegion, string>> = {
+  nrt: "default",
+  dub: "eu-dub",
+};
+
+function groupForRegion(region: TursoRegion): string {
+  const group = GROUP_BY_REGION[region];
+  if (!group) {
+    console.error(
+      `Error: no Turso group registered for region "${region}". ` +
+        `Provision one via \`turso group create <name> --location aws-<region>\` ` +
+        `and add it to GROUP_BY_REGION.`,
+    );
+    process.exit(2);
+  }
+  return group;
+}
+
+function awsLocationForRegion(region: TursoRegion): string {
+  const hit = TURSO_REGIONS.find((r) => r.code === region);
+  if (!hit) {
+    console.error(`Error: unknown Turso region "${region}".`);
+    process.exit(2);
+  }
+  return `aws-${hit.awsRegion}`;
+}
 
 interface Args {
   slug: string;
@@ -202,38 +237,117 @@ async function migrate(args: Args) {
     // pointed at /dev/null the CLI exits cleanly once .dump finishes.
     execSync(`turso db shell ${sourceDbName} .dump < /dev/null > ${dumpPath}`, {
       stdio: ["ignore", "pipe", "inherit"],
+      // /bin/sh (execSync's default) truncates the .dump output mid-stream
+      // and emits "Error: unexpected EOF" even with stdin redirected.
+      // /bin/bash handles the same pipeline cleanly. Observed on macOS
+      // 15.x with turso CLI v1.0.x — no other combination was reliable.
+      shell: "/bin/bash",
     });
   }
 
-  // 2. Provision target DB in the new region, with a temporary name so we can
-  //    rename during the swap. Target name = `<slug>-fra` (operator can
-  //    rename via turso CLI afterwards if desired).
+  // 2. Provision empty target DB in the new region via mgmt API.
+  //    Previously tried `turso db create --from-dump`, but that CLI flag
+  //    silently imports nothing on SQL dumps containing Turso-native
+  //    functions (libsql_vector_idx etc) — the upload "succeeds" but the
+  //    target is empty. Programmatic restore via libsql client below
+  //    handles Turso-native functions correctly and doesn't rely on the
+  //    CLI's shell-streaming endpoint (which times out on multi-MB dumps
+  //    with `error code 404: stream not found`).
   const targetDbName = `${args.slug}-${args.targetRegion}`;
-  console.log(`[phase-e] Creating target DB "${targetDbName}" in ${args.targetRegion}`);
+  const groupName = groupForRegion(args.targetRegion);
+  const awsLocation = awsLocationForRegion(args.targetRegion);
+  console.log(
+    `[phase-e] Creating empty target DB "${targetDbName}" ` +
+      `(group=${groupName}, location=${awsLocation})`,
+  );
   if (args.dryRun) {
-    console.log(`[dry-run] would run: createTursoDatabase("${targetDbName}", { location: "${args.targetRegion}" })`);
+    console.log(
+      `[dry-run] would provision "${targetDbName}" then programmatically ` +
+        `replay ${dumpPath} via @libsql/client.`,
+    );
     console.log("[dry-run] Stopping here — no destructive actions taken.");
     return;
   }
 
   let newDb;
   try {
-    newDb = await createTursoDatabase(targetDbName, { location: args.targetRegion });
+    newDb = await createTursoDatabase(targetDbName, {
+      location: args.targetRegion,
+      group: groupName,
+    });
   } catch (err) {
     console.error(`[phase-e] Failed to create target DB:`, err);
     process.exit(1);
   }
 
-  // 3. Restore dump into the new DB via turso CLI.
-  console.log(`[phase-e] Restoring dump into "${targetDbName}"`);
+  // 3. Replay dump through @libsql/client. Dumps emitted by
+  //    `turso db shell <db> .dump` are one SQL statement per line
+  //    (multi-row INSERTs stay on a single line, as does every CREATE).
+  //    We skip pragma/transaction control lines since the client runs
+  //    each exec in its own implicit transaction. Failures abort with
+  //    a cleanup-and-delete so the target DB doesn't linger half-loaded.
+  //
+  //    Streaming line-by-line via readline is mandatory — real-world dumps
+  //    hit 600+ MB once EinsteinChunk vectors are hex-encoded, which
+  //    exceeds Node's max-string-length limit of 0x1fffffe8 (~512 MB) for
+  //    a single `readFileSync('utf8')` call.
+  console.log(`[phase-e] Replaying dump into "${targetDbName}" via libsql client`);
+  const targetClient = createClient({ url: newDb.url, authToken: newDb.token });
   try {
-    execSync(`turso db shell ${targetDbName} < ${dumpPath}`, {
-      stdio: ["ignore", "pipe", "inherit"],
+    const { createReadStream } = await import("node:fs");
+    const { createInterface } = await import("node:readline");
+    const rl = createInterface({
+      input: createReadStream(dumpPath, { encoding: "utf8" }),
+      crlfDelay: Infinity,
     });
+
+    // Dump statements can span multiple lines (e.g. multi-column CREATE
+    // TABLE). Accumulate lines until we hit one ending in `;` at the end
+    // (outside any open string literal — the embedded `X'...'` blobs are
+    // single-line per INSERT, so a naive "ends with `;`" check is safe in
+    // practice on Turso dumps). The resulting statement is one SQL item.
+    const batch: string[] = [];
+    const chunkSize = 50;
+    let done = 0;
+    const flush = async () => {
+      if (batch.length === 0) return;
+      await targetClient.batch(batch, "write");
+      done += batch.length;
+      batch.length = 0;
+      process.stdout.write(`\r[phase-e]   ${done} statements applied`);
+    };
+
+    let pending = "";
+    for await (const line of rl) {
+      const t = line.trim();
+      if (t.length === 0) continue;
+      if (t.startsWith("--")) continue;
+      if (t === "BEGIN TRANSACTION;" || t === "COMMIT;") continue;
+      if (t.startsWith("PRAGMA ")) continue;
+
+      pending = pending.length ? `${pending}\n${t}` : t;
+      if (!pending.endsWith(";")) continue;
+      // Strip the trailing semicolon — Turso's wire protocol rejects it.
+      const stmt = pending.slice(0, -1);
+      pending = "";
+      batch.push(stmt);
+      if (batch.length >= chunkSize) await flush();
+    }
+    if (pending.length > 0) {
+      throw new Error(`Dump ended with an unterminated statement: ${pending.slice(0, 120)}…`);
+    }
+    await flush();
+    process.stdout.write("\n");
   } catch (err) {
-    console.error(`[phase-e] Restore failed, deleting target DB:`, err);
-    await deleteTursoDatabase(targetDbName);
+    console.error(`[phase-e] Replay failed, deleting target DB:`, err);
+    try {
+      await deleteTursoDatabase(targetDbName);
+    } catch {
+      /* ignore */
+    }
     process.exit(1);
+  } finally {
+    targetClient.close();
   }
 
   // 4. Row-count parity check.
