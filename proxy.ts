@@ -1,5 +1,14 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "node:crypto";
+
+// Keep in sync with `lib/server/farm-context.ts`. We intentionally re-implement
+// the tiny HMAC helper here rather than importing, because proxy.ts runs on
+// the Edge-compatible middleware runtime and must keep its module graph flat
+// (no transitive Prisma / auth-options imports).
+function signIdentity(userEmail: string, slug: string, secret: string): string {
+  return createHmac("sha256", secret).update(`${userEmail}\n${slug}`).digest("hex");
+}
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -16,9 +25,10 @@ export async function proxy(req: NextRequest) {
 
   // Enforce tenant isolation: verify user has access to the farm in the URL
   const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)/);
+  const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string; role: string }>;
+
   if (farmRouteMatch) {
     const farmSlug = farmRouteMatch[1];
-    const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string }>;
     const farm = farms.find((f) => f.slug === farmSlug);
 
     if (!farm) {
@@ -41,7 +51,7 @@ export async function proxy(req: NextRequest) {
     // navigation (bookmark, refresh, typed URL). Only update when it differs.
     const currentCookie = req.cookies.get("active_farm_slug")?.value;
     if (currentCookie !== farmSlug) {
-      const response = NextResponse.next();
+      const response = withSessionHeaders(req, token, farm, NextResponse.next);
       response.cookies.set("active_farm_slug", farmSlug, {
         httpOnly: true,
         sameSite: "lax",
@@ -58,7 +68,57 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/farms", req.url));
   }
 
-  return NextResponse.next();
+  return withSessionHeaders(req, token, resolveActiveFarm(req, farms), NextResponse.next);
+}
+
+/**
+ * Resolve the farm the current request acts against:
+ *   1. `[farmSlug]/admin/...` URL segment (already matched above)
+ *   2. `active_farm_slug` cookie
+ * Returns `null` when neither source is present — the signed header is then
+ * omitted and handlers fall back to the legacy `getServerSession` path.
+ */
+function resolveActiveFarm(
+  req: NextRequest,
+  farms: Array<{ slug: string; tier: string; subscriptionStatus: string; role: string }>,
+): { slug: string; role: string } | null {
+  const cookieSlug = req.cookies.get("active_farm_slug")?.value;
+  if (cookieSlug) {
+    const farm = farms.find((f) => f.slug === cookieSlug);
+    if (farm) return { slug: farm.slug, role: farm.role };
+  }
+  return null;
+}
+
+/**
+ * Build a `NextResponse.next()` that stamps the signed identity triplet
+ * onto the downstream request headers. The headers are invisible to the
+ * client — they only travel from middleware to the route handler runtime.
+ *
+ * If any precondition is missing (no email, no active farm, no secret) we
+ * skip the stamp and the route falls back to the legacy path. Safe by
+ * default.
+ */
+function withSessionHeaders(
+  req: NextRequest,
+  token: { email?: string | null; sub?: string },
+  farm: { slug: string; role: string } | null,
+  factory: (init?: { request?: { headers: Headers } }) => NextResponse,
+): NextResponse {
+  const secret = process.env.NEXTAUTH_SECRET;
+  const email = token.email ?? "";
+  if (!secret || !email || !farm) {
+    return factory();
+  }
+
+  const headers = new Headers(req.headers);
+  const sig = signIdentity(email, farm.slug, secret);
+  headers.set("x-session-user", email);
+  headers.set("x-farm-slug", farm.slug);
+  headers.set("x-session-role", farm.role);
+  headers.set("x-session-sig", sig);
+
+  return factory({ request: { headers } });
 }
 
 export const config = {

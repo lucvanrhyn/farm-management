@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { getCachedFarmSummary } from "@/lib/server/cached";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
 export async function GET() {
   return withServerTiming(async () => {
-    const session = await timeAsync("session", () => getServerSession(authOptions));
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const db = await getPrismaWithAuth(session);
-    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+    // Phase D (P6): `getFarmContext` reads proxy's signed header triplet
+    // via next/headers when no `req` is passed, so a legacy zero-arg
+    // handler gets the same fast-path. Falls back to getServerSession
+    // transparently when the triplet is missing.
+    const ctx = await timeAsync("session", () => getFarmContext());
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-      const summary = await timeAsync("query", () => getCachedFarmSummary(db.slug));
+      const summary = await timeAsync("query", () => getCachedFarmSummary(ctx.slug));
       return NextResponse.json(summary);
     } catch (err) {
       const e = err as Record<string, unknown>;
