@@ -177,14 +177,30 @@ async function migrate(args: Args) {
 
   // 1. Dump source DB to local file via the turso CLI (the mgmt API has no
   //    dump/restore endpoint at the time of writing).
+  //
+  // DB-name derivation: Turso's URL subdomain is `<dbname>-<org>`, NOT the
+  // raw DB name. Example: DB `trio-b-boerdery` on org `lucvanrhyn` has URL
+  // host `trio-b-boerdery-lucvanrhyn.aws-*.turso.io`. Naive `.split(".")[0]`
+  // yields the subdomain (which `turso db shell` then rejects as "not
+  // found"). Strip the `-<org>` suffix to recover the real DB name.
   const workDir = mkdtempSync(join(tmpdir(), `phase-e-${args.slug}-`));
   const dumpPath = join(workDir, `${args.slug}.sql`);
-  const sourceDbName = farm.tursoUrl.replace(/^libsql:\/\//, "").split(".")[0];
+  const org = requireEnv("TURSO_ORG");
+  const subdomain = farm.tursoUrl.replace(/^libsql:\/\//, "").split(".")[0];
+  const orgSuffix = `-${org}`;
+  const sourceDbName = subdomain.endsWith(orgSuffix)
+    ? subdomain.slice(0, -orgSuffix.length)
+    : subdomain;
   console.log(`[phase-e] Dumping source DB "${sourceDbName}" → ${dumpPath}`);
   if (args.dryRun) {
-    console.log(`[dry-run] would run: turso db shell ${sourceDbName} .dump > ${dumpPath}`);
+    console.log(`[dry-run] would run: turso db shell ${sourceDbName} .dump < /dev/null > ${dumpPath}`);
   } else {
-    execSync(`turso db shell ${sourceDbName} .dump > ${dumpPath}`, {
+    // `< /dev/null` is load-bearing: without it, `turso db shell <db> .dump`
+    // tries to read the next command from stdin after the .dump completes,
+    // hits the parent's closed TTY, emits "Error: unexpected EOF" to stderr,
+    // exits non-zero, AND silently truncates the dump mid-write. With stdin
+    // pointed at /dev/null the CLI exits cleanly once .dump finishes.
+    execSync(`turso db shell ${sourceDbName} .dump < /dev/null > ${dumpPath}`, {
       stdio: ["ignore", "pipe", "inherit"],
     });
   }
