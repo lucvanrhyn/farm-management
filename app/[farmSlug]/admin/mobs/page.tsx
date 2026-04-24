@@ -21,7 +21,13 @@ export default async function AdminMobsPage({
 
   const mode = await getFarmMode(farmSlug);
 
-  const [prismaMobs, animalGroups, prismaCamps, animals] = await Promise.all([
+  // Phase I.2: only SSR the membership roster — animals currently assigned to
+  // a mob — with a narrow projection. The "add animal to mob" picker is
+  // client-side and paginates /api/animals?unassigned=1&search=… on demand.
+  // Before this change the page SSR'd every active animal (874 rows / ~120
+  // KB JSON on trio-b) into the RSC payload because MobsManager also served
+  // as the picker's data source.
+  const [prismaMobs, animalGroups, prismaCamps, mobMembers] = await Promise.all([
     prisma.mob.findMany({ orderBy: { name: "asc" } }),
     prisma.animal.groupBy({
       by: ["mobId"],
@@ -30,8 +36,8 @@ export default async function AdminMobsPage({
     }),
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
     prisma.animal.findMany({
-      where: { status: "Active", species: mode },
-      select: { animalId: true, name: true, currentCamp: true, mobId: true, category: true },
+      where: { status: "Active", species: mode, mobId: { not: null } },
+      select: { animalId: true, name: true, mobId: true },
       orderBy: { animalId: "asc" },
     }),
   ]);
@@ -55,12 +61,13 @@ export default async function AdminMobsPage({
     water_source: c.waterSource ?? undefined,
   }));
 
-  const animalList = animals.map((a) => ({
+  // Narrow membership rows: what MobsManager needs to render "in this mob"
+  // lists. Category/currentCamp are intentionally absent — the picker loads
+  // them on demand from the paginated API when the admin opens the modal.
+  const membership = mobMembers.map((a) => ({
     animalId: a.animalId,
     name: a.name,
-    currentCamp: a.currentCamp,
     mobId: a.mobId,
-    category: a.category,
   }));
 
   return (
@@ -74,7 +81,7 @@ export default async function AdminMobsPage({
       <MobsManager
         initialMobs={mobs}
         camps={camps}
-        animals={animalList}
+        membership={membership}
         farmSlug={farmSlug}
       />
     </div>
