@@ -14,7 +14,16 @@ describe("parseTursoRegion", () => {
     expect(parseTursoRegion(url)).toBe("nrt");
   });
 
-  it("detects Frankfurt (eu-central-1) — the Phase E target region", () => {
+  it("detects Ireland (eu-west-1) — the current Phase E target region", () => {
+    // 2026-04-24: Turso retired Frankfurt (aws-eu-central-1) before we ran
+    // the cutover; Ireland is the closest remaining Turso region to our
+    // Vercel fra1 functions (~30ms Vercel→DB vs 250ms Tokyo).
+    const url =
+      "libsql://delta-livestock-lucvanrhyn.aws-eu-west-1.turso.io";
+    expect(parseTursoRegion(url)).toBe("dub");
+  });
+
+  it("still detects Frankfurt (eu-central-1) if a legacy URL appears — historical compat", () => {
     const url =
       "libsql://delta-livestock-lucvanrhyn.aws-eu-central-1.turso.io";
     expect(parseTursoRegion(url)).toBe("fra");
@@ -61,14 +70,17 @@ describe("isTargetRegion", () => {
 });
 
 describe("TURSO_REGIONS registry", () => {
-  it("contains the three regions FarmTrack has historically used or plans to use", () => {
+  it("contains every region FarmTrack has historically used or plans to use", () => {
     const codes = TURSO_REGIONS.map((r) => r.code) as TursoRegion[];
-    expect(codes).toContain("fra");
+    expect(codes).toContain("dub"); // Ireland — current Phase E target
+    expect(codes).toContain("fra"); // Frankfurt — retired by Turso but kept for parsing
     expect(codes).toContain("nrt");
     expect(codes).toContain("iad");
   });
 
   it("pairs each code with its AWS region suffix for deterministic parsing", () => {
+    const dub = TURSO_REGIONS.find((r) => r.code === "dub");
+    expect(dub?.awsRegion).toBe("eu-west-1");
     const fra = TURSO_REGIONS.find((r) => r.code === "fra");
     expect(fra?.awsRegion).toBe("eu-central-1");
   });

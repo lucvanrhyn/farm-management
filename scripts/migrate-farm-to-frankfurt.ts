@@ -58,17 +58,17 @@ function parseArgs(argv: string[]): Args {
     slug: "",
     dryRun: false,
     rollback: false,
-    targetRegion: "fra",
+    targetRegion: "dub",
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--slug") args.slug = argv[++i] ?? "";
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--rollback") args.rollback = true;
-    else if (a === "--target-region") args.targetRegion = (argv[++i] ?? "fra") as TursoRegion;
+    else if (a === "--target-region") args.targetRegion = (argv[++i] ?? "dub") as TursoRegion;
     else if (a === "--help" || a === "-h") {
       console.log(
-        "Usage: migrate-farm-to-frankfurt.ts --slug <slug> [--dry-run] [--rollback] [--target-region fra|nrt|iad]",
+        "Usage: migrate-farm-to-frankfurt.ts --slug <slug> [--dry-run] [--rollback] [--target-region dub|fra|nrt|iad]",
       );
       process.exit(0);
     }

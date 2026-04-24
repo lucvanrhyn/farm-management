@@ -6,7 +6,7 @@
  * and exits non-zero if any farm isn't in the expected region.
  *
  * Usage:
- *   pnpm tsx scripts/verify-farm-regions.ts              # default: target = fra
+ *   pnpm tsx scripts/verify-farm-regions.ts              # default: target = dub
  *   pnpm tsx scripts/verify-farm-regions.ts --target nrt # during migration window
  *
  * Intended CI hooks:
@@ -27,9 +27,9 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { target: "fra" };
+  const args: Args = { target: "dub" };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--target") args.target = (argv[++i] ?? "fra") as TursoRegion;
+    if (argv[i] === "--target") args.target = (argv[++i] ?? "dub") as TursoRegion;
   }
   return args;
 }

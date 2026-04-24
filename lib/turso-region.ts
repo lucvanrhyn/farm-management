@@ -1,27 +1,34 @@
 /**
  * Turso region parsing + classification.
  *
- * Used by Phase E (Frankfurt region migration) to:
+ * Used by Phase E (EU-region migration) to:
  *  - Classify each farm's Turso URL by physical region so observability can
- *    differentiate requests served from Tokyo vs. Frankfurt during the
+ *    differentiate requests served from Tokyo vs. Ireland during the
  *    cutover window.
  *  - Gate the meta-DB smoke test (`assertAllFarmsInRegion`) that guards
  *    against silently provisioning a farm into the wrong region after
  *    cutover.
+ *
+ * Historical note: the original Phase E brief targeted Frankfurt
+ * (`aws-eu-central-1` / `fra`). On 2026-04-24 Turso's available locations
+ * no longer included Frankfurt, so the cutover shifted to Ireland
+ * (`aws-eu-west-1` / `dub`). `fra` is retained in the registry so URLs
+ * already stamped with eu-central-1 (if any ever existed) parse cleanly.
  *
  * Intentionally NOT a runtime router: Turso's libSQL client handles
  * read/write routing natively when replicas exist. This module is pure
  * string logic — no I/O, no network, no libSQL dependency.
  */
 
-export type TursoRegion = "fra" | "nrt" | "iad";
+export type TursoRegion = "dub" | "fra" | "nrt" | "iad";
 
 export const TURSO_REGIONS: ReadonlyArray<{
   code: TursoRegion;
   awsRegion: string;
   description: string;
 }> = [
-  { code: "fra", awsRegion: "eu-central-1", description: "Frankfurt (Phase E target)" },
+  { code: "dub", awsRegion: "eu-west-1", description: "Ireland (current Phase E target)" },
+  { code: "fra", awsRegion: "eu-central-1", description: "Frankfurt (retired by Turso 2026-04)" },
   { code: "nrt", awsRegion: "ap-northeast-1", description: "Tokyo (pre-Phase-E)" },
   { code: "iad", awsRegion: "us-east-1", description: "US East (legacy)" },
 ] as const;
