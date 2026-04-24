@@ -1,14 +1,31 @@
-# Frankfurt Region Cutover Runbook (Phase E / P7)
+# EU Region Cutover Runbook (Phase E / P7)
 
-**Goal:** eliminate the Cape Town → iad1 → Tokyo triple-hop that sets a ~600 ms
-floor on every authenticated request. Target end-state: Vercel fn in `fra1`
-(Frankfurt) + per-farm Turso DB in `aws-eu-central-1` (Frankfurt). Expected cold
-p95 dashboard drop: 200–400 ms on top of `bench-results/*post-wave2-*` baselines.
+**Status:** **Executed 2026-04-25.** Target had to shift from Frankfurt →
+Ireland after Turso retired their `aws-eu-central-1` location. This runbook
+is kept for future tenant onboarding into the EU region. If you're adding a
+new tenant to the Ireland group, follow sections 1–4; skip section 9 (Vercel
+flip) since it already happened.
 
-This runbook is the *human-executed* counterpart to the Phase E code that
-lands on `perf/frankfurt-region`. The code is necessary but not sufficient —
-flipping `vercel.json` alone without migrating the DBs first would make things
-**worse** (Frankfurt → Tokyo is further than US-East → Tokyo).
+**Goal (as-executed):** eliminate the Cape Town → iad1 → Tokyo triple-hop
+that set a ~600 ms floor on every authenticated request. Achieved end-state:
+Vercel fn in `fra1` (Frankfurt) + per-farm Turso DB in `aws-eu-west-1`
+(Ireland, short code `dub`). Measured warm TTFB dropped to ~215 ms — a ~400 ms
+improvement over the pre-Phase-E baseline.
+
+This runbook was the *human-executed* counterpart to the Phase E code that
+landed on `perf/frankfurt-region`. The code is necessary but not sufficient —
+flipping `vercel.json` without migrating the DBs first makes things **worse**
+(Frankfurt → Tokyo is further than US-East → Tokyo), which is exactly what
+happened during the ~28-hour degraded window before cutover.
+
+## Region choice: why Ireland (2026-04-25 update)
+
+The original Phase E brief targeted Frankfurt (`aws-eu-central-1`). On
+2026-04-24 the `turso db locations` list no longer included Frankfurt;
+attempts to provision DBs there fail silently. Ireland (`aws-eu-west-1`)
+is the closest remaining Turso region to our Vercel `fra1` Lambdas —
+~30 ms RTT vs the retired Frankfurt's ~5 ms RTT. End-to-end this is
+indistinguishable from the original plan at South African latencies.
 
 ---
 
