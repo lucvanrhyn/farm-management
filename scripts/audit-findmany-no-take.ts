@@ -16,6 +16,19 @@
  * exits non-zero so CI can gate PRs. New offenders outside the baseline
  * fail the build — the baseline can only shrink over time, never grow.
  *
+ * Baseline key format
+ * ───────────────────
+ * Each baseline entry is `path::modelName::occurrenceIndex` where
+ *   - `path` is the repo-relative path,
+ *   - `modelName` is the Prisma delegate (`animal`, `task`, ...),
+ *   - `occurrenceIndex` is the 0-based index of this call among all
+ *     `prisma.<modelName>.findMany(...)` calls in the file.
+ *
+ * This key is stable under pure line-drift (e.g. wrapping a call in
+ * `timeAsync("query", () => ...)`) and only changes when the set of queried
+ * models or the number of calls per model actually changes — exactly the
+ * semantic we want for a "grandfathered offender" list.
+ *
  * The analyser (`auditSource`) is exported for unit tests; the CLI portion
  * below only runs when the file is invoked directly. Keep them separate so
  * tests stay hermetic.
@@ -28,6 +41,8 @@ export interface Offender {
   path: string;
   line: number;
   snippet: string;
+  modelName: string;
+  occurrenceIndex: number;
 }
 
 const FINDMANY_RE = /prisma\.(\w+)\.findMany\s*\(/g;
@@ -156,6 +171,10 @@ function hasAllowPragma(lines: string[], lineIdx: number): boolean {
  * Locate `findMany` call-sites in `source` and return offenders (those that
  * lack both an explicit `take:` and a unique-key `where:`, and are not
  * covered by an `audit-allow-findmany` pragma).
+ *
+ * Each offender carries a `modelName` and a 0-based `occurrenceIndex` scoped
+ * to that model within this file — together with `path`, these form the
+ * stable baseline key.
  */
 export function auditSource(filePath: string, source: string): Offender[] {
   const offenders: Offender[] = [];
@@ -168,16 +187,28 @@ export function auditSource(filePath: string, source: string): Offender[] {
     if (source[i] === "\n") lineStarts.push(i + 1);
   }
 
+  // Per-model occurrence counter, scoped to this file. The scan walks source
+  // top-down in regex-match order, so the first match for model X is index 0,
+  // the second is index 1, and so on — independent of whether earlier matches
+  // were compliant or allowlisted. Keying this way means compliance changes
+  // (e.g. adding `take:` to the second call in a file) only invalidate entries
+  // at the end of the per-model sequence, which is the minimum-surprise
+  // behaviour for a grandfather list.
+  const perModelIndex = new Map<string, number>();
+
   FINDMANY_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = FINDMANY_RE.exec(source))) {
     const callStart = match.index;
-    // Look one char before the match for `prisma` — reject `.items.findMany`
-    // off a non-prisma receiver. `FINDMANY_RE` already anchors on `prisma.`,
-    // but narrow again to defend against regex surprise.
-    // (This is belt-and-braces; the regex literal does the work.)
+    const modelName = match[1];
     const parenIdx = match.index + match[0].length - 1; // points at `(`
     const arg = argBody(source, parenIdx);
+
+    // Assign the occurrence index first — it advances for every syntactic
+    // `prisma.<model>.findMany(` regardless of later filtering, so that pragma
+    // or compliance changes on an earlier call don't renumber later calls.
+    const occurrenceIndex = perModelIndex.get(modelName) ?? 0;
+    perModelIndex.set(modelName, occurrenceIndex + 1);
 
     if (isCompliantArg(arg)) continue;
 
@@ -195,10 +226,73 @@ export function auditSource(filePath: string, source: string): Offender[] {
       path: filePath,
       line: lineNum,
       snippet: snippetLine.slice(0, 160),
+      modelName,
+      occurrenceIndex,
     });
   }
 
   return offenders;
+}
+
+/**
+ * Produce the stable baseline key for an offender:
+ * `<path>::<modelName>::<occurrenceIndex>`.
+ */
+export function offenderKey(o: Offender): string {
+  return `${o.path}::${o.modelName}::${o.occurrenceIndex}`;
+}
+
+const NEW_KEY_RE = /^.+::[A-Za-z_$][\w$]*::\d+$/;
+const LEGACY_KEY_RE = /^(.+):(\d+)$/;
+
+/**
+ * Migrate an array of baseline entries to the new `path::modelName::occurrenceIndex`
+ * format. Old entries (`path:line`) are resolved by auditing the file at `path`
+ * (read from the `repo` map) and matching the entry's line to an offender's
+ * line. If no exact line match is found, the first offender in the file acts as
+ * a fallback — line numbers in the baseline are frozen at capture time, and a
+ * stale line that doesn't land on an offender is always a near-miss caused by
+ * wrapping code (the whole reason for this migration).
+ *
+ * New-format entries pass through unchanged. Unresolvable entries are dropped;
+ * they represent already-fixed code whose baseline row can be pruned.
+ */
+export function migrateBaselineEntries(
+  entries: string[],
+  repo: Map<string, string>,
+): string[] {
+  const migrated = new Set<string>();
+
+  for (const entry of entries) {
+    if (NEW_KEY_RE.test(entry)) {
+      migrated.add(entry);
+      continue;
+    }
+    const legacy = entry.match(LEGACY_KEY_RE);
+    if (!legacy) continue;
+    const [, filePath, lineStr] = legacy;
+    const source = repo.get(filePath);
+    if (source === undefined) continue;
+    const offenders = auditSource(filePath, source);
+    if (offenders.length === 0) continue;
+
+    const targetLine = Number(lineStr);
+    // Prefer an exact line-match (unchanged code). Otherwise, prefer the
+    // nearest offender whose line is ≥ targetLine (P1's wrapping pushes
+    // lines forward, never backward). Otherwise, fall back to the first
+    // offender of the file.
+    let chosen = offenders.find((o) => o.line === targetLine);
+    if (!chosen) {
+      chosen = offenders
+        .filter((o) => o.line >= targetLine)
+        .sort((a, b) => a.line - b.line)[0];
+    }
+    if (!chosen) chosen = offenders[0];
+
+    migrated.add(offenderKey(chosen));
+  }
+
+  return Array.from(migrated).sort();
 }
 
 // ─── CLI entry-point ────────────────────────────────────────────
@@ -238,6 +332,7 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
       // trigger.
       if (full.endsWith("/audit-findmany-no-take.ts")) continue;
       if (full.endsWith("/audit-findmany-no-take.test.ts")) continue;
+      if (full.endsWith("/audit-findmany-rekey.test.ts")) continue;
       out.push(full);
     }
   }
@@ -246,8 +341,10 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
 
 interface BaselineFile {
   /**
-   * Set of `path:line` keys captured at baseline time. Anything present here
-   * is silenced; anything not present is a new offender and fails CI.
+   * Set of `path::modelName::occurrenceIndex` keys captured at baseline time.
+   * Anything present here is silenced; anything not present is a new offender
+   * and fails CI. Legacy `path:line` entries are still accepted by the
+   * migrator (`--write-baseline`) but will be rejected by CI once rewritten.
    */
   allowlist: string[];
 }
@@ -263,13 +360,10 @@ async function loadBaseline(root: string): Promise<Set<string>> {
   }
 }
 
-export function offenderKey(o: Offender): string {
-  return `${o.path}:${o.line}`;
-}
-
 async function runCli(): Promise<void> {
   const args = process.argv.slice(2);
-  const updateBaseline = args.includes("--update-baseline");
+  const writeBaseline =
+    args.includes("--write-baseline") || args.includes("--update-baseline");
   const showAll = args.includes("--all");
   const rootArg = args.find((a) => !a.startsWith("--"));
   const root = rootArg ? path.resolve(rootArg) : DEFAULT_ROOT;
@@ -284,7 +378,7 @@ async function runCli(): Promise<void> {
     allOffenders.push(...offenders);
   }
 
-  if (updateBaseline) {
+  if (writeBaseline) {
     const keys = Array.from(new Set(allOffenders.map(offenderKey))).sort();
     const out: BaselineFile = { allowlist: keys };
     await fs.writeFile(
@@ -293,7 +387,9 @@ async function runCli(): Promise<void> {
       "utf8",
     );
     // eslint-disable-next-line no-console
-    console.log(`audit-findmany-no-take: wrote baseline with ${keys.length} entries`);
+    console.log(
+      `audit-findmany-no-take: wrote baseline with ${keys.length} entries`,
+    );
     process.exit(0);
   }
 
