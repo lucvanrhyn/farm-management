@@ -31,12 +31,18 @@ model Observation {
   editedAt      DateTime?
   editHistory   String?
   attachmentUrl String?
+  // Phase I.3 — denormalised species. Nullable to tolerate orphan rows
+  // (animalId references an animal that no longer exists) and camp-level
+  // observations (animalId null). Backfilled from Animal.species by
+  // migration 0003 and kept in sync at write-time by logger API routes.
+  species       String?
 
   @@index([type, campId, observedAt], name: "idx_obs_type_camp_date")
   @@index([type, animalId, observedAt], name: "idx_obs_type_animal_date")
   @@index([campId], name: "idx_obs_camp")
   @@index([animalId], name: "idx_obs_animal")
   @@index([loggedBy], name: "idx_obs_logged_by")
+  @@index([species, animalId], name: "idx_observation_species_animal")
 }
 
 model Animal {

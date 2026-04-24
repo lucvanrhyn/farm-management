@@ -125,7 +125,7 @@ function parseDetails(raw: string): Record<string, string> {
 
 export async function getReproStats(
   prisma: PrismaClient,
-  options?: { animalIds?: string[] },
+  options?: { species?: string },
 ): Promise<ReproStats> {
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
@@ -144,9 +144,11 @@ export async function getReproStats(
     details: true,
   } as const;
 
-  // When animalIds is provided, scope all observation queries to that set.
-  const animalFilter = options?.animalIds?.length
-    ? { animalId: { in: options.animalIds } }
+  // Phase I.3 — scope via the denormalised `species` column on Observation
+  // instead of the old 874-ID IN-list. The index
+  // `idx_observation_species_animal` (migration 0003) serves the predicate.
+  const speciesFilter = options?.species
+    ? { species: options.species }
     : {};
 
   const [reproObs, calvingObs, allCamps] = await Promise.all([
@@ -154,7 +156,7 @@ export async function getReproStats(
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan"] },
         observedAt: { gte: twelveMonthsAgo },
-        ...animalFilter,
+        ...speciesFilter,
       },
       orderBy: { observedAt: "desc" },
       select: selectFields,
@@ -163,7 +165,7 @@ export async function getReproStats(
       where: {
         type: "calving",
         observedAt: { gte: eighteenMonthsAgo },
-        ...animalFilter,
+        ...speciesFilter,
       },
       orderBy: { observedAt: "asc" },
       select: selectFields,
