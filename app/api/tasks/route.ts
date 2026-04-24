@@ -26,6 +26,18 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { expandRule } from "@/lib/tasks/recurrence";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
+import {
+  decodeTaskCursor,
+  encodeTaskCursor,
+  TASK_CURSOR_ORDER_BY,
+  tupleGtWhere,
+} from "@/lib/tasks/cursor";
+
+// Pagination tunables. Default 50/request matches the admin/tasks SSR page
+// size. Max 500 caps the worst-case single-request cost when a mis-coded
+// client asks for "all at once".
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 500;
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -49,6 +61,15 @@ export async function GET(req: NextRequest) {
     const latParam = searchParams.get("lat");
     const lngParam = searchParams.get("lng");
     const radiusKmParam = searchParams.get("radiusKm");
+
+    // Pagination is opt-in: when neither `limit` nor `cursor` is present, the
+    // handler returns the legacy unbounded array shape so existing callers
+    // (IndexedDB sync, logger fetch) keep working. The admin/tasks SSR page
+    // and "Load more" control pass `?limit=` to receive the streaming
+    // `{ tasks, nextCursor, hasMore }` shape.
+    const limitParam = searchParams.get("limit");
+    const cursorParam = searchParams.get("cursor");
+    const paginated = limitParam !== null || cursorParam !== null;
 
     // ── Occurrences mode ──
     if (asParam === "occurrences") {
@@ -104,17 +125,63 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const tasks = await timeAsync("query", () =>
+    if (!paginated) {
+      const tasks = await timeAsync("query", () =>
+        prisma.task.findMany({
+          where,
+          orderBy: [{ dueDate: "asc" }, { priority: "asc" }, { createdAt: "asc" }],
+        }),
+      );
+
+      // Parse JSON-stringified arrays before returning
+      const parsed = tasks.map(parseTaskArrayFields);
+
+      return NextResponse.json(parsed);
+    }
+
+    const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
+    if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
+      return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+    }
+    const limit = Math.min(rawLimit, MAX_LIMIT);
+
+    let cursorWhere: Record<string, unknown> | null = null;
+    if (cursorParam) {
+      const decoded = decodeTaskCursor(cursorParam);
+      if (!decoded) {
+        return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+      }
+      cursorWhere = tupleGtWhere(decoded);
+    }
+
+    // Fetch `limit + 1` rows to detect "has more" without a COUNT round-trip.
+    // Order by the stable composite [dueDate, createdAt, id] so ties at a
+    // shared dueDate don't drop rows across page boundaries.
+    const items = await timeAsync("query", () =>
       prisma.task.findMany({
-        where,
-        orderBy: [{ dueDate: "asc" }, { priority: "asc" }, { createdAt: "asc" }],
+        where: { ...where, ...(cursorWhere ?? {}) },
+        orderBy: TASK_CURSOR_ORDER_BY,
+        take: limit + 1,
       }),
     );
 
-    // Parse JSON-stringified arrays before returning
-    const parsed = tasks.map(parseTaskArrayFields);
+    const hasMore = items.length > limit;
+    const trimmed = hasMore ? items.slice(0, limit) : items;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeTaskCursor({
+            dueDate: last.dueDate,
+            createdAt: last.createdAt.toISOString(),
+            id: last.id,
+          })
+        : null;
 
-    return NextResponse.json(parsed);
+    return NextResponse.json({
+      tasks: trimmed.map(parseTaskArrayFields),
+      nextCursor,
+      hasMore,
+    });
   });
 }
 
