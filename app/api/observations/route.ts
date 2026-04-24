@@ -112,6 +112,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Phase I.3 — denormalise species onto Observation at write time so
+  // /admin/reproduction can filter `species: mode` directly (no animalId-IN
+  // prefetch). Nullable: orphan/camp-only observations simply have no species.
+  let species: string | null = null;
+  if (animal_id) {
+    const animal = await prisma.animal.findUnique({
+      where: { animalId: animal_id },
+      select: { species: true },
+    });
+    species = animal?.species ?? null;
+  }
+
   try {
     const record = await prisma.observation.create({
       data: {
@@ -121,6 +133,7 @@ export async function POST(request: NextRequest) {
         details: details ?? "",
         observedAt,
         loggedBy: session.user?.email ?? null,
+        species,
       },
     });
     revalidateObservationWrite(db.slug);

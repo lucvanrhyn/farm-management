@@ -39,6 +39,9 @@ const mockTaskFindUnique = vi.fn();
 const mockObservationCreate = vi.fn();
 const mockTemplateUpsert = vi.fn();
 const mockTransaction = vi.fn();
+// Phase I.3 — task route now looks up Animal.species at write time so the
+// denormalised Observation.species stays fresh. Default mock returns cattle.
+const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: "cattle" });
 
 const mockPrisma = {
   task: {
@@ -49,6 +52,9 @@ const mockPrisma = {
   },
   observation: {
     create: mockObservationCreate,
+  },
+  animal: {
+    findUnique: mockAnimalFindUnique,
   },
   taskTemplate: {
     upsert: mockTemplateUpsert,

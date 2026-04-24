@@ -16,6 +16,9 @@ vi.mock('next-auth', () => ({
 // Mock prisma client methods used by the route
 const mockCreate = vi.fn().mockResolvedValue({ id: 'test-obs-id' });
 const mockCampFindUnique = vi.fn().mockResolvedValue({ campId: 'A' });
+// Phase I.3 — observations POST now looks up Animal.species at write time
+// to keep the denormalised column fresh.
+const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
 
 const mockPrisma = {
   observation: {
@@ -23,6 +26,9 @@ const mockPrisma = {
   },
   camp: {
     findUnique: mockCampFindUnique,
+  },
+  animal: {
+    findUnique: mockAnimalFindUnique,
   },
 };
 
