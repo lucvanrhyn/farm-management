@@ -67,6 +67,46 @@ describe("auditSource", () => {
     expect(offenders.map((o) => o.line).sort()).toEqual([1, 2]);
   });
 
+  it("ignores findMany calls inside // line comments (documentation shape)", () => {
+    // Regression: __tests__/admin/reproduction-page-denorm.test.ts has a doc-
+    // comment showing the old regression shape:
+    //   //   const speciesAnimals = await prisma.animal.findMany({ where: { species: mode } ... })
+    // The regex-only auditor wrongly flagged this as a new offender and
+    // turned audit-pagination CI red. Line comments must be stripped before
+    // matching.
+    const source = [
+      `// The previous regression shape:`,
+      `//   const speciesAnimals = await prisma.animal.findMany({ where: { species: mode } ... })`,
+      `expect(src).not.toMatch(/prisma\\.animal\\.findMany/);`,
+    ].join("\n");
+    const offenders = auditSource("commented.ts", source);
+    expect(offenders).toEqual([]);
+  });
+
+  it("ignores findMany calls inside /* ... */ block comments", () => {
+    const source = [
+      `/*`,
+      `  Old shape before we paginated:`,
+      `    await prisma.task.findMany({ where: { assigneeId: x } });`,
+      `*/`,
+      `await prisma.task.findMany({ take: 25 });`,
+    ].join("\n");
+    const offenders = auditSource("block.ts", source);
+    expect(offenders).toEqual([]);
+  });
+
+  it("commented-out findMany does not advance the per-model occurrence counter", () => {
+    // A commented-out call must not renumber a real call's baseline key —
+    // otherwise inserting a comment invalidates every downstream entry.
+    const source = [
+      `// await prisma.animal.findMany({ where: { species: mode } });`,
+      `await prisma.animal.findMany({ where: { species: mode } });`,
+    ].join("\n");
+    const offenders = auditSource("counter.ts", source);
+    expect(offenders).toHaveLength(1);
+    expect(offenders[0].occurrenceIndex).toBe(0);
+  });
+
   it("respects an allow-comment on the preceding line", () => {
     const source = [
       `// audit-allow-findmany: intentional full scan for analytics`,
