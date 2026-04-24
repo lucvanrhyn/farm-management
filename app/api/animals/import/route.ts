@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import * as XLSX from "xlsx";
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma, role } = db;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

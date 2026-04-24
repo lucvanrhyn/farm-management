@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
   if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
   const { prisma, role } = db;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { name, type } = await request.json();
   if (!name || !type || !["income", "expense"].includes(type)) {

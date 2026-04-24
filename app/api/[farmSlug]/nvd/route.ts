@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueNvd } from "@/lib/server/nvd";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
@@ -79,6 +80,11 @@ export async function POST(
   const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
   if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: defence-in-depth — re-verify ADMIN against meta-db so a
+  // demoted ADMIN can't keep issuing NVDs until their JWT expires.
+  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   // Rate limit: 10 NVD issues per 10 minutes per farm
   const rl = checkRateLimit(`nvd-issue:${farmSlug}`, 10, 10 * 60 * 1000);

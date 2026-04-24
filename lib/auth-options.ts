@@ -97,6 +97,19 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
+    // Phase H.2: bound the stale-ADMIN window.
+    //
+    // Phase H removed the 60 s meta-db refresh from the jwt callback, so
+    // session.user.farms (carrying per-farm ADMIN/MANAGER/VIEWER roles) is
+    // only refreshed at initial sign-in or on explicit useSession().update().
+    // next-auth v4's default session lifetime is 30 days, meaning a demoted
+    // ADMIN would keep the stale role on every route that trusts the JWT
+    // (i.e. everything not wired through verifyFreshAdminRole) for up to 30 d.
+    //
+    // Capping at 8 hours limits worst-case staleness to one business day while
+    // preserving the Phase H win (zero meta-db round-trip on the hot path).
+    // Admin-write routes still call verifyFreshAdminRole for defence-in-depth.
+    maxAge: 60 * 60 * 8,
   },
   callbacks: {
     async jwt({ token, user, trigger }) {

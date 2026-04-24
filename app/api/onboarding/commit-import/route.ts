@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   commitImport,
@@ -84,6 +85,10 @@ export async function POST(req: NextRequest) {
   }
   const { prisma, slug, role } = db;
   if (role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
