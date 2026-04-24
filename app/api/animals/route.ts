@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
@@ -14,14 +12,9 @@ const MAX_LIMIT = 2000;
 
 export async function GET(req: NextRequest) {
   return withServerTiming(async () => {
-    const session = await timeAsync("session", () => getServerSession(authOptions));
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const db = await getPrismaWithAuth(session);
-    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-    const { prisma } = db;
+    const ctx = await timeAsync("session", () => getFarmContext(req));
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { prisma } = ctx;
 
     const { searchParams } = new URL(req.url);
     const camp = searchParams.get("camp");
@@ -86,13 +79,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role } = db;
+  const ctx = await getFarmContext(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug } = ctx;
   // LOGGER role may create calf records (calving observation flow). ADMIN required for all else.
   if (role !== "ADMIN" && role !== "LOGGER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -146,6 +135,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  revalidateAnimalWrite(db.slug);
+  revalidateAnimalWrite(slug);
   return NextResponse.json({ success: true, animal }, { status: 201 });
 }
