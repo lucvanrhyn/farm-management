@@ -9,6 +9,7 @@
  */
 import type { Client } from "@libsql/client";
 import { createClient } from "@libsql/client";
+import { fileURLToPath } from "node:url";
 
 function getClient(): Client {
   const url = process.env.META_TURSO_URL;
@@ -49,7 +50,7 @@ async function main() {
   console.log("✓ phase-e meta migration complete");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((err) => {
     console.error("Migration failed:", err);
     process.exit(1);
