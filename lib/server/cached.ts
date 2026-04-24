@@ -249,6 +249,8 @@ export interface FarmSettingsData {
   alertThresholdHours: number;
   farmName: string;
   breed: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 const SETTINGS_DEFAULTS: FarmSettingsData = {
@@ -259,6 +261,8 @@ const SETTINGS_DEFAULTS: FarmSettingsData = {
   alertThresholdHours: 48,
   farmName: "My Farm",
   breed: "Mixed",
+  latitude: null,
+  longitude: null,
 };
 
 export async function getCachedFarmSettings(
@@ -277,6 +281,8 @@ export async function getCachedFarmSettings(
           alertThresholdHours: row.alertThresholdHours,
           farmName: row.farmName,
           breed: row.breed,
+          latitude: row.latitude ?? null,
+          longitude: row.longitude ?? null,
         };
       });
     },
