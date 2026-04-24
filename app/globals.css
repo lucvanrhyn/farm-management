@@ -36,6 +36,55 @@ body {
 }
 .mapboxgl-popup-tip { display: none !important; }
 
+/* ---------------------------------------------------------------
+ * Animated hero keyframes (Phase M.2)
+ *
+ * Replaced framer-motion on components/ui/animated-hero.tsx to keep
+ * framer's ~40 KB runtime out of /home's initial JS. The component
+ * only did simple entrance fades/slides + a word-rotator — all
+ * expressible as CSS keyframes and transitions.
+ *
+ * The .hero-word-rotator children use `transform`/`opacity` toggled
+ * by `data-state={"active"|"above"|"below"}`, with a spring-ish
+ * cubic-bezier transition.
+ * ---------------------------------------------------------------- */
+@keyframes hero-fade-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hero-fade-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hero-fade-slide-up-sm {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hero-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.hero-anim {
+  opacity: 0;
+  animation-fill-mode: forwards;
+  animation-timing-function: ease-out;
+}
+.hero-anim-greeting  { animation: hero-fade-slide-down 0.5s ease-out forwards; }
+.hero-anim-title     { animation: hero-fade-slide-up 0.6s 0.1s ease-out forwards; }
+.hero-anim-subtitle  { animation: hero-fade 0.6s 0.25s ease-out forwards; }
+.hero-anim-slogan    { animation: hero-fade-slide-up-sm 0.6s 0.4s ease-out forwards; }
+.hero-anim-pill      { animation: hero-fade 0.6s 0.6s ease-out forwards; }
+
+.hero-word {
+  transition:
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s ease-out;
+}
+.hero-word[data-state="active"] { transform: translateY(0);     opacity: 1; }
+.hero-word[data-state="above"]  { transform: translateY(-60px); opacity: 0; }
+.hero-word[data-state="below"]  { transform: translateY(60px);  opacity: 0; }
+
 /* Glowing card animations — farm palette (rust → gold → leather) */
 @keyframes border-follow {
   0%   { left: 0;    top: 0;    transform: translate(-50%, -50%); }

@@ -9,7 +9,13 @@ interface FarmStats {
   campCount: number;
   heroImageUrl?: string;
 }
-import { motion } from "framer-motion";
+
+// Phase M.2: framer-motion was previously imported here, pulling ~40 KB of
+// animation runtime into /home's initial JS graph. Phase M dynamic-split
+// HomeSectionGrid but missed this component, which app/[farmSlug]/home/page.tsx
+// renders directly. The animations were all simple entrance fades/slides plus
+// a word-rotator — all expressible as CSS keyframes/transitions. See the
+// `.hero-anim-*` and `.hero-word` rules in app/globals.css.
 
 const ENGLISH_MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -28,6 +34,14 @@ function getGreeting(hour: number): { text: string; icon: string } {
   if (hour < 12) return { text: "Good morning", icon: "🌅" };
   if (hour < 17) return { text: "Good afternoon", icon: "☀️" };
   return { text: "Good evening", icon: "🌙" };
+}
+
+function wordState(
+  wordIndex: number,
+  activeIndex: number,
+): "active" | "above" | "below" {
+  if (wordIndex === activeIndex) return "active";
+  return activeIndex > wordIndex ? "above" : "below";
 }
 
 export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: string) => void }) {
@@ -70,11 +84,8 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
     <div className="flex flex-col items-center text-center gap-3">
       {/* Greeting + date */}
       {mounted && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex items-center gap-2 text-sm"
+        <div
+          className="hero-anim-greeting flex items-center gap-2 text-sm"
           style={{
             color: "#B09878",
             fontFamily: "var(--font-sans)",
@@ -85,14 +96,12 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
           <span>{greeting.text}</span>
           <span style={{ color: "#6A5038" }}>·</span>
           <span>{dateStr}</span>
-        </motion.div>
+        </div>
       )}
 
       {/* Farm name */}
-      <motion.h1
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.1 }}
+      <h1
+        className="hero-anim-title text-5xl md:text-7xl font-bold uppercase"
         style={{
           fontFamily: "var(--font-display)",
           color: "#F5EBD4",
@@ -100,33 +109,24 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
           lineHeight: 1.1,
           textShadow: "0 2px 20px rgba(0,0,0,0.9)",
         }}
-        className="text-5xl md:text-7xl font-bold uppercase"
       >
         {farm?.farmName ?? "—"}
-      </motion.h1>
+      </h1>
 
       {/* Subtitle */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.25 }}
+      <p
+        className="hero-anim-subtitle text-sm md:text-base tracking-widest uppercase font-light"
         style={{
           color: "#C4A870",
           fontFamily: "var(--font-sans)",
           textShadow: "0 1px 12px rgba(0,0,0,0.8)",
         }}
-        className="text-sm md:text-base tracking-widest uppercase font-light"
       >
         {farm ? `${farm.breed} Farm Management System` : "Farm Management System"}
-      </motion.p>
+      </p>
 
       {/* Animated slogan */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.4 }}
-        className="mt-4 flex flex-col items-center gap-1"
-      >
+      <div className="hero-anim-slogan mt-4 flex flex-col items-center gap-1">
         <span
           style={{
             color: "#9A8060",
@@ -139,9 +139,10 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
         </span>
         <div className="relative h-14 flex items-center justify-center overflow-hidden w-72">
           {words.map((word, index) => (
-            <motion.span
+            <span
               key={word}
-              className="absolute font-semibold"
+              data-state={wordState(index, wordIndex)}
+              className="hero-word absolute font-semibold"
               style={{
                 fontFamily: "var(--font-display)",
                 color: "#D46830",
@@ -149,26 +150,16 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
                 letterSpacing: "0.03em",
                 textShadow: "0 2px 16px rgba(0,0,0,0.9)",
               }}
-              initial={{ opacity: 0, y: 40 }}
-              transition={{ type: "spring", stiffness: 60, damping: 15 }}
-              animate={
-                wordIndex === index
-                  ? { y: 0, opacity: 1 }
-                  : { y: wordIndex > index ? -60 : 60, opacity: 0 }
-              }
             >
               {word}
-            </motion.span>
+            </span>
           ))}
         </div>
-      </motion.div>
+      </div>
 
       {/* Info pill */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.6 }}
-        className="mt-1 px-4 py-1.5 rounded-full text-xs tracking-wider"
+      <div
+        className="hero-anim-pill mt-1 px-4 py-1.5 rounded-full text-xs tracking-wider"
         style={{
           background: "rgba(4,2,1,0.50)",
           border: "1px solid rgba(255,255,255,0.10)",
@@ -179,7 +170,7 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
         {farm
           ? `${farm.breed} · ${farm.animalCount} animals · ${farm.campCount} camps`
           : "Loading…"}
-      </motion.div>
+      </div>
     </div>
   );
 }
