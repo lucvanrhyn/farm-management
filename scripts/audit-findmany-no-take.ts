@@ -48,6 +48,72 @@ export interface Offender {
 const FINDMANY_RE = /prisma\.(\w+)\.findMany\s*\(/g;
 
 /**
+ * Replace every `//` line comment and `/* … *\/` block comment in `src` with
+ * spaces of equal length. Preserves line structure (and therefore the
+ * character-index → line-number mapping used elsewhere) while guaranteeing
+ * that regex scans can't match tokens that only appear inside a comment.
+ *
+ * String literals are respected so `"// not a comment"` doesn't get mangled.
+ * This is the minimum correct preprocessor — it's not a full JS parser, but
+ * it covers every realistic occurrence of `prisma.*.findMany` in our tree.
+ */
+function stripComments(src: string): string {
+  const out: string[] = new Array(src.length);
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    // Line comment: replace `//…\n` with spaces, keep the newline.
+    if (ch === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") {
+        out[i] = " ";
+        i++;
+      }
+      continue;
+    }
+    // Block comment: replace `/*…*/` with spaces, preserving newlines inside.
+    if (ch === "/" && src[i + 1] === "*") {
+      out[i] = " ";
+      out[i + 1] = " ";
+      i += 2;
+      while (i < src.length - 1 && !(src[i] === "*" && src[i + 1] === "/")) {
+        out[i] = src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < src.length - 1) {
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 2;
+      }
+      continue;
+    }
+    // String literal: copy through verbatim so `"// …"` stays intact.
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const quote = ch;
+      out[i] = ch;
+      i++;
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === "\\") {
+          out[i] = src[i];
+          if (i + 1 < src.length) out[i + 1] = src[i + 1];
+          i += 2;
+        } else {
+          out[i] = src[i];
+          i++;
+        }
+      }
+      if (i < src.length) {
+        out[i] = src[i];
+        i++;
+      }
+      continue;
+    }
+    out[i] = ch;
+    i++;
+  }
+  return out.join("");
+}
+
+/**
  * Walk balanced curly braces starting at `open` (an index pointing at `{`)
  * and return the index of the matching `}`. Returns -1 if unbalanced. Tracks
  * string literals and line comments so braces inside `"{ foo }"` don't
@@ -180,6 +246,14 @@ export function auditSource(filePath: string, source: string): Offender[] {
   const offenders: Offender[] = [];
   const lines = source.split("\n");
 
+  // Strip comments BEFORE scanning so a doc-comment showing the old shape of
+  // a query (`// const x = await prisma.animal.findMany(...)`) doesn't get
+  // regex-matched as a real call. Using a space-preserving strip keeps line
+  // numbers + character indices aligned with the original source, so the
+  // offender report still points at the right line if something *does*
+  // match outside a comment.
+  const scanned = stripComments(source);
+
   // Precompute line-start offsets so we can map a character index to a 1-based
   // line number without repeating a scan.
   const lineStarts: number[] = [0];
@@ -198,11 +272,11 @@ export function auditSource(filePath: string, source: string): Offender[] {
 
   FINDMANY_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = FINDMANY_RE.exec(source))) {
+  while ((match = FINDMANY_RE.exec(scanned))) {
     const callStart = match.index;
     const modelName = match[1];
     const parenIdx = match.index + match[0].length - 1; // points at `(`
-    const arg = argBody(source, parenIdx);
+    const arg = argBody(scanned, parenIdx);
 
     // Assign the occurrence index first — it advances for every syntactic
     // `prisma.<model>.findMany(` regardless of later filtering, so that pragma
