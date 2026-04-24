@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
+import { getCachedFarmSettings } from "@/lib/server/cached";
 import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import type { FarmTier } from "@/lib/tier";
@@ -72,9 +73,10 @@ export default async function AdminPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
-  const [prisma, creds] = await Promise.all([
+  const [prisma, creds, farmSettings] = await Promise.all([
     getPrismaForFarm(farmSlug),
     getFarmCreds(farmSlug),
+    getCachedFarmSettings(farmSlug),
   ]);
   const tier = (creds?.tier ?? "advanced") as FarmTier;
   if (!prisma) {
@@ -84,10 +86,6 @@ export default async function AdminPage({
       </div>
     );
   }
-
-  const farmSettings = await prisma.farmSettings.findFirst({
-    select: { latitude: true, longitude: true },
-  });
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
@@ -102,8 +100,8 @@ export default async function AdminPage({
         {/* Weather widget in admin header */}
         <div className="sm:max-w-sm w-full">
           <WeatherWidget
-            latitude={farmSettings?.latitude ?? null}
-            longitude={farmSettings?.longitude ?? null}
+            latitude={farmSettings.latitude}
+            longitude={farmSettings.longitude}
           />
         </div>
       </div>
