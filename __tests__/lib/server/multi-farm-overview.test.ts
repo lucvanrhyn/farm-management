@@ -105,6 +105,43 @@ describe('getOverviewForUserFarms', () => {
     expect(result[0].activeAnimalCount).toBeNull();
   });
 
+  it('returns lastObservationAtMs as a number (JSON-safe for unstable_cache)', async () => {
+    // Regression: FarmOverview used to expose `lastObservationAt: Date | null`,
+    // but this object is wrapped in `unstable_cache` which JSON-round-trips
+    // the payload. JSON.stringify(Date) → ISO string; JSON.parse leaves it a
+    // string; the component then called `.getTime()` and crashed.
+    //
+    // Fix: expose epoch-ms (`number | null`) — JSON-native, no lie.
+    const { getPrismaForFarm } = await import('@/lib/farm-prisma');
+    const created = new Date('2026-04-20T10:15:00Z');
+    vi.mocked(getPrismaForFarm).mockResolvedValue(
+      makeMockPrisma({ animalCount: 5, latestObs: { createdAt: created } }) as never,
+    );
+
+    const { getOverviewForUserFarms } = await import('@/lib/server/multi-farm-overview');
+    const result = await getOverviewForUserFarms([makeFarm('obs-farm')]);
+
+    expect(typeof result[0].lastObservationAtMs).toBe('number');
+    expect(result[0].lastObservationAtMs).toBe(created.getTime());
+
+    // And — the whole point — it must survive a JSON round-trip unchanged.
+    const roundTripped = JSON.parse(JSON.stringify(result[0]));
+    expect(roundTripped.lastObservationAtMs).toBe(created.getTime());
+    expect(typeof roundTripped.lastObservationAtMs).toBe('number');
+  });
+
+  it('returns null lastObservationAtMs when farm has no observations', async () => {
+    const { getPrismaForFarm } = await import('@/lib/farm-prisma');
+    vi.mocked(getPrismaForFarm).mockResolvedValue(
+      makeMockPrisma({ animalCount: 0, latestObs: null }) as never,
+    );
+
+    const { getOverviewForUserFarms } = await import('@/lib/server/multi-farm-overview');
+    const result = await getOverviewForUserFarms([makeFarm('fresh-farm')]);
+
+    expect(result[0].lastObservationAtMs).toBeNull();
+  });
+
   it('caps at 8 farms', async () => {
     const { getPrismaForFarm } = await import('@/lib/farm-prisma');
     vi.mocked(getPrismaForFarm).mockResolvedValue(

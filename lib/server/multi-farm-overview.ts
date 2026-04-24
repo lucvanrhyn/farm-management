@@ -5,7 +5,16 @@ export interface FarmOverview {
   slug: string;
   activeAnimalCount: number | null; // null = unavailable
   campCount: number | null;
-  lastObservationAt: Date | null;
+  /**
+   * Epoch milliseconds of the most recent observation, or null if none.
+   *
+   * Intentionally `number` (not `Date`): this object crosses the
+   * `unstable_cache` JSON boundary in `getCachedMultiFarmOverview`, and
+   * `Date` instances don't survive `JSON.parse` — they come back as ISO
+   * strings and silently break `.getTime()` in consumers. Using epoch-ms
+   * keeps the type honest and requires zero parsing downstream.
+   */
+  lastObservationAtMs: number | null;
   tier: string;
   subscriptionStatus: string;
 }
@@ -31,7 +40,7 @@ export async function getOverviewForUserFarms(
           slug: farm.slug,
           activeAnimalCount: null,
           campCount: null,
-          lastObservationAt: null,
+          lastObservationAtMs: null,
           tier: farm.tier,
           subscriptionStatus: farm.subscriptionStatus,
         };
@@ -56,7 +65,7 @@ export async function getOverviewForUserFarms(
         slug: farm.slug,
         activeAnimalCount,
         campCount,
-        lastObservationAt: latestObs?.createdAt ?? null,
+        lastObservationAtMs: latestObs?.createdAt.getTime() ?? null,
         tier: farm.tier,
         subscriptionStatus: farm.subscriptionStatus,
       };
@@ -70,7 +79,7 @@ export async function getOverviewForUserFarms(
       slug: capped[i].slug,
       activeAnimalCount: null,
       campCount: null,
-      lastObservationAt: null,
+      lastObservationAtMs: null,
       tier: capped[i].tier,
       subscriptionStatus: capped[i].subscriptionStatus,
     };
