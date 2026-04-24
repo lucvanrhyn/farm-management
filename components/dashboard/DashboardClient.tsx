@@ -2,16 +2,30 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import dynamic from "next/dynamic";
 import { SignOutButton } from "@/components/logger/SignOutButton";
-import CampDetailPanel from "./CampDetailPanel";
-import AnimalProfile from "./AnimalProfile";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
 import WeatherWidget from "./WeatherWidget";
 import type { Camp } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+
+// Phase M: framer-motion used to be imported statically here for the
+// header stats strip and the slide-in side panel. It's now split into
+// two dynamic-only chunks so the dashboard route ships without the
+// animation library in its initial JS bundle.
+const DashboardStatsStrip = dynamic(() => import("./DashboardStatsStrip"), {
+  ssr: false,
+  // Placeholder keeps the header centered while the chunk loads so the
+  // surrounding layout doesn't jump.
+  loading: () => (
+    <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }} aria-hidden />
+  ),
+});
+
+const DashboardSidePanel = dynamic(() => import("./DashboardSidePanel"), {
+  ssr: false,
+});
 
 // Leaflet must only render client-side
 const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
@@ -52,98 +66,6 @@ const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
   { value: "density",  label: "Stocking Density" },
   { value: "days",     label: "Days Since Inspection" },
 ];
-
-// ─── Stat chip ────────────────────────────────────────────────────────────────
-
-const chipVariants = {
-  hidden: { opacity: 0, y: 6, scale: 0.92 },
-  show: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { type: "spring" as const, stiffness: 200, damping: 22 },
-  },
-};
-
-function StatChip({
-  label,
-  value,
-  accent,
-  pulse,
-  dark,
-}: {
-  label: string;
-  value: string | number;
-  accent?: boolean;
-  pulse?: boolean;
-  dark?: boolean;
-}) {
-  const bg = dark
-    ? (accent ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)")
-    : (accent ? "rgba(220,50,50,0.06)" : "rgba(0,0,0,0.04)");
-  const borderColor = dark
-    ? (accent ? "rgba(239,68,68,0.25)" : "rgba(74,222,128,0.15)")
-    : (accent ? "rgba(200,50,50,0.2)" : "rgba(0,0,0,0.08)");
-  const valueColor = dark
-    ? (accent ? "#ef4444" : "#4ade80")
-    : (accent ? "#B03030" : "#1A1510");
-  const labelColor = dark ? "rgba(74,222,128,0.5)" : "rgba(26,21,16,0.45)";
-  const pulseColor = dark ? "#ef4444" : "#B03030";
-
-  return (
-    <motion.div
-      variants={chipVariants}
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "4px 12px",
-        borderRadius: 8,
-        background: bg,
-        border: `1px solid ${borderColor}`,
-        gap: 1,
-      }}
-    >
-      {pulse && (
-        <span
-          style={{
-            position: "absolute",
-            top: 4,
-            right: 4,
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: pulseColor,
-            animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
-          }}
-        />
-      )}
-      <span
-        style={{
-          fontFamily: "var(--font-dm-serif)",
-          fontSize: 18,
-          lineHeight: 1,
-          color: valueColor,
-        }}
-      >
-        {value}
-      </span>
-      <span
-        style={{
-          fontSize: 9,
-          color: labelColor,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          fontFamily: "var(--font-sans)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {label}
-      </span>
-    </motion.div>
-  );
-}
 
 // ─── Morning briefing helper ──────────────────────────────────────────────────
 
@@ -422,25 +344,14 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* Summary stats */}
-        <motion.div
-          initial="hidden"
-          animate="show"
-          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
-          style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
-        >
-          <StatChip label="Total Animals"   value={filteredTotal}                        />
-          <StatChip
-            label="Inspected"
-            value={conditionsLoading ? "—" : `${inspectedToday}/${camps.length}`}
-          />
-          <StatChip
-            label="Active Alerts"
-            value={conditionsLoading ? "—" : alertCount}
-            accent={!conditionsLoading && alertCount > 0}
-            pulse={!conditionsLoading && alertCount > 0}
-          />
-        </motion.div>
+        {/* Summary stats — framer-motion loaded lazily (see dynamic() above) */}
+        <DashboardStatsStrip
+          totalAnimals={filteredTotal}
+          inspectedLabel={conditionsLoading ? "—" : `${inspectedToday}/${camps.length}`}
+          alertLabel={conditionsLoading ? "—" : alertCount}
+          alertAccent={!conditionsLoading && alertCount > 0}
+          alertPulse={!conditionsLoading && alertCount > 0}
+        />
         {conditionsError && (
           <span style={{ fontSize: 10, color: "rgba(239,68,68,0.7)", whiteSpace: "nowrap" }}>
             Live data unavailable
@@ -572,43 +483,21 @@ export default function DashboardClient({
           )}
         </div>
 
-        {/* ── Side panel (opened via "View Full Details") ─────────────── */}
-        <AnimatePresence>
-          {panelOpen && (
-            <motion.div
-              key={selectedAnimalId ?? selectedCampId}
-              initial={{ x: 380, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 380, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 24 }}
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                bottom: 0,
-                width: 380,
-                boxShadow: "-8px 0 40px rgba(0,0,0,0.6)",
-                zIndex: 20,
-              }}
-            >
-              {selectedAnimalId ? (
-                <AnimalProfile
-                  animalId={selectedAnimalId}
-                  onClose={() => { setSelectedAnimalId(null); setSelectedCampId(null); }}
-                  onBack={() => setSelectedAnimalId(null)}
-                />
-              ) : (
-                <CampDetailPanel
-                  campId={selectedCampId!}
-                  camp={camps.find((c) => c.camp_id === selectedCampId)}
-                  onClose={() => setSelectedCampId(null)}
-                  onSelectAnimal={(id) => setSelectedAnimalId(id)}
-                  liveCondition={liveConditions[selectedCampId!]}
-                />
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* ── Side panel (opened via "View Full Details") ───────────────
+             framer-motion + AnimatePresence loaded lazily via
+             next/dynamic — chunk only downloads when a user opens the
+             panel, not on first paint of the dashboard. */}
+        <DashboardSidePanel
+          panelOpen={panelOpen}
+          selectedCampId={selectedCampId}
+          selectedAnimalId={selectedAnimalId}
+          camps={camps}
+          liveConditions={liveConditions}
+          onSelectAnimal={(id) => setSelectedAnimalId(id)}
+          onCloseAnimal={() => { setSelectedAnimalId(null); setSelectedCampId(null); }}
+          onCloseCamp={() => setSelectedCampId(null)}
+          onBackFromAnimal={() => setSelectedAnimalId(null)}
+        />
       </div>
     </div>
   );
