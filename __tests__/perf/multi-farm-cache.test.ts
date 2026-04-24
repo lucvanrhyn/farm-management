@@ -147,7 +147,7 @@ const MOCK_OVERVIEWS: FarmOverview[] = MOCK_FARMS.map((f) => ({
   slug: f.slug,
   activeAnimalCount: 42,
   campCount: 5,
-  lastObservationAt: null,
+  lastObservationAtMs: null,
   tier: f.tier,
   subscriptionStatus: f.subscriptionStatus,
 }));

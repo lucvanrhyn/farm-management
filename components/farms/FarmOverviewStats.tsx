@@ -1,8 +1,15 @@
 import type { FarmOverview } from "@/lib/server/multi-farm-overview";
 
-function formatHeartbeat(date: Date | null): string {
-  if (!date) return "No activity";
-  const diffMs = Date.now() - date.getTime();
+/**
+ * Format an epoch-ms timestamp as a coarse relative-age string.
+ *
+ * Takes `number | null` (not `Date | null`) because the source
+ * FarmOverview crosses the unstable_cache JSON boundary — epoch-ms is
+ * the only Date-ish representation that survives `JSON.parse` losslessly.
+ */
+function formatHeartbeat(ms: number | null): string {
+  if (ms === null) return "No activity";
+  const diffMs = Date.now() - ms;
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   if (diffHours < 1) return "< 1h ago";
   if (diffHours < 24) return `${diffHours}h ago`;
@@ -47,7 +54,7 @@ function TierBadge({
 
 export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
   const unavailable = overview.activeAnimalCount === null;
-  const hasRecentActivity = overview.lastObservationAt !== null;
+  const hasRecentActivity = overview.lastObservationAtMs !== null;
 
   // Genuine error state: DB unreachable / creds missing. Tell the farmer
   // clicking the card will retry — the card itself is the link, so a
@@ -117,7 +124,7 @@ export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
         style={{ color: "#6A4E30" }}
         title="Last logged observation"
       >
-        {formatHeartbeat(overview.lastObservationAt)}
+        {formatHeartbeat(overview.lastObservationAtMs)}
       </span>
       <Divider />
       <TierBadge
