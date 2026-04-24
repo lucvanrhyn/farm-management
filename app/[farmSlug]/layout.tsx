@@ -1,7 +1,5 @@
-import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { FarmModeProvider } from "@/lib/farm-mode";
 import { getCachedFarmSpeciesSettings } from "@/lib/server/cached";
-import { isCacheEnabled } from "@/lib/flags";
 import AppShell from "@/components/AppShell";
 
 export default async function FarmSlugLayout({
@@ -14,24 +12,9 @@ export default async function FarmSlugLayout({
   const { farmSlug } = await params;
 
   let enabledSpecies: string[] = ["cattle"];
-
   try {
-    if (isCacheEnabled(farmSlug)) {
-      const { enabledSpecies: cached } = await getCachedFarmSpeciesSettings(farmSlug);
-      enabledSpecies = cached;
-    } else {
-      const prisma = await getPrismaForFarm(farmSlug);
-      if (prisma) {
-        const settings = await prisma.farmSpeciesSettings.findMany();
-        enabledSpecies = settings
-          .filter((s) => s.enabled)
-          .map((s) => s.species);
-        // Ensure cattle is always present
-        if (!enabledSpecies.includes("cattle")) {
-          enabledSpecies.unshift("cattle");
-        }
-      }
-    }
+    const { enabledSpecies: cached } = await getCachedFarmSpeciesSettings(farmSlug);
+    enabledSpecies = cached;
   } catch {
     // Fail-open: default to cattle-only if species settings unavailable
   }

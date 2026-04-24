@@ -3,17 +3,12 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import type { SessionFarm } from "@/types/next-auth";
 import { FarmCard } from "./FarmCard";
-import { getOverviewForUserFarms } from "@/lib/server/multi-farm-overview";
-import type { FarmOverview } from "@/lib/server/multi-farm-overview";
 import { getCachedMultiFarmOverview } from "@/lib/server/cached";
-import { isCacheEnabled } from "@/lib/flags";
 
 // ── Overview loader (only rendered for 2+ farms) ──────────────────────────────
 
 async function OverviewCards({ userId, farms }: { userId: string; farms: SessionFarm[] }) {
-  const overviews = isCacheEnabled(farms[0]?.slug ?? "")
-    ? await getCachedMultiFarmOverview(userId, farms)
-    : await getOverviewForUserFarms(farms);
+  const overviews = await getCachedMultiFarmOverview(userId, farms);
   const overviewBySlug = Object.fromEntries(overviews.map((o) => [o.slug, o]));
 
   return (
