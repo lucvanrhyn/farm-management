@@ -2,11 +2,46 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { useRouter, useParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { AnimatedHero } from "@/components/ui/animated-hero";
 import { useFarmMode, type FarmMode } from "@/lib/farm-mode";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
+
+// Phase M: framer-motion used to be imported statically here for the
+// 3-card section launcher. That dragged ~40 KB of animation library into
+// the first-load JS on /[farmSlug]/home — the first authenticated page
+// a user sees after login. The cards now live in HomeSectionGrid, loaded
+// via next/dynamic({ ssr: false }) so framer lands in a separate chunk
+// that only downloads after first paint.
+const HomeSectionGrid = dynamic(
+  () => import("@/components/home/HomeSectionGrid"),
+  {
+    ssr: false,
+    // Skeleton placeholder keeps the 3-column grid shape so the page
+    // doesn't jump when the chunk loads. Dimensions match the live
+    // cards (minHeight: 140px, grid-cols-3, gap-4).
+    loading: () => (
+      <div
+        className="grid grid-cols-3 gap-4 w-full"
+        aria-hidden
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              minHeight: "140px",
+              borderRadius: "2rem",
+              background: "rgba(5,3,1,0.52)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.40)",
+            }}
+          />
+        ))}
+      </div>
+    ),
+  },
+);
 
 const ADMIN_ICON = (
   <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -42,23 +77,7 @@ function getSections(mode: FarmMode) {
   ];
 }
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 24, scale: 0.95 },
-  show: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      type: "spring" as const,
-      stiffness: 200,
-      damping: 22,
-      delay: i * 0.08,
-    },
-  }),
-};
-
 export default function HomePage() {
-  const router = useRouter();
   const params = useParams();
   const farmSlug = params.farmSlug as string;
   const [heroImage, setHeroImage] = useState("/farm-hero.jpg");
@@ -99,91 +118,8 @@ export default function HomePage() {
           <ModeSwitcher variant="glass" />
         )}
 
-        {/* Section cards */}
-        <div className="grid grid-cols-3 gap-4 w-full">
-          {sections.map((section, i) => (
-            <motion.button
-              key={section.path}
-              custom={i}
-              variants={cardVariants}
-              initial="hidden"
-              animate="show"
-              whileHover={{
-                scale: 1.03,
-                transition: { type: "spring", stiffness: 300, damping: 20 },
-              }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push(`/${farmSlug}${section.path}`)}
-              className="group flex flex-col items-center gap-3 px-4 py-6"
-              style={{
-                borderRadius: "2rem",
-                background: "rgba(5,3,1,0.52)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.40)",
-                cursor: "pointer",
-                minHeight: "140px",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(12,7,2,0.70)";
-                e.currentTarget.style.border = "1px solid rgba(196,144,48,0.30)";
-                e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(196,144,48,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(5,3,1,0.52)";
-                e.currentTarget.style.border = "1px solid rgba(255,255,255,0.07)";
-                e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.40)";
-              }}
-            >
-              {/* Icon */}
-              <div
-                className="rounded-xl p-3 transition-colors duration-200"
-                style={{ color: "#C49030", background: "rgba(196,144,48,0.10)" }}
-              >
-                {section.icon}
-              </div>
-
-              {/* Labels */}
-              <div className="flex flex-col items-center gap-0.5">
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    color: "#F0DEB8",
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {section.label}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-sans)",
-                    color: "#7A5840",
-                    fontSize: "0.7rem",
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {section.description}
-                </span>
-              </div>
-
-              {/* Arrow */}
-              <svg
-                className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                style={{ color: "#C49030" }}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
-            </motion.button>
-          ))}
-        </div>
+        {/* Section cards (framer-motion loaded lazily — see dynamic() above) */}
+        <HomeSectionGrid sections={sections} farmSlug={farmSlug} />
 
         {/* Logout */}
         <button
