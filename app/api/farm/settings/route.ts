@@ -75,7 +75,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Defence-in-depth: re-verify against meta-db (fresh role) to close the
-  // 5-minute JWT refresh window where a revoked ADMIN could still mutate settings.
+  // JWT staleness window where a revoked ADMIN could still mutate settings.
+  // See lib/auth.ts::verifyFreshAdminRole for the full rationale.
   const freshOk = await verifyFreshAdminRole(session.user.id, farmSlug);
   if (!freshOk) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
