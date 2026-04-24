@@ -110,8 +110,18 @@ describe("auditSource", () => {
 });
 
 describe("offenderKey", () => {
-  it("composes a stable `path:line` string for baseline diffing", () => {
-    const o: Offender = { path: "foo/bar.ts", line: 42, snippet: "…" };
-    expect(offenderKey(o)).toBe("foo/bar.ts:42");
+  it("composes a stable `path::model::occurrenceIndex` string for baseline diffing", () => {
+    // The key intentionally excludes `line` so that formatting-only edits
+    // (e.g. wrapping a findMany in `timeAsync("query", () => ...)`) don't
+    // invalidate already-grandfathered entries. See audit-findmany-rekey.test.ts
+    // for the full baseline-stability contract.
+    const o: Offender = {
+      path: "foo/bar.ts",
+      line: 42,
+      snippet: "…",
+      modelName: "animal",
+      occurrenceIndex: 0,
+    };
+    expect(offenderKey(o)).toBe("foo/bar.ts::animal::0");
   });
 });
