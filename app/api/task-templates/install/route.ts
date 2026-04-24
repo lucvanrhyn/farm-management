@@ -12,28 +12,20 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { SEED_TEMPLATES } from "@/lib/tasks/seed-templates";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
 
 export async function POST(req: NextRequest) {
-  // Suppress unused parameter warning — no body needed for this route
-  void req;
-
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const ctx = await getFarmContext(req);
+  if (!ctx) {
     return NextResponse.json(
       { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
       { status: 401 },
     );
   }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role, slug: tenantSlug } = db;
+  const { prisma, role, slug, session } = ctx;
 
   if (role !== "ADMIN") {
     return NextResponse.json(
@@ -42,7 +34,7 @@ export async function POST(req: NextRequest) {
     );
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, tenantSlug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json(
       { error: "Forbidden", code: "FORBIDDEN" },
       { status: 403 },
@@ -56,9 +48,9 @@ export async function POST(req: NextRequest) {
     const { name, name_af, taskType, description, description_af, priorityDefault, recurrenceRule, reminderOffset, species, isPublic } = template;
 
     const result = await prisma.taskTemplate.upsert({
-      where: { tenantSlug_name: { tenantSlug, name } },
+      where: { tenantSlug_name: { tenantSlug: slug, name } },
       create: {
-        tenantSlug,
+        tenantSlug: slug,
         name,
         name_af,
         taskType,
@@ -88,6 +80,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  revalidateTaskWrite(db.slug);
+  revalidateTaskWrite(slug);
   return NextResponse.json({ installed, skipped });
 }

@@ -2,38 +2,22 @@
  * GET /api/[farmSlug]/tax/it3/[id]/pdf — re-render PDF from stored snapshot
  */
 import { NextRequest } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
-import type { SessionFarm } from "@/types/next-auth";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { buildIt3Pdf } from "@/lib/server/sars-it3-pdf";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const { farmSlug, id } = await params;
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
-  const { farmSlug, id } = await params;
-
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug,
-  );
-  if (!accessible) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
-  }
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) {
-    return new Response(JSON.stringify({ error: "Farm not found" }), { status: 404 });
-  }
-
-  const record = await prisma.it3Snapshot.findUnique({ where: { id } });
+  const record = await ctx.prisma.it3Snapshot.findUnique({ where: { id } });
   if (!record) {
     return new Response(JSON.stringify({ error: "IT3 snapshot not found" }), { status: 404 });
   }

@@ -54,13 +54,22 @@ vi.mock('@/lib/auth-options', () => ({
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function signHeaders(userEmail: string, slug: string): Record<string, string> {
+function signHeaders(
+  userEmail: string,
+  slug: string,
+  userId = 'user-1',
+): Record<string, string> {
+  // Phase G (P6.5): signature payload now binds `sub` (user id) too so
+  // migrated admin-write handlers can call `verifyFreshAdminRole(session.user.id, slug)`
+  // without an empty-string id silently rejecting every ADMIN.
   const sig = createHmac('sha256', SECRET)
-    .update(`${userEmail}\n${slug}`)
+    .update(`${userEmail}\n${slug}\n${userId}`)
     .digest('hex');
   return {
     'x-session-user': userEmail,
     'x-farm-slug': slug,
+    'x-session-role': 'ADMIN',
+    'x-session-sub': userId,
     'x-session-sig': sig,
   };
 }

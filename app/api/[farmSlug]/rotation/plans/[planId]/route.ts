@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm, getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; planId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, planId } = await params;
-  if (!session.user.farms.some((f) => f.slug === farmSlug)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
-
-  const plan = await prisma.rotationPlan.findUnique({
+  const plan = await ctx.prisma.rotationPlan.findUnique({
     where: { id: planId },
     include: { steps: { orderBy: { sequence: "asc" } } },
   });
@@ -35,18 +26,15 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; planId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, planId } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
-  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const prisma = _auth.prisma;
 
   const existing = await prisma.rotationPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
@@ -88,21 +76,18 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; planId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, planId } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
-  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const prisma = _auth.prisma;
 
   const existing = await prisma.rotationPlan.findUnique({ where: { id: planId } });
   if (!existing) return NextResponse.json({ error: "Plan not found" }, { status: 404 });

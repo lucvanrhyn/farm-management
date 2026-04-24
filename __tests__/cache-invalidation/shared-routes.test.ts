@@ -93,6 +93,9 @@ vi.mock("@/lib/species/registry", () => ({
 
 vi.mock("@/lib/auth", () => ({
   getUserRoleForFarm: vi.fn().mockReturnValue("ADMIN"),
+  // Phase H.2: every admin-write route now re-verifies against meta-db.
+  // Tests don't have meta-db; trust the mocked ADMIN role.
+  verifyFreshAdminRole: vi.fn().mockResolvedValue(true),
 }));
 
 // Stub CAMP_COLOR_PALETTE to avoid import side effects

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAlertWrite } from "@/lib/server/revalidate";
 
@@ -9,33 +7,34 @@ export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-async function authorize(params: Promise<{ farmSlug: string }>, requireAdmin = false) {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: "Unauthorized", status: 401 } as const;
-
-  const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) return db;
+async function authorize(
+  req: NextRequest,
+  farmSlug: string,
+  requireAdmin = false,
+) {
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return { error: "Unauthorized", status: 401 } as const;
 
   if (requireAdmin) {
-    if (db.role !== "ADMIN") {
+    if (ctx.role !== "ADMIN") {
       return { error: "Forbidden", status: 403 } as const;
     }
     // Phase H.2: re-verify ADMIN against meta-db to close the stale-ADMIN
     // window introduced when Phase H removed the jwt-callback refresh.
-    if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+    if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
       return { error: "Forbidden", status: 403 } as const;
     }
   }
 
-  return { prisma: db.prisma, farmSlug: db.slug } as const;
+  return { prisma: ctx.prisma, farmSlug: ctx.slug } as const;
 }
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -82,11 +81,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params, true);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug, true);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { prisma, farmSlug } = auth;
+  const { prisma, farmSlug: slug } = auth;
 
   const body = await req.json();
   const { date, rainfallMm, campId, stationName } = body;
@@ -115,7 +115,7 @@ export async function POST(
     },
   });
 
-  revalidateAlertWrite(farmSlug);
+  revalidateAlertWrite(slug);
   return NextResponse.json(record, { status: 201 });
 }
 
@@ -123,11 +123,12 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params, true);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug, true);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { prisma, farmSlug } = auth;
+  const { prisma, farmSlug: slug } = auth;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -155,6 +156,6 @@ export async function DELETE(
     );
   }
 
-  revalidateAlertWrite(farmSlug);
+  revalidateAlertWrite(slug);
   return NextResponse.json({ ok: true });
 }

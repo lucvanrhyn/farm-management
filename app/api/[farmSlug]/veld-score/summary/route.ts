@@ -1,21 +1,14 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import type { SessionFarm } from '@/types/next-auth';
-import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { getFarmContextForSlug } from '@/lib/server/farm-context-slug';
 import { getFarmSummary } from '@/lib/server/veld-score';
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { farmSlug } = await params;
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some((f) => f.slug === farmSlug);
-  if (!accessible) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
-  const summary = await getFarmSummary(prisma);
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const summary = await getFarmSummary(ctx.prisma);
   return NextResponse.json(summary);
 }

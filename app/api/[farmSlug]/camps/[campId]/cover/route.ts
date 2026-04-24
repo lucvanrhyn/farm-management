@@ -1,9 +1,7 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { randomUUID } from "crypto";
-import type { SessionFarm } from "@/types/next-auth";
 import { revalidateCampWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
@@ -32,22 +30,13 @@ function calcDaysRemaining(
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; campId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, campId } = await params;
-
-  // Verify the authenticated user has access to the requested farm
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug,
-  );
-  if (!accessible) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma } = ctx;
 
   // Fire all three independent queries in parallel (~3 Turso round-trips → 1)
   const [readings, camp, animalCount] = await Promise.all([
@@ -81,23 +70,18 @@ export async function GET(
 }
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; campId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, campId } = await params;
-
-  // Verify the authenticated user has ADMIN access to the requested farm
-  const farmPost = (session.user?.farms as SessionFarm[] | undefined)?.find(
-    (f) => f.slug === farmSlug,
-  );
-  if (!farmPost) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (farmPost.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { coverCategory, kgDmPerHaOverride } = body;
@@ -130,7 +114,7 @@ export async function POST(
       kgDmPerHa,
       useFactor: DEFAULT_USE_FACTOR,
       recordedAt: new Date().toISOString(),
-      recordedBy: session.user?.name ?? session.user?.email ?? "Unknown",
+      recordedBy: session.user?.email ?? "Unknown",
     },
   });
 
@@ -143,24 +127,18 @@ export async function POST(
 }
 
 export async function DELETE(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; campId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-
-  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find(
-    (f) => f.slug === farmSlug,
-  );
-  if (!farm) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (farm.role !== "ADMIN") {
-    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
 
   const body = await req.json();
   const { readingId } = body;

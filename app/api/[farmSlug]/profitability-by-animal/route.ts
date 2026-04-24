@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
-import { getPrismaForFarm } from '@/lib/farm-prisma'
+import { getFarmContextForSlug } from '@/lib/server/farm-context-slug'
+import { getFarmCreds } from '@/lib/meta-db'
 import { getProfitabilityByAnimal } from '@/lib/server/profitability-by-animal'
-import type { SessionFarm } from '@/types/next-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,25 +9,17 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const { farmSlug } = await params
-  const farms = session.user?.farms as SessionFarm[] | undefined
-  const farm = farms?.find((f) => f.slug === farmSlug)
-  if (!farm) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  const ADVANCED_TIERS = new Set(['advanced', 'enterprise'])
-  if (!ADVANCED_TIERS.has(farm.tier)) {
-    return NextResponse.json({ error: 'Advanced plan required' }, { status: 403 })
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req)
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const prisma = await getPrismaForFarm(farmSlug)
-  if (!prisma) {
-    return NextResponse.json({ error: 'Farm not found' }, { status: 404 })
+  // Read tier from meta-db — the fast-path synthesised session only carries
+  // role, not tier, so we can't rely on session.user.farms[*].tier here.
+  const creds = await getFarmCreds(farmSlug)
+  if (!creds) return NextResponse.json({ error: 'Farm not found' }, { status: 404 })
+  const ADVANCED_TIERS = new Set(['advanced', 'enterprise', 'consulting'])
+  if (!ADVANCED_TIERS.has(creds.tier)) {
+    return NextResponse.json({ error: 'Advanced plan required' }, { status: 403 })
   }
 
   const { searchParams } = new URL(req.url)
@@ -47,7 +37,7 @@ export async function GET(
   }
 
   try {
-    const rows = await getProfitabilityByAnimal(prisma, dateRange)
+    const rows = await getProfitabilityByAnimal(ctx.prisma, dateRange)
     return NextResponse.json(rows)
   } catch (err) {
     console.error('[profitability-by-animal] query failed', err)

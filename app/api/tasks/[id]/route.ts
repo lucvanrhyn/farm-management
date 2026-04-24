@@ -13,9 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { observationFromTaskCompletion } from "@/lib/tasks/observation-mapping";
 import type { TaskCompletionPayload } from "@/lib/tasks/observation-mapping";
@@ -27,19 +25,16 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role } = db;
+  const ctx = await getFarmContext(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const { id } = await params;
 
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) {
@@ -149,7 +144,7 @@ export async function PATCH(
       observationCreated = true;
       observationId = createdObs.id;
 
-      revalidateTaskWrite(db.slug);
+      revalidateTaskWrite(slug);
       return NextResponse.json({
         ...updatedTask,
         observationCreated,
@@ -161,7 +156,7 @@ export async function PATCH(
   // ── Standard update (no observation) ──
   const task = await prisma.task.update({ where: { id }, data: update });
 
-  revalidateTaskWrite(db.slug);
+  revalidateTaskWrite(slug);
   return NextResponse.json({
     ...task,
     observationCreated: false,
@@ -171,22 +166,19 @@ export async function PATCH(
 // ── DELETE ────────────────────────────────────────────────────────────────────
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role } = db;
+  const ctx = await getFarmContext(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const { id } = await params;
 
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) {
@@ -195,6 +187,6 @@ export async function DELETE(
 
   await prisma.task.delete({ where: { id } });
 
-  revalidateTaskWrite(db.slug);
+  revalidateTaskWrite(slug);
   return NextResponse.json({ success: true });
 }

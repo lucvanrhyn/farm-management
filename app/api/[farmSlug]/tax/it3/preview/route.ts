@@ -5,9 +5,7 @@
  * form so the farmer can inspect totals before committing a snapshot.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getIt3Payload } from "@/lib/server/sars-it3";
 
@@ -17,12 +15,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const creds = await getFarmCreds(farmSlug);
   if (!creds || creds.tier !== "advanced") {
@@ -42,6 +37,6 @@ export async function GET(
     );
   }
 
-  const payload = await getIt3Payload(_auth.prisma, taxYear, session.user?.email ?? null);
+  const payload = await getIt3Payload(ctx.prisma, taxYear, ctx.session.user?.email ?? null);
   return NextResponse.json(payload);
 }

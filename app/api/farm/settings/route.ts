@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getUserRoleForFarm, verifyFreshAdminRole } from "@/lib/auth";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
@@ -10,28 +8,15 @@ function getFarmSlugFromRequest(req: NextRequest): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
     return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
   }
 
-  // Verify the requesting user has access to this specific farm
-  const userFarms = (session.user as { farms?: Array<{ slug: string }> }).farms ?? [];
-  if (!userFarms.some((f) => f.slug === farmSlug)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) {
-    return NextResponse.json({ error: "Farm not found" }, { status: 404 });
-  }
-
-  const settings = await prisma.farmSettings.findFirst();
+  const settings = await ctx.prisma.farmSettings.findFirst();
 
   return NextResponse.json({
     farmName: settings?.farmName ?? "My Farm",
@@ -62,15 +47,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
     return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
   }
 
-  if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, session } = ctx;
+
+  if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -80,11 +66,6 @@ export async function PATCH(req: NextRequest) {
   const freshOk = await verifyFreshAdminRole(session.user.id, farmSlug);
   if (!freshOk) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) {
-    return NextResponse.json({ error: "Farm not found" }, { status: 404 });
   }
 
   let body: Record<string, unknown>;

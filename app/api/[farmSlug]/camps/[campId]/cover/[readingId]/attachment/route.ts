@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; campId: string; readingId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { farmSlug, campId, readingId } = await params;
-  const auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { prisma } = auth;
+  const ctx = await getFarmContextForSlug(farmSlug, request);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma } = ctx;
 
   const body = await request.json();
   const { attachmentUrl } = body;

@@ -47,9 +47,19 @@ const mockPrisma = {
 } as const;
 
 const mockGetPrismaForSlugWithAuth = vi.fn();
+const mockGetPrismaWithAuth = vi.fn();
+const mockGetPrismaForFarm = vi.fn();
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForSlugWithAuth: (...args: unknown[]) =>
     mockGetPrismaForSlugWithAuth(...args),
+  // Phase G (P6.5): `getFarmContextForSlug` first tries the cookie-scoped
+  // `getFarmContext`, which falls back to `getPrismaWithAuth(session)` when
+  // there are no signed headers (tests don't provide any). Mock both so the
+  // fall-through reaches `getPrismaForSlugWithAuth` via the slug-mismatch
+  // path. The cookie-scoped helper always returns { error } here so the
+  // slug-validated helper re-issues the URL-slug auth.
+  getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
+  getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
 }));
 
 // ── helpers ─────────────────────────────────────────────────────────────
@@ -87,11 +97,19 @@ function dbForbids() {
 function resetAll() {
   mockGetServerSession.mockReset();
   mockGetPrismaForSlugWithAuth.mockReset();
+  mockGetPrismaWithAuth.mockReset();
+  mockGetPrismaForFarm.mockReset();
   mockGameWaterPointFindMany.mockReset();
   mockGameInfrastructureFindMany.mockReset();
   mockRainfallFindMany.mockReset();
   mockTaskFindMany.mockReset();
   mockCampFindMany.mockReset();
+
+  // Phase G: getFarmContext (cookie-scoped) tries getPrismaWithAuth first.
+  // Force it to fail so the helper falls through to getPrismaForSlugWithAuth
+  // for URL-slug validation — matches the pre-G behaviour these tests expect.
+  mockGetPrismaWithAuth.mockResolvedValue({ error: "Forbidden", status: 403 });
+  mockGetPrismaForFarm.mockResolvedValue(mockPrisma);
 
   mockGameWaterPointFindMany.mockResolvedValue([]);
   mockGameInfrastructureFindMany.mockResolvedValue([]);

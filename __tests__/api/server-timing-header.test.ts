@@ -74,7 +74,7 @@ describe("Server-Timing header on instrumented routes", () => {
 
   it("GET /api/camps/status emits Server-Timing", async () => {
     const { GET } = await import("@/app/api/camps/status/route");
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/camps/status"));
     expect(res.headers.get("Server-Timing") ?? "").toMatch(/total;dur=/);
   });
 

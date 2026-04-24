@@ -1,25 +1,17 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getFarmCreds } from "@/lib/meta-db";
-import type { SessionFarm } from "@/types/next-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { farmSlug } = await params;
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Verify the authenticated user has access to the requested farm
-  const farms = session.user?.farms as SessionFarm[] | undefined;
-  if (!farms?.some((f) => f.slug === farmSlug)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   // Tier read live from meta DB — session JWT is cached at login.
   const creds = await getFarmCreds(farmSlug);
   if (!creds) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
@@ -27,8 +19,7 @@ export async function GET(
     return NextResponse.json({ error: "Advanced plan required" }, { status: 403 });
   }
 
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const { prisma } = ctx;
 
   // Step 1: fetch camp list (needed to scope IN-queries)
   const camps = await prisma.camp.findMany({ orderBy: { campId: "asc" } });
