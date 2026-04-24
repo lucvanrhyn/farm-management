@@ -662,6 +662,10 @@ model Notification {
   @@unique([type, dedupKey], name: "unique_type_dedup")
   @@index([isRead, createdAt], name: "idx_notification_read_date")
   @@index([collapseKey])
+  // Phase-J perf: serves /api/notifications cache-miss `expiresAt > now` filter
+  // + `[isRead asc, createdAt desc]` sort. `expiresAt` leads so the predicate
+  // narrows the row set before the sort, avoiding a full filter-scan.
+  @@index([expiresAt, isRead, createdAt], name: "idx_notification_expires_read_created")
 }
 
 // ── Alert Preferences (Phase J) ─────────────────────────────────────────────
