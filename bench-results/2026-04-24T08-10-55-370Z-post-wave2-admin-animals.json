@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-04-24T08:10:55.370Z",
+  "gitSha": "30b068e",
+  "label": "post-wave2-admin-animals",
+  "url": "https://farm-management-lilac.vercel.app/trio-b-boerdery/admin/animals",
+  "iterations": 5,
+  "samples": [
+    {
+      "iteration": 0,
+      "ttfbMs": 2975.759417,
+      "totalMs": 4835.730541999999,
+      "status": 200,
+      "vercelId": "cpt1::iad1::f988j-1777018236007-5fc07aab07a6"
+    },
+    {
+      "iteration": 1,
+      "ttfbMs": 1865.3168329999999,
+      "totalMs": 3580.139625,
+      "status": 200,
+      "vercelId": "cpt1::iad1::4kqlq-1777018240757-336d4f20ec24"
+    },
+    {
+      "iteration": 2,
+      "ttfbMs": 1898.524958,
+      "totalMs": 3588.6605409999993,
+      "status": 200,
+      "vercelId": "cpt1::iad1::2hjvt-1777018244334-82f4357b1f4f"
+    },
+    {
+      "iteration": 3,
+      "ttfbMs": 1935.2037500000006,
+      "totalMs": 3789.977999999999,
+      "status": 200,
+      "vercelId": "cpt1::iad1::jzfl4-1777018247923-7fa8df67d171"
+    },
+    {
+      "iteration": 4,
+      "ttfbMs": 1918.6972920000007,
+      "totalMs": 3685.959666999999,
+      "status": 200,
+      "vercelId": "cpt1::iad1::l6zvg-1777018251713-6301bbb57f56"
+    }
+  ],
+  "p50": 1908.6111250000004,
+  "p95": 2715.62050025,
+  "p99": 2923.7316336500003,
+  "meanTtfb": 2118.7004500000003,
+  "vercelRegion": "cpt1"
+}
