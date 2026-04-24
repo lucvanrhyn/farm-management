@@ -77,3 +77,10 @@ tmp/
 # flooding git with noise. `scripts/bench-snapshot.ts` writes both.
 tasks/bench/*.json
 !tasks/bench/latest.json
+
+# Prod cold-TTFB bench snapshots (`scripts/bench-prod-cold.ts`).
+# Track labelled perf-wave baselines (`post-wave-1.json`, `post-wave-2.json`,
+# `post-frankfurt.json`, etc.) so the regression harness has something to
+# diff against. Ignore ad-hoc experimental runs — convention is to use
+# `--label <name>.tmp` for throwaway runs. See docs/perf/bench-playbook.md.
+bench-results/*.tmp.json
