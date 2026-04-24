@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateCampWrite } from "@/lib/server/revalidate";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { getCachedCampList } from "@/lib/server/cached";
 import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
@@ -25,8 +26,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug } = ctx;
+  const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { campId, campName, sizeHectares, waterSource, geojson, color } = body;

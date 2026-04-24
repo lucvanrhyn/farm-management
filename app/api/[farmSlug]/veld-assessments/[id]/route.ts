@@ -1,24 +1,23 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import type { SessionFarm } from '@/types/next-auth';
-import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { getFarmContextForSlug } from '@/lib/server/farm-context-slug';
+import { verifyFreshAdminRole } from '@/lib/auth';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
 export async function DELETE(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { farmSlug, id } = await params;
-  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find((f) => f.slug === farmSlug);
-  if (!farm) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  if (farm.role !== 'ADMIN') {
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== 'ADMIN') {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   try {
     await prisma.veldAssessment.delete({ where: { id } });
     revalidateObservationWrite(farmSlug);

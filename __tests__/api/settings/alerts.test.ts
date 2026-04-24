@@ -30,8 +30,16 @@ const mockPrisma = {
 } as const;
 
 const mockGetPrismaForSlugWithAuth = vi.fn();
+const mockGetPrismaWithAuth = vi.fn().mockResolvedValue({ error: "Forbidden", status: 403 });
+const mockGetPrismaForFarm = vi.fn();
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForSlugWithAuth: (...args: unknown[]) => mockGetPrismaForSlugWithAuth(...args),
+  // Phase G (P6.5): route funnels through getFarmContextForSlug which first
+  // tries the cookie-scoped getFarmContext (getPrismaWithAuth). Tests don't
+  // set signed headers so the fast path never fires; forcing the cookie
+  // lookup to error keeps the helper on its slug-validated fallback.
+  getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
+  getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
 }));
 
 const mockVerifyFreshAdminRole = vi.fn();

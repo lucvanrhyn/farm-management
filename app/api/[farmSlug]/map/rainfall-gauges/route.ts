@@ -12,19 +12,16 @@
  * schema.prisma), so window comparisons use string lexical sort — valid
  * because of the zero-padded ISO format.
  *
- * Auth mirrors `/api/[farmSlug]/rainfall`.
+ * Phase G (P6.5): migrated to `getFarmContextForSlug`.
  *
  * Error codes:
  *   AUTH_REQUIRED              — 401, no session
  *   CROSS_TENANT_FORBIDDEN     — 403, session.farms doesn't include farmSlug
- *   FARM_NOT_FOUND             — 404, slug exists in URL but not in meta DB
- *   INVALID_FARM_SLUG          — 400, malformed slug
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +30,6 @@ function asErr(code: string, message: string, status: number) {
     { success: false, error: code, message },
     { status },
   );
-}
-
-function mapDbErr(status: number, message: string) {
-  if (status === 403) return asErr("CROSS_TENANT_FORBIDDEN", message, 403);
-  if (status === 404) return asErr("FARM_NOT_FOUND", message, 404);
-  if (status === 400) return asErr("INVALID_FARM_SLUG", message, 400);
-  return asErr("INTERNAL_ERROR", message, status);
 }
 
 function yyyyMmDdDaysAgo(days: number): string {
@@ -77,17 +67,15 @@ interface Gauge {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
-  }
-
   const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) return mapDbErr(db.status, db.error);
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
+    const { code, status } = await classifyFarmContextFailure(req);
+    return asErr(code, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
+  }
 
   // Only pull the last 7 days — anything older is irrelevant to map display.
   // "24h" in day-granularity rainfall means "today's reading" (RainfallRecord
@@ -96,7 +84,7 @@ export async function GET(
   const cutoff7d = yyyyMmDdDaysAgo(6); // today + last 6 days = 7 readings
   const cutoff24h = yyyyMmDdToday();
 
-  const rows: RainRow[] = await db.prisma.rainfallRecord.findMany({
+  const rows: RainRow[] = await ctx.prisma.rainfallRecord.findMany({
     where: { date: { gte: cutoff7d } },
     select: {
       date: true,

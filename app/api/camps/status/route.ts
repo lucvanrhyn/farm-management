@@ -1,22 +1,15 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { getCachedCampConditions } from "@/lib/server/cached";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return withServerTiming(async () => {
-    const session = await timeAsync("session", () => getServerSession(authOptions));
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const db = await getPrismaWithAuth(session);
-    if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
+    const ctx = await timeAsync("session", () => getFarmContext(req));
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-      const conditions = await timeAsync("query", () => getCachedCampConditions(db.slug));
+      const conditions = await timeAsync("query", () => getCachedCampConditions(ctx.slug));
       const result: Record<string, unknown> = {};
       for (const [campId, status] of conditions.entries()) {
         result[campId] = status;

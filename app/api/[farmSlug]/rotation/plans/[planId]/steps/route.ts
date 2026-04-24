@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
@@ -12,18 +10,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; planId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, planId } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
-  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const prisma = _auth.prisma;
 
   const plan = await prisma.rotationPlan.findUnique({ where: { id: planId } });
   if (!plan) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
@@ -79,18 +74,15 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string; planId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug, planId } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
-  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const prisma = _auth.prisma;
 
   const plan = await prisma.rotationPlan.findUnique({ where: { id: planId } });
   if (!plan) return NextResponse.json({ error: "Plan not found" }, { status: 404 });

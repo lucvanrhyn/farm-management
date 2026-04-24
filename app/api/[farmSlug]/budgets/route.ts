@@ -1,34 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
 
-async function authorize(params: Promise<{ farmSlug: string }>, requireAdmin = false) {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: "Unauthorized", status: 401 } as const;
-
-  const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) return db;
+async function authorize(
+  req: NextRequest,
+  farmSlug: string,
+  requireAdmin = false,
+) {
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return { error: "Unauthorized", status: 401 } as const;
 
   if (requireAdmin) {
-    if (db.role !== "ADMIN") {
+    if (ctx.role !== "ADMIN") {
       return { error: "Forbidden", status: 403 } as const;
     }
     // Phase H.2: defence-in-depth against the stale-ADMIN window that opened
     // when Phase H dropped the meta-db refresh from the jwt callback.
     // Budgets are tenant-wide config, so every admin-write must re-verify
     // against meta-db rather than trusting the JWT's cached farms list.
-    if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+    if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
       return { error: "Forbidden", status: 403 } as const;
     }
   }
 
-  return { prisma: db.prisma, farmSlug: db.slug } as const;
+  return { prisma: ctx.prisma, farmSlug: ctx.slug } as const;
 }
 
 function parseIntOrNull(raw: string | null): number | null {
@@ -41,7 +39,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -80,11 +79,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params, true);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug, true);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { prisma, farmSlug } = auth;
+  const { prisma, farmSlug: slug } = auth;
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -141,7 +141,7 @@ export async function POST(
     },
   });
 
-  revalidateTransactionWrite(farmSlug);
+  revalidateTransactionWrite(slug);
   return NextResponse.json(record, { status: 201 });
 }
 
@@ -149,11 +149,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params, true);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug, true);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { prisma, farmSlug } = auth;
+  const { prisma, farmSlug: slug } = auth;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -186,7 +187,7 @@ export async function PATCH(
 
   try {
     const record = await prisma.budget.update({ where: { id }, data });
-    revalidateTransactionWrite(farmSlug);
+    revalidateTransactionWrite(slug);
     return NextResponse.json(record);
   } catch {
     return NextResponse.json({ error: "Record not found" }, { status: 404 });
@@ -197,11 +198,12 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const auth = await authorize(params, true);
+  const { farmSlug } = await params;
+  const auth = await authorize(req, farmSlug, true);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { prisma, farmSlug } = auth;
+  const { prisma, farmSlug: slug } = auth;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -221,6 +223,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete budget record" }, { status: 500 });
   }
 
-  revalidateTransactionWrite(farmSlug);
+  revalidateTransactionWrite(slug);
   return NextResponse.json({ ok: true });
 }

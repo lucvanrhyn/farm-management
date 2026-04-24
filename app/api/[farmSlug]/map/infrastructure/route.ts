@@ -9,20 +9,16 @@
  * LineString fences / paths, extend this route to parse + forward it as the
  * feature geometry. For now, only Point features are emitted.
  *
- * Auth mirrors `/api/[farmSlug]/rainfall`; error codes match the sibling
- * water-points route.
+ * Phase G (P6.5): migrated to `getFarmContextForSlug`.
  *
  * Error codes:
  *   AUTH_REQUIRED              — 401, no session
  *   CROSS_TENANT_FORBIDDEN     — 403, session.farms doesn't include farmSlug
- *   FARM_NOT_FOUND             — 404, slug exists in URL but not in meta DB
- *   INVALID_FARM_SLUG          — 400, malformed slug
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -33,27 +29,18 @@ function asErr(code: string, message: string, status: number) {
   );
 }
 
-function mapDbErr(status: number, message: string) {
-  if (status === 403) return asErr("CROSS_TENANT_FORBIDDEN", message, 403);
-  if (status === 404) return asErr("FARM_NOT_FOUND", message, 404);
-  if (status === 400) return asErr("INVALID_FARM_SLUG", message, 400);
-  return asErr("INTERNAL_ERROR", message, status);
-}
-
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
+  const { farmSlug } = await params;
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
+    const { code, status } = await classifyFarmContextFailure(req);
+    return asErr(code, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
   }
 
-  const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) return mapDbErr(db.status, db.error);
-
-  const rows = await db.prisma.gameInfrastructure.findMany({
+  const rows = await ctx.prisma.gameInfrastructure.findMany({
     select: {
       id: true,
       name: true,

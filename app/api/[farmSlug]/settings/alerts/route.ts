@@ -13,6 +13,10 @@
  *            can't mutate farm-wide notification policy during the JWT TTL
  *            window (see lib/auth.ts::verifyFreshAdminRole).
  *
+ * Phase G (P6.5): migrated to `getFarmContextForSlug`. The helper collapses
+ * 401/403/404 into a single null return — typed error codes restored via
+ * `classifyFarmContextFailure` on the error path only.
+ *
  * Response shape follows memory/patterns.md API envelope:
  *   { success, prefs: [...], farmSettings: { quietHoursStart, ... } }
  *
@@ -24,13 +28,11 @@
  *   INVALID_PREF_FIELD            — 400, a pref row failed validation
  *   INVALID_QUIET_HOURS           — 400, HH:mm format broken
  *   INVALID_TIMEZONE              — 400, empty / non-string tz
- *   FARM_NOT_FOUND                — 404, slug not in meta DB
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
@@ -81,32 +83,27 @@ function asErr(code: string, message: string, status: number) {
   );
 }
 
+async function contextFailureResponse(req: NextRequest) {
+  const { code, status } = await classifyFarmContextFailure(req);
+  const message = code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden";
+  const mappedCode = code === "CROSS_TENANT_FORBIDDEN" ? "FARM_ACCESS_DENIED" : code;
+  return asErr(mappedCode, message, status);
+}
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
-  }
   const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) {
-    const code =
-      db.status === 403
-        ? "FARM_ACCESS_DENIED"
-        : db.status === 404
-          ? "FARM_NOT_FOUND"
-          : "INVALID_SLUG";
-    return asErr(code, db.error, db.status);
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return contextFailureResponse(req);
 
   const [prefs, settings] = await Promise.all([
-    db.prisma.alertPreference.findMany({
-      where: { userId: session.user.id },
+    ctx.prisma.alertPreference.findMany({
+      where: { userId: ctx.session.user.id },
       orderBy: [{ category: "asc" }, { channel: "asc" }],
     }),
-    db.prisma.farmSettings.findFirst({
+    ctx.prisma.farmSettings.findFirst({
       select: {
         quietHoursStart: true,
         quietHoursEnd: true,
@@ -189,21 +186,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
-  }
   const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) {
-    const code =
-      db.status === 403
-        ? "FARM_ACCESS_DENIED"
-        : db.status === 404
-          ? "FARM_NOT_FOUND"
-          : "INVALID_SLUG";
-    return asErr(code, db.error, db.status);
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return contextFailureResponse(req);
 
   let body: Record<string, unknown>;
   try {
@@ -212,7 +197,7 @@ export async function PATCH(
     return asErr("INVALID_BODY", "Body must be valid JSON", 400);
   }
 
-  const userId = session.user.id;
+  const userId = ctx.session.user.id;
 
   // ── Validate prefs[] if present ────────────────────────────────────────
   let validatedPrefs: PrefInput[] | null = null;
@@ -238,7 +223,7 @@ export async function PATCH(
     // Any farm-level write requires a freshly-verified ADMIN. This closes
     // the 60s JWT TTL window where a revoked admin could still mutate
     // tenant-wide notification policy.
-    if (db.role !== "ADMIN") {
+    if (ctx.role !== "ADMIN") {
       return asErr(
         "ADMIN_REQUIRED_FOR_FARM_SETTINGS",
         "Only farm admins can change quiet hours, timezone or species thresholds",
@@ -322,7 +307,7 @@ export async function PATCH(
     // libSQL driver batches serverless calls efficiently, and sequential
     // upserts keep the error surface row-local.
     for (const p of validatedPrefs) {
-      await db.prisma.alertPreference.upsert({
+      await ctx.prisma.alertPreference.upsert({
         where: {
           unique_user_pref: {
             userId,
@@ -353,7 +338,7 @@ export async function PATCH(
 
   if (Object.keys(farmUpdate).length > 0) {
     // Upsert so brand-new tenants without a FarmSettings row still succeed.
-    await db.prisma.farmSettings.upsert({
+    await ctx.prisma.farmSettings.upsert({
       where: { id: "singleton" },
       update: farmUpdate,
       create: {
@@ -368,11 +353,11 @@ export async function PATCH(
   revalidateSettingsWrite(farmSlug);
 
   const [prefs, settings] = await Promise.all([
-    db.prisma.alertPreference.findMany({
+    ctx.prisma.alertPreference.findMany({
       where: { userId },
       orderBy: [{ category: "asc" }, { channel: "asc" }],
     }),
-    db.prisma.farmSettings.findFirst({
+    ctx.prisma.farmSettings.findFirst({
       select: {
         quietHoursStart: true,
         quietHoursEnd: true,

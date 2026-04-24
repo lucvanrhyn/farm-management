@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getFinancialAnalytics } from "@/lib/server/financial-analytics";
 import { getFarmCreds } from "@/lib/meta-db";
-import type { SessionFarm } from "@/types/next-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +9,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-  const farms = session.user?.farms as SessionFarm[] | undefined;
-  if (!farms?.some((f) => f.slug === farmSlug)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   // Tier must be read live from meta DB — session JWT is cached at login
   // and would lie about recently-upgraded farms until the user re-logs in.
   const creds = await getFarmCreds(farmSlug);
@@ -27,9 +20,6 @@ export async function GET(
   if (creds.tier === "basic") {
     return NextResponse.json({ error: "Advanced plan required" }, { status: 403 });
   }
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
 
   const { searchParams } = new URL(req.url);
   const fromParam = searchParams.get("from");
@@ -42,6 +32,6 @@ export async function GET(
     return NextResponse.json({ error: "Invalid date params" }, { status: 400 });
   }
 
-  const result = await getFinancialAnalytics(prisma, from, to);
+  const result = await getFinancialAnalytics(ctx.prisma, from, to);
   return NextResponse.json(result);
 }

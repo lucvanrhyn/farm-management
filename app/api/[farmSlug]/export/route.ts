@@ -1,10 +1,8 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { NextRequest } from "next/server";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isPaidTier } from "@/lib/tier";
-import type { SessionFarm } from "@/types/next-auth";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
@@ -84,22 +82,15 @@ async function buildPdf(
 }
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const { farmSlug } = await params;
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
-
-  const { farmSlug } = await params;
-
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some(
-    (f) => f.slug === farmSlug
-  );
-  if (!accessible) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
-  }
+  const prisma = ctx.prisma;
 
   // Rate limit: 20 exports per 10 minutes per farm (PDF generation is CPU-intensive)
   const rl = checkRateLimit(`export:${farmSlug}`, 20, 10 * 60 * 1000);
@@ -117,11 +108,6 @@ export async function GET(
     if (!creds || !isPaidTier(creds.tier)) {
       return new Response(JSON.stringify({ error: "This export requires an Advanced subscription." }), { status: 403 });
     }
-  }
-
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) {
-    return new Response(JSON.stringify({ error: "Farm not found" }), { status: 404 });
   }
 
   const format = (url.searchParams.get("format") ?? "csv") as ExportFormat;

@@ -179,7 +179,12 @@ describe("POST /api/onboarding/commit-import", () => {
     expect(commitImportMock).not.toHaveBeenCalled();
   });
 
-  it("propagates getPrismaWithAuth error status", async () => {
+  it("returns 401 when farm context cannot be resolved", async () => {
+    // Phase G (P6.5): getFarmContext collapses every auth failure (no session,
+    // no active farm, forbidden) to a null return → a single 401. The legacy
+    // getPrismaWithAuth distinguished 400/403/404 per failure mode; that
+    // detail is gone by design. This test now guards that the handler exits
+    // cleanly on any auth failure rather than crashing.
     getServerSessionMock.mockResolvedValue({
       user: { email: "luc@example.com", farms: [] },
     });
@@ -191,7 +196,7 @@ describe("POST /api/onboarding/commit-import", () => {
       "@/app/api/onboarding/commit-import/route"
     );
     const res = await POST(makeReq(validBody));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
     expect(commitImportMock).not.toHaveBeenCalled();
   });
 

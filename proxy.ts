@@ -6,8 +6,20 @@ import { createHmac } from "node:crypto";
 // the tiny HMAC helper here rather than importing, because proxy.ts runs on
 // the Edge-compatible middleware runtime and must keep its module graph flat
 // (no transitive Prisma / auth-options imports).
-function signIdentity(userEmail: string, slug: string, secret: string): string {
-  return createHmac("sha256", secret).update(`${userEmail}\n${slug}`).digest("hex");
+//
+// Phase G (P6.5): the payload now also binds the JWT `sub` (the user id) so
+// that `verifyFreshAdminRole(session.user.id, slug)` calls in migrated
+// handlers receive the real user id instead of the empty string. Must stay
+// in sync with `signIdentity` in `lib/server/farm-context.ts`.
+function signIdentity(
+  userEmail: string,
+  slug: string,
+  userId: string,
+  secret: string,
+): string {
+  return createHmac("sha256", secret)
+    .update(`${userEmail}\n${slug}\n${userId}`)
+    .digest("hex");
 }
 
 export async function proxy(req: NextRequest) {
@@ -107,15 +119,21 @@ function withSessionHeaders(
 ): NextResponse {
   const secret = process.env.NEXTAUTH_SECRET;
   const email = token.email ?? "";
-  if (!secret || !email || !farm) {
+  const sub = token.sub ?? "";
+  // Require `sub` — migrated admin-write handlers need `session.user.id` to
+  // call `verifyFreshAdminRole(userId, slug)`. Without a sub, skip the
+  // fast-path stamp and let the handler take the legacy getServerSession
+  // path which does populate `session.user.id`.
+  if (!secret || !email || !sub || !farm) {
     return factory();
   }
 
   const headers = new Headers(req.headers);
-  const sig = signIdentity(email, farm.slug, secret);
+  const sig = signIdentity(email, farm.slug, sub, secret);
   headers.set("x-session-user", email);
   headers.set("x-farm-slug", farm.slug);
   headers.set("x-session-role", farm.role);
+  headers.set("x-session-sub", sub);
   headers.set("x-session-sig", sig);
 
   return factory({ request: { headers } });

@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getBreedingSnapshot, suggestPairings } from "@/lib/server/breeding-analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getFarmCreds } from "@/lib/meta-db";
-import type { SessionFarm } from "@/types/next-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +18,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-  const farmFromToken = (session.user?.farms as SessionFarm[] | undefined)?.find(
-    (f) => f.slug === farmSlug,
-  );
-  if (!farmFromToken) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Live tier check — JWT tier can be stale after subscription changes
   const creds = await getFarmCreds(farmSlug);
@@ -44,8 +36,7 @@ export async function POST(
     );
   }
 
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+  const prisma = ctx.prisma;
 
   // Gather herd data in parallel
   const [snapshot, pairings, settings, recentReproObs, recentCalvingObs] = await Promise.all([

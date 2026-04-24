@@ -1,8 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import type { SessionFarm } from '@/types/next-auth';
-import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { getFarmContextForSlug } from '@/lib/server/farm-context-slug';
 import { calcVeldScore, calcGrazingCapacity, type BiomeType } from '@/lib/calculators/veld-score';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
@@ -26,20 +23,16 @@ function isValidLevel(n: unknown): n is 0 | 1 | 2 {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { farmSlug } = await params;
-  const accessible = (session.user?.farms as SessionFarm[] | undefined)?.some((f) => f.slug === farmSlug);
-  if (!accessible) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const url = new URL(_req.url);
+  const url = new URL(req.url);
   const campId = url.searchParams.get('campId');
-  const rows = await prisma.veldAssessment.findMany({
+  const rows = await ctx.prisma.veldAssessment.findMany({
     where: campId ? { campId } : undefined,
     orderBy: { assessmentDate: 'desc' },
     take: 500,
@@ -48,19 +41,16 @@ export async function GET(
 }
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { farmSlug } = await params;
-  const farm = (session.user?.farms as SessionFarm[] | undefined)?.find((f) => f.slug === farmSlug);
-  if (!farm) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  if (farm.role !== 'ADMIN' && farm.role !== 'MANAGER') {
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { prisma, role, session } = ctx;
+  if (role !== 'ADMIN' && role !== 'MANAGER') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return NextResponse.json({ error: 'Farm not found' }, { status: 404 });
 
   let body: PostBody;
   try {

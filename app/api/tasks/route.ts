@@ -23,6 +23,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { expandRule } from "@/lib/tasks/recurrence";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
@@ -192,6 +193,10 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   let body: unknown;
   try {

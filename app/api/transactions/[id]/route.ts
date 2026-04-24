@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
@@ -9,15 +7,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role } = db;
+  const ctx = await getFarmContext(request);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -57,23 +52,20 @@ export async function PATCH(
     data,
   });
 
-  revalidateTransactionWrite(db.slug);
+  revalidateTransactionWrite(slug);
   return NextResponse.json(transaction);
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma, role } = db;
+  const ctx = await getFarmContext(request);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -85,6 +77,6 @@ export async function DELETE(
   }
 
   await prisma.transaction.delete({ where: { id } });
-  revalidateTransactionWrite(db.slug);
+  revalidateTransactionWrite(slug);
   return NextResponse.json({ ok: true });
 }

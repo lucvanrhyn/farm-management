@@ -16,6 +16,11 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
+  // Platform-admin endpoint — no farm scoping. The consolidated
+  // getFarmContext helpers require an active farm; this endpoint
+  // operates on meta-DB consulting-lead rows only, so it retains the
+  // legacy getServerSession path. (See EXEMPT set in
+  // __tests__/api/session-consolidation-coverage.test.ts.)
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) {

@@ -17,9 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import {
   DEFAULT_MAP_SETTINGS,
@@ -28,39 +26,29 @@ import {
 } from "@/lib/farm-settings/defaults";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+export async function GET(req: NextRequest) {
+  const ctx = await getFarmContext(req);
+  if (!ctx) {
     return NextResponse.json(
       { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
       { status: 401 },
     );
   }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) {
-    return NextResponse.json({ error: db.error }, { status: db.status });
-  }
-  const { prisma } = db;
+  const { prisma } = ctx;
 
   const row = await prisma.farmSettings.findFirst({ select: { mapSettings: true } });
   return NextResponse.json(parseStoredMapSettings(row?.mapSettings));
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const ctx = await getFarmContext(req);
+  if (!ctx) {
     return NextResponse.json(
       { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
       { status: 401 },
     );
   }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) {
-    return NextResponse.json({ error: db.error }, { status: db.status });
-  }
-  const { prisma, role } = db;
+  const { prisma, role, slug, session } = ctx;
 
   if (role !== "ADMIN") {
     return NextResponse.json(
@@ -69,7 +57,7 @@ export async function PUT(req: NextRequest) {
     );
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json(
       { error: "Forbidden", code: "FORBIDDEN" },
       { status: 403 },
@@ -123,6 +111,6 @@ export async function PUT(req: NextRequest) {
     },
   });
 
-  revalidateSettingsWrite(db.slug);
+  revalidateSettingsWrite(slug);
   return NextResponse.json(next);
 }

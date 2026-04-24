@@ -30,9 +30,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -41,13 +40,6 @@ function asErr(code: string, message: string, status: number) {
     { success: false, error: code, message },
     { status },
   );
-}
-
-function mapDbErr(status: number, message: string) {
-  if (status === 403) return asErr("CROSS_TENANT_FORBIDDEN", message, 403);
-  if (status === 404) return asErr("FARM_NOT_FOUND", message, 404);
-  if (status === 400) return asErr("INVALID_FARM_SLUG", message, 400);
-  return asErr("INTERNAL_ERROR", message, status);
 }
 
 const VALID_STATUS_FILTERS = new Set(["today", "open", "all"]);
@@ -129,14 +121,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
-  }
-
   const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) return mapDbErr(db.status, db.error);
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
+    const { code, status } = await classifyFarmContextFailure(req);
+    return asErr(code, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
+  }
 
   const statusFilter = new URL(req.url).searchParams.get("status") ?? "open";
   if (!VALID_STATUS_FILTERS.has(statusFilter)) {
@@ -156,7 +146,7 @@ export async function GET(
   }
 
   const [tasks, camps] = await Promise.all([
-    db.prisma.task.findMany({
+    ctx.prisma.task.findMany({
       where,
       select: {
         id: true,
@@ -171,7 +161,7 @@ export async function GET(
         lng: true,
       },
     }),
-    db.prisma.camp.findMany({
+    ctx.prisma.camp.findMany({
       select: { campId: true, geojson: true },
       where: { geojson: { not: null } },
     }),

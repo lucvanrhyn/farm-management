@@ -4,6 +4,11 @@ import { authOptions } from "@/lib/auth-options";
 import { evictFarmClient } from "@/lib/farm-prisma";
 import { getUserRoleForFarm } from "@/lib/auth";
 
+// Platform-dev endpoint: evicts the cached Prisma client for any farm
+// the caller is an ADMIN of. Needs the full session.user.farms list
+// (not scoped to the active farm the way getFarmContext is), so it
+// retains getServerSession here. Exempt via the
+// session-consolidation-coverage allowlist.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

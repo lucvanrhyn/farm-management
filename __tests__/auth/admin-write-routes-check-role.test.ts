@@ -72,6 +72,37 @@ const READ_ONLY: ReadonlySet<string> = new Set([
   'task-occurrences/route.ts::GET',
   'transaction-categories/route.ts::GET',
   'transactions/route.ts::GET',
+  // Phase G (P6.5): routes migrated to getFarmContext / getFarmContextForSlug.
+  // These were outside the H.2 test's original scope (it matched only legacy
+  // helpers); after the Phase G scope widening they are discovered and need
+  // explicit classification.
+  'animals/route.ts::GET',
+  'camps/route.ts::GET',
+  'farm/route.ts::GET',
+  'notifications/route.ts::GET',
+  'tasks/route.ts::GET',
+  // Phase G (P6.5): cookie-scoped read-only handlers migrated via
+  // getFarmContextForSlug (slug-in-query-string pattern) or getFarmContext.
+  'farm/settings/route.ts::GET',
+  'farm/species-settings/route.ts::GET',
+  'onboarding/template/route.ts::GET',
+  // Phase G (P6.5): [farmSlug]/** read-only handlers migrated to
+  // getFarmContextForSlug — the H.2 test's widened scope (see collectHandlers)
+  // now discovers them. All are pure reads: no DB writes, no tenant config.
+  '[farmSlug]/camps/[campId]/cover/route.ts::GET',
+  '[farmSlug]/camps/[campId]/stats/route.ts::GET',
+  '[farmSlug]/export/route.ts::GET',
+  '[farmSlug]/feed-on-offer/route.ts::GET',
+  '[farmSlug]/financial-analytics/route.ts::GET',
+  '[farmSlug]/nvd/[id]/pdf/route.ts::GET',
+  '[farmSlug]/nvd/[id]/route.ts::GET',
+  '[farmSlug]/performance/route.ts::GET',
+  '[farmSlug]/profitability-by-animal/route.ts::GET',
+  '[farmSlug]/rotation/route.ts::GET',
+  '[farmSlug]/tax/it3/[id]/pdf/route.ts::GET',
+  '[farmSlug]/tax/it3/[id]/route.ts::GET',
+  '[farmSlug]/veld-assessments/route.ts::GET',
+  '[farmSlug]/veld-score/summary/route.ts::GET',
 ]);
 
 /**
@@ -112,6 +143,33 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   // coverage check forces verifyFreshAdminRole.
   '[farmSlug]/farm-settings/ai/route.ts::PUT',
   '[farmSlug]/farm-settings/methodology/route.ts::PUT',
+
+  // Phase G (P6.5): pre-migrated (Phase D) + newly-migrated handlers that
+  // allow any farm user (LOGGER / VIEWER / ADMIN) to write.
+  //
+  // animals/route.ts::POST — LOGGER may create calf records (calving flow).
+  // notifications/*::POST/PATCH — per-user mark-read, not tenant config.
+  'animals/route.ts::POST',
+  'notifications/[id]/route.ts::PATCH',
+  'notifications/read-all/route.ts::POST',
+
+  // Phase G (P6.5): non-admin writes under [farmSlug]/** — any farm user may
+  // invoke these. They mutate state but are NOT tenant-admin config.
+  //
+  // breeding/analyze — triggers an OpenAI call; tier-gated (paid only) but
+  // open to any authenticated farm user who meets the tier threshold.
+  // nvd/validate — dry-run withdrawal check, no DB mutation (semantically
+  // read-only, but POST by convention because it takes a body).
+  // veld-assessments::POST — ADMIN-or-MANAGER write. Manager is not ADMIN
+  // so the fresh-admin check doesn't apply here; a future tightening could
+  // add a `verifyFreshManagerRole` helper.
+  '[farmSlug]/breeding/analyze/route.ts::POST',
+  '[farmSlug]/nvd/validate/route.ts::POST',
+  '[farmSlug]/veld-assessments/route.ts::POST',
+
+  // photos/upload — any farm user may upload photos for observations; not
+  // tenant config. Migrated to getFarmContext in Phase D/G.
+  'photos/upload/route.ts::POST',
 ]);
 
 /** Find every route.ts under app/api recursively. */
@@ -223,8 +281,16 @@ function collectHandlers(): HandlerRecord[] {
     const src = readFileSync(absPath, 'utf8');
     // Use parenthesised form so comments referencing the symbol don't trigger
     // the check — we only care about actual call sites.
+    //
+    // Phase G (P6.5): the coverage rule now also matches the Phase D/G
+    // consolidated helpers (`getFarmContext(` / `getFarmContextForSlug(`).
+    // Migrated admin-write handlers still need `verifyFreshAdminRole` — the
+    // helper name changed but the H.2 invariant did not.
     const uses =
-      src.includes('getPrismaForSlugWithAuth(') || src.includes('getPrismaWithAuth(');
+      src.includes('getPrismaForSlugWithAuth(') ||
+      src.includes('getPrismaWithAuth(') ||
+      src.includes('getFarmContext(') ||
+      src.includes('getFarmContextForSlug(');
     if (!uses) continue;
     const bodies = handlerBodies(src);
     for (const [method, body] of bodies) {
@@ -232,8 +298,11 @@ function collectHandlers(): HandlerRecord[] {
         key: `${relPath}::${method}`,
         relPath,
         method,
-        usesAuthHelper: body.includes('getPrismaForSlugWithAuth(') ||
+        usesAuthHelper:
+          body.includes('getPrismaForSlugWithAuth(') ||
           body.includes('getPrismaWithAuth(') ||
+          body.includes('getFarmContext(') ||
+          body.includes('getFarmContextForSlug(') ||
           // authorize() helper pattern — body calls authorize() which internally
           // calls one of the helpers. Count as uses-helper so the coverage rule
           // applies.

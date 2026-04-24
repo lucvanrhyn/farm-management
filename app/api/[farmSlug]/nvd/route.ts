@@ -3,9 +3,7 @@
  * POST /api/[farmSlug]/nvd  — issue a new NVD (ADMIN only, rate limited)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueNvd } from "@/lib/server/nvd";
@@ -19,13 +17,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-  const _authGet = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _authGet) return NextResponse.json({ error: _authGet.error }, { status: _authGet.status });
-  const prisma = _authGet.prisma;
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma } = ctx;
 
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
@@ -64,7 +59,7 @@ export async function GET(
     return { ...r, headCount };
   });
 
-  return NextResponse.json({ records: withCount, total, page, limit });
+  return NextResponse.json({ records: withCount, total, page, limit: limit });
 }
 
 // ── POST — issue NVD ──────────────────────────────────────────────────────────
@@ -73,16 +68,14 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { farmSlug } = await params;
-  const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
-  if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, role, slug, session } = ctx;
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: defence-in-depth — re-verify ADMIN against meta-db so a
   // demoted ADMIN can't keep issuing NVDs until their JWT expires.
-  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -91,8 +84,6 @@ export async function POST(
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many NVD requests. Please wait." }, { status: 429 });
   }
-
-  const prisma = _auth.prisma;
 
   let body: Record<string, unknown>;
   try {

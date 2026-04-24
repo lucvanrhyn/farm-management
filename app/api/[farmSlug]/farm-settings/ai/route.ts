@@ -27,9 +27,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, isBudgetExempt, type FarmTier } from "@/lib/tier";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
@@ -159,21 +158,12 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ farmSlug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return asErr("AUTH_REQUIRED", "Sign in required", 401);
-  }
-
   const { farmSlug } = await params;
-  const db = await getPrismaForSlugWithAuth(session, farmSlug);
-  if ("error" in db) {
-    const code =
-      db.status === 403
-        ? "FARM_ACCESS_DENIED"
-        : db.status === 404
-          ? "FARM_NOT_FOUND"
-          : "INVALID_SLUG";
-    return asErr(code, db.error, db.status);
+  const ctx = await getFarmContextForSlug(farmSlug, req);
+  if (!ctx) {
+    const { code, status } = await classifyFarmContextFailure(req);
+    const mapped = code === "CROSS_TENANT_FORBIDDEN" ? "FARM_ACCESS_DENIED" : code;
+    return asErr(mapped, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
   }
 
   // Tier gate — Basic must not write.
@@ -205,7 +195,7 @@ export async function PUT(
   // existing ragConfig forward so runtime budget counters aren't wiped.
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prisma: any = db.prisma;
+    const prisma: any = ctx.prisma;
     const row = await prisma.farmSettings.findFirst({
       select: { aiSettings: true },
     });

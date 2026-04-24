@@ -131,7 +131,9 @@ describe("POST /api/onboarding/map-columns", () => {
     expect(proposeColumnMappingMock).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when getPrismaWithAuth returns an error", async () => {
+  it("returns 401 when farm context cannot be resolved", async () => {
+    // Phase G (P6.5): getFarmContext collapses every auth failure (no session,
+    // no active farm, forbidden) to a null return → a single 401.
     getServerSessionMock.mockResolvedValue({
       user: { email: "luc@example.com", farms: [] },
     });
@@ -143,7 +145,7 @@ describe("POST /api/onboarding/map-columns", () => {
       "@/app/api/onboarding/map-columns/route"
     );
     const res = await POST(makeReq(validBody));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
   });
 
   it("returns 429 when the rate limit is exceeded", async () => {

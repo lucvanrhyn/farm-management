@@ -58,24 +58,37 @@ const requestCache = new WeakMap<NextRequest, Promise<FarmContext | null>>();
 const SIGNED_USER_HEADER = 'x-session-user';
 const SIGNED_SLUG_HEADER = 'x-farm-slug';
 const SIGNED_ROLE_HEADER = 'x-session-role';
+const SIGNED_SUB_HEADER = 'x-session-sub';
 const SIGNATURE_HEADER = 'x-session-sig';
 
 /**
- * Compute the HMAC-SHA256 signature for (userEmail, slug). Exported so
- * `proxy.ts` can reuse the exact same primitive when signing and we cannot
- * drift between signer and verifier.
+ * Compute the HMAC-SHA256 signature for (userEmail, slug, userId). Exported
+ * so `proxy.ts` can reuse the exact same primitive when signing and we
+ * cannot drift between signer and verifier.
+ *
+ * Phase G (P6.5): the payload now also binds the JWT `sub` (user id) so
+ * migrated admin-write handlers calling `verifyFreshAdminRole(session.user.id, slug)`
+ * receive the real user id instead of an empty string.
  */
-export function signIdentity(userEmail: string, slug: string, secret: string): string {
-  return createHmac('sha256', secret).update(`${userEmail}\n${slug}`).digest('hex');
+export function signIdentity(
+  userEmail: string,
+  slug: string,
+  userId: string,
+  secret: string,
+): string {
+  return createHmac('sha256', secret)
+    .update(`${userEmail}\n${slug}\n${userId}`)
+    .digest('hex');
 }
 
 function verifyIdentity(
   userEmail: string,
   slug: string,
+  userId: string,
   providedSig: string,
   secret: string,
 ): boolean {
-  const expected = signIdentity(userEmail, slug, secret);
+  const expected = signIdentity(userEmail, slug, userId, secret);
   // Length mismatch would cause `timingSafeEqual` to throw; pre-check.
   if (expected.length !== providedSig.length) return false;
   try {
@@ -135,21 +148,34 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
   const slug = read(SIGNED_SLUG_HEADER);
   const sig = read(SIGNATURE_HEADER);
   const signedRole = read(SIGNED_ROLE_HEADER) ?? '';
+  const signedSub = read(SIGNED_SUB_HEADER) ?? '';
 
   // Fast path: proxy.ts already authenticated this request. We MUST NOT
-  // trust any of the three headers unless the HMAC verifies — otherwise an
+  // trust any of the headers unless the HMAC verifies — otherwise an
   // external caller could spoof tenant identity by sending `x-farm-slug`.
-  if (secret && userEmail && slug && sig && verifyIdentity(userEmail, slug, sig, secret)) {
+  //
+  // Phase G (P6.5): the signed payload now binds `sub` (user id) too so
+  // migrated admin-write handlers can call `verifyFreshAdminRole(userId, slug)`
+  // without an empty-string userId silently rejecting every ADMIN.
+  if (
+    secret &&
+    userEmail &&
+    slug &&
+    sig &&
+    signedSub &&
+    verifyIdentity(userEmail, slug, signedSub, sig, secret)
+  ) {
     const prisma = await getPrismaForFarm(slug);
     if (!prisma) return null;
     // Synthesise a minimal Session from the signed headers. Handlers that
-    // need the broader session (farms list, id, role priority) still have
-    // it because proxy.ts copies role + farms into the JWT; but most
-    // handlers only need `session.user?.email`, so we keep this lean to
-    // avoid a second meta-db round-trip for the full session.
+    // need the broader session (farms list, role priority) still have
+    // `user.id` + `user.email` + `user.role` populated, which covers every
+    // `verifyFreshAdminRole(session.user.id, slug)` call site. We keep this
+    // lean — no second meta-db round-trip for the full farms list — because
+    // each migrated handler already works against a single slug.
     const session = {
       user: {
-        id: '',
+        id: signedSub,
         email: userEmail,
         username: '',
         role: signedRole,
