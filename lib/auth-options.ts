@@ -11,19 +11,6 @@ import type { SessionFarm } from '../types/next-auth';
 export { AUTH_ERROR_CODES } from './auth-errors';
 export type { AuthErrorCode } from './auth-errors';
 
-/**
- * Max age of the JWT's cached `farms` / `role` before we re-fetch from
- * meta-db. Kept at 60 s to close the session-drift window where a
- * revoked ADMIN could still act as ADMIN after their role was downgraded.
- *
- * Defence-in-depth: the 6 destructive admin ops (animal/observation/
- * transaction/camp/global reset + farm settings PATCH) also call
- * `verifyFreshAdminRole()`, which bypasses the JWT entirely and queries
- * meta-db directly — so even inside this 60 s window a revoked ADMIN
- * cannot wipe data.
- */
-export const SESSION_ROLE_TTL_MS = 60_000;
-
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -113,29 +100,31 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user, trigger }) {
+      // Initial sign-in: authorize() already loaded farms + role, so we copy
+      // them into the token and are done — no meta-db round-trip.
       if (user) {
         token.role = (user as { role: string }).role;
         token.username = (user as { username: string }).username;
         token.farms = (user as { farms: SessionFarm[] }).farms;
-        token.farmsRefreshedAt = Date.now();
+        return token;
       }
-      // Re-fetch farms periodically (see SESSION_ROLE_TTL_MS) or on explicit update trigger.
-      const refreshAge = Date.now() - ((token.farmsRefreshedAt as number) ?? 0);
-      const needsRefresh = trigger === 'update' || refreshAge > SESSION_ROLE_TTL_MS;
-      if (needsRefresh && token.sub) {
+      // Explicit `useSession().update()` from the client — re-fetch on demand.
+      // This is the only path that hits meta-db after sign-in; subsequent
+      // `getServerSession()` reads use the cached farms from the JWT.
+      //
+      // Routes that need fresh ADMIN verification (bulk resets, tenant-wide
+      // settings PATCH) call `verifyFreshAdminRole()` directly — see lib/auth.ts.
+      if (trigger === 'update' && token.sub) {
         try {
           const farms = await getFarmsForUser(token.sub);
           token.farms = farms;
-          // Recalculate role from refreshed farms
           const rolePriority: Record<string, number> = { ADMIN: 3, DASHBOARD: 2, LOGGER: 1 };
-          const topRole = farms.reduce(
+          token.role = farms.reduce(
             (best, f) => ((rolePriority[f.role] ?? 0) > (rolePriority[best] ?? 0) ? f.role : best),
             'LOGGER',
           );
-          token.role = topRole;
-          token.farmsRefreshedAt = Date.now();
         } catch (err) {
-          console.error('[jwt] failed to refresh farms:', err);
+          console.error('[jwt] failed to refresh farms on update trigger:', err);
         }
       }
       return token;
