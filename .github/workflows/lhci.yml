@@ -86,11 +86,21 @@ jobs:
           BENCH_PASSWORD: ${{ secrets.BENCH_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${BENCH_PASSWORD:-}" ]; then
-            echo "::warning::BENCH_PASSWORD secret is not set — skipping LHCI run."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # Any missing secret → skip-with-warning (not a red cross). LHCI
+          # against a server booted with empty secrets produces garbage
+          # numbers anyway; we'd rather not run than run with bogus data.
+          # Historical failure mode when NEXTAUTH_SECRET was empty:
+          # /api/auth/csrf returned `{}`, `csrfToken` was undefined, and
+          # `process.stdout.write(undefined)` threw ERR_INVALID_ARG_TYPE.
+          for var in BENCH_PASSWORD NEXTAUTH_SECRET TURSO_DATABASE_URL \
+                     TURSO_AUTH_TOKEN META_TURSO_DATABASE_URL \
+                     META_TURSO_AUTH_TOKEN; do
+            if [ -z "${!var:-}" ]; then
+              echo "::warning::${var} secret is not set — skipping LHCI run."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
 
           # Start the server in the background just to mint a cookie.
           pnpm start -p 3001 >/tmp/next.log 2>&1 &
@@ -103,7 +113,16 @@ jobs:
 
           # next-auth credentials-provider sign-in flow: GET csrf → POST callback.
           CSRF_JSON=$(curl -sS -c /tmp/cookies.txt http://localhost:3001/api/auth/csrf)
-          CSRF_TOKEN=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).csrfToken)" "$CSRF_JSON")
+          # Defensive parse: if csrfToken is missing we fail loudly instead of
+          # letting `process.stdout.write(undefined)` explode three lines down.
+          CSRF_TOKEN=$(node -e "
+            const parsed = JSON.parse(process.argv[1] || '{}');
+            if (!parsed.csrfToken) {
+              console.error('next-auth /api/auth/csrf returned no csrfToken; body=' + process.argv[1]);
+              process.exit(1);
+            }
+            process.stdout.write(parsed.csrfToken);
+          " "$CSRF_JSON")
 
           curl -sS -L \
             -c /tmp/cookies.txt -b /tmp/cookies.txt \
