@@ -27,6 +27,14 @@ vi.mock("@/lib/auth-options", () => ({
   authOptions: {},
 }));
 
+// Phase H.2: verifyFreshAdminRole hits the meta-db, which isn't available in
+// unit tests. For handlers under test we trust the mocked session's ADMIN
+// role; fresh-admin defence is exercised in the dedicated coverage suite.
+vi.mock("@/lib/auth", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth")>("@/lib/auth");
+  return { ...actual, verifyFreshAdminRole: vi.fn().mockResolvedValue(true) };
+});
+
 // ── Prisma mock ───────────────────────────────────────────────────────────────
 const mockTaskCreate = vi.fn();
 const mockTaskUpdate = vi.fn();

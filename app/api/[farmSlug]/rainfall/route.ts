@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAlertWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,15 @@ async function authorize(params: Promise<{ farmSlug: string }>, requireAdmin = f
   const db = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in db) return db;
 
-  if (requireAdmin && db.role !== "ADMIN") {
-    return { error: "Forbidden", status: 403 } as const;
+  if (requireAdmin) {
+    if (db.role !== "ADMIN") {
+      return { error: "Forbidden", status: 403 } as const;
+    }
+    // Phase H.2: re-verify ADMIN against meta-db to close the stale-ADMIN
+    // window introduced when Phase H removed the jwt-callback refresh.
+    if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+      return { error: "Forbidden", status: 403 } as const;
+    }
   }
 
   return { prisma: db.prisma, farmSlug: db.slug } as const;

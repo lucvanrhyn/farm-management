@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +15,17 @@ async function authorize(params: Promise<{ farmSlug: string }>, requireAdmin = f
   const db = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in db) return db;
 
-  if (requireAdmin && db.role !== "ADMIN") {
-    return { error: "Forbidden", status: 403 } as const;
+  if (requireAdmin) {
+    if (db.role !== "ADMIN") {
+      return { error: "Forbidden", status: 403 } as const;
+    }
+    // Phase H.2: defence-in-depth against the stale-ADMIN window that opened
+    // when Phase H dropped the meta-db refresh from the jwt callback.
+    // Budgets are tenant-wide config, so every admin-write must re-verify
+    // against meta-db rather than trusting the JWT's cached farms list.
+    if (!(await verifyFreshAdminRole(session.user.id, db.slug))) {
+      return { error: "Forbidden", status: 403 } as const;
+    }
   }
 
   return { prisma: db.prisma, farmSlug: db.slug } as const;

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { issueIt3Snapshot } from "@/lib/server/sars-it3";
@@ -68,6 +69,10 @@ export async function POST(
   const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
   if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   // Tier gate: advanced+ only (Consulting also allowed — Phase L tier extension)
   const creds = await getFarmCreds(farmSlug);

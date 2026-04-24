@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateRotationWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ export async function POST(
   const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
   if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const prisma = _auth.prisma;
 
   const plan = await prisma.rotationPlan.findUnique({ where: { id: planId } });
@@ -81,6 +86,10 @@ export async function PUT(
   const _auth = await getPrismaForSlugWithAuth(session, farmSlug);
   if ("error" in _auth) return NextResponse.json({ error: _auth.error }, { status: _auth.status });
   if (_auth.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
+  if (!(await verifyFreshAdminRole(session.user.id, _auth.slug))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const prisma = _auth.prisma;
 
   const plan = await prisma.rotationPlan.findUnique({ where: { id: planId } });
