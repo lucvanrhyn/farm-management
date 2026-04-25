@@ -12,6 +12,7 @@ import {
   effectiveAssistantName,
   parseAiSettings,
 } from "@/lib/einstein/settings-schema";
+import { logger } from "@/lib/logger";
 
 /**
  * Path suffixes that must render normally while onboardingComplete is still false.
@@ -94,7 +95,7 @@ export default async function AdminLayout({
   ]);
 
   if (credsResult.status === "rejected") {
-    console.error(`[AdminLayout] getFarmCreds failed for "${farmSlug}":`, credsResult.reason);
+    logger.error('[AdminLayout] getFarmCreds failed', { farmSlug, reason: credsResult.reason });
     return (
       <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
         <div className="text-center max-w-md px-4">
@@ -142,10 +143,10 @@ export default async function AdminLayout({
       // default through the provider is fine (it normalises again).
       assistantName = resolved;
     } else {
-      console.error(
-        `[AdminLayout] farmSettings.findFirst failed for "${farmSlug}":`,
-        settingsRes.reason,
-      );
+      logger.error('[AdminLayout] farmSettings.findFirst failed', {
+        farmSlug,
+        reason: settingsRes.reason,
+      });
       // fail-open: a transient DB error must NOT trap an established admin
       // in /onboarding. Leave onboardingComplete=true so the page renders.
       // assistantName stays null → provider normalises to "Einstein".

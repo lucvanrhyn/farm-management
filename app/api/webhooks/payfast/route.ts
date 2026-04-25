@@ -6,6 +6,7 @@ import {
   type PayFastParams,
 } from '@/lib/payfast';
 import { updateFarmSubscription } from '@/lib/meta-db';
+import { logger } from '@/lib/logger';
 
 /**
  * PayFast ITN (Instant Transaction Notification) webhook.
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     '127.0.0.1';
 
   if (!isValidPayFastIP(ip)) {
-    console.warn('[payfast-itn] Rejected request from IP:', ip);
+    logger.warn('[payfast-itn] Rejected request from IP', { ip });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -49,14 +50,14 @@ export async function POST(req: NextRequest) {
   const expectedSignature = generateSignature(paramsWithoutSig, passphrase);
 
   if (expectedSignature !== receivedSignature) {
-    console.warn('[payfast-itn] Signature mismatch. Expected:', expectedSignature, 'Got:', receivedSignature);
+    logger.warn('[payfast-itn] Signature mismatch', { expected: expectedSignature, got: receivedSignature });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   // 4. Server-to-server validation
   const isValid = await validateITN(rawParams);
   if (!isValid) {
-    console.warn('[payfast-itn] PayFast ITN validation returned INVALID');
+    logger.warn('[payfast-itn] PayFast ITN validation returned INVALID');
     return NextResponse.json({ error: 'ITN validation failed' }, { status: 400 });
   }
 
@@ -66,11 +67,11 @@ export async function POST(req: NextRequest) {
   const payfastToken = rawParams.token; // Subscription token for recurring billing
 
   if (!farmSlug) {
-    console.error('[payfast-itn] Missing custom_str1 (farmSlug)');
+    logger.error('[payfast-itn] Missing custom_str1 (farmSlug)');
     return NextResponse.json({ error: 'Missing farm identifier' }, { status: 400 });
   }
 
-  console.info('[payfast-itn] Received:', { paymentStatus, farmSlug, payfastToken });
+  logger.info('[payfast-itn] Received', { paymentStatus, farmSlug, payfastToken });
 
   if (paymentStatus === 'COMPLETE') {
     const tier = (rawParams.custom_str2 ?? '') as 'basic' | 'advanced' | '';
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
       const { computeFarmLsu } = await import('@/lib/pricing/farm-lsu');
       lockedLsu = await computeFarmLsu(farmSlug);
     } catch (err) {
-      console.error('[payfast-itn] Failed to compute farm LSU — lockedLsu will be null:', err);
+      logger.error('[payfast-itn] Failed to compute farm LSU — lockedLsu will be null', err);
     }
 
     const now = new Date();
@@ -114,7 +115,8 @@ export async function POST(req: NextRequest) {
       ...(nextRenewalAt !== undefined ? { nextRenewalAt } : {}),
     });
 
-    console.info('[payfast-itn] Subscription activated for farm:', farmSlug, {
+    logger.info('[payfast-itn] Subscription activated', {
+      farmSlug,
       tier: tier || 'unknown',
       frequency: frequency || 'unknown',
       billingAmountZar,
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
     });
   } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
     await updateFarmSubscription(farmSlug, 'inactive');
-    console.info('[payfast-itn] Subscription set to inactive for farm:', farmSlug, '— status:', paymentStatus);
+    logger.info('[payfast-itn] Subscription set to inactive', { farmSlug, paymentStatus });
   }
   // PENDING status: no action — wait for COMPLETE or FAILED
 

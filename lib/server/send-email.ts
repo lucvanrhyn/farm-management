@@ -12,6 +12,7 @@
 // wire HTML and subject line remain identical.
 
 import { Resend } from "resend";
+import { logger } from "@/lib/logger";
 
 function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -184,9 +185,7 @@ export async function sendEmail(
   if (!opts.to) return { sent: false, skipped: "no-recipient" };
   const resend = getResend();
   if (!resend) {
-    console.warn(
-      `[send-email] RESEND_API_KEY missing — skipping template "${opts.template}"`,
-    );
+    logger.warn('[send-email] RESEND_API_KEY missing — skipping template', { template: opts.template });
     return { sent: false, skipped: "no-api-key" };
   }
   const renderer = RENDERERS[opts.template];

@@ -8,6 +8,7 @@ import {
   type CommitImportProgress,
   type CommitImportResult,
 } from "@/lib/onboarding/commit-import";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/onboarding/commit-import
@@ -200,7 +201,7 @@ export async function POST(req: NextRequest) {
         ]);
         send("complete", result);
       } catch (err) {
-        console.error("[commit-import] fatal", err);
+        logger.error('[commit-import] fatal', err);
         const message =
           err instanceof Error && err.message === "Import timeout"
             ? "Import timed out — please reduce batch size and retry"

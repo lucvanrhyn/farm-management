@@ -1,4 +1,5 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { logger } from "@/lib/logger";
 import type { SessionFarm } from "@/types/next-auth";
 
 export interface FarmOverview {
@@ -75,7 +76,7 @@ export async function getOverviewForUserFarms(
 
   return results.map((result, i): FarmOverview => {
     if (result.status === "fulfilled") return result.value;
-    console.error(`[multi-farm-overview] Failed to fetch overview for "${capped[i].slug}":`, result.reason);
+    logger.error('[multi-farm-overview] Failed to fetch overview', { slug: capped[i].slug, reason: result.reason });
     return {
       slug: capped[i].slug,
       activeAnimalCount: null,

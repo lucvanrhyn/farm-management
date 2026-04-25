@@ -180,10 +180,15 @@ describe('POST /api/auth/resend-verification', () => {
     const res = await POST(makeReq({ email: 'luc@example.com' }));
 
     expect(res.status).toBe(500);
+    // Wave 4 G.4: route now logs through @/lib/logger which emits
+    // `console.error(message, { message, stack })` in dev. The error
+    // message + stack still flow through, just packaged in a payload.
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('[resend-verification]'),
-      expect.stringContaining('meta-db offline'),
-      expect.any(String),
+      expect.objectContaining({
+        message: expect.stringContaining('meta-db offline'),
+        stack: expect.any(String),
+      }),
     );
     spy.mockRestore();
   });

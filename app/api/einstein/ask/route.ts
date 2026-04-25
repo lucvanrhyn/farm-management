@@ -22,6 +22,7 @@ import { authOptions } from '@/lib/auth-options';
 import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
+import { logger } from '@/lib/logger';
 import {
   assertWithinBudget,
   stampCostBeforeSend,
@@ -327,10 +328,9 @@ export async function POST(req: NextRequest): Promise<Response> {
             },
           });
         } catch (logErr) {
-          console.warn(
-            '[einstein/ask] failed to persist RagQueryLog',
-            logErr instanceof Error ? logErr.message : String(logErr),
-          );
+          logger.warn('[einstein/ask] failed to persist RagQueryLog', {
+            err: logErr instanceof Error ? logErr.message : String(logErr),
+          });
         }
         controller.close();
       }

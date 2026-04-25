@@ -32,6 +32,7 @@ import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, isBudgetExempt, type FarmTier } from "@/lib/tier";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 import {
   ASSISTANT_NAME_MAX_LEN,
   ASSISTANT_NAME_REGEX,
@@ -257,10 +258,7 @@ export async function PUT(
       },
     });
   } catch (err) {
-    console.error(
-      `[farm-settings/ai] save failed for "${farmSlug}":`,
-      err,
-    );
+    logger.error('[farm-settings/ai] save failed', { farmSlug, err });
     return asErr(
       "AI_SETTINGS_SAVE_FAILED",
       "Could not save settings — please try again",

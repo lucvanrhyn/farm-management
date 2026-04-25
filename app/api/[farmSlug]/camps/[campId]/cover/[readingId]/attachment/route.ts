@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { logger } from "@/lib/logger";
 
 export async function PATCH(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, attachmentUrl: updated.attachmentUrl });
   } catch (err) {
-    console.error("[cover/attachment PATCH] DB error:", err);
+    logger.error('[cover/attachment PATCH] DB error', err);
     return NextResponse.json({ error: "Failed to update attachment" }, { status: 500 });
   }
 }

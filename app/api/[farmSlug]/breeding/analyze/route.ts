@@ -3,6 +3,7 @@ import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getBreedingSnapshot, suggestPairings } from "@/lib/server/breeding-analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getFarmCreds } from "@/lib/meta-db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,7 @@ The JSON must have these exact keys: summary, bullRecommendations, calvingAlerts
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text();
-    console.error("[breeding/analyze] OpenAI error:", openaiRes.status, errText);
+    logger.error('[breeding/analyze] OpenAI error', { status: openaiRes.status, errText });
     return NextResponse.json(
       { error: `OpenAI request failed: ${openaiRes.status}` },
       { status: 502 },

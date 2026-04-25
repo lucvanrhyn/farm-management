@@ -8,6 +8,7 @@ import {
   generateVerificationToken,
   sendVerificationEmail,
 } from '@/lib/email-verification';
+import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
@@ -98,11 +99,10 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     // Server errors: log for ops but don't reveal anything to the caller.
     const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      '[resend-verification]',
+    logger.error('[resend-verification]', {
       message,
-      err instanceof Error ? err.stack : '',
-    );
+      stack: err instanceof Error ? err.stack : '',
+    });
     return NextResponse.json(
       { error: 'Something went wrong. Please try again.' },
       { status: 500 },

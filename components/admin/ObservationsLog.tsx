@@ -44,6 +44,7 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
       .then((data: Camp[]) => setCamps(data))
       .catch((err: unknown) => {
         if ((err as { name?: string }).name !== "AbortError") {
+          // intentional console: client-side fetch, no logger sink in browser.
           console.error("[ObservationsLog] Failed to load camps:", err);
         }
       });
