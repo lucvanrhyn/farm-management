@@ -12,6 +12,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // cross-species by design: reset blocks on any active animal (any species).
   const activeAnimals = await prisma.animal.count({ where: { status: "Active" } });
   if (activeAnimals > 0) {
     return NextResponse.json(

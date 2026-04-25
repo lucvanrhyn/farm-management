@@ -40,6 +40,8 @@ export async function evaluate(
     prisma.camp.findMany({
       select: { id: true, campId: true, campName: true, sizeHectares: true },
     }) as Promise<CampRow[]>,
+    // cross-species by design: LSU overstock uses merged LSU values across all
+    // species (cattle + sheep + game) per the brief's mixed-species math.
     prisma.animal.findMany({
       where: { status: "Active" },
       select: { category: true, currentCamp: true, status: true },

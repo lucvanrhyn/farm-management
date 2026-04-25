@@ -27,6 +27,7 @@ export async function getDataHealthScore(
     assignedCount,
     txThisMonth,
   ] = await Promise.all([
+    // cross-species by design: data hygiene metric covers every active animal.
     prisma.animal.count({ where: { status: "Active" } }),
     prisma.camp.count(),
     prisma.observation.groupBy({
@@ -45,6 +46,7 @@ export async function getDataHealthScore(
         campId: { not: "" },
       },
     }),
+    // cross-species by design: "% of animals with a camp" is farm-wide.
     prisma.animal.count({
       where: { status: "Active", currentCamp: { not: "" } },
     }),

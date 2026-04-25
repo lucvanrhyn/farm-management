@@ -9,6 +9,7 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
 
   const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
     getLatestCampConditions(prisma),
+    // cross-species by design: camps overview totals every species per camp.
     prisma.animal.groupBy({
       by: ["currentCamp"],
       where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },

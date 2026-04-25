@@ -73,6 +73,7 @@ export async function getFinancialAnalytics(
       where: { date: { gte: fromStr, lte: toStr } },
       select: { type: true, amount: true, category: true },
     }),
+    // cross-species by design: financial KPI denominator is farm-wide head count.
     prisma.animal.count({ where: { status: "Active" } }),
     prisma.observation.findMany({
       where: {
@@ -224,6 +225,7 @@ export async function getProfitabilityByCategory(
       where: txWhere,
       select: { type: true, amount: true, animalId: true },
     }),
+    // cross-species by design: profitability-by-category aggregates all species.
     prisma.animal.findMany({
       where: { status: "Active" },
       select: { animalId: true, category: true },
@@ -282,6 +284,7 @@ export async function getFinancialKPIs(
       where: txWhere,
       select: { type: true, amount: true },
     }),
+    // cross-species by design: financial KPI denominator is farm-wide head count.
     prisma.animal.count({ where: { status: "Active" } }),
   ]);
 
@@ -487,6 +490,7 @@ export async function getCogByCamp(
     prisma.camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
     }),
+    // cross-species by design: COG-by-camp totals every animal in a camp.
     prisma.animal.findMany({
       where: { status: "Active" },
       select: { animalId: true, currentCamp: true },
@@ -554,6 +558,7 @@ export async function getCogByAnimal(
       where: { ...buildExpenseWhere(from, to, scope), animalId: { not: null } },
       select: { animalId: true, amount: true },
     }),
+    // cross-species by design: COG-by-animal lookup needs every species.
     prisma.animal.findMany({
       select: {
         animalId: true,
@@ -614,6 +619,7 @@ export async function getCogSummary(
       where: buildExpenseWhere(from, to, scope),
       select: { amount: true },
     }),
+    // cross-species by design: financial KPI denominator is farm-wide head count.
     prisma.animal.count({ where: { status: "Active" } }),
     computeKgGainedByAnimal(prisma, from, to),
   ]);

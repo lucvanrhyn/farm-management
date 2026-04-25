@@ -30,6 +30,7 @@ export async function GET(
   // Step 2: fire all bulk queries in parallel — 4 queries regardless of camp count
   // (was N+1: 1 camp list + 3 queries per camp = 3N+1)
   const [animalGroups, allConditions, allCovers] = await Promise.all([
+    // cross-species by design: per-camp performance rollup spans species.
     prisma.animal.groupBy({
       by: ["currentCamp"],
       where: { currentCamp: { in: campIds }, status: "Active" },

@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const [mobs, animalGroups] = await Promise.all([
     prisma.mob.findMany({ orderBy: { name: "asc" } }),
+    // cross-species by design: mob list aggregates all species mob memberships.
     prisma.animal.groupBy({
       by: ["mobId"],
       where: { status: "Active", mobId: { not: null } },

@@ -31,6 +31,8 @@ export default async function PerformanceSection({
 
   const [camps, animalsByCategory, allConditions, allCoverReadings] = await Promise.all([
     prisma.camp.findMany({ orderBy: { campId: "asc" } }),
+    // cross-species by design: per-camp performance groups by species + category
+    // explicitly so the merged-LSU table can weight each bucket correctly.
     prisma.animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },

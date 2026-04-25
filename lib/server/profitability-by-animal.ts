@@ -20,6 +20,7 @@ export async function getProfitabilityByAnimal(
       where: txWhere,
       select: { animalId: true, campId: true, type: true, amount: true },
     }),
+    // cross-species by design: profitability-per-animal spans every species.
     prisma.animal.findMany({
       where: { status: 'Active' },
       select: { animalId: true, name: true, category: true, currentCamp: true },

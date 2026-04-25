@@ -137,6 +137,7 @@ export async function buildAnimalSnapshot(
 ): Promise<AnimalSnapshotEntry[]> {
   if (animalIds.length === 0) return [];
 
+  // cross-species by design: NVD movement docs cover every species per SA regs.
   const animals = await prisma.animal.findMany({
     where: { animalId: { in: animalIds }, status: "Active" },
     select: {

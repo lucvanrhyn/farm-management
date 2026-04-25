@@ -96,6 +96,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Camp not found" }, { status: 404 });
   }
 
+  // cross-species by design: deletion guard must block on any species in camp.
   const activeAnimals = await prisma.animal.count({
     where: { currentCamp: campId, status: "Active" },
   });

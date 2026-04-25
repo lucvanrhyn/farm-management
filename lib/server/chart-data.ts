@@ -148,6 +148,7 @@ export async function fetchFinancialAnalyticsData(
       where: { date: dateFilter },
       select: { type: true, amount: true, date: true },
     }),
+    // cross-species by design: financial herd composition is farm-wide.
     prisma.animal.groupBy({
       by: ["category"],
       where: { status: "Active" },
