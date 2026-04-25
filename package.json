@@ -47,6 +47,7 @@
     "@vercel/blob": "^2.3.2",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.34.3",
     "idb": "^8.0.3",
     "inngest": "^4.2.4",
@@ -67,8 +68,7 @@
     "rrule": "^2.8.1",
     "serwist": "^9.5.6",
     "web-push": "^3.6.7",
-    "web-vitals": "^5.2.0",
-    "xlsx": "^0.18.5"
+    "web-vitals": "^5.2.0"
   },
   "devDependencies": {
     "@inngest/test": "^1.0.0",
@@ -118,6 +118,5 @@
     "not dead",
     "not ie > 0",
     "not op_mini all"
-  ],
-  "//xlsx-note": "xlsx@0.18.5 has an unpatched prototype-pollution CVE (GHSA-4r6h-8v6p-xvw6) with no fix available on the npm registry. It is actively used by app/api/animals/import/route.ts and scripts/{create-template,seed-animals,export-dummy-to-excel}.ts for Excel import/export. Replacement (e.g. @e965/xlsx fork, exceljs, or sheetjs CDN build) is deferred to a dedicated workstream."
+  ]
 }
