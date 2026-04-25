@@ -8,9 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { getPrismaWithAuth } from '@/lib/farm-prisma';
+import { getFarmContext } from '@/lib/server/farm-context';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
 
@@ -51,11 +49,6 @@ function parseBody(raw: unknown): FeedbackBody | { error: string } {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
-  }
-
   let rawBody: unknown;
   try {
     rawBody = await req.json();
@@ -68,12 +61,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
   }
 
-  // Resolve farm from active_farm_slug cookie (same as /api/notifications pattern).
-  const db = await getPrismaWithAuth(session);
-  if ('error' in db) {
-    return jsonError('EINSTEIN_FORBIDDEN', db.error, db.status);
+  const ctx = await getFarmContext(req);
+  if (!ctx) {
+    return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
   }
-  const { prisma, slug } = db;
+  const { prisma, slug } = ctx;
 
   const creds = await getFarmCreds(slug);
   if (!creds) {

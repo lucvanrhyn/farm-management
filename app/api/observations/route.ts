@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
-import { getPrismaWithAuth } from "@/lib/farm-prisma";
+import { getFarmContext } from "@/lib/server/farm-context";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -28,14 +26,9 @@ const VALID_OBSERVATION_TYPES = new Set([
 ]);
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const ctx = await getFarmContext(request);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma } = ctx;
 
   const { searchParams } = new URL(request.url);
   const camp = searchParams.get("camp");
@@ -64,10 +57,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const ctx = await getFarmContext(request);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { prisma, session, slug } = ctx;
 
   // Rate limit: 100 observations per minute per user (offline sync can burst, but cap runaway clients)
   const userId = session.user?.email ?? "unknown";
@@ -75,10 +67,6 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
-
-  const db = await getPrismaWithAuth(session);
-  if ("error" in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
 
   const body = await request.json();
   const { type, camp_id, animal_id, details, created_at } = body;
@@ -136,7 +124,7 @@ export async function POST(request: NextRequest) {
         species,
       },
     });
-    revalidateObservationWrite(db.slug);
+    revalidateObservationWrite(slug);
     return NextResponse.json({ success: true, id: record.id });
   } catch (err) {
     console.error("[observations] DB error:", err);
