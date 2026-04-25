@@ -162,7 +162,7 @@ export default function AnimalImporter() {
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -178,7 +178,7 @@ export default function AnimalImporter() {
           <div>
             <p style={{ fontSize: "1.875rem", marginBottom: "0.75rem" }}>📂</p>
             <p style={{ fontWeight: 600, color: "#6B5C4E" }}>Drop a file here or click to select</p>
-            <p style={{ fontSize: "0.875rem", color: "#9C8E7A", marginTop: "0.25rem" }}>.xlsx, .xls or .csv</p>
+            <p style={{ fontSize: "0.875rem", color: "#9C8E7A", marginTop: "0.25rem" }}>.xlsx</p>
           </div>
         )}
       </div>
