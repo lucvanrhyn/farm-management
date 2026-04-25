@@ -58,17 +58,19 @@ function signHeaders(
   userEmail: string,
   slug: string,
   userId = 'user-1',
+  role = 'ADMIN',
 ): Record<string, string> {
-  // Phase G (P6.5): signature payload now binds `sub` (user id) too so
-  // migrated admin-write handlers can call `verifyFreshAdminRole(session.user.id, slug)`
+  // Phase G (P6.5): signature payload binds `sub` (user id) so migrated
+  // admin-write handlers can call `verifyFreshAdminRole(session.user.id, slug)`
   // without an empty-string id silently rejecting every ADMIN.
+  // Wave 1 W1b: payload also binds `role` and a leading `v2` version byte.
   const sig = createHmac('sha256', SECRET)
-    .update(`${userEmail}\n${slug}\n${userId}`)
+    .update(`v2\n${userEmail}\n${slug}\n${userId}\n${role}`)
     .digest('hex');
   return {
     'x-session-user': userEmail,
     'x-farm-slug': slug,
-    'x-session-role': 'ADMIN',
+    'x-session-role': role,
     'x-session-sub': userId,
     'x-session-sig': sig,
   };

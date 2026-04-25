@@ -31,16 +31,18 @@ vi.mock('next-auth/jwt', () => ({
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// Phase G (P6.5): the signed payload now includes the JWT `sub` so migrated
-// admin handlers receive the real user id via the synthesised session.
+// Phase G (P6.5): the signed payload includes the JWT `sub` so migrated admin
+// handlers receive the real user id via the synthesised session.
+// Wave 1 W1b: payload now also binds `role` and a leading `v2` version byte.
 function verifySig(
   userEmail: string,
   slug: string,
   sub: string,
+  role: string,
   sig: string,
 ): boolean {
   const expected = createHmac('sha256', SECRET)
-    .update(`${userEmail}\n${slug}\n${sub}`)
+    .update(`v2\n${userEmail}\n${slug}\n${sub}\n${role}`)
     .digest('hex');
   if (expected.length !== sig.length) return false;
   return timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
@@ -99,14 +101,16 @@ describe('proxy.ts — session hoist + signed header injection', () => {
 
     const user = res.headers.get('x-middleware-request-x-session-user');
     const slug = res.headers.get('x-middleware-request-x-farm-slug');
+    const role = res.headers.get('x-middleware-request-x-session-role');
     const sub = res.headers.get('x-middleware-request-x-session-sub');
     const sig = res.headers.get('x-middleware-request-x-session-sig');
 
     expect(user).toBe('user-1@example.com');
     expect(slug).toBe('trio-b-boerdery');
+    expect(role).toBe('ADMIN');
     expect(sub).toBe('user-1');
     expect(sig).toBeTruthy();
-    expect(verifySig(user!, slug!, sub!, sig!)).toBe(true);
+    expect(verifySig(user!, slug!, sub!, role!, sig!)).toBe(true);
   });
 
   it('(b) unauthenticated request gets redirected (no headers leaked)', async () => {

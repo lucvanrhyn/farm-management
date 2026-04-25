@@ -45,9 +45,10 @@ vi.mock('@/lib/auth-options', () => ({
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function sign(email: string, slug: string, sub: string): string {
+// Wave 1 W1b: HMAC payload is `v2\n<email>\n<slug>\n<sub>\n<role>`.
+function sign(email: string, slug: string, sub: string, role: string): string {
   return createHmac('sha256', SECRET)
-    .update(`${email}\n${slug}\n${sub}`)
+    .update(`v2\n${email}\n${slug}\n${sub}\n${role}`)
     .digest('hex');
 }
 
@@ -57,7 +58,7 @@ function makeReqWithSignedHeaders(opts: {
   sub: string;
   role: string;
 }): NextRequest {
-  const sig = sign(opts.email, opts.slug, opts.sub);
+  const sig = sign(opts.email, opts.slug, opts.sub, opts.role);
   const headers = new Headers();
   headers.set('x-session-user', opts.email);
   headers.set('x-farm-slug', opts.slug);
