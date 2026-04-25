@@ -57,14 +57,87 @@ function serializeError(err: Error): Record<string, unknown> {
   };
 }
 
+// ─── Recursive payload normaliser ────────────────────────────────────────────
+// Walks the value tree and converts any nested `Error` instance into a plain
+// object `{ name, message, stack, cause? }` that JSON.stringify can serialise.
+// Without this, JSON.stringify turns Error instances into `{}` — silently
+// losing message and stack in production logs exactly when they're most needed.
+//
+// Safety guarantees:
+//   • Cycle detection via WeakSet — circular refs become the string "[Circular]".
+//   • Depth cap at 10 — guards against pathological deep structures.
+//   • Primitives (string, number, boolean, null, undefined) pass through unchanged.
+
+const MAX_DEPTH = 10;
+
+function normalizeValue(
+  value: unknown,
+  seen: WeakSet<object>,
+  depth: number,
+): unknown {
+  if (depth > MAX_DEPTH) return "[MaxDepth]";
+
+  // Primitives — nothing to do.
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  // Error instances — extract serialisable fields.
+  if (value instanceof Error) {
+    const serialized: Record<string, unknown> = serializeError(value);
+    // Recursively normalise the cause chain if present.
+    const cause = (value as Error & { cause?: unknown }).cause;
+    if (cause !== undefined) {
+      serialized.cause = normalizeValue(cause, seen, depth + 1);
+    }
+    return serialized;
+  }
+
+  // Objects and arrays — both need cycle detection.
+  if (typeof value === "object") {
+    if (seen.has(value as object)) return "[Circular]";
+    seen.add(value as object);
+
+    if (Array.isArray(value)) {
+      const result = value.map((item) => normalizeValue(item, seen, depth + 1));
+      seen.delete(value as object);
+      return result;
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      result[k] = normalizeValue(v, seen, depth + 1);
+    }
+    seen.delete(value as object);
+    return result;
+  }
+
+  // Functions, symbols, bigint — coerce to string so they don't vanish.
+  return String(value);
+}
+
 function normaliseRest(rest: unknown[]): unknown {
   if (rest.length === 0) return undefined;
   if (rest.length === 1) {
     const only = rest[0];
+    // Top-level Error: preserve the existing { error: ... } wrapper shape.
     if (only instanceof Error) return { error: serializeError(only) };
+    // Records / arrays / nested structures: walk recursively so any nested
+    // Error instances survive JSON.stringify.
+    if (only !== null && typeof only === "object") {
+      return normalizeValue(only, new WeakSet(), 0);
+    }
     return only;
   }
-  return rest.map((r) => (r instanceof Error ? serializeError(r) : r));
+  return rest.map((r) =>
+    r instanceof Error ? serializeError(r) : normalizeValue(r, new WeakSet(), 0),
+  );
 }
 
 function emit(level: Level, msg: string, rest: unknown[]): void {
