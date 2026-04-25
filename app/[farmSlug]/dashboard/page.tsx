@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import DashboardClient from "@/components/dashboard/DashboardClient";
 import { getCachedDashboardData } from "@/lib/server/cached";
 

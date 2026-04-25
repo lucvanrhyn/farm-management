@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import { getPrismaForFarm } from "@/lib/farm-prisma";

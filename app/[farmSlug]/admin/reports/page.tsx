@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import ExportButton from "@/components/admin/ExportButton";
 import RotationPlanExportCard from "@/components/admin/RotationPlanExportCard";
 import CostOfGainExportCard from "@/components/admin/CostOfGainExportCard";

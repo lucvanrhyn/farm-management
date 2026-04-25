@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Phase L Wave 3E — Farm Methodology Object editor.
  *

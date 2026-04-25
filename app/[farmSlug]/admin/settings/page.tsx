@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import SettingsForm, { type FarmSettingsData } from "@/components/admin/SettingsForm";
 
