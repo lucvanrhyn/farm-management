@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { Suspense } from "react";
 import AnimalsTable from "@/components/admin/AnimalsTable";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";

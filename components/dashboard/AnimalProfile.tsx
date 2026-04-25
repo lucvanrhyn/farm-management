@@ -14,18 +14,33 @@ interface Props {
 
 export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [animal, setAnimal] = useState<PrismaAnimal | null | "loading">("loading");
-  const [observations, setObservations] = useState<PrismaObservation[]>([]);
-  const [obsLoading, setObsLoading] = useState(false);
+
+  // Combined fetch results keyed by animalId so loading state is derived in
+  // render (no synchronous setState in the effect body).
+  const [animalResult, setAnimalResult] = useState<{
+    id: string;
+    data: PrismaAnimal | null;
+  } | null>(null);
+  const [obsResult, setObsResult] = useState<{
+    id: string;
+    data: PrismaObservation[];
+  } | null>(null);
+
+  // Derived: "loading" when result is absent or was for a different animalId.
+  const animal: PrismaAnimal | null | "loading" =
+    animalResult?.id === animalId ? animalResult.data : "loading";
+  const observations: PrismaObservation[] =
+    obsResult?.id === animalId ? obsResult.data : [];
+  const obsLoading = obsResult?.id !== animalId;
 
   useEffect(() => {
     const controller = new AbortController();
-    setAnimal("loading");
+    const id = animalId;
     fetch(`/api/animals/${encodeURIComponent(animalId)}`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
-      .then((data: PrismaAnimal | null) => setAnimal(data))
+      .then((data: PrismaAnimal | null) => setAnimalResult({ id, data }))
       .catch((err: unknown) => {
-        if ((err as { name?: string }).name !== "AbortError") setAnimal(null);
+        if ((err as { name?: string }).name !== "AbortError") setAnimalResult({ id, data: null });
       });
     return () => controller.abort();
   }, [animalId]);
@@ -33,14 +48,15 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
   useEffect(() => {
     if (!animalId) return;
     const controller = new AbortController();
-    setObsLoading(true);
+    const id = animalId;
     fetch(`/api/observations?animalId=${encodeURIComponent(animalId)}&limit=100`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : [])
-      .then((data: PrismaObservation[]) => setObservations(Array.isArray(data) ? data : []))
+      .then((data: PrismaObservation[]) =>
+        setObsResult({ id, data: Array.isArray(data) ? data : [] }),
+      )
       .catch((err: unknown) => {
-        if ((err as { name?: string }).name !== "AbortError") setObservations([]);
-      })
-      .finally(() => setObsLoading(false));
+        if ((err as { name?: string }).name !== "AbortError") setObsResult({ id, data: [] });
+      });
     return () => controller.abort();
   }, [animalId]);
 

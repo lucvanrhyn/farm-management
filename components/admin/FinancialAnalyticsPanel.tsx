@@ -20,12 +20,22 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
   const effectiveFrom = rawFrom ?? "";
   const effectiveTo = rawTo ?? "";
 
-  const [data, setData] = useState<FinancialAnalyticsResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Combined fetch state keyed by request parameters — loading is derived in
+  // render from whether the result key matches, so no synchronous setState in
+  // the effect body (eliminates the lint rule cascade concern).
+  const fetchKey = `${farmSlug}|${effectiveFrom}|${effectiveTo}`;
+  const [result, setResult] = useState<{
+    key: string;
+    data: FinancialAnalyticsResult | null;
+  } | null>(null);
+
+  // Derived: loading when result is absent or for a stale key.
+  const loading = result === null || result.key !== fetchKey;
+  const data = result?.key === fetchKey ? result.data : null;
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    const key = fetchKey;
     const params = new URLSearchParams();
     if (effectiveFrom) params.set("from", effectiveFrom);
     if (effectiveTo) params.set("to", effectiveTo);
@@ -35,14 +45,17 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: FinancialAnalyticsResult | null) => {
-        if (d) setData(d);
-        setLoading(false);
+        setResult({ key, data: d });
       })
       .catch((err: unknown) => {
-        if ((err as { name?: string }).name !== "AbortError") setLoading(false);
+        if ((err as { name?: string }).name !== "AbortError") {
+          setResult({ key, data: null });
+        }
       });
     return () => controller.abort();
-  }, [farmSlug, effectiveFrom, effectiveTo]);
+    // fetchKey is a stable string derived from farmSlug + effective dates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey]);
 
   const fmt = (n: number) =>
     `R ${Math.abs(Math.round(n)).toLocaleString("en-ZA")}`;

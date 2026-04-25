@@ -75,19 +75,23 @@ const labelLayer: LayerProps = {
 };
 
 export default function TaskPinLayer({ farmSlug, camps, statusFilter }: Props) {
-  const [state, setState] = useState<FetchState<TaskPinsPayload>>({ status: "idle" });
+  const fetchUrl = statusFilter
+    ? `/api/${encodeURIComponent(farmSlug)}/map/task-pins?status=${encodeURIComponent(statusFilter)}`
+    : `/api/${encodeURIComponent(farmSlug)}/map/task-pins`;
+  const [result, setResult] = useState<{ url: string; state: FetchState<TaskPinsPayload> } | null>(null);
+
+  const state: FetchState<TaskPinsPayload> =
+    result?.url === fetchUrl ? result.state : { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    const url = statusFilter
-      ? `/api/${encodeURIComponent(farmSlug)}/map/task-pins?status=${encodeURIComponent(statusFilter)}`
-      : `/api/${encodeURIComponent(farmSlug)}/map/task-pins`;
-    fetchLayerJson<TaskPinsPayload>(url).then((result) => {
-      if (!cancelled) setState(result);
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<TaskPinsPayload>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
     });
-    return () => { cancelled = true; };
-  }, [farmSlug, statusFilter]);
+    return () => ctrl.abort();
+  }, [fetchUrl]);
 
   if (state.status !== "ready") return null;
 

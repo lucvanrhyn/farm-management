@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Phase J7a — Alert settings page.
  *

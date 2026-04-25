@@ -478,22 +478,18 @@ export default function AdminNav({
   const activeGroupLabel: string =
     groups.find((g) => g.links.some((l) => l.isActive))?.label ?? "Overview";
 
-  // Expanded-groups state. SSR-safe initial value: only the active group is
-  // open. On mount we merge in any user preference from localStorage.
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set<string>([activeGroupLabel]),
-  );
-
-  // Load persisted state on mount + re-sync whenever navigation changes the
-  // active group so a user landing mid-flow still sees their route highlighted.
-  useEffect(() => {
+  // User's collapsed/expanded preferences. Lazy initializer reads localStorage
+  // on first client render (SSR-safe — readStoredExpanded returns null on the server).
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = readStoredExpanded(farmSlug);
-    setExpanded((prev) => {
-      const next = new Set<string>(stored ?? prev);
-      next.add(activeGroupLabel); // active group always visible
-      return next;
-    });
-  }, [farmSlug, activeGroupLabel]);
+    return new Set<string>(stored ?? [activeGroupLabel]);
+  });
+
+  // Ensure the active group is always visible — derived in render, no effect needed.
+  // This avoids any synchronous setState in an effect body (lint rule violation).
+  const displayExpanded = expanded.has(activeGroupLabel)
+    ? expanded
+    : new Set([...expanded, activeGroupLabel]);
 
   // Ref mirror of the expanded set so toggleGroup can compute the next
   // value synchronously and persist to localStorage in the same tick as
@@ -581,7 +577,7 @@ export default function AdminNav({
           animate="show"
         >
           {groups.map((group) => {
-            const isOpen = expanded.has(group.label);
+            const isOpen = displayExpanded.has(group.label);
             const sectionId = `admin-nav-group-${group.label.replace(/\s+/g, "-").toLowerCase()}`;
             const isActiveGroup = group.label === activeGroupLabel;
             return (

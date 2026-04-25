@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getFarmCreds } from "@/lib/meta-db";
 import { Check, Minus } from "lucide-react";
 import type { FarmTier } from "@/lib/tier";

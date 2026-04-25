@@ -257,7 +257,7 @@ export function findLatestPriorSnapshot(
 ): BenchSnapshot | null {
   if (!existsSync(dir)) return null;
 
-  let candidates: { path: string; mtimeMs: number }[] = [];
+  const candidates: { path: string; mtimeMs: number }[] = [];
   for (const name of readdirSync(dir)) {
     if (!SNAPSHOT_EXT.test(name)) continue;
     if (TMP_EXT.test(name)) continue;

@@ -13,12 +13,22 @@ interface Props {
  * Renders an integer that counts up from 0 → value on mount.
  * Falls back to instant render if prefers-reduced-motion is set.
  */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export default function AnimatedNumber({ value, className, style, duration = 700 }: Props) {
-  const [display, setDisplay] = useState(0);
+  const reduced = prefersReducedMotion();
+  // When reduced-motion is set, render value directly — no animation state needed.
+  // When animating, track the in-progress display value via RAF callbacks (async,
+  // never from the effect body synchronously).
+  const [animatedDisplay, setAnimatedDisplay] = useState(0);
 
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) { setDisplay(value); return; }
+    if (reduced) return; // reduced-motion branch renders `value` directly
 
     let rafId: number;
     let start: number | null = null;
@@ -27,13 +37,15 @@ export default function AnimatedNumber({ value, className, style, duration = 700
       if (!start) start = ts;
       const progress = Math.min((ts - start) / duration, 1);
       const ease = 1 - Math.pow(1 - progress, 3); // cubic ease-out
-      setDisplay(Math.round(ease * value));
+      setAnimatedDisplay(Math.round(ease * value));
       if (progress < 1) rafId = requestAnimationFrame(step);
     };
 
     rafId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafId);
-  }, [value, duration]);
+  }, [value, duration, reduced]);
+
+  const display = reduced ? value : animatedDisplay;
 
   return (
     <span className={className} style={style}>
