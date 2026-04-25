@@ -46,24 +46,36 @@ vercel env add BLOB_READ_WRITE_TOKEN production --value '__REDACTED__' --yes
 vercel env add BLOB_READ_WRITE_TOKEN preview '' --value '__REDACTED__' --yes
 ```
 
-### 2b. `PAYFAST_*` (production — preview already has sandbox creds)
+### 2b. `PAYFAST_*` (production — push sandbox values temporarily)
 
-Per memory: **production is missing all four PayFast keys**, preview already
-has sandbox values. Production should remain unset until PayFast finishes
-verifying the merchant address (see `memory/payfast-pending.md`); keep this
-section parked until that gates clears, or push placeholder sandbox values
-and re-run when the prod creds arrive.
+User decision (2026-04-25, Wave 1 review): PayFast verification is approved
+but live merchant creds will be wired in only AFTER all four waves of the
+audit-repair plan ship. To unblock prod deploys in the meantime, push the
+**same sandbox values currently on preview** to production with
+`PAYFAST_SANDBOX=true`. Real flag flips to `false` and live keys land in a
+post-Wave-4 sweep.
 
-- **Source:** PayFast merchant portal → Account → Integration. Use the
-  **live** keys for production (sandbox keys belong on preview only).
+- **Source:** copy from preview (don't re-fetch from PayFast portal):
 
 ```bash
-# Run only after PayFast address verification clears.
-vercel env add PAYFAST_MERCHANT_ID production --value '__REDACTED__' --yes
-vercel env add PAYFAST_MERCHANT_KEY production --value '__REDACTED__' --yes
-vercel env add PAYFAST_PASSPHRASE production --value '__REDACTED__' --yes
-vercel env add PAYFAST_SANDBOX production --value 'false' --yes
+vercel env pull --environment=preview /tmp/preview-env-pre-w1c
+PAYFAST_MERCHANT_ID=$(grep '^PAYFAST_MERCHANT_ID=' /tmp/preview-env-pre-w1c | cut -d= -f2- | tr -d '"')
+PAYFAST_MERCHANT_KEY=$(grep '^PAYFAST_MERCHANT_KEY=' /tmp/preview-env-pre-w1c | cut -d= -f2- | tr -d '"')
+PAYFAST_PASSPHRASE=$(grep '^PAYFAST_PASSPHRASE=' /tmp/preview-env-pre-w1c | cut -d= -f2- | tr -d '"')
+
+vercel env add PAYFAST_MERCHANT_ID production --value "$PAYFAST_MERCHANT_ID" --yes
+vercel env add PAYFAST_MERCHANT_KEY production --value "$PAYFAST_MERCHANT_KEY" --yes
+vercel env add PAYFAST_PASSPHRASE production --value "$PAYFAST_PASSPHRASE" --yes
+vercel env add PAYFAST_SANDBOX production --value 'true' --yes  # NB: TRUE temporarily
+
+# After Wave 4 — replace with live merchant creds + flip sandbox to false:
+# vercel env rm PAYFAST_MERCHANT_ID production --yes
+# vercel env add PAYFAST_MERCHANT_ID production --value '<LIVE_FROM_PORTAL>' --yes
+# (repeat for KEY, PASSPHRASE, then PAYFAST_SANDBOX=false)
 ```
+
+**Update `memory/payfast-pending.md`** when the sandbox push lands and again
+when the live cutover happens.
 
 ### 2c. (Optional) sync any other drift surfaced by the diff in step 1
 
@@ -71,6 +83,63 @@ Use the bulk-copy loop from `ops-gotchas-vercel-cli.md` §"Bulk-copy loop that
 actually works" if Production has keys Preview lacks (or vice versa). Common
 candidates seen in past audits: `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`,
 `PLATFORM_ADMIN_EMAILS`, `ESKOMSEPUSH_TOKEN`. Confirm before pushing.
+
+---
+
+### 2d. Rotate Turso auth tokens for the migrated farm DB
+
+The existing `TURSO_AUTH_TOKEN` in `.env.local` was issued for the Tokyo
+host (`delta-livestock-lucvanrhyn`). It currently still authorises the
+Ireland host because Turso treats them as the same logical DB during the
+soak window — but it goes dead the moment the legacy DB is destroyed
+(`turso db destroy` on or after 2026-05-09 per
+`memory/audit-wave-plan-2026-04-25.md`). Mint fresh tokens for the
+post-cutover hosts and store them with **no expiry** per the lesson in
+`memory/ops-incidents.md`:
+
+```bash
+turso auth login   # if 'turso auth whoami' is empty
+turso db tokens create delta-livestock-dub --expiration none
+turso db tokens create acme-cattle-dub --expiration none
+
+# Push to Vercel (production + preview must match):
+vercel env add TURSO_AUTH_TOKEN production --value '<token-from-trio-b>' --yes
+vercel env add TURSO_AUTH_TOKEN preview '' --value '<token-from-trio-b>' --yes
+```
+
+Note: `TURSO_AUTH_TOKEN` is a single value because production currently
+serves a single tenant (Trio B). Once a second tenant lands on Vercel the
+correct shape is per-farm token storage in the meta DB
+(`farms.turso_auth_token`) — that wiring already exists; the env-level
+token is only the bootstrap default.
+
+### 2e. `META_TURSO_URL` — open question (NOT yet pushed)
+
+The Phase E cutover migrated **per-farm DBs only**. The meta DB itself is
+still on `farmtrack-meta-lucvanrhyn.aws-ap-northeast-1.turso.io` (Tokyo)
+according to:
+
+1. `vercel env pull --environment=preview` → returns the Tokyo host.
+2. `docs/ops/frankfurt-cutover-runbook.md` — meta DB swap is described
+   only as "export the URL so the migrate script can write to it",
+   never as "destination of the swap".
+3. `memory/workstream-perf-complete-2026-04-24.md` §"Meta DB state after
+   cutover".
+
+The user may want to migrate the meta DB to Ireland in a later cutover
+(latency consistency), but that's a separate runbook — **not** Wave 1
+work. If/when that runs:
+
+```bash
+vercel env rm META_TURSO_URL production --yes
+vercel env rm META_TURSO_URL preview --yes
+vercel env add META_TURSO_URL production --value 'libsql://farmtrack-meta-dub-lucvanrhyn.aws-eu-west-1.turso.io' --yes
+vercel env add META_TURSO_URL preview '' --value 'libsql://farmtrack-meta-dub-lucvanrhyn.aws-eu-west-1.turso.io' --yes
+# + new META_TURSO_AUTH_TOKEN minted with --expiration none against the new DB
+```
+
+The hostname above (`farmtrack-meta-dub-lucvanrhyn`) is the convention
+used for the per-farm DBs; verify against `turso db list` before pushing.
 
 ---
 
