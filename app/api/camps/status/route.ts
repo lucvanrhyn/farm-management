@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { getCachedCampConditions } from "@/lib/server/cached";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
+import { logger } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   return withServerTiming(async () => {
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json(result);
     } catch (err) {
-      console.error("[camps/status] DB error:", err);
+      logger.error('[camps/status] DB error', err);
       return NextResponse.json({ error: "Failed to load camp conditions" }, { status: 500 });
     }
   });

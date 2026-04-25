@@ -3,6 +3,8 @@
 // Extracted so every generator computes identical keys and so unit tests can
 // stub time-only math without touching Prisma.
 
+import { logger } from "@/lib/logger";
+
 export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
@@ -54,7 +56,7 @@ export function parseSpeciesThresholds(
     // Corrupt JSON is a settings bug — log once, don't throw. The generator
     // already falls back to its own defaults, so the daily run still produces
     // alerts even when the admin UI wrote bad JSON.
-    console.warn("[alerts] speciesAlertThresholds is not valid JSON");
+    logger.warn('[alerts] speciesAlertThresholds is not valid JSON');
     return {};
   }
 }

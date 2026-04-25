@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getFarmContextForSlug } from '@/lib/server/farm-context-slug'
 import { getFarmCreds } from '@/lib/meta-db'
 import { getProfitabilityByAnimal } from '@/lib/server/profitability-by-animal'
+import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,7 @@ export async function GET(
     const rows = await getProfitabilityByAnimal(ctx.prisma, dateRange)
     return NextResponse.json(rows)
   } catch (err) {
-    console.error('[profitability-by-animal] query failed', err)
+    logger.error('[profitability-by-animal] query failed', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

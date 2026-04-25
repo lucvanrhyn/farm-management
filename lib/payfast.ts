@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 const SANDBOX = process.env.PAYFAST_SANDBOX === 'true';
 
@@ -82,7 +83,7 @@ export async function validateITN(params: PayFastParams): Promise<boolean> {
     const text = await res.text();
     return text.trim() === 'VALID';
   } catch (err) {
-    console.error('[payfast] ITN validation request failed:', err);
+    logger.error('[payfast] ITN validation request failed', err);
     return false;
   }
 }

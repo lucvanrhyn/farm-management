@@ -21,6 +21,7 @@ export default function OnboardingError({
   reset: () => void;
 }) {
   useEffect(() => {
+    // intentional console: client-side error boundary, no logger sink in browser.
     console.warn("[onboarding] boundary caught:", error);
   }, [error]);
 

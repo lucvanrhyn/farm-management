@@ -15,6 +15,7 @@ import {
   type AlertThresholds,
   type DashboardAlert,
 } from "@/lib/server/dashboard-alerts";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_THRESHOLDS: AlertThresholds = {
   adgPoorDoerThreshold: 0.7,
@@ -101,10 +102,9 @@ export async function evaluate(
     // Dashboard alerts has its own internal .catch(() => []) on most sub-queries,
     // so reaching this branch is rare. Log and return [] rather than block the
     // whole evaluation pipeline.
-    console.warn(
-      "[alerts:legacy-dashboard] getDashboardAlerts failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logger.warn('[alerts:legacy-dashboard] getDashboardAlerts failed', {
+      err: err instanceof Error ? err.message : String(err),
+    });
     return [];
   }
   return [...bundle.red, ...bundle.amber].map((a) => toAlertCandidate(a, now));

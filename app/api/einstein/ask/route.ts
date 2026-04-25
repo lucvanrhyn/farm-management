@@ -22,6 +22,7 @@ import { authOptions } from '@/lib/auth-options';
 import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
+import { logger } from '@/lib/logger';
 import {
   assertWithinBudget,
   stampCostBeforeSend,
@@ -308,8 +309,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       } finally {
         // Best-effort RagQueryLog row. Never let logging throw into the stream.
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (prisma as any).ragQueryLog.create({
+          await prisma.ragQueryLog.create({
             data: {
               userId: session.user?.id ?? 'unknown',
               assistantName,
@@ -328,10 +328,9 @@ export async function POST(req: NextRequest): Promise<Response> {
             },
           });
         } catch (logErr) {
-          console.warn(
-            '[einstein/ask] failed to persist RagQueryLog',
-            logErr instanceof Error ? logErr.message : String(logErr),
-          );
+          logger.warn('[einstein/ask] failed to persist RagQueryLog', {
+            err: logErr instanceof Error ? logErr.message : String(logErr),
+          });
         }
         controller.close();
       }
