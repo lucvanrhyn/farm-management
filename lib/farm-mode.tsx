@@ -92,14 +92,41 @@ export function FarmModeProvider({
     return stored && enabledModes.includes(stored) ? stored : enabledModes[0];
   });
 
+  // Track the farmSlug this provider's `rawMode` was last seeded for. When
+  // Next App Router navigates to a different farm the params change but the
+  // client provider stays mounted (it lives above the [farmSlug] layout
+  // boundary). Without this re-seed, `rawMode` would still reflect the
+  // PREVIOUS farm's choice and the cookie-write effect below would overwrite
+  // the new farm's stored mode — leaking species filtering across tenants
+  // (the original Bug 3 species-leak).
+  //
+  // The React-blessed "adjusting state on prop change" pattern stores the
+  // previous prop in `useState` and compares during render
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // Reading state during render is fine; the React-Compiler ESLint rule that
+  // forbids ref mutation during render does NOT flag this approach.
+  const [lastFarmSlug, setLastFarmSlug] = useState(farmSlug);
+  if (lastFarmSlug !== farmSlug) {
+    const stored = getStoredMode(farmSlug);
+    const next =
+      stored && enabledModes.includes(stored) ? stored : enabledModes[0];
+    setLastFarmSlug(farmSlug);
+    setModeState(next);
+  }
+
   // Clamp mode in render if enabledModes changed and the stored choice is now
   // invalid — purely derived, no effect needed.
   const mode: FarmMode = enabledModes.includes(rawMode) ? rawMode : enabledModes[0];
 
   // Sync cookie on mount and whenever farmSlug/mode changes. No setState here.
+  // The dependency on `lastFarmSlug` (which is updated synchronously alongside
+  // setModeState above) guarantees the effect only fires after the re-seed
+  // commit, never on the discarded render where `mode` would still be the
+  // pre-reset value.
   useEffect(() => {
+    if (lastFarmSlug !== farmSlug) return;
     setStoredMode(farmSlug, mode);
-  }, [farmSlug, mode]);
+  }, [farmSlug, mode, lastFarmSlug]);
 
   // Persist mode changes to localStorage
   const setMode = useCallback(

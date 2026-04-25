@@ -23,7 +23,7 @@ type Props = {
 export function FileDropzone({
   onFile,
   isLoading = false,
-  accept = ".xlsx,.xls,.csv",
+  accept = ".xlsx",
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -200,7 +200,7 @@ export function FileDropzone({
               <span aria-hidden="true">·</span>
               <span className="inline-flex items-center gap-1.5">
                 <FileSpreadsheet size={12} strokeWidth={1.8} />
-                .xlsx, .xls, .csv
+                .xlsx
               </span>
             </div>
           </>
