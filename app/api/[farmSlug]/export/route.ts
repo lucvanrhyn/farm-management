@@ -18,6 +18,7 @@ import {
   type ExportFormat,
   type ExportType,
 } from "@/lib/server/export";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ export async function GET(
     if (err instanceof ExportRequestError) {
       return new Response(JSON.stringify({ error: err.message }), { status: err.status });
     }
-    console.error("[export] Error generating export:", err);
+    logger.error('[export] Error generating export', err);
     return new Response(JSON.stringify({ error: "Export failed" }), { status: 500 });
   }
 }

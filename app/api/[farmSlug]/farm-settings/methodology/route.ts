@@ -28,6 +28,7 @@ import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, type FarmTier } from "@/lib/tier";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 import {
   mergeAiSettings,
   parseAiSettings,
@@ -183,10 +184,7 @@ export async function PUT(
       methodology: validation.value,
     });
   } catch (err) {
-    console.error(
-      `[farm-settings/methodology] save failed for "${farmSlug}":`,
-      err,
-    );
+    logger.error('[farm-settings/methodology] save failed', { farmSlug, err });
     return asErr(
       "METHODOLOGY_SAVE_FAILED",
       "Could not save methodology — please try again",

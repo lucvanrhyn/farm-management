@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { getFarmContext } from '@/lib/server/farm-context';
+import { logger } from '@/lib/logger';
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
 
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.error('[photos/upload] BLOB_READ_WRITE_TOKEN is not configured');
+    logger.error('[photos/upload] BLOB_READ_WRITE_TOKEN is not configured');
     return NextResponse.json(
       { error: 'Photo uploads are not configured. Please contact your administrator.' },
       { status: 503 },
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     const blob = await put(`farm-photos/${slug}/${Date.now()}-${safeName}`, file, { access: 'public' });
     return NextResponse.json({ url: blob.url });
   } catch (err) {
-    console.error('[photos/upload] Blob upload failed:', err);
+    logger.error('[photos/upload] Blob upload failed', err);
     return NextResponse.json({ error: 'Photo upload failed. Please try again.' }, { status: 500 });
   }
 }

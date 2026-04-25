@@ -4,6 +4,7 @@ import { compareSync } from 'bcryptjs';
 import { getUserByIdentifier, getFarmsForUser, isEmailVerified } from './meta-db';
 import { checkRateLimit } from './rate-limit';
 import { AUTH_ERROR_CODES } from './auth-errors';
+import { logger } from './logger';
 import type { SessionFarm } from '../types/next-auth';
 
 // Re-export the client-safe codes so tests + docs can keep importing from
@@ -37,7 +38,7 @@ export const authOptions: NextAuthOptions = {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const stack = err instanceof Error ? (err.stack ?? '') : '';
-          console.error('[authorize] meta DB error:', message, stack);
+          logger.error('[authorize] meta DB error', { message, stack });
 
           // A thrown "must be set in environment variables" error originates
           // from meta-db.getMetaClient() — treat as a preview/env misconfig
@@ -67,7 +68,7 @@ export const authOptions: NextAuthOptions = {
             verified = await isEmailVerified(user.id);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            console.error('[authorize] email verification check failed:', message);
+            logger.error('[authorize] email verification check failed', { message });
             throw new Error(AUTH_ERROR_CODES.DB_UNAVAILABLE);
           }
           if (!verified) {
@@ -137,7 +138,7 @@ export const authOptions: NextAuthOptions = {
             'LOGGER',
           );
         } catch (err) {
-          console.error('[jwt] failed to refresh farms on update trigger:', err);
+          logger.error('[jwt] failed to refresh farms on update trigger', err);
         }
       }
       return token;

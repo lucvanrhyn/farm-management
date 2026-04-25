@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFarmContext } from '@/lib/server/farm-context';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
+import { logger } from '@/lib/logger';
 
 export async function PATCH(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function PATCH(
     revalidateObservationWrite(slug);
     return NextResponse.json({ success: true, attachmentUrl: updated.attachmentUrl });
   } catch (err) {
-    console.error('[observations/attachment PATCH] DB error:', err);
+    logger.error('[observations/attachment PATCH] DB error', err);
     return NextResponse.json({ error: 'Failed to update attachment' }, { status: 500 });
   }
 }

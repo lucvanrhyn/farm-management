@@ -8,6 +8,7 @@
 // We just count events per day for the last 14 days and apply stats.
 
 import type { PrismaClient, FarmSettings } from "@prisma/client";
+import { logger } from "@/lib/logger";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoDate } from "./helpers";
 
@@ -58,7 +59,7 @@ export async function evaluate(
   } catch (err) {
     // GamePredationEvent may be missing on legacy tenants — skip the game source
     // gracefully but warn with context so ops can tell "no events" from "no table".
-    console.warn(`[alerts:PREDATOR_SPIKE] GamePredationEvent query failed — skipping game source`, {
+    logger.warn('[alerts:PREDATOR_SPIKE] GamePredationEvent query failed — skipping game source', {
       err: err instanceof Error ? err.message : String(err),
     });
     gameRows = [];

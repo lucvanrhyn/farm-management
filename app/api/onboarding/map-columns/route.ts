@@ -7,6 +7,7 @@ import {
   AdaptiveImportError,
   type ProposeMappingInput,
 } from "@/lib/onboarding/adaptive-import";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/onboarding/map-columns
@@ -102,13 +103,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     if (err instanceof AdaptiveImportError) {
       // Upstream / parse failure — safe to surface a pointer, but not details.
-      console.error("[map-columns] AdaptiveImportError", err.message);
+      logger.error('[map-columns] AdaptiveImportError', { message: err.message });
       return NextResponse.json(
         { error: "AI import service is currently unavailable." },
         { status: 502 }
       );
     }
-    console.error("[map-columns] unexpected error", err);
+    logger.error('[map-columns] unexpected error', err);
     return NextResponse.json(
       { error: "Internal server error." },
       { status: 500 }

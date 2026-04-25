@@ -4,6 +4,10 @@
  * Persists partial OnboardingState between page navigations within a single
  * browser tab. All helpers no-op safely during SSR (no window) and in
  * private-mode browsers where sessionStorage throws.
+ *
+ * All `console.*` calls in this file are intentional: this module only runs
+ * in the client (sessionStorage is browser-only), where the structured
+ * `@/lib/logger` has no useful sink.
  */
 
 import type { OnboardingState } from "@/lib/onboarding/client-types";

@@ -137,6 +137,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       await refreshHeroImage();
       setSyncStatus('idle');
     } catch (err) {
+      // intentional console: client-side OfflineProvider, no logger sink in browser.
       console.error('refreshData error:', err);
       setSyncStatus('error');
     }

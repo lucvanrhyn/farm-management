@@ -1,3 +1,10 @@
+// lib/sync-manager.ts
+//
+// Browser-only IndexedDB sync manager. All `console.*` calls in this
+// file are intentional: this module only runs in the client (the
+// service worker / `OfflineProvider` invokes it), where the structured
+// `@/lib/logger` has no useful sink. Vercel-side logging is irrelevant
+// for a browser-tab failure.
 import {
   seedCamps,
   seedAnimals,

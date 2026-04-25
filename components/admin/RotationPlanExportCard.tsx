@@ -29,6 +29,7 @@ export default function RotationPlanExportCard({ farmSlug }: Props) {
           if (visible.length > 0) setSelectedPlanId(visible[0].id);
         }
       })
+      // intentional console: client-side fetch, no logger sink in browser.
       .catch((err) => { if (err?.name !== "AbortError") console.error("[RotationPlanExportCard] fetch failed:", err); })
       .finally(() => setLoading(false));
     return () => controller.abort();

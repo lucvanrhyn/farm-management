@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -219,7 +220,7 @@ export async function DELETE(
   try {
     await prisma.budget.delete({ where: { id } });
   } catch (err) {
-    console.error("[budgets DELETE] DB error:", err);
+    logger.error('[budgets DELETE] DB error', err);
     return NextResponse.json({ error: "Failed to delete budget record" }, { status: 500 });
   }
 

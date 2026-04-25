@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 
 export async function DELETE(
   request: NextRequest,
@@ -29,7 +30,7 @@ export async function DELETE(
     revalidateObservationWrite(slug);
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[observations DELETE] DB error:", err);
+    logger.error('[observations DELETE] DB error', err);
     return NextResponse.json({ error: "Failed to delete observation" }, { status: 500 });
   }
 }
@@ -88,7 +89,7 @@ export async function PATCH(
     revalidateObservationWrite(slug);
     return NextResponse.json(updated);
   } catch (err) {
-    console.error("[observations PATCH] DB error:", err);
+    logger.error('[observations PATCH] DB error', err);
     return NextResponse.json({ error: "Failed to update observation" }, { status: 500 });
   }
 }

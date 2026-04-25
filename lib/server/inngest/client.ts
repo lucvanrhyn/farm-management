@@ -10,6 +10,7 @@
 // OK in local dev (the SDK targets the Inngest dev server at 127.0.0.1:8288).
 
 import { Inngest } from "inngest";
+import { logger } from "@/lib/logger";
 
 // In production, Inngest's cloud mode requires INNGEST_EVENT_KEY (to send events)
 // and INNGEST_SIGNING_KEY (to verify signed webhooks). The SDK only throws when
@@ -17,10 +18,10 @@ import { Inngest } from "inngest";
 // deploy surfaces immediately instead of at the first cron fire.
 if (process.env.NODE_ENV === "production") {
   if (!process.env.INNGEST_EVENT_KEY) {
-    console.error("[inngest] INNGEST_EVENT_KEY is not set — cloud event sends will fail");
+    logger.error('[inngest] INNGEST_EVENT_KEY is not set — cloud event sends will fail');
   }
   if (!process.env.INNGEST_SIGNING_KEY) {
-    console.error("[inngest] INNGEST_SIGNING_KEY is not set — /api/inngest cannot verify signed webhooks");
+    logger.error('[inngest] INNGEST_SIGNING_KEY is not set — /api/inngest cannot verify signed webhooks');
   }
 }
 

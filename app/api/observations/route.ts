@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 // Allowlist of valid observation type strings to prevent arbitrary type injection
 const VALID_OBSERVATION_TYPES = new Set([
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(observations);
   } catch (err) {
-    console.error("[observations GET] DB error:", err);
+    logger.error('[observations GET] DB error', err);
     return NextResponse.json({ error: "Failed to fetch observations" }, { status: 500 });
   }
 }
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
     revalidateObservationWrite(slug);
     return NextResponse.json({ success: true, id: record.id });
   } catch (err) {
-    console.error("[observations] DB error:", err);
+    logger.error('[observations] DB error', err);
     return NextResponse.json({ error: "Failed to save observation" }, { status: 500 });
   }
 }

@@ -6,6 +6,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
 import { recordTiming, getTimingBag } from "@/lib/server/server-timing";
 import { recordFarmDbRegion } from "@/lib/server/region-timing";
+import { logger } from "@/lib/logger";
 import type { Session } from "next-auth";
 import type { SessionFarm } from "@/types/next-auth";
 
@@ -126,9 +127,7 @@ export async function withFarmPrisma<T>(
     return await fn(client);
   } catch (err) {
     if (!isTokenExpiredError(err)) throw err;
-    console.warn(
-      `[farm-prisma] auth error for "${slug}" — evicting client + creds and retrying once`,
-    );
+    logger.warn('[farm-prisma] auth error — evicting client + creds and retrying once', { slug });
     evictFarmClient(slug);
     evictFarmCreds(slug);
     const fresh = await createFarmClient(slug);

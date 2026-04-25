@@ -23,6 +23,7 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -460,8 +461,7 @@ export async function commitImport(
   } catch (err) {
     // Inserts are already committed. Log and move on so the HTTP layer can
     // still report success to the user.
-    // eslint-disable-next-line no-console
-    console.error("commitImport: failed to update ImportJob", {
+    logger.error("commitImport: failed to update ImportJob", {
       importJobId,
       inserted,
       skipped,
@@ -492,8 +492,7 @@ export async function commitImport(
       // flip for this session. Farmer will re-hit /onboarding, see the
       // "empty farm guard" detect animals > 0, and be redirected to /admin
       // anyway (see app/[farmSlug]/onboarding/layout.tsx).
-      // eslint-disable-next-line no-console
-      console.error("commitImport: failed to flip FarmSettings.onboardingComplete", {
+      logger.error("commitImport: failed to flip FarmSettings.onboardingComplete", {
         error: err instanceof Error ? err.message : err,
       });
     }

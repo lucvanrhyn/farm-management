@@ -9,6 +9,7 @@ import {
   setVerificationToken,
 } from './meta-db';
 import { generateVerificationToken, sendVerificationEmail } from './email-verification';
+import { logger } from './logger';
 
 export interface ProvisionFarmInput {
   name: string;
@@ -73,7 +74,7 @@ export async function provisionFarm(input: ProvisionFarmInput): Promise<Provisio
     try {
       await deleteTursoDatabase(dbName);
     } catch {
-      console.error(`[provisioning] Failed to cleanup Turso DB '${dbName}' after error`);
+      logger.error('[provisioning] Failed to cleanup Turso DB after error', { dbName });
     }
     throw error;
   }
