@@ -93,6 +93,7 @@ export interface HeadcountByCamp {
 }
 
 export async function getHeadcountByCamp(prisma: PrismaClient): Promise<HeadcountByCamp[]> {
+  // cross-species by design: headcount is grouped by species explicitly.
   const rows = await prisma.animal.groupBy({
     by: ["currentCamp", "species", "category"],
     where: { status: "Active" },
@@ -204,6 +205,7 @@ export async function getDeathsAndSales(prisma: PrismaClient, months = 12): Prom
     select: { observedAt: true },
   });
 
+  // cross-species by design: deaths/sales trend is farm-wide.
   const soldAnimals = await prisma.animal.findMany({
     where: { status: "Sold" },
     select: { dateAdded: true },

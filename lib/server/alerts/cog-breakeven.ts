@@ -53,6 +53,8 @@ export async function evaluate(
     return [];
   }
 
+  // cross-species by design: alert fires per-animal using a per-species
+  // marketByS lookup; the loop below keys on `a.species` row-by-row.
   const animals = (await prisma.animal.findMany({
     where: { status: "Active" },
     select: { id: true, animalId: true, species: true },

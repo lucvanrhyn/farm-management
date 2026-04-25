@@ -230,6 +230,7 @@ export default async function OnboardingLayout({
   }
 
   // 3. Empty-farm guard.
+  // cross-species by design: onboarding wizard is "first animal of any kind"
   const animalCount = await prisma.animal.count();
   if (animalCount > 0) {
     redirect(`/${farmSlug}/admin`);

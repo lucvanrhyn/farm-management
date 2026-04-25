@@ -268,6 +268,7 @@ export async function findStaleEntities(
       // bare IDs. See chunker comment on Wave 2A field-mismatch postmortem.
       const [rows, animals, camps] = await Promise.all([
         prisma.observation.findMany({}),
+        // cross-species by design: RAG embeddings cover every animal entity.
         prisma.animal.findMany({
           select: { animalId: true, name: true, species: true, breed: true },
         }),
@@ -295,6 +296,7 @@ export async function findStaleEntities(
     }
     case "animal": {
       // Denormalise current-camp name for readable chunk text.
+      // cross-species by design: RAG embeddings cover every animal.
       const [rows, camps] = await Promise.all([
         prisma.animal.findMany({}),
         prisma.camp.findMany({ select: { campId: true, campName: true } }),

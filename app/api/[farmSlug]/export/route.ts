@@ -116,6 +116,9 @@ export async function GET(
 
   try {
     if (type === "animals") {
+      // cross-species by design: legacy bulk-animal export ships every species
+      // (route does not receive a species filter). Phase G follow-up may add a
+      // `?species=` parameter to align with the species-scoped admin pages.
       const animals = await prisma.animal.findMany({
         where: { status: "Active" },
         orderBy: { animalId: "asc" },
@@ -353,6 +356,7 @@ export async function GET(
 
       // Build a map of animalId → name + camp for enrichment
       const animalIds = [...new Set(obs.map((o) => o.animalId).filter(Boolean))] as string[];
+      // cross-species by design: weight-history rows are looked up by id only.
       const animals = animalIds.length > 0
         ? await prisma.animal.findMany({
             where: { id: { in: animalIds } },
@@ -459,6 +463,7 @@ export async function GET(
 
     if (type === "performance") {
       const camps = await prisma.camp.findMany();
+      // cross-species by design: performance export uses merged-LSU values.
       const animalsByCamp = await prisma.animal.groupBy({
         by: ["currentCamp", "category"],
         where: { status: "Active" },

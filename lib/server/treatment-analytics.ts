@@ -60,6 +60,7 @@ export async function getAnimalsInWithdrawal(
   // Get unique animal IDs and look up only active animals
   const animalIds = [...new Set(treatmentObs.map((o) => o.animalId as string))];
 
+  // cross-species by design: withdrawal periods apply to any treated species.
   const activeAnimals = await prisma.animal.findMany({
     where: {
       animalId: { in: animalIds },

@@ -34,7 +34,8 @@ export async function GET(
     latestInspection,
     latestCondition,
   ] = await Promise.all([
-    // Active animals in this camp
+    // Active animals in this camp.
+    // cross-species by design: physical camp stats roll up every species.
     prisma.animal.findMany({
       where: { currentCamp: campId, status: "Active" },
       select: { category: true },

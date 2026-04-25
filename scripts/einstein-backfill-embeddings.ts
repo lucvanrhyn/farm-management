@@ -109,6 +109,7 @@ async function loadSourceRows(
       // animalId cuid strings — useless for natural-language queries.
       const [rows, animals, camps] = await Promise.all([
         prisma.observation.findMany({}),
+        // cross-species by design: backfill embeddings cover every animal.
         prisma.animal.findMany({
           select: { animalId: true, name: true, species: true, breed: true },
         }),
@@ -135,6 +136,7 @@ async function loadSourceRows(
     case 'animal': {
       // Denormalise current-camp name so chunk text reads "currently camp
       // 'North Pasture'" instead of "currently camp <campId>".
+      // cross-species by design: backfill embeddings cover every animal.
       const [rows, camps] = await Promise.all([
         prisma.animal.findMany({}),
         prisma.camp.findMany({ select: { campId: true, campName: true } }),

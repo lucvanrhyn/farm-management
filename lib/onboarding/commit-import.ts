@@ -351,6 +351,7 @@ export async function commitImport(
 
   let existingByTag = new Map<string, string>();
   if (parentTags.size > 0) {
+    // cross-species by design: ear-tag uniqueness is farm-wide, not per-species.
     const existing = await prisma.animal.findMany({
       where: { animalId: { in: Array.from(parentTags) } },
       select: { animalId: true },
