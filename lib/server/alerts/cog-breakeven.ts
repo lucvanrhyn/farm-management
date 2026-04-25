@@ -11,6 +11,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { parseSpeciesThresholds } from "./helpers";
+import { logger } from "@/lib/logger";
 
 const BREAKEVEN_FRACTION = 0.85;
 
@@ -49,7 +50,7 @@ export async function evaluate(
     }
   }
   if (Object.keys(marketByS).length === 0) {
-    console.warn("[alerts:COG_EXCEEDS_BREAKEVEN] no market prices configured — skipping");
+    logger.warn('[alerts:COG_EXCEEDS_BREAKEVEN] no market prices configured — skipping');
     return [];
   }
 

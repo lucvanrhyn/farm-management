@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
-import { getPrismaWithAuth } from '@/lib/farm-prisma';
+import { getFarmContext } from '@/lib/server/farm-context';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
+import { logger } from '@/lib/logger';
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = await getPrismaWithAuth(session);
-  if ('error' in db) return NextResponse.json({ error: db.error }, { status: db.status });
-  const { prisma } = db;
+  const ctx = await getFarmContext(request);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { prisma, slug } = ctx;
 
   const { id } = await params;
   const body = await request.json();
@@ -36,10 +30,10 @@ export async function PATCH(
       data: { attachmentUrl },
     });
 
-    revalidateObservationWrite(db.slug);
+    revalidateObservationWrite(slug);
     return NextResponse.json({ success: true, attachmentUrl: updated.attachmentUrl });
   } catch (err) {
-    console.error('[observations/attachment PATCH] DB error:', err);
+    logger.error('[observations/attachment PATCH] DB error', err);
     return NextResponse.json({ error: 'Failed to update attachment' }, { status: 500 });
   }
 }

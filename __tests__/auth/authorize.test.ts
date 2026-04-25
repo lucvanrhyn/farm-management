@@ -122,10 +122,16 @@ describe('authorize (auth-options.ts)', () => {
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
       AUTH_ERROR_CODES.DB_UNAVAILABLE,
     );
+    // Wave 4 G.4: lib/auth-options now logs through @/lib/logger which emits
+    // `console.error(message, { message, stack })` in dev. We assert the
+    // prefix is in the message and the underlying error message + stack
+    // are surfaced through the structured payload.
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('[authorize]'),
-      expect.stringContaining('WebSocket connection failed: ECONNREFUSED'),
-      expect.any(String),
+      expect.objectContaining({
+        message: expect.stringContaining('WebSocket connection failed: ECONNREFUSED'),
+        stack: expect.any(String),
+      }),
     );
     spy.mockRestore();
   });

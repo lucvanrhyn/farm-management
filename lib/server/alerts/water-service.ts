@@ -6,6 +6,7 @@
 import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, diffDays, toIsoDate, toIsoWeek } from "./helpers";
+import { logger } from "@/lib/logger";
 
 const STALE_DAYS = 30;
 
@@ -31,10 +32,9 @@ export async function evaluate(
     // No module-level dedup: each tenant logs its own warning once per cron cycle,
     // which is the correct granularity (prior module-scoped flag suppressed
     // warnings for all subsequent tenants in the same Node process).
-    console.warn(
-      `[alerts:WATER_SERVICE_OVERDUE_30D] missing table on tenant — skipping`,
-      { err: err instanceof Error ? err.message : String(err) },
-    );
+    logger.warn('[alerts:WATER_SERVICE_OVERDUE_30D] missing table on tenant — skipping', {
+      err: err instanceof Error ? err.message : String(err),
+    });
     return [];
   }
   if (points.length === 0) return [];

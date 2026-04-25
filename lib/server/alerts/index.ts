@@ -20,6 +20,7 @@ import { evaluate as taxDeadline } from "./tax-deadline";
 import { evaluate as spiDrought } from "./spi-drought";
 import { evaluate as lsuOverstock } from "./lsu-overstock";
 import { evaluate as legacyDashboard } from "./legacy-dashboard";
+import { logger } from "@/lib/logger";
 
 interface NamedGenerator {
   name: string;
@@ -57,10 +58,11 @@ export async function evaluateAllAlerts(
     if (r.status === "fulfilled") {
       out.push(...r.value);
     } else {
-      console.warn(
-        `[alerts] generator "${GENERATORS[i].name}" failed for tenant "${farmSlug}":`,
-        r.reason instanceof Error ? r.reason.message : String(r.reason),
-      );
+      logger.warn('[alerts] generator failed', {
+        generator: GENERATORS[i].name,
+        tenant: farmSlug,
+        reason: r.reason instanceof Error ? r.reason.message : String(r.reason),
+      });
     }
   }
   return out;

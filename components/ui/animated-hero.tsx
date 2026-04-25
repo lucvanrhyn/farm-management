@@ -69,6 +69,7 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
           if (data.heroImageUrl) onHeroImageLoad?.(data.heroImageUrl);
         }
       })
+      // intentional console: client-side fetch, no logger sink in browser.
       .catch((err) => { if (err?.name !== "AbortError") console.error("[animated-hero] fetch failed:", err); });
     return () => {
       clearInterval(interval);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAlertWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -149,7 +150,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[rainfall DELETE]", message, err instanceof Error ? err.stack : "");
+    logger.error('[rainfall DELETE]', { message, stack: err instanceof Error ? err.stack : '' });
     return NextResponse.json(
       { error: "Could not delete rainfall record" },
       { status: 500 },

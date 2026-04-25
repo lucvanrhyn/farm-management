@@ -24,6 +24,7 @@ import type { PrismaClient, FarmSettings, Notification } from "@prisma/client";
 import { sendPushToFarm } from "@/lib/server/push-sender";
 import { PREDATOR_SPIKE_TYPE } from "./predator-spike";
 import { sendDailyDigest } from "./digest-email";
+import { logger } from "@/lib/logger";
 
 export interface DispatchResult {
   pushed: number;
@@ -123,11 +124,10 @@ export async function dispatchChannels(
       await sendPushToFarm(prisma, { title, body, href: pushable[0].href });
       result.pushed = pushable.length;
     } catch (err) {
-      console.warn(
-        "[dispatch] push failed for",
+      logger.warn('[dispatch] push failed', {
         farmSlug,
-        err instanceof Error ? err.message : String(err),
-      );
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

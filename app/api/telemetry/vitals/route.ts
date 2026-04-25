@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMetaClient } from "@/lib/meta-db";
+import { logger } from "@/lib/logger";
 
 // Allowlist matches the web-vitals library's metric names. Any other
 // value is rejected — prevents arbitrary keys from polluting the table.
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       args: [id, name, value, rating, safeDelta, safeNav, safeRoute, ua],
     });
   } catch (err) {
-    console.warn("[telemetry/vitals] write failed:", err);
+    logger.warn('[telemetry/vitals] write failed', err);
   }
 
   return NextResponse.json({ ok: true }, { status: 202 });

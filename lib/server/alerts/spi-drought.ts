@@ -9,6 +9,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { getDroughtPayload } from "@/lib/server/drought";
+import { logger } from "@/lib/logger";
 
 export async function evaluate(
   prisma: PrismaClient,
@@ -22,10 +23,9 @@ export async function evaluate(
   try {
     payload = await getDroughtPayload(prisma, settings.latitude, settings.longitude);
   } catch (err) {
-    console.warn(
-      "[alerts:SPI_DROUGHT] drought payload fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logger.warn('[alerts:SPI_DROUGHT] drought payload fetch failed', {
+      err: err instanceof Error ? err.message : String(err),
+    });
     return [];
   }
 

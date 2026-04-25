@@ -5,6 +5,7 @@ import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
+import { logger } from "@/lib/logger";
 
 export default async function GameLayout({
   children,
@@ -24,7 +25,7 @@ export default async function GameLayout({
     const creds = await getFarmCreds(farmSlug);
     tier = (creds?.tier ?? "basic") as FarmTier;
   } catch (err) {
-    console.error(`[GameLayout] getFarmCreds failed for "${farmSlug}":`, err);
+    logger.error('[GameLayout] getFarmCreds failed', { farmSlug, err });
     return (
       <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
         <div className="text-center max-w-md px-4">

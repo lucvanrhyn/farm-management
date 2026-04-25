@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { getCachedFarmSummary } from "@/lib/server/cached";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   return withServerTiming(async () => {
@@ -17,7 +18,7 @@ export async function GET() {
       return NextResponse.json(summary);
     } catch (err) {
       const e = err as Record<string, unknown>;
-      console.error("[GET /api/farm] query failed:", {
+      logger.error('[GET /api/farm] query failed', {
         message: e?.message,
         code: e?.code,
       });

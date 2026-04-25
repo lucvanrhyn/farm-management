@@ -6,6 +6,7 @@ import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { voidIt3Snapshot } from "@/lib/server/sars-it3";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export async function POST(
     try {
       body = (await req.json()) as { reason?: string };
     } catch (err) {
-      console.error("[it3 void] malformed request body:", err);
+      logger.error('[it3 void] malformed request body', err);
       return NextResponse.json(
         { error: "Request body must be valid JSON" },
         { status: 400 },

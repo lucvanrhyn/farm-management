@@ -14,6 +14,7 @@
 import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { addDays, defaultExpiry, diffDays, toIsoWeek } from "./helpers";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_GESTATION_DAYS = 147;
 const LEAD_DAYS = 7;
@@ -34,7 +35,7 @@ function parsePregnant(details: string): boolean {
   } catch (err) {
     // Malformed details JSON on a single pregnancy_scan row — treat as "not pregnant"
     // so the alert doesn't fire, and log so the data-quality issue is visible.
-    console.warn(`[alerts:LAMBING_DUE_7D] malformed pregnancy_scan details — treating as not pregnant`, {
+    logger.warn('[alerts:LAMBING_DUE_7D] malformed pregnancy_scan details — treating as not pregnant', {
       err: err instanceof Error ? err.message : String(err),
     });
     return false;

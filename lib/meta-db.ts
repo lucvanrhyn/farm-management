@@ -1,4 +1,5 @@
 import { createClient, type Client } from '@libsql/client';
+import { logger } from '@/lib/logger';
 
 let _client: Client | null = null;
 let hasWarnedAboutPlatformAdminFallback = false;
@@ -70,7 +71,7 @@ export async function withMetaDb<T>(fn: (client: Client) => Promise<T>): Promise
     return await fn(getMetaClient());
   } catch (err) {
     if (!isMetaAuthError(err)) throw err;
-    console.warn('[meta-db] auth error — evicting client and retrying once');
+    logger.warn('[meta-db] auth error — evicting client and retrying once');
     evictMetaClient();
     return await fn(getMetaClient());
   }
@@ -624,7 +625,7 @@ export async function isPlatformAdmin(email: string): Promise<boolean> {
   // Fallback — legacy farm-ADMIN check. Log once per process.
   if (!hasWarnedAboutPlatformAdminFallback) {
     hasWarnedAboutPlatformAdminFallback = true;
-    console.warn(
+    logger.warn(
       '[meta-db] PLATFORM_ADMIN_EMAILS not set — falling back to farm-ADMIN check. Set the env var for production.',
     );
   }

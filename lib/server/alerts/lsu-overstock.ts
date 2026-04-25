@@ -10,6 +10,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { getMergedLsuValues } from "@/lib/species/registry";
+import { logger } from "@/lib/logger";
 
 const OVERSTOCK_MULTIPLIER = 1.1;
 
@@ -54,7 +55,7 @@ export async function evaluate(
          ORDER BY assessmentDate DESC LIMIT 1
        )`,
     ).catch((err) => {
-      console.warn(`[alerts:LSU_OVERSTOCK] veld assessment query failed — falling back to defaults`, {
+      logger.warn('[alerts:LSU_OVERSTOCK] veld assessment query failed — falling back to defaults', {
         err: err instanceof Error ? err.message : String(err),
       });
       return [];

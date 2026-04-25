@@ -59,6 +59,7 @@ export default function RegisterPage() {
         setSuccess(true);
       }
     } catch (err) {
+      // intentional console: client-side form submit error, no logger sink in browser.
       console.error("[register] submit failed:", err);
       setError("Network error. Check your connection.");
     } finally {

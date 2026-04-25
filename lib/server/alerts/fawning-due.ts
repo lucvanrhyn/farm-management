@@ -17,6 +17,7 @@ import {
   type GestationBreed,
   type GestationEntry,
 } from "@/lib/species/gestation";
+import { logger } from "@/lib/logger";
 
 const FAWNING_WINDOW_DAYS = 14;
 
@@ -64,7 +65,7 @@ export async function evaluate(
       select: { id: true, commonName: true, lastCensusDate: true, gestationDays: true },
     });
   } catch (err) {
-    console.warn(`[alerts:FAWNING_DUE] GameSpecies query failed — skipping tenant`, {
+    logger.warn('[alerts:FAWNING_DUE] GameSpecies query failed — skipping tenant', {
       err: err instanceof Error ? err.message : String(err),
     });
     return [];

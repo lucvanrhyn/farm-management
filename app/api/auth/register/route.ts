@@ -3,6 +3,7 @@ import { hash } from 'bcryptjs';
 import { getUserByEmail } from '../../../../lib/meta-db';
 import { provisionFarm } from '../../../../lib/provisioning';
 import { checkRateLimit } from '../../../../lib/rate-limit';
+import { logger } from '../../../../lib/logger';
 
 interface RegisterBody {
   name: string;
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(ANTI_ENUM_RESPONSE);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Registration failed';
-    console.error('[register] Provisioning error:', message);
+    logger.error('[register] Provisioning error', { message });
     return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });
   }
 }
