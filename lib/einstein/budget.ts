@@ -91,10 +91,7 @@ interface AiSettingsBlob {
 async function readAiSettings(prisma: PrismaClient): Promise<AiSettingsBlob> {
   // FarmSettings is a singleton per tenant DB — same pattern as every other
   // Phase J/K generator (findFirst, null-safe default).
-  // Prisma client is loose-typed here; cast via any to tolerate the newly-added
-  // aiSettings column on tenant DBs that may not yet have regenerated types.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row = await (prisma as any).farmSettings.findFirst({});
+  const row = await prisma.farmSettings.findFirst({});
   if (!row) {
     throw new EinsteinBudgetError(
       'EINSTEIN_BUDGET_SETTINGS_MISSING',
@@ -226,8 +223,7 @@ export async function stampCostBeforeSend(
   // json_set() here — the column is a plain String, not SQLite JSON1
   // functions. Rewriting the whole blob is O(few-KB) and avoids edge cases
   // where the blob was null or malformed.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (prisma as any).farmSettings.updateMany({
+  await prisma.farmSettings.updateMany({
     data: { aiSettings: JSON.stringify(nextBlob) },
   });
 }
@@ -254,8 +250,7 @@ export async function resetMonthlyBudget(farmSlug: string): Promise<void> {
     currentMonthKey: currentMonthKey(new Date()),
   };
   const nextBlob: AiSettingsBlob = { ...settings, ragConfig: next };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (prisma as any).farmSettings.updateMany({
+  await prisma.farmSettings.updateMany({
     data: { aiSettings: JSON.stringify(nextBlob) },
   });
 }

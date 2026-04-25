@@ -308,8 +308,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       } finally {
         // Best-effort RagQueryLog row. Never let logging throw into the stream.
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (prisma as any).ragQueryLog.create({
+          await prisma.ragQueryLog.create({
             data: {
               userId: session.user?.id ?? 'unknown',
               assistantName,
