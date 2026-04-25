@@ -3,7 +3,7 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
-import * as XLSX from "xlsx";
+import { readWorkbook, readSheetAsObjects } from "@/lib/xlsx-shim";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = await readWorkbook(buffer);
 
   // Look up farm's default breed from settings
   const farmSettings = await prisma.farmSettings.findFirst({ select: { breed: true } });
@@ -72,9 +72,8 @@ export async function POST(req: NextRequest) {
   let campsCreated = 0;
   const validCampIds = new Set<string>();
 
-  if (workbook.SheetNames.includes("Camps")) {
-    const campsSheet = workbook.Sheets["Camps"];
-    const campRows = XLSX.utils.sheet_to_json<Record<string, string>>(campsSheet, { defval: "" });
+  if (workbook.sheetNames.includes("Camps")) {
+    const campRows = readSheetAsObjects(workbook, "Camps", { defval: "" }) as Record<string, string>[];
 
     for (const campRow of campRows) {
       const campName = String(campRow.camp_name ?? "").trim();
@@ -114,11 +113,10 @@ export async function POST(req: NextRequest) {
 
   // ── Determine which sheet has animals ──────────────────────────────────────
   // Two-tab template: use "Animals" sheet. Single-sheet (legacy): use first sheet.
-  const animalSheetName = workbook.SheetNames.includes("Animals")
+  const animalSheetName = workbook.sheetNames.includes("Animals")
     ? "Animals"
-    : workbook.SheetNames[0];
-  const sheet = workbook.Sheets[animalSheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+    : workbook.sheetNames[0];
+  const rows = readSheetAsObjects(workbook, animalSheetName, { defval: "" }) as Record<string, string>[];
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "Animals sheet is empty" }, { status: 400 });

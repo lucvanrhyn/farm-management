@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import * as XLSX from "xlsx";
+import {
+  buildWorkbookFromAOA,
+  writeWorkbookToBuffer,
+  readWorkbook,
+} from "@/lib/xlsx-shim";
 import { parseSpreadsheet, hashFile } from "@/lib/onboarding/parse-file";
 import { buildXlsxFile, TINY_ROWS } from "../../fixtures/build-xlsx";
 
@@ -14,7 +18,7 @@ afterEach(() => {
 
 describe("parseSpreadsheet", () => {
   it("returns parsedColumns, sampleRows, and fullRowCount from a tiny xlsx", async () => {
-    const file = buildXlsxFile(TINY_ROWS);
+    const file = await buildXlsxFile(TINY_ROWS);
     const result = await parseSpreadsheet(file);
 
     expect(result.parsedColumns).toEqual(["Ear Tag", "Sex", "Birth Date", "Breed"]);
@@ -42,8 +46,8 @@ describe("parseSpreadsheet", () => {
   });
 
   it("throws on an unparseable / corrupt file", async () => {
-    // Random bytes that aren't a valid xlsx — exercises the XLSX.read catch
-    // branch that surfaces a "Could not parse spreadsheet" error.
+    // Random bytes that aren't a valid xlsx — exercises the readWorkbook
+    // catch branch that surfaces a "Could not parse spreadsheet" error.
     const file = new File(
       [new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00])],
       "corrupt.xlsx",
@@ -51,21 +55,20 @@ describe("parseSpreadsheet", () => {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       },
     );
-    // Depending on XLSX's leniency, the bytes may parse as an empty
-    // workbook (zero data rows) or fail the initial read. Either way the
-    // user-facing behaviour is a thrown Error — which is what we assert.
+    // Either way the user-facing behaviour is a thrown Error — which is what
+    // we assert.
     await expect(parseSpreadsheet(file)).rejects.toThrow();
   });
 
   it("throws when the sheet has no header row", async () => {
-    // aoa_to_sheet on [[]] produces an empty sheet; XLSX treats that as no rows.
-    const file = buildXlsxFile([]);
+    // Empty rows array → workbook with empty sheet → no header row.
+    const file = await buildXlsxFile([]);
     await expect(parseSpreadsheet(file)).rejects.toThrow(/no header row/i);
   });
 
   it("throws when header row is present but has no named columns", async () => {
     // Headers are all blanks — after trim+filter, zero named columns remain.
-    const file = buildXlsxFile([
+    const file = await buildXlsxFile([
       ["", "", ""],
       ["a", "b", "c"],
     ]);
@@ -75,7 +78,7 @@ describe("parseSpreadsheet", () => {
   it("throws when there are more than 200 columns", async () => {
     const headers = Array.from({ length: 201 }, (_, i) => `col${i + 1}`);
     const dataRow = Array.from({ length: 201 }, () => "x");
-    const file = buildXlsxFile([headers, dataRow]);
+    const file = await buildXlsxFile([headers, dataRow]);
     await expect(parseSpreadsheet(file)).rejects.toThrow(/Too many columns/);
   });
 
@@ -84,14 +87,15 @@ describe("parseSpreadsheet", () => {
   // -------------------------------------------------------------------------
 
   it("prefixes formula-injection payloads in sampleRows", async () => {
-    const file = buildXlsxFile([
+    const file = await buildXlsxFile([
       ["A", "B", "C", "D"],
       ["=HYPERLINK(\"evil\")", "+CMD", "-ABC", "@func"],
       ["safe", "value", "here", "ok"],
     ]);
     const result = await parseSpreadsheet(file);
 
-    // Cell values returned via `sheet_to_json` become strings with raw:false.
+    // Cell values returned with raw:false are coerced to strings — the
+    // sanitizer must prefix any formula-trigger char.
     const firstRow = result.sampleRows[0]!;
     expect(firstRow.A).toBe("'=HYPERLINK(\"evil\")");
     expect(firstRow.B).toBe("'+CMD");
@@ -130,14 +134,12 @@ describe("hashFile", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sanity: ensure XLSX import works in jsdom (regression guard).
+// Sanity: ensure the xlsx-shim can parse its own output in jsdom.
 // ---------------------------------------------------------------------------
 
-it("sanity check — XLSX can parse its own output in jsdom", async () => {
-  const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.aoa_to_sheet([["a"], ["1"]]);
-  XLSX.utils.book_append_sheet(workbook, sheet, "S1");
-  const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-  const reread = XLSX.read(bytes, { type: "array" });
-  expect(reread.SheetNames).toEqual(["S1"]);
+it("sanity check — xlsx-shim can parse its own output in jsdom", async () => {
+  const wb = buildWorkbookFromAOA([["a"], ["1"]], "S1");
+  const bytes = await writeWorkbookToBuffer(wb);
+  const reread = await readWorkbook(bytes);
+  expect(reread.sheetNames).toEqual(["S1"]);
 });

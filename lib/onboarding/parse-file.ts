@@ -1,13 +1,18 @@
 /**
  * Browser-side spreadsheet parser + SHA-256 helper for the AI Import Wizard.
  *
- * Parses xlsx/csv files in the browser using SheetJS, reading headers and a
- * preview of data rows that will be shipped to the server-side mapping
- * proposal endpoint. The full file never crosses the wire — we send a small
- * sample plus the SHA-256 fingerprint so duplicate imports can be detected.
+ * Parses xlsx/csv files in the browser using ExcelJS (via lib/xlsx-shim),
+ * reading headers and a preview of data rows that will be shipped to the
+ * server-side mapping proposal endpoint. The full file never crosses the
+ * wire — we send a small sample plus the SHA-256 fingerprint so duplicate
+ * imports can be detected.
  */
 
-import * as XLSX from "xlsx";
+import {
+  readWorkbook,
+  readFirstSheetAsArrays,
+  readFirstSheetAsObjects,
+} from "@/lib/xlsx-shim";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_COLUMNS = 200;
@@ -30,27 +35,22 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   }
 
   const buffer = await file.arrayBuffer();
-  let workbook: XLSX.WorkBook;
+  let workbook: Awaited<ReturnType<typeof readWorkbook>>;
   try {
-    workbook = XLSX.read(buffer, { type: "array" });
+    workbook = await readWorkbook(buffer);
   } catch (err) {
     throw new Error(
       `Could not parse spreadsheet — ${err instanceof Error ? err.message : "invalid file"}`,
     );
   }
 
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) {
+  if (workbook.sheetNames.length === 0) {
     throw new Error("Spreadsheet has no sheets");
   }
-  const sheet = workbook.Sheets[firstSheetName];
-  if (!sheet) {
-    throw new Error("Spreadsheet first sheet is empty");
-  }
 
-  // Header row via `header: 1` returns an array of arrays (first row = headers).
-  const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-  const headerRow = headerRows[0];
+  // Header row via array-of-arrays read; row 0 = headers.
+  const arrays = readFirstSheetAsArrays(workbook);
+  const headerRow = arrays[0];
   if (!Array.isArray(headerRow) || headerRow.length === 0) {
     throw new Error("Spreadsheet has no header row");
   }
@@ -67,7 +67,7 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   }
 
   // Row objects keyed by header name.
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+  const rows = readFirstSheetAsObjects(workbook, {
     defval: "",
     raw: false,
   });

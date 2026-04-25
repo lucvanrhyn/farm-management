@@ -3,8 +3,8 @@
  * Run with: pnpm exec tsx --tsconfig tsconfig.scripts.json scripts/export-dummy-to-excel.ts
  */
 
-import * as XLSX from "xlsx";
 import path from "path";
+import { buildWorkbookFromObjects, writeWorkbookFile } from "../lib/xlsx-shim";
 
 // Inline animal generation (copied from dummy-data to avoid ESM import issues in scripts)
 type AnimalCategory = "Cow" | "Bull" | "Heifer" | "Calf" | "Ox";
@@ -109,34 +109,26 @@ function generateAnimals(): AnimalRow[] {
 
 const animals = generateAnimals();
 
-const worksheet = XLSX.utils.json_to_sheet(animals, {
-  header: [
-    "animal_id", "name", "sex", "date_of_birth", "breed",
-    "category", "current_camp", "status", "mother_id", "father_id",
-    "registration_number", "date_added",
-  ],
-});
-
-// Set column widths for readability
-worksheet["!cols"] = [
-  { wch: 10 }, // animal_id
-  { wch: 14 }, // name
-  { wch: 8 },  // sex
-  { wch: 14 }, // date_of_birth
-  { wch: 10 }, // breed
-  { wch: 10 }, // category
-  { wch: 18 }, // current_camp
-  { wch: 10 }, // status
-  { wch: 10 }, // mother_id
-  { wch: 10 }, // father_id
-  { wch: 30 }, // registration_number
-  { wch: 12 }, // date_added
+const headers = [
+  "animal_id", "name", "sex", "date_of_birth", "breed",
+  "category", "current_camp", "status", "mother_id", "father_id",
+  "registration_number", "date_added",
 ];
+const widths = [10, 14, 8, 14, 10, 10, 18, 10, 10, 10, 30, 12];
 
-const workbook = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(workbook, worksheet, "Animals");
+const workbook = buildWorkbookFromObjects(
+  animals as unknown as Record<string, unknown>[],
+  "Animals",
+  headers,
+  widths,
+);
 
 const outPath = path.join(process.cwd(), "animals.xlsx");
-XLSX.writeFile(workbook, outPath);
 
-console.log(`✅ Exported ${animals.length} animals to ${outPath}`);
+(async () => {
+  await writeWorkbookFile(workbook, outPath);
+  console.log(`✅ Exported ${animals.length} animals to ${outPath}`);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
