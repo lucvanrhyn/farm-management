@@ -25,10 +25,20 @@ interface Props {
 export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
   const router = useRouter();
 
-  // Step 1: user clicks a queue entry — show mob picker
-  const [destCampId, setDestCampId]   = useState<string | null>(null);
-  const [mobs, setMobs]               = useState<ApiMob[]>([]);
-  const [loadingMobs, setLoadingMobs] = useState(false);
+  // Step 1: user clicks a queue entry — show mob picker.
+  // Mobs state is combined into a single object so fetch transitions are
+  // atomic (one setState call in the async callback — no synchronous
+  // setState in the effect body, which the lint rule flags as cascade-prone).
+  const [destCampId, setDestCampId] = useState<string | null>(null);
+  const [mobsState, setMobsState]   = useState<{
+    loading: boolean;
+    mobs: ApiMob[];
+    forCampId: string | null;
+  }>({ loading: false, mobs: [], forCampId: null });
+
+  // Derived — mobs and loadingMobs for the current destCampId.
+  const mobs       = mobsState.forCampId === destCampId ? mobsState.mobs : [];
+  const loadingMobs = destCampId !== null && (mobsState.forCampId !== destCampId || mobsState.loading);
 
   // Step 2: user picks a mob — open MobMoveModal
   const [selectedMob, setSelectedMob]   = useState<ApiMob | null>(null);
@@ -38,13 +48,15 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
 
   useEffect(() => {
     if (!destCampId) return;
-    setLoadingMobs(true);
-    setMobs([]);
+    const campId = destCampId;
     fetch("/api/mobs")
       .then((r) => (r.ok ? r.json() : []))
-      .then((all: ApiMob[]) => setMobs(all.filter((m) => m.animal_count > 0)))
-      .catch(() => setMobs([]))
-      .finally(() => setLoadingMobs(false));
+      .then((all: ApiMob[]) =>
+        setMobsState({ loading: false, mobs: all.filter((m) => m.animal_count > 0), forCampId: campId }),
+      )
+      .catch(() =>
+        setMobsState({ loading: false, mobs: [], forCampId: campId }),
+      );
   }, [destCampId]);
 
   function handleOpenQueue(campId: string) {
@@ -61,7 +73,7 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
   function handleClose() {
     setDestCampId(null);
     setSelectedMob(null);
-    setMobs([]);
+    setMobsState({ loading: false, mobs: [], forCampId: null });
     setError(null);
     setIsSubmitting(false);
   }

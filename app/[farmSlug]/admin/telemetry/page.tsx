@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";

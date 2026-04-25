@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { AlertTriangle, Baby, Droplets, Scissors } from "lucide-react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";

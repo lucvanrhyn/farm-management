@@ -58,16 +58,21 @@ const labelLayer: LayerProps = {
 };
 
 export default function RainfallGaugeLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<GaugesPayload>>({ status: "idle" });
+  const fetchUrl = `/api/${encodeURIComponent(farmSlug)}/map/rainfall-gauges`;
+  const [result, setResult] = useState<{ url: string; state: FetchState<GaugesPayload> } | null>(null);
+
+  const state: FetchState<GaugesPayload> =
+    result?.url === fetchUrl ? result.state : { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<GaugesPayload>(`/api/${encodeURIComponent(farmSlug)}/map/rainfall-gauges`).then((r) => {
-      if (!cancelled) setState(r);
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<GaugesPayload>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
     });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+    return () => ctrl.abort();
+  }, [fetchUrl]);
 
   if (state.status !== "ready") return null;
 

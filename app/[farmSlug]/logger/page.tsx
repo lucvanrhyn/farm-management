@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";

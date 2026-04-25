@@ -18,28 +18,32 @@ interface Props {
 }
 
 function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: boolean } {
-  const [mobs, setMobs] = useState<MobInfo[]>([]);
-  const [loading, setLoading] = useState(false);
   const { mode } = useFarmModeSafe();
+  // Combine result with the key it was fetched for — loading is derived in
+  // render without any synchronous setState in the effect body.
+  const fetchKey = campId ? `${campId}|${mode}` : null;
+  const [result, setResult] = useState<{ key: string; mobs: MobInfo[] } | null>(null);
+
+  const mobs    = result?.key === fetchKey ? result.mobs : [];
+  const loading = fetchKey !== null && result?.key !== fetchKey;
 
   useEffect(() => {
-    if (!campId) { setMobs([]); return; }
+    if (!campId || !fetchKey) return;
     const controller = new AbortController();
-    setLoading(true);
+    const key = fetchKey;
     fetch("/api/mobs", { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : []))
       .then((all: MobInfo[]) => {
         const inCamp = all
           .filter((m) => m.current_camp === campId)
           .filter((m) => (m.species ?? "cattle") === mode);
-        setMobs(inCamp);
+        setResult({ key, mobs: inCamp });
       })
       .catch((err: unknown) => {
-        if ((err as { name?: string }).name !== "AbortError") setMobs([]);
-      })
-      .finally(() => setLoading(false));
+        if ((err as { name?: string }).name !== "AbortError") setResult({ key, mobs: [] });
+      });
     return () => controller.abort();
-  }, [campId, mode]);
+  }, [campId, mode, fetchKey]);
 
   return { mobs, loading };
 }

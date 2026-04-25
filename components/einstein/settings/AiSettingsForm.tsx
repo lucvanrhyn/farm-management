@@ -168,9 +168,9 @@ export default function AiSettingsForm({
           data-testid="assistant-name-input"
         />
         <p className="text-[11px]" style={{ color: "#9C8E7A" }}>
-          Rename Einstein — e.g. "Oupa", "Boerkloof". Leave blank to reset. Up
+          Rename Einstein — e.g. &ldquo;Oupa&rdquo;, &ldquo;Boerkloof&rdquo;. Leave blank to reset. Up
           to {ASSISTANT_NAME_MAX_LEN} characters; letters, numbers, spaces, .
-          ' and - only.
+          &apos; and - only.
         </p>
       </div>
 

@@ -84,17 +84,22 @@ export function FarmModeProvider({
     return valid.includes("cattle") ? valid : ["cattle", ...valid];
   }, [enabledSpecies]);
 
-  // Initialize to first enabled mode (SSR-safe — no localStorage read here)
-  const [mode, setModeState] = useState<FarmMode>(enabledModes[0]);
-
-  // On client mount, apply stored mode from localStorage and sync cookie.
-  useEffect(() => {
+  // Lazy initializer reads localStorage on first client render (SSR-safe —
+  // getStoredMode returns null on the server). Eliminates the synchronous
+  // setState-in-effect that the lint rule flags.
+  const [rawMode, setModeState] = useState<FarmMode>(() => {
     const stored = getStoredMode(farmSlug);
-    if (stored && enabledModes.includes(stored)) {
-      setModeState(stored);
-      setStoredMode(farmSlug, stored); // ensures cookie is synced with localStorage value
-    }
-  }, [farmSlug, enabledModes]);
+    return stored && enabledModes.includes(stored) ? stored : enabledModes[0];
+  });
+
+  // Clamp mode in render if enabledModes changed and the stored choice is now
+  // invalid — purely derived, no effect needed.
+  const mode: FarmMode = enabledModes.includes(rawMode) ? rawMode : enabledModes[0];
+
+  // Sync cookie on mount and whenever farmSlug/mode changes. No setState here.
+  useEffect(() => {
+    setStoredMode(farmSlug, mode);
+  }, [farmSlug, mode]);
 
   // Persist mode changes to localStorage
   const setMode = useCallback(
@@ -105,13 +110,6 @@ export function FarmModeProvider({
     },
     [farmSlug, enabledModes],
   );
-
-  // Sync if enabledModes changes and current mode is no longer valid
-  useEffect(() => {
-    if (!enabledModes.includes(mode)) {
-      setModeState(enabledModes[0]);
-    }
-  }, [enabledModes, mode]);
 
   const value: FarmModeContextValue = {
     mode,

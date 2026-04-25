@@ -60,19 +60,26 @@ function normalise(payload: AfisPayload | null): GeoJSON.FeatureCollection {
 }
 
 export default function AfisFireLayer({ bbox, onStaleChange }: Props) {
-  const [state, setState] = useState<FetchState<AfisPayload>>({ status: "idle" });
+  // Layer state keyed by request URL. Loading is derived in render from whether
+  // the result is for the current key — no synchronous setState in the effect body.
+  const qs = bbox ? `?bbox=${bbox.join(",")}` : "";
+  const fetchUrl = `/api/map/gis/afis${qs}`;
+  const [result, setResult] = useState<{ url: string; state: FetchState<AfisPayload> } | null>(null);
+
+  // Derived: show as loading when we haven't settled for the current URL yet.
+  const state: FetchState<AfisPayload> =
+    result?.url === fetchUrl ? result.state : { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    const qs = bbox ? `?bbox=${bbox.join(",")}` : "";
-    fetchLayerJson<AfisPayload>(`/api/map/gis/afis${qs}`).then((r) => {
-      if (cancelled) return;
-      setState(r);
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<AfisPayload>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
       if (r.status === "ready" && onStaleChange) onStaleChange(Boolean(r.stale));
     });
-    return () => { cancelled = true; };
-  }, [bbox, onStaleChange]);
+    return () => ctrl.abort();
+  }, [fetchUrl, onStaleChange]);
 
   if (state.status !== "ready") return null;
   const fc = normalise(state.data);

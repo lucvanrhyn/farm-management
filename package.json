@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "rm -f .next/dev/lock && next dev --webpack --port 3001",
     "prebuild": "tsx scripts/create-template.ts",
-    "build": "prisma generate && next build --webpack",
+    "build": "prisma generate && eslint && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "db:push": "prisma db push",

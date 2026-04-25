@@ -20,15 +20,22 @@ export type FetchState<T> =
 /**
  * Fetch JSON with graceful 404 handling. A layer whose endpoint 404s (because
  * Wave 2C hasn't shipped yet) should render an "Unavailable" state, not crash.
+ *
+ * Pass an `AbortSignal` via `signal` to cancel in-flight requests on unmount
+ * or dep change. An `AbortError` resolves to `null` (caller should ignore it).
  */
-export async function fetchLayerJson<T>(url: string): Promise<FetchState<T>> {
+export async function fetchLayerJson<T>(
+  url: string,
+  options?: { signal?: AbortSignal },
+): Promise<FetchState<T> | null> {
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store", signal: options?.signal });
     if (res.status === 404) return { status: "error", error: "unavailable" };
     if (!res.ok) return { status: "error", error: `http_${res.status}` };
     const body = (await res.json()) as T & { _stale?: boolean };
     return { status: "ready", data: body, stale: Boolean(body?._stale) };
   } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") return null;
     return { status: "error", error: e instanceof Error ? e.message : "fetch_failed" };
   }
 }
