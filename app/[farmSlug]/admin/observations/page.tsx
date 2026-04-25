@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { getFarmCreds } from "@/lib/meta-db";

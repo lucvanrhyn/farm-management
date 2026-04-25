@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAllSpeciesConfigs } from "@/lib/species/registry";
 import SpeciesSettingsForm, { type SpeciesRow } from "@/components/admin/SpeciesSettingsForm";

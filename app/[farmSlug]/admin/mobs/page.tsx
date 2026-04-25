@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import MobsManager from "@/components/admin/MobsManager";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Phase K Wave 3F — /admin/settings/tasks
  *
