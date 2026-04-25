@@ -21,8 +21,8 @@ import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import {
   hashFile,
   parseSpreadsheet,
-  sanitizeRow,
 } from "@/lib/onboarding/parse-file";
+import { readAllRows } from "@/lib/onboarding/read-all-rows";
 import type {
   CommitProgressFrame,
   CommitResultFrame,
@@ -377,15 +377,3 @@ export default function OnboardingImportPage() {
   );
 }
 
-async function readAllRows(file: File): Promise<Record<string, unknown>[]> {
-  const XLSX = await import("xlsx");
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const firstSheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[firstSheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: "",
-    raw: false,
-  });
-  return rows.map(sanitizeRow);
-}
