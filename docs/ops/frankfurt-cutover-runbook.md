@@ -1,10 +1,30 @@
 # EU Region Cutover Runbook (Phase E / P7)
 
-**Status:** **Executed 2026-04-25.** Target had to shift from Frankfurt →
-Ireland after Turso retired their `aws-eu-central-1` location. This runbook
-is kept for future tenant onboarding into the EU region. If you're adding a
-new tenant to the Ireland group, follow sections 1–4; skip section 9 (Vercel
-flip) since it already happened.
+**Status:** **Executed 2026-04-25. Migration script retired in Wave 1
+(2026-04-25).** Target had to shift from Frankfurt → Ireland after Turso
+retired their `aws-eu-central-1` location. This runbook is preserved for
+historical context only — `scripts/migrate-farm-to-frankfurt.ts` has been
+removed from the repo because:
+
+1. All extant tenants (`delta-livestock`, `ft-acme-cattle`) are already
+   in `dub`; there is nothing left to cut over.
+2. The legacy Tokyo source DBs are scheduled for delete on **2026-05-09**,
+   after which the script's input no longer exists.
+3. The audit (Wave 1, W1a) found the script lacked a write-fence between
+   dump and meta-DB pointer-swap — any write that landed in that window
+   was silently lost. Fencing dead code is worse than removing it.
+4. New tenants are provisioned directly into `dub` by the regular
+   onboarding flow (`createTursoDatabase` in `lib/turso-api.ts` with
+   `location: "dub"`), not by this script.
+
+If a future region migration is ever needed (e.g. `dub` → some other
+region), write a fresh script that includes a Turso `read_only` toggle on
+the source for the entire dump+swap window. **Do not resurrect the
+retired script** — it is unsafe by design.
+
+The sections below are kept as documentation of the *human-executed*
+counterpart to the (now deleted) Phase E code that landed on
+`perf/frankfurt-region`. Treat as historical reference.
 
 **Goal (as-executed):** eliminate the Cape Town → iad1 → Tokyo triple-hop
 that set a ~600 ms floor on every authenticated request. Achieved end-state:
