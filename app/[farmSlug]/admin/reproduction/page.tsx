@@ -8,17 +8,17 @@ import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 
-const PregnancyRateCycleChart = dynamic(
+const PregnancyRateCycleChart = nextDynamic(
   () => import("@/components/admin/charts/PregnancyRateCycleChart"),
   { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
 );
-const DaysOpenHistogram = dynamic(
+const DaysOpenHistogram = nextDynamic(
   () => import("@/components/admin/charts/DaysOpenHistogram"),
   { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
 );
-const WeaningRateKPI = dynamic(
+const WeaningRateKPI = nextDynamic(
   () => import("@/components/admin/charts/WeaningRateKPI"),
   { loading: () => <div className="h-12 animate-pulse bg-gray-100 rounded-lg" /> },
 );

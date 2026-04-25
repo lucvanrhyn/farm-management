@@ -113,7 +113,7 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   // Lazy initializer: if no coord props and geolocation is unavailable, mark as
   // failed immediately rather than in an effect body (avoids synchronous setState
   // in effect, which the lint rule flags as cascade-prone).
-  const [geoFailed, setGeoFailed] = useState(() => {
+  const [geoFailed, setGeoFailed] = useState<boolean>(() => {
     const hasCoordProps = latitude != null && longitude != null;
     return !hasCoordProps && typeof navigator !== "undefined" && !navigator.geolocation;
   });

@@ -7,15 +7,15 @@ import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import type { ADGResult, WeightRecord } from "@/lib/server/weight-analytics";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import type { WeightPoint } from "@/components/admin/charts/WeightTrendChart";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
 
-const WeightTrendChart = dynamic(
+const WeightTrendChart = nextDynamic(
   () => import("@/components/admin/charts/WeightTrendChart"),
   { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
 );
-const AnimalInvestment = dynamic(
+const AnimalInvestment = nextDynamic(
   () => import("@/components/admin/AnimalInvestment"),
   { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
 );
