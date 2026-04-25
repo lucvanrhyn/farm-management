@@ -17,7 +17,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { LayerState } from "@/components/map/LayerToggle";
 import {
   DEFAULT_LAYER_STATE,
@@ -142,14 +142,11 @@ function TabButton({
 // ── Layers tab ───────────────────────────────────────────────────────────
 
 function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
-  const [state, setState] = useState<LayerState>(DEFAULT_LAYER_STATE);
-  const [hydrated, setHydrated] = useState(false);
+  // Lazy initializer reads localStorage on first client render (SSR-safe —
+  // readLayerState() returns defaults when window is undefined). No effect
+  // needed — eliminates the synchronous setState-in-effect lint error.
+  const [state, setState] = useState<LayerState>(readLayerState);
   const isBasic = tier === "basic";
-
-  useEffect(() => {
-    setState(readLayerState());
-    setHydrated(true);
-  }, []);
 
   const toggle = useCallback((key: keyof LayerState) => {
     setState((prev) => {
@@ -174,7 +171,7 @@ function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
       <ul className="flex flex-col gap-2">
         {LAYER_OPTIONS.map((opt) => {
           const locked = opt.moat && isBasic;
-          const checked = hydrated ? state[opt.key] : DEFAULT_LAYER_STATE[opt.key];
+          const checked = state[opt.key];
           return (
             <li
               key={opt.key}

@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { createElement, useState, type ReactNode } from "react";
+import { createElement, useState, useEffect, type ReactNode } from "react";
 
 // ─── next/navigation mock ────────────────────────────────────────────────
 // Each test inspects `routerPush` to assert deep-link navigation on click.
@@ -189,10 +189,12 @@ describe("EinsteinChat — wordmark", () => {
   it("re-renders the wordmark when the provider's name changes", () => {
     globalThis.fetch = vi.fn() as unknown as typeof fetch;
 
-    let setName: (v: string) => void = () => {};
+    // container.set is populated by useEffect (after render) so no ref mutation
+    // occurs during the render phase — satisfies react-hooks/immutability.
+    const container: { set: (v: string) => void } = { set: () => {} };
     function Host({ children }: { children: ReactNode }) {
       const [name, setN] = useState("Einstein");
-      setName = setN;
+      useEffect(() => { container.set = setN; });
       return (
         <AssistantNameProvider name={name}>{children}</AssistantNameProvider>
       );
@@ -209,7 +211,7 @@ describe("EinsteinChat — wordmark", () => {
 
     // Wave 3's rename editor would flip this after PUT /api/farm-settings/ai.
     act(() => {
-      setName("Oupa");
+      container.set("Oupa");
     });
     expect(screen.getByTestId("assistant-wordmark").textContent).toBe("Oupa");
   });
@@ -530,13 +532,14 @@ describe("EinsteinChat — no hardcoded assistant name leakage", () => {
 
     globalThis.fetch = vi.fn() as unknown as typeof fetch;
     render(
-      createElement(AssistantNameProvider, {
-        name: "Oupa",
-        children: createElement("div", null, [
+      createElement(
+        AssistantNameProvider,
+        { name: "Oupa" },
+        createElement("div", null, [
           createElement(NameProbe, { key: "probe" }),
           createElement(EinsteinChat, { key: "chat", farmSlug: "farm-x" }),
         ]),
-      }),
+      ),
     );
 
     expect(screen.getByTestId("probe").textContent).toBe("Oupa");

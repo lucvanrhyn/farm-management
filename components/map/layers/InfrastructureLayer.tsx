@@ -68,16 +68,21 @@ function normalise(payload: InfraPayload | null): GeoJSON.FeatureCollection {
 }
 
 export default function InfrastructureLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<InfraPayload>>({ status: "idle" });
+  const fetchUrl = `/api/${encodeURIComponent(farmSlug)}/map/infrastructure`;
+  const [result, setResult] = useState<{ url: string; state: FetchState<InfraPayload> } | null>(null);
+
+  const state: FetchState<InfraPayload> =
+    result?.url === fetchUrl ? result.state : { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<InfraPayload>(`/api/${encodeURIComponent(farmSlug)}/map/infrastructure`).then((r) => {
-      if (!cancelled) setState(r);
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<InfraPayload>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
     });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+    return () => ctrl.abort();
+  }, [fetchUrl]);
 
   if (state.status !== "ready") return null;
 

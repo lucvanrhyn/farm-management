@@ -48,9 +48,8 @@ export default async function AiSettingsPage({
   let budgetCapZar: number;
   try {
     const prisma = await getPrismaForFarm(farmSlug);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const row = prisma
-      ? await (prisma as any).farmSettings.findFirst({
+      ? await prisma.farmSettings.findFirst({
           select: { aiSettings: true },
         })
       : null;

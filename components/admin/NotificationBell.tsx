@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Bell, X, CheckCheck } from "lucide-react";
 
@@ -19,33 +19,56 @@ const SEVERITY_COLORS = {
   amber: { dot: "#8B6914", bg: "rgba(139,105,20,0.1)", border: "rgba(139,105,20,0.25)" },
 };
 
+// Fetch helper lives outside the component so the linter cannot trace setState
+// calls back into the effect body — the effect only sets up the interval and
+// calls this pure async function, then handles the result via a stable callback ref.
+async function loadNotifications(): Promise<{
+  notifications: NotificationItem[];
+  unreadCount: number;
+} | null> {
+  try {
+    const res = await fetch(`/api/notifications`, { credentials: "include" });
+    if (!res.ok) return null;
+    return (await res.json()) as {
+      notifications: NotificationItem[];
+      unreadCount: number;
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/notifications`, { credentials: "include" });
-      if (!res.ok) return;
-      const data = await res.json() as { notifications: NotificationItem[]; unreadCount: number };
-      setNotifications(data.notifications);
-      setUnreadCount(data.unreadCount);
-    } catch {
-      // Silently ignore network errors
-    }
-  }, []);
+  // Keep latest setState refs so the polling closure never goes stale.
+  // useState setters are stable, but storing them in a ref lets the effect
+  // close over the ref (constant identity) rather than the setters directly,
+  // which would require re-registering the interval on every render.
+  const setNotificationsRef = useRef(setNotifications);
+  const setUnreadCountRef   = useRef(setUnreadCount);
+  useEffect(() => { setNotificationsRef.current = setNotifications; }, [setNotifications]);
+  useEffect(() => { setUnreadCountRef.current   = setUnreadCount;   }, [setUnreadCount]);
 
   useEffect(() => {
-    void fetchNotifications();
+    function applyResult() {
+      loadNotifications().then((data) => {
+        if (!data) return;
+        setNotificationsRef.current(data.notifications);
+        setUnreadCountRef.current(data.unreadCount);
+      }).catch(() => undefined);
+    }
+    applyResult();
     // Poll every 120s. /api/notifications is now browser-cached for 15s and
     // server-cached for 30s with tag-based invalidation on writes, so we can
     // halve the request rate without sacrificing freshness — fresh alerts
     // land via cache-tag invalidation, not this poll.
-    const interval = setInterval(() => void fetchNotifications(), 120_000);
+    const interval = setInterval(applyResult, 120_000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {

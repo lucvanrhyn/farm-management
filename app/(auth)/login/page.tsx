@@ -1,18 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AUTH_ERROR_CODES } from "@/lib/auth-errors";
 
-// No <Link> import: the single link on this page is a full-page
-// navigation to /register, so a plain <a> is strictly better — it
-// ships zero extra JS and still triggers Next's hard-navigation path
-// for the unauthenticated /register route.
-//
-// No `useRouter()` import either — a successful login triggers a
-// full-document navigation to /farms via `window.location.assign()`.
-// The session cookie was just set by next-auth, so the subsequent
-// server-rendered /farms reads the fresh session natively. This
-// saves ~8 KB brotli vs pulling `next/navigation` into the bundle.
+// No `useRouter()` import: a successful login triggers a full-document
+// navigation to /farms via `window.location.assign()`. The session cookie was
+// just set by next-auth, so the subsequent server-rendered /farms reads the
+// fresh session natively.
 
 // framer-motion used to animate entry of logo + card here. Replaced
 // with CSS-only fade/rise-in (see globals.css `.auth-rise-in`) so the
@@ -287,12 +282,12 @@ export default function LoginPage() {
           }}
         >
           Don&apos;t have an account?{" "}
-          <a
+          <Link
             href="/register"
             style={{ color: "#8A6840", textDecoration: "underline" }}
           >
             Register
-          </a>
+          </Link>
         </p>
       </div>
 
