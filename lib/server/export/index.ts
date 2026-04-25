@@ -64,7 +64,7 @@ const EXPORTERS: Record<ExportType, (ctx: ExportContext) => Promise<ExportArtifa
 };
 
 export function isExportType(value: string): value is ExportType {
-  return value in EXPORTERS;
+  return Object.hasOwn(EXPORTERS, value);
 }
 
 export function dispatchExport(type: ExportType, ctx: ExportContext): Promise<ExportArtifact> {
