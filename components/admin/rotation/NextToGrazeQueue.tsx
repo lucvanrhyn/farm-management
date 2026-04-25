@@ -73,7 +73,7 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
   function handleClose() {
     setDestCampId(null);
     setSelectedMob(null);
-    setMobs([]);
+    setMobsState({ loading: false, mobs: [], forCampId: null });
     setError(null);
     setIsSubmitting(false);
   }
