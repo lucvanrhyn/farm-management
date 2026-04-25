@@ -121,8 +121,7 @@ export default async function AdminLayout({
       prisma.farmSpeciesSettings.findMany(),
       // Also read aiSettings so we can hydrate the AssistantNameProvider below
       // — one round trip covers both onboardingComplete and the blob.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma as any).farmSettings.findFirst({
+      prisma.farmSettings.findFirst({
         select: { onboardingComplete: true, aiSettings: true },
       }),
     ]);
@@ -134,9 +133,7 @@ export default async function AdminLayout({
     if (settingsRes.status === "fulfilled") {
       // A brand-new tenant with no FarmSettings row is treated as "onboarding
       // not complete" — guide the admin through the wizard on first visit.
-      const row = settingsRes.value as
-        | { onboardingComplete: boolean | null; aiSettings: string | null }
-        | null;
+      const row = settingsRes.value;
       onboardingComplete = row?.onboardingComplete ?? false;
       // Parse is fail-soft — malformed JSON collapses to empty + default name.
       const aiBlob = parseAiSettings(row?.aiSettings);

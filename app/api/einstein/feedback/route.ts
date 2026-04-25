@@ -80,8 +80,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updated = await (prisma as any).ragQueryLog.update({
+    const updated = await prisma.ragQueryLog.update({
       where: { id: parsed.queryLogId },
       data: { feedback: parsed.feedback, feedbackNote: parsed.note ?? null },
       select: { id: true },
