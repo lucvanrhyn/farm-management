@@ -25,6 +25,7 @@ export async function evaluate(
   _settings: FarmSettings,
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
+  // cross-species by design: 90-day weighing alert applies to every species.
   const animals = (await prisma.animal.findMany({
     where: { status: "Active" },
     select: { id: true, animalId: true, currentCamp: true },

@@ -54,6 +54,9 @@ export async function GET(req: NextRequest) {
     };
 
     if (!paginated) {
+      // cross-species by design: species filter is opt-in via `?species=`
+      // (see baseWhere construction above). Callers that want a single
+      // species pass it explicitly; legacy callers stay multi-species.
       const animals = await timeAsync("query", () =>
         prisma.animal.findMany({
           where: baseWhere,
@@ -73,6 +76,7 @@ export async function GET(req: NextRequest) {
     // ONLY by animalId when paginating (dropping the category tie-breaker) so
     // a single monotonic cursor is sufficient. Fetch `limit + 1` rows to
     // detect "has more" without a second COUNT round-trip.
+    // cross-species by design: species filter is opt-in via baseWhere above.
     const items = await timeAsync("query", () =>
       prisma.animal.findMany({
         where: {

@@ -205,6 +205,8 @@ export async function getRotationStatusByCamp(
       },
     }),
     prisma.mob.findMany({ select: { id: true, name: true } }),
+    // cross-species by design: rotation buckets are keyed on (mobId, species)
+    // so a sheep mob and a cattle mob in the same camp don't collide.
     prisma.animal.findMany({
       where: { status: 'Active' },
       select: {

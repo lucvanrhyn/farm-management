@@ -49,6 +49,8 @@ export async function GET(
       where: { campId },
       select: { sizeHectares: true },
     }),
+    // cross-species by design: cover/days-remaining math counts every animal
+    // grazing the camp regardless of species (LSU is computed elsewhere).
     prisma.animal.count({
       where: { currentCamp: campId, status: "Active" },
     }),
@@ -100,6 +102,8 @@ export async function POST(
       where: { campId },
       select: { sizeHectares: true },
     }),
+    // cross-species by design: cover/days-remaining math counts every animal
+    // grazing the camp regardless of species (LSU is computed elsewhere).
     prisma.animal.count({
       where: { currentCamp: campId, status: "Active" },
     }),

@@ -82,6 +82,7 @@ async function buildInventorySnapshot(
   // reconstruct historical stock-at-period-end — that would require replaying
   // every movement/sale observation across the year, which deserves its own
   // design pass. Farmers can compare against their own stock sheet.
+  // cross-species by design: SARS IT3 inventory covers all livestock by category.
   const grouped = await prisma.animal.groupBy({
     by: ["category"],
     where: { status: "Active" },
