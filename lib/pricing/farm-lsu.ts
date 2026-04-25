@@ -68,6 +68,7 @@ export async function computeFarmLsu(farmSlug: string): Promise<number> {
   if (!prisma) throw new Error(`Farm not found: ${farmSlug}`);
 
   const [animalGroups, gameRows] = await Promise.all([
+    // cross-species by design: farm-wide LSU sums cattle + sheep + game.
     prisma.animal.groupBy({
       by: ['category'],
       where: { status: 'Active' },

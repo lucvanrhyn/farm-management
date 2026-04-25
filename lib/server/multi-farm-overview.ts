@@ -53,6 +53,7 @@ export async function getOverviewForUserFarms(
       // lib/server/ (chart-data, data-health, breeding-analytics, analytics,
       // profitability-by-animal).
       const [activeAnimalCount, campCount, latestObs] = await Promise.all([
+        // cross-species by design: farm-selector overview counts every species.
         prisma.animal.count({ where: { status: "Active" } }),
         prisma.camp.count(),
         prisma.observation.findFirst({

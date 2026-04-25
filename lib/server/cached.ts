@@ -175,6 +175,7 @@ export async function getCachedDashboardOverview(
           mtdTransactions,
           dataHealth,
         ] = await Promise.all([
+          // cross-species by design: dashboard total spans all species.
           prisma.animal.count({ where: { status: "Active" } }),
           prisma.camp.count(),
           prisma.farmSettings.findFirst(),
@@ -313,6 +314,8 @@ export async function getCachedCampList(
       return withFarmPrisma(slug, async (prisma) => {
         const [camps, animalGroups] = await Promise.all([
           prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          // cross-species by design when `sp` is empty: callers opt in to
+          // species filter via the `species` parameter on getCachedCampList.
           prisma.animal.groupBy({
             by: ["currentCamp"],
             where: {
@@ -369,6 +372,7 @@ export async function getCachedFarmSummary(
       return withFarmPrisma(slug, async (prisma) => {
         const [settings, animalCount, campCount] = await Promise.all([
           prisma.farmSettings.findFirst(),
+          // cross-species by design: /api/farm header counts whole farm.
           prisma.animal.count({ where: { status: "Active" } }),
           prisma.camp.count(),
         ]);
@@ -495,6 +499,8 @@ export async function getCachedDashboardData(
           veldLatestByCamp,
           feedOnOfferLatestByCamp,
         ] = await Promise.all([
+          // cross-species by design: dashboard groups by species explicitly
+          // so the UI can render per-species totals AND a combined headline.
           prisma.animal.groupBy({
             by: ["species"],
             where: { status: "Active" },

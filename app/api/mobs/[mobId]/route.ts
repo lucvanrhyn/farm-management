@@ -74,6 +74,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Mob not found" }, { status: 404 });
   }
 
+  // cross-species by design: mobId is already the per-species scope key.
   const assignedCount = await prisma.animal.count({
     where: { mobId, status: "Active" },
   });

@@ -266,6 +266,7 @@ async function structured(
   for (const entityType of filter) {
     try {
       if (entityType === 'animal') {
+        // cross-species by design: RAG aggregate covers every animal entity.
         const active = await prisma.animal.count({ where: { status: 'Active' } });
         const total = await prisma.animal.count();
         chunks.push({

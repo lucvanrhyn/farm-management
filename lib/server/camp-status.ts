@@ -96,6 +96,7 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
   const [camps, allCoverReadings, allAnimals] = await Promise.all([
     prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
     prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
+    // cross-species by design: low-grazing math sums LSU across all species.
     prisma.animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
