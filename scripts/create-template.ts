@@ -1,5 +1,5 @@
-import * as XLSX from "xlsx";
 import * as path from "path";
+import { ExcelJS, writeWorkbookFile } from "../lib/xlsx-shim";
 
 // ── Camps sheet ──────────────────────────────────────────────────────────────
 const campsData = [
@@ -8,11 +8,7 @@ const campsData = [
   ["Koppie", 80, "Borehole", "Rocky terrain — use for dry cows"],
   ["Kraal", 15, "Trough", "Treatment camp near house"],
 ];
-
-const campsSheet = XLSX.utils.aoa_to_sheet(campsData);
-campsSheet["!cols"] = [
-  { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 35 },
-];
+const campsWidths = [20, 14, 14, 35];
 
 // ── Animals sheet ────────────────────────────────────────────────────────────
 const animalsData = [
@@ -23,21 +19,31 @@ const animalsData = [
   ["K-001", "",       "Male",   "2025-09-15", "Bonsmara", "Calf",   "Rivier", "Active", "C-001", "B-001", "Born on farm",    "2025-09-15"],
   ["O-001", "",       "Male",   "2021-11-03", "Bonsmara", "Ox",     "Koppie", "Active", "",      "",      "Castrated 2022",  "2024-03-01"],
 ];
-
-const animalsSheet = XLSX.utils.aoa_to_sheet(animalsData);
-animalsSheet["!cols"] = [
-  { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 14 }, { wch: 10 },
-  { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
-  { wch: 20 }, { wch: 12 },
-];
+const animalsWidths = [10, 10, 8, 14, 10, 10, 14, 10, 10, 10, 20, 12];
 
 // ── Workbook ─────────────────────────────────────────────────────────────────
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, campsSheet, "Camps");
-XLSX.utils.book_append_sheet(wb, animalsSheet, "Animals");
+const wb = new ExcelJS.Workbook();
+
+const campsSheet = wb.addWorksheet("Camps");
+for (const row of campsData) campsSheet.addRow(row);
+campsWidths.forEach((w, i) => {
+  campsSheet.getColumn(i + 1).width = w;
+});
+
+const animalsSheet = wb.addWorksheet("Animals");
+for (const row of animalsData) animalsSheet.addRow(row);
+animalsWidths.forEach((w, i) => {
+  animalsSheet.getColumn(i + 1).width = w;
+});
 
 const outPath = path.join("public", "templates", "farmtrack-import-template.xlsx");
-XLSX.writeFile(wb, outPath);
-console.log(`Template created: ${outPath}`);
-console.log("  Sheet 1: Camps (4 columns, 3 example rows)");
-console.log("  Sheet 2: Animals (12 columns, 5 example rows)");
+
+(async () => {
+  await writeWorkbookFile(wb, outPath);
+  console.log(`Template created: ${outPath}`);
+  console.log("  Sheet 1: Camps (4 columns, 3 example rows)");
+  console.log("  Sheet 2: Animals (12 columns, 5 example rows)");
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

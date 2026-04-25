@@ -4,9 +4,9 @@
  * Run with: pnpm exec tsx --tsconfig tsconfig.scripts.json scripts/seed-animals.ts
  */
 
-import * as XLSX from "xlsx";
 import path from "path";
 import { PrismaClient } from "@prisma/client";
+import { readWorkbookFile, readFirstSheetAsObjects } from "../lib/xlsx-shim";
 
 const prisma = new PrismaClient();
 
@@ -19,10 +19,8 @@ async function main() {
   const filePath = path.join(process.cwd(), "animals.xlsx");
   console.log(`Reading ${filePath}…`);
 
-  const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+  const workbook = await readWorkbookFile(filePath);
+  const rows = readFirstSheetAsObjects(workbook, { defval: "" }) as Record<string, string>[];
 
   if (rows.length === 0) {
     console.error("File is empty — aborting.");
