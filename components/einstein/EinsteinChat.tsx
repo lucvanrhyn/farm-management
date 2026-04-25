@@ -31,6 +31,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import Link from "next/link";
 import { useAssistantName } from "@/hooks/useAssistantName";
 import CitationChip from "./CitationChip";
 import type { Citation } from "@/lib/einstein/retriever";
@@ -618,13 +619,13 @@ function errorCopy(
         tone: "border-amber-700 bg-amber-950/40 text-amber-100",
         body: "This feature is available on the Advanced plan.",
         cta: (
-          <a
+          <Link
             href="/subscription"
             className="inline-block rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-stone-950 hover:bg-amber-500"
             data-testid="upgrade-cta"
           >
             Upgrade plan
-          </a>
+          </Link>
         ),
       };
     case "EINSTEIN_BUDGET_EXHAUSTED":

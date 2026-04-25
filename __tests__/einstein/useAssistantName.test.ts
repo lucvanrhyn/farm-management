@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { createElement, useState, type ReactNode } from "react";
+import { createElement, useState, useEffect, type ReactNode } from "react";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import {
   AssistantNameProvider,
@@ -31,43 +31,25 @@ describe("useAssistantName — default fallback", () => {
   });
 
   it("returns the default when the provider is given a null name", () => {
-    render(
-      createElement(AssistantNameProvider, {
-        name: null,
-        children: createElement(Probe),
-      }),
-    );
+    render(createElement(AssistantNameProvider, { name: null }, createElement(Probe)));
     expect(screen.getByTestId("name").textContent).toBe("Einstein");
   });
 
   it("returns the default when the provider is given whitespace", () => {
-    render(
-      createElement(AssistantNameProvider, {
-        name: "   ",
-        children: createElement(Probe),
-      }),
-    );
+    render(createElement(AssistantNameProvider, { name: "   " }, createElement(Probe)));
     expect(screen.getByTestId("name").textContent).toBe("Einstein");
   });
 });
 
 describe("useAssistantName — custom names", () => {
   it("returns the custom name when provided", () => {
-    render(
-      createElement(AssistantNameProvider, {
-        name: "Oupa",
-        children: createElement(Probe),
-      }),
-    );
+    render(createElement(AssistantNameProvider, { name: "Oupa" }, createElement(Probe)));
     expect(screen.getByTestId("name").textContent).toBe("Oupa");
   });
 
   it("trims surrounding whitespace on the stored name", () => {
     render(
-      createElement(AssistantNameProvider, {
-        name: "  Boerkloof  ",
-        children: createElement(Probe),
-      }),
+      createElement(AssistantNameProvider, { name: "  Boerkloof  " }, createElement(Probe)),
     );
     expect(screen.getByTestId("name").textContent).toBe("Boerkloof");
   });
@@ -75,20 +57,23 @@ describe("useAssistantName — custom names", () => {
 
 describe("useAssistantName — live re-render", () => {
   it("re-renders when the provider's name changes (rename flow)", () => {
-    // Host wires a state holder so we can flip the name after mount,
-    // mirroring Wave 3's rename editor calling setState on the layout.
-    let setName: (v: string) => void = () => {};
+    // Host exposes setState via a stable container object. The setter is
+    // placed into the container inside useEffect (after render) so no
+    // ref mutation occurs during the render phase (satisfies
+    // react-hooks/immutability). useState setters are stable across
+    // renders so reading container.set after mount always works.
+    const container: { set: (v: string) => void } = { set: () => {} };
     function Host({ children }: { children: ReactNode }) {
       const [name, setN] = useState("Einstein");
-      setName = setN;
-      return createElement(AssistantNameProvider, { name, children });
+      useEffect(() => { container.set = setN; });
+      return createElement(AssistantNameProvider, { name }, children);
     }
 
-    render(createElement(Host, { children: createElement(Probe) }));
+    render(createElement(Host, {}, createElement(Probe)));
     expect(screen.getByTestId("name").textContent).toBe("Einstein");
 
     act(() => {
-      setName("Boerkloof");
+      container.set("Boerkloof");
     });
     expect(screen.getByTestId("name").textContent).toBe("Boerkloof");
   });

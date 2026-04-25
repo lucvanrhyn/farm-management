@@ -44,17 +44,24 @@ function formatTime(iso: string | undefined): string {
 }
 
 export default function EskomBannerLayer({ areaId }: Props) {
-  const [state, setState] = useState<FetchState<EskomStatus>>({ status: "idle" });
+  const fetchUrl = areaId
+    ? `/api/map/gis/eskom-se-push/status/${encodeURIComponent(areaId)}`
+    : null;
+  const [result, setResult] = useState<{ url: string; state: FetchState<EskomStatus> } | null>(null);
+
+  const state: FetchState<EskomStatus> =
+    fetchUrl && result?.url === fetchUrl ? result.state : { status: "idle" };
 
   useEffect(() => {
-    if (!areaId) return;
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<EskomStatus>(`/api/map/gis/eskom-se-push/status/${encodeURIComponent(areaId)}`).then((r) => {
-      if (!cancelled) setState(r);
+    if (!fetchUrl) return;
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<EskomStatus>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
     });
-    return () => { cancelled = true; };
-  }, [areaId]);
+    return () => ctrl.abort();
+  }, [fetchUrl]);
 
   if (!areaId) return null;
   if (state.status !== "ready") return null;

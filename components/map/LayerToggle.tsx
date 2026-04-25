@@ -8,7 +8,7 @@
  * component just renders the toggles.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 export interface LayerState {
   campOverlay:     boolean;
@@ -59,13 +59,10 @@ export function readLayerState(): LayerState {
  * persisted state and re-renders. Writes on every change.
  */
 export function useLayerState(): [LayerState, (patch: Partial<LayerState>) => void] {
-  const [state, setState] = useState<LayerState>(DEFAULT_LAYER_STATE);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setState(readLayerState());
-    setHydrated(true);
-  }, []);
+  // Lazy initializer reads localStorage on first client render (SSR-safe —
+  // readLayerState() returns defaults when window is undefined). No effect
+  // needed for hydration — eliminates the synchronous setState-in-effect lint error.
+  const [state, setState] = useState<LayerState>(readLayerState);
 
   const update = useCallback((patch: Partial<LayerState>) => {
     setState((prev) => {
@@ -80,9 +77,6 @@ export function useLayerState(): [LayerState, (patch: Partial<LayerState>) => vo
       return next;
     });
   }, []);
-
-  // Suppress SSR hydration flash by forcing `hydrated` into state reads.
-  void hydrated;
 
   return [state, update];
 }

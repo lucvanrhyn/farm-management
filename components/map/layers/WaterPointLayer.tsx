@@ -64,16 +64,21 @@ const labelLayer: LayerProps = {
 };
 
 export default function WaterPointLayer({ farmSlug }: Props) {
-  const [state, setState] = useState<FetchState<WaterPointsPayload>>({ status: "idle" });
+  const fetchUrl = `/api/${encodeURIComponent(farmSlug)}/map/water-points`;
+  const [result, setResult] = useState<{ url: string; state: FetchState<WaterPointsPayload> } | null>(null);
+
+  const state: FetchState<WaterPointsPayload> =
+    result?.url === fetchUrl ? result.state : { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<WaterPointsPayload>(`/api/${encodeURIComponent(farmSlug)}/map/water-points`).then((r) => {
-      if (!cancelled) setState(r);
+    const ctrl = new AbortController();
+    const url = fetchUrl;
+    fetchLayerJson<WaterPointsPayload>(url, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult({ url, state: r });
     });
-    return () => { cancelled = true; };
-  }, [farmSlug]);
+    return () => ctrl.abort();
+  }, [fetchUrl]);
 
   if (state.status !== "ready") return null;
 

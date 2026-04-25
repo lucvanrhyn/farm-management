@@ -36,16 +36,21 @@ function normalise(payload: FmdPayload | null): GeoJSON.FeatureCollection {
   return EMPTY_FC;
 }
 
+const FMD_URL = "/api/map/gis/fmd-zones";
+
 export default function FmdZoneLayer() {
-  const [state, setState] = useState<FetchState<FmdPayload>>({ status: "idle" });
+  const [result, setResult] = useState<FetchState<FmdPayload> | null>(null);
+
+  // Derived: show loading until we have a result (fetch fires once on mount).
+  const state: FetchState<FmdPayload> = result ?? { status: "loading" };
 
   useEffect(() => {
-    let cancelled = false;
-    setState({ status: "loading" });
-    fetchLayerJson<FmdPayload>("/api/map/gis/fmd-zones").then((r) => {
-      if (!cancelled) setState(r);
+    const ctrl = new AbortController();
+    fetchLayerJson<FmdPayload>(FMD_URL, { signal: ctrl.signal }).then((r) => {
+      if (!r) return; // aborted
+      setResult(r);
     });
-    return () => { cancelled = true; };
+    return () => ctrl.abort();
   }, []);
 
   if (state.status !== "ready") return null;

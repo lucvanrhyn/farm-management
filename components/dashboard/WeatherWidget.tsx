@@ -107,43 +107,54 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   const params = useParams();
   const farmSlug = typeof params?.farmSlug === "string" ? params.farmSlug : "";
 
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     latitude != null && longitude != null ? { lat: latitude, lng: longitude } : null
   );
+  // Lazy initializer: if no coord props and geolocation is unavailable, mark as
+  // failed immediately rather than in an effect body (avoids synchronous setState
+  // in effect, which the lint rule flags as cascade-prone).
+  const [geoFailed, setGeoFailed] = useState(() => {
+    const hasCoordProps = latitude != null && longitude != null;
+    return !hasCoordProps && typeof navigator !== "undefined" && !navigator.geolocation;
+  });
 
-  // If no props, attempt browser geolocation
+  // Combined weather result keyed by coord string — derives loading and error
+  // purely in render so no synchronous setState in effect bodies.
+  const coordKey = coords ? `${coords.lat.toFixed(4)}_${coords.lng.toFixed(4)}` : null;
+  const [weatherResult, setWeatherResult] = useState<{
+    key: string;
+    data: WeatherData | null;
+    error: string | null;
+  } | null>(null);
+
+  // Derived state — no setState needed in effects.
+  const weather = weatherResult?.key === coordKey ? weatherResult.data : null;
+  const error   = weatherResult?.key === coordKey ? weatherResult.error : null;
+  // Loading: true while we're waiting for coords or for the weather fetch to settle.
+  // False once geolocation failed (nothing more to wait for) or weather result arrived.
+  const loading = !geoFailed && (coordKey === null || weatherResult?.key !== coordKey);
+
+  // If no props and geolocation is available, attempt to get current position.
+  // geoFailed is already true if geolocation is unavailable (lazy initializer).
   useEffect(() => {
-    if (coords) return;
-    if (!navigator.geolocation) return;
+    if (coords || geoFailed) return;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
-        setLoading(false);
+        setGeoFailed(true);
       }
     );
-  }, [coords]);
+  }, [coords, geoFailed]);
 
   useEffect(() => {
-    if (!coords) {
-      setLoading(false);
-      return;
-    }
+    if (!coords || !coordKey) return;
 
-    const cacheKey = `${CACHE_KEY}_${coords.lat.toFixed(4)}_${coords.lng.toFixed(4)}`;
-    const cached = readCache(cacheKey);
-    if (cached) {
-      setWeather(cached);
-      setLoading(false);
-      return;
-    }
-
+    const cacheKey = `${CACHE_KEY}_${coordKey}`;
     const controller = new AbortController();
+    const key = coordKey;
 
     const url =
       `https://api.open-meteo.com/v1/forecast` +
@@ -154,41 +165,48 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
       `&timezone=auto` +
       `&forecast_days=5`;
 
-    fetch(url, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
-        return res.json() as Promise<OpenMeteoResponse>;
+    // Check cache asynchronously (via microtask) to avoid synchronous setState
+    // in the effect body — resolves immediately if cached, fetches otherwise.
+    Promise.resolve(readCache(cacheKey))
+      .then((cached) => {
+        if (cached) return cached;
+        return fetch(url, { signal: controller.signal })
+          .then((res) => {
+            if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
+            return res.json() as Promise<OpenMeteoResponse>;
+          })
+          .then((raw): WeatherData => {
+            const data: WeatherData = {
+              current: {
+                temp: Math.round(raw.current.temperature_2m),
+                code: raw.current.weathercode,
+              },
+              daily: raw.daily.time.slice(0, 5).map((date, i) => ({
+                date,
+                maxTemp: Math.round(raw.daily.temperature_2m_max[i]),
+                minTemp: Math.round(raw.daily.temperature_2m_min[i]),
+                precip: Math.round(raw.daily.precipitation_sum[i] * 10) / 10,
+                code: raw.daily.weathercode[i],
+              })),
+              fetchedAt: Date.now(),
+            };
+            writeCache(cacheKey, data);
+            return data;
+          });
       })
-      .then((raw) => {
-        const data: WeatherData = {
-          current: {
-            temp: Math.round(raw.current.temperature_2m),
-            code: raw.current.weathercode,
-          },
-          daily: raw.daily.time.slice(0, 5).map((date, i) => ({
-            date,
-            maxTemp: Math.round(raw.daily.temperature_2m_max[i]),
-            minTemp: Math.round(raw.daily.temperature_2m_min[i]),
-            precip: Math.round(raw.daily.precipitation_sum[i] * 10) / 10,
-            code: raw.daily.weathercode[i],
-          })),
-          fetchedAt: Date.now(),
-        };
-        writeCache(cacheKey, data);
-        setWeather(data);
-        setLoading(false);
+      .then((data) => {
+        setWeatherResult({ key, data, error: null });
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === "AbortError") return;
-        setError("Could not load weather data.");
-        setLoading(false);
+        setWeatherResult({ key, data: null, error: "Could not load weather data." });
       });
 
     return () => controller.abort();
-  }, [coords]);
+  }, [coords, coordKey]);
 
   // ── No coordinates ─────────────────────────────────────────────────────────
-  if (!loading && !coords) {
+  if (geoFailed || (!loading && !coords)) {
     return (
       <div
         className="rounded-xl px-4 py-3 flex items-center gap-3"

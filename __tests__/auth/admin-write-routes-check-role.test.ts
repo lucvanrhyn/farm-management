@@ -218,7 +218,7 @@ function handlerBodies(source: string): Map<Method, string> {
     // `i` now points just after the closing `)`. Handler signatures may have
     // a return-type annotation (`: Promise<Response>`) before the body — skip
     // whitespace + annotation chars until we hit the body `{`.
-    let braceIdx = source.indexOf('{', i);
+    const braceIdx = source.indexOf('{', i);
     if (braceIdx === -1) continue;
     // Ensure there's no second `(` before `{` — that would indicate we stopped
     // inside a nested arg list (not happening in this codebase, but cheap).
