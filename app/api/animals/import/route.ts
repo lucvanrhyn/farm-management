@@ -52,17 +52,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
-  const allowedTypes = [
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel",
-    "text/csv",
-  ];
-  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
-    return NextResponse.json({ error: "File must be .xlsx, .xls, or .csv" }, { status: 400 });
+  // Wave 1 W1d migrated from `xlsx@0.18.5` to ExcelJS via `lib/xlsx-shim`.
+  // The shim deliberately handles `.xlsx` only — it has no CSV parser and no
+  // BIFF8 (`.xls`) reader. Accepting those extensions and letting the shim
+  // throw unhandled produced a 500 with no useful message; per
+  // silent-failure-pattern.md we surface a typed-error 400 instead.
+  const XLSX_MIME =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const isXlsxByExt = /\.xlsx$/i.test(file.name);
+  const isXlsxByMime = file.type === XLSX_MIME;
+  if (!isXlsxByExt && !isXlsxByMime) {
+    return NextResponse.json(
+      {
+        code: "FILE_TYPE_UNSUPPORTED",
+        error:
+          "Only .xlsx files are supported. CSV/XLS support was removed in the xlsx → ExcelJS migration. Please save your file as .xlsx and re-upload.",
+      },
+      { status: 400 },
+    );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = await readWorkbook(buffer);
+  let workbook: Awaited<ReturnType<typeof readWorkbook>>;
+  try {
+    workbook = await readWorkbook(buffer);
+  } catch (err) {
+    // ExcelJS / jszip throw "Can't find end of central directory" for non-zip
+    // payloads (a renamed CSV, corrupt download, etc.). Translate to a typed
+    // 400 — never let it leak as a 500 with a stack trace.
+    return NextResponse.json(
+      {
+        code: "FILE_PARSE_FAILED",
+        error: `Could not read the .xlsx file — ${err instanceof Error ? err.message : "invalid workbook"}. Make sure the file is a real .xlsx workbook (not a renamed CSV).`,
+      },
+      { status: 400 },
+    );
+  }
 
   // Look up farm's default breed from settings
   const farmSettings = await prisma.farmSettings.findFirst({ select: { breed: true } });
