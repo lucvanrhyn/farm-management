@@ -7,18 +7,29 @@ import { createHmac } from "node:crypto";
 // the Edge-compatible middleware runtime and must keep its module graph flat
 // (no transitive Prisma / auth-options imports).
 //
-// Phase G (P6.5): the payload now also binds the JWT `sub` (the user id) so
-// that `verifyFreshAdminRole(session.user.id, slug)` calls in migrated
-// handlers receive the real user id instead of the empty string. Must stay
-// in sync with `signIdentity` in `lib/server/farm-context.ts`.
+// Phase G (P6.5): the payload binds the JWT `sub` (the user id) so that
+// `verifyFreshAdminRole(session.user.id, slug)` calls in migrated handlers
+// receive the real user id instead of the empty string.
+//
+// Wave 1 W1b: the payload also binds `role` and a leading `v2` version byte.
+// Role was previously stamped into a sibling header (`x-session-role`) and
+// trusted verbatim by handlers — the primitive itself did not enforce role
+// authenticity. The version byte forces v1 tokens to fail verification on
+// deploy (NEXTAUTH_SECRET MUST be rotated alongside this change).
+//
+// IMPORTANT: bumping IDENTITY_HMAC_VERSION here requires the same bump in
+// `lib/server/farm-context.ts`.
+const IDENTITY_HMAC_VERSION = "v2";
+
 function signIdentity(
   userEmail: string,
   slug: string,
   userId: string,
+  role: string,
   secret: string,
 ): string {
   return createHmac("sha256", secret)
-    .update(`${userEmail}\n${slug}\n${userId}`)
+    .update(`${IDENTITY_HMAC_VERSION}\n${userEmail}\n${slug}\n${userId}\n${role}`)
     .digest("hex");
 }
 
@@ -128,8 +139,16 @@ function withSessionHeaders(
     return factory();
   }
 
+  // Stamp the signed identity tuple. Wave 1 W1b binds `role` into the HMAC
+  // payload itself — `x-session-role` is still set (defense-in-depth: every
+  // matched-path response overwrites the client-supplied header so a fetch
+  // bypassing middleware to a non-matched path can't inject a forged role)
+  // but is no longer the authoritative source. The verifier in
+  // `lib/server/farm-context.ts` reads the role via the header AND requires
+  // it to match the value bound in the HMAC. Drift between header and
+  // signed value fails verification cleanly.
   const headers = new Headers(req.headers);
-  const sig = signIdentity(email, farm.slug, sub, secret);
+  const sig = signIdentity(email, farm.slug, sub, farm.role, secret);
   headers.set("x-session-user", email);
   headers.set("x-farm-slug", farm.slug);
   headers.set("x-session-role", farm.role);

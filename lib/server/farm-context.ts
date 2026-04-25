@@ -9,8 +9,8 @@
  * `proxy.ts` already runs `getToken` for every request that hits the matcher
  * — the full session material is available there. Phase D hoists that work
  * into the middleware hop: proxy authenticates once, stamps an HMAC-signed
- * identity triplet onto the request, and route handlers consume it via
- * `getFarmContext()`.
+ * identity tuple (email, slug, sub, role + version byte) onto the request,
+ * and route handlers consume it via `getFarmContext()`.
  *
  * Trust model
  * -----------
@@ -62,33 +62,53 @@ const SIGNED_SUB_HEADER = 'x-session-sub';
 const SIGNATURE_HEADER = 'x-session-sig';
 
 /**
- * Compute the HMAC-SHA256 signature for (userEmail, slug, userId). Exported
- * so `proxy.ts` can reuse the exact same primitive when signing and we
+ * Identity HMAC version. Bumped from implicit v1 → v2 in Wave 1 W1b when
+ * `role` was bound into the payload. The version byte lives at the head of
+ * the HMAC input so any future rotation (key change, payload change) can be
+ * forced by bumping this constant — old tokens fail verification cleanly
+ * instead of silently degrading.
+ *
+ * IMPORTANT: bumping `IDENTITY_HMAC_VERSION` requires `NEXTAUTH_SECRET` to
+ * be rotated on the same deploy so all in-flight v(N-1) tokens are rejected
+ * and clients are forced to re-auth. v1 tokens are intentionally rejected.
+ */
+export const IDENTITY_HMAC_VERSION = 'v2';
+
+/**
+ * Compute the HMAC-SHA256 signature for (version, userEmail, slug, userId, role).
+ * Exported so `proxy.ts` can reuse the exact same primitive when signing and we
  * cannot drift between signer and verifier.
  *
- * Phase G (P6.5): the payload now also binds the JWT `sub` (user id) so
- * migrated admin-write handlers calling `verifyFreshAdminRole(session.user.id, slug)`
+ * Phase G (P6.5): the payload binds the JWT `sub` (user id) so migrated
+ * admin-write handlers calling `verifyFreshAdminRole(session.user.id, slug)`
  * receive the real user id instead of an empty string.
+ *
+ * Wave 1 W1b: payload now also binds `role` and a leading version byte. Role
+ * was previously only stamped into a sibling header (`x-session-role`) and
+ * not authenticated by the HMAC, leaving a forged-role attack vector at the
+ * primitive level. The version byte lets us rotate cleanly in future.
  */
 export function signIdentity(
   userEmail: string,
   slug: string,
   userId: string,
+  role: string,
   secret: string,
 ): string {
   return createHmac('sha256', secret)
-    .update(`${userEmail}\n${slug}\n${userId}`)
+    .update(`${IDENTITY_HMAC_VERSION}\n${userEmail}\n${slug}\n${userId}\n${role}`)
     .digest('hex');
 }
 
-function verifyIdentity(
+export function verifyIdentity(
   userEmail: string,
   slug: string,
   userId: string,
+  role: string,
   providedSig: string,
   secret: string,
 ): boolean {
-  const expected = signIdentity(userEmail, slug, userId, secret);
+  const expected = signIdentity(userEmail, slug, userId, role, secret);
   // Length mismatch would cause `timingSafeEqual` to throw; pre-check.
   if (expected.length !== providedSig.length) return false;
   try {
@@ -154,16 +174,24 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
   // trust any of the headers unless the HMAC verifies — otherwise an
   // external caller could spoof tenant identity by sending `x-farm-slug`.
   //
-  // Phase G (P6.5): the signed payload now binds `sub` (user id) too so
-  // migrated admin-write handlers can call `verifyFreshAdminRole(userId, slug)`
+  // Phase G (P6.5): the signed payload binds `sub` (user id) so migrated
+  // admin-write handlers can call `verifyFreshAdminRole(userId, slug)`
   // without an empty-string userId silently rejecting every ADMIN.
+  //
+  // Wave 1 W1b: the payload also binds `role` and a leading `v2` version
+  // byte. Role was previously trusted from `x-session-role` outside the
+  // HMAC; now any tampered or v1-format token fails verification cleanly.
+  // We require a non-empty `signedRole` here — without it the verifier
+  // would happily authenticate a token signed with role="" against a
+  // forged `x-session-role: ADMIN` header.
   if (
     secret &&
     userEmail &&
     slug &&
     sig &&
     signedSub &&
-    verifyIdentity(userEmail, slug, signedSub, sig, secret)
+    signedRole &&
+    verifyIdentity(userEmail, slug, signedSub, signedRole, sig, secret)
   ) {
     const prisma = await getPrismaForFarm(slug);
     if (!prisma) return null;
