@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { clientLogger } from "@/lib/client-logger";
 
 /**
  * Registers the Serwist service worker at the root layout level so that
@@ -18,12 +19,10 @@ export function SWRegistrar() {
       navigator.serviceWorker
         .register("/sw.js")
         .then((reg) => {
-          // intentional console: client-side SW registration, no logger sink in browser.
-          console.log("[SW] Registered, scope:", reg.scope);
+          clientLogger.info("[SW] Registered", { scope: reg.scope });
         })
         .catch((err) => {
-          // intentional console: client-side SW registration, no logger sink in browser.
-          console.error("[SW] Registration failed:", err);
+          clientLogger.error("[SW] Registration failed", { err });
         });
     }
   }, []);
