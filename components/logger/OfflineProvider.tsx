@@ -20,6 +20,7 @@ import {
 } from '@/lib/offline-store';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
+import { clientLogger } from '@/lib/client-logger';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
 
@@ -137,8 +138,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       await refreshHeroImage();
       setSyncStatus('idle');
     } catch (err) {
-      // intentional console: client-side OfflineProvider, no logger sink in browser.
-      console.error('refreshData error:', err);
+      clientLogger.error('refreshData error', { err });
       setSyncStatus('error');
     }
   }, [pendingCount, syncStatus, refreshPendingCount, refreshHeroImage]);
