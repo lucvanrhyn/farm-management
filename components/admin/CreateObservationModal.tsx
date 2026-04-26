@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ObservationType } from "@/lib/types";
 import { getAllObservationTypes, getAllSpeciesConfigs } from "@/lib/species/registry";
+import AnimalPicker from "@/components/observations/AnimalPicker";
 
 // ─── Constants ──────────────────────────────────────────────────
 
@@ -55,7 +56,18 @@ const fieldInput: React.CSSProperties = {
 
 interface CreateObservationModalProps {
   camps: { id: string; name: string }[];
+  /**
+   * Pre-fetched first page of active animals (≤ PAGE_SIZE on the page). Used
+   * for fast offline rendering of the most-common picks. The modal also
+   * exposes a server-side search (`AnimalPicker`) that reaches animals
+   * outside this slice via `/api/animals?search=`.
+   */
   animals: { id: string; tag: string; campId: string }[];
+  /**
+   * Active farm-mode species. Threaded through to the AnimalPicker so the
+   * server-side search returns rows of the right species only.
+   */
+  species?: string | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -65,6 +77,7 @@ interface CreateObservationModalProps {
 export default function CreateObservationModal({
   camps,
   animals,
+  species,
   onSuccess,
   onCancel,
 }: CreateObservationModalProps) {
@@ -76,7 +89,13 @@ export default function CreateObservationModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const filteredAnimals = campId
+  // The SSR-prefetched `animals` array is a hot-cache of the first PAGE_SIZE
+  // rows on the parent page. For animals outside that slice the AnimalPicker
+  // does a debounced server-side search via /api/animals?search=. We keep the
+  // prefetched list in the modal's prop surface so the server-side picker can
+  // still surface a fast path (filtered by current campId) without a network
+  // round-trip when the target is in the prefetch.
+  const prefetchedForCamp = campId
     ? animals.filter((a) => a.campId === campId)
     : animals;
 
@@ -190,20 +209,52 @@ export default function CreateObservationModal({
             </label>
 
             {ANIMAL_LINKED_TYPES.has(selectedType) && (
-              <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
-                Animal (optional)
-                <select
+              <div className="text-xs font-semibold flex flex-col gap-1" style={{ color: "#6B5C4E" }}>
+                <span>Animal (optional)</span>
+                {/*
+                  Prefetched quick-pick: the parent page hydrates the first 50
+                  active animals in the current camp. This is the common case
+                  (small herd, target nearby) and avoids a network round-trip.
+                */}
+                {prefetchedForCamp.length > 0 && (
+                  <select
+                    value={animalId && prefetchedForCamp.some((a) => a.id === animalId) ? animalId : ""}
+                    onChange={(e) => setAnimalId(e.target.value)}
+                    style={fieldInput}
+                    className="block"
+                    aria-label="Quick-pick animal"
+                  >
+                    <option value="">Quick-pick from this camp…</option>
+                    {prefetchedForCamp.map((a) => (
+                      <option key={a.id} value={a.id}>{a.tag}</option>
+                    ))}
+                  </select>
+                )}
+                {/*
+                  Server-side search: reaches animals outside the SSR slice.
+                  Phase H replaces the legacy "raw animalId text field" fallback
+                  with this debounced typeahead bound to /api/animals?search=.
+                */}
+                <AnimalPicker
+                  species={species}
+                  campId={campId || undefined}
                   value={animalId}
-                  onChange={(e) => setAnimalId(e.target.value)}
-                  style={fieldInput}
-                  className="mt-1 block"
-                >
-                  <option value="">None</option>
-                  {filteredAnimals.map((a) => (
-                    <option key={a.id} value={a.id}>{a.tag}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setAnimalId}
+                />
+                {animalId && (
+                  <span className="text-[11px] font-normal" style={{ color: "#9C8E7A" }}>
+                    Selected: <span className="font-mono">{animalId}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAnimalId("")}
+                      className="ml-2 underline"
+                      style={{ color: "#6B5C4E" }}
+                    >
+                      Clear
+                    </button>
+                  </span>
+                )}
+              </div>
             )}
 
             {/* Type-specific fields */}
