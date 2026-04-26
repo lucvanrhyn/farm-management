@@ -230,7 +230,19 @@ export default function RegisterPage() {
           Start with our Basic plan at R200/month. Upgrade to Advanced anytime.
         </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        {/*
+          Explicit method="post" + action prevent the no-JS HTML fallback
+          from defaulting to GET, which would leak email + password +
+          farmName into the URL bar and access logs. The action route is
+          /api/auth/register which already handles POST natively — so even
+          if the JS handler never runs, the browser submits via POST body.
+        */}
+        <form
+          onSubmit={handleSubmit}
+          method="post"
+          action="/api/auth/register"
+          className="flex flex-col gap-3.5"
+        >
           {/* Name */}
           <div className="flex flex-col gap-1">
             <label htmlFor="name" style={labelStyle}>Full Name</label>
@@ -339,9 +351,19 @@ export default function RegisterPage() {
           )}
 
           {/* Submit */}
+          {/*
+            aria-busy + disabled together pin the busy contract:
+            - `disabled` blocks pointer + keyboard double-submit during the
+              ~4s provisioning window (the visible label change is not
+              enough — a user clicking again would otherwise trip the 5/hr
+              IP rate limit on /api/auth/register).
+            - `aria-busy="true"` announces the same state to assistive tech
+              and to e2e harnesses (Playwright `getAttribute('aria-busy')`).
+          */}
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             style={{
               marginTop: "0.25rem",
               background: loading

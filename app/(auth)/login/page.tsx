@@ -163,7 +163,20 @@ export default function LoginPage() {
         }}
       >
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/*
+          Explicit method="post" + action are critical: if JS fails to load
+          (PWA stale, ad blocker, slow 3G abort), the browser's native
+          fallback would otherwise default to GET and leak `identifier` +
+          `password` into the URL bar and access logs. NextAuth's credentials
+          callback accepts POST, so the fallback degrades gracefully — at
+          worst the user gets a CSRF challenge instead of a credential leak.
+        */}
+        <form
+          onSubmit={handleSubmit}
+          method="post"
+          action="/api/auth/callback/credentials"
+          className="flex flex-col gap-4"
+        >
           {/* Identifier */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="identifier" style={labelStyle}>
@@ -232,9 +245,12 @@ export default function LoginPage() {
           )}
 
           {/* Submit */}
+          {/* aria-busy pairs with `disabled` so AT + Playwright agree on
+              the in-flight state (matches /register pattern). */}
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             style={{
               marginTop: "0.25rem",
               background: loading
