@@ -11,9 +11,23 @@ function CompleteContent() {
   const searchParams = useSearchParams();
   const farmSlug = searchParams.get("farm");
 
-  const [status, setStatus] = useState<"refreshing" | "ready" | "timeout">("refreshing");
+  // Fast-fail when ?farm= is missing. Without a farm slug the polling loop
+  // can do no useful work — it would tick 12 times over 24 s and drop into
+  // an ambiguous timeout. Real users hit this branch from saved bookmarks,
+  // PayFast return URLs that strip query params, manual URL entry, and
+  // browser back/forward replays. Rendering the error immediately gives
+  // them a clear explanation and a way out.
+  const initialStatus: "refreshing" | "ready" | "timeout" | "missing-farm" =
+    farmSlug ? "refreshing" : "missing-farm";
+
+  const [status, setStatus] = useState<
+    "refreshing" | "ready" | "timeout" | "missing-farm"
+  >(initialStatus);
 
   useEffect(() => {
+    // No farm slug → render the actionable error and skip polling entirely.
+    if (!farmSlug) return;
+
     let attempts = 0;
     const MAX_ATTEMPTS = 12; // 24 seconds total
 
@@ -24,19 +38,17 @@ function CompleteContent() {
       await update();
 
       // Check the live subscription status from the API
-      if (farmSlug) {
-        try {
-          const res = await fetch(`/api/subscription/status?farm=${farmSlug}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.subscriptionStatus === "active") {
-              setStatus("ready");
-              return;
-            }
+      try {
+        const res = await fetch(`/api/subscription/status?farm=${farmSlug}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.subscriptionStatus === "active") {
+            setStatus("ready");
+            return;
           }
-        } catch {
-          // Network error — keep polling
         }
+      } catch {
+        // Network error — keep polling
       }
 
       if (attempts >= MAX_ATTEMPTS) {
@@ -57,6 +69,10 @@ function CompleteContent() {
     } else {
       router.push("/farms");
     }
+  }
+
+  function handleRecoverFromMissingFarm() {
+    router.push("/farms");
   }
 
   return (
@@ -172,6 +188,78 @@ function CompleteContent() {
               }}
             >
               Go to my farm
+            </button>
+          </>
+        )}
+
+        {status === "missing-farm" && (
+          <>
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "rgba(196,144,48,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#C49030"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                color: "#F0DEB8",
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                textAlign: "center",
+              }}
+            >
+              We couldn&apos;t identify your farm
+            </h1>
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                color: "#8A6840",
+                fontSize: "0.875rem",
+                textAlign: "center",
+              }}
+            >
+              This page needs a farm context to confirm your subscription.
+              Return to your dashboard to continue, or contact support if the
+              issue persists.
+            </p>
+            <button
+              onClick={handleRecoverFromMissingFarm}
+              style={{
+                marginTop: "0.5rem",
+                background:
+                  "linear-gradient(135deg, rgba(196,144,48,0.90) 0%, rgba(160,100,40,0.90) 100%)",
+                border: "1px solid rgba(196,144,48,0.35)",
+                borderRadius: "10px",
+                padding: "0.75rem 2rem",
+                color: "#F0DEB8",
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.9375rem",
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+            >
+              Go to my farms
             </button>
           </>
         )}
