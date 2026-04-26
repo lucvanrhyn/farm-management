@@ -7,9 +7,14 @@ import CreateObservationModal from "@/components/admin/CreateObservationModal";
 interface Props {
   camps: { id: string; name: string }[];
   animals: { id: string; tag: string; campId: string }[];
+  /**
+   * Active farm-mode species. Forwarded to the create-observation modal so
+   * its server-side animal picker filters to the right species.
+   */
+  species?: string | null;
 }
 
-export default function ObservationsPageClient({ camps, animals }: Props) {
+export default function ObservationsPageClient({ camps, animals, species }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -34,6 +39,7 @@ export default function ObservationsPageClient({ camps, animals }: Props) {
         <CreateObservationModal
           camps={camps}
           animals={animals}
+          species={species}
           onSuccess={refresh}
           onCancel={() => setShowCreate(false)}
         />
