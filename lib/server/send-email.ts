@@ -13,6 +13,7 @@
 
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
+import { NOTIFICATION_ERROR_CODES } from "@/lib/server/notifications/error-codes";
 
 function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -185,13 +186,24 @@ export async function sendEmail(
   if (!opts.to) return { sent: false, skipped: "no-recipient" };
   const resend = getResend();
   if (!resend) {
-    logger.warn('[send-email] RESEND_API_KEY missing — skipping template', { template: opts.template });
+    // Fail loud, not throw — cron must keep running on a config issue.
+    // The typed code (centralised in lib/server/notifications/error-codes.ts)
+    // is what operations greps on; do NOT replace with a free-text string.
+    logger.warn("[send-email] RESEND_API_KEY missing — skipping template", {
+      code: NOTIFICATION_ERROR_CODES.RESEND_KEY_MISSING,
+      template: opts.template,
+    });
     return { sent: false, skipped: "no-api-key" };
   }
   const renderer = RENDERERS[opts.template];
   if (!renderer) {
     // Shouldn't happen at runtime because EmailTemplate is a union, but defend
     // against runtime callers with weaker types (e.g. JSON-driven sends).
+    // Fail loud — an unknown template reaching here means a regression upstream.
+    logger.warn("[send-email] unknown template — dropping send", {
+      code: NOTIFICATION_ERROR_CODES.UNKNOWN_TEMPLATE,
+      template: opts.template,
+    });
     return { sent: false, error: `Unknown template: ${opts.template}` };
   }
   const rendered = renderer(opts.data as Record<string, unknown>);
@@ -206,14 +218,31 @@ export async function sendEmail(
     // as a failure signal.
     const anyRes = res as unknown as { data?: { id?: string }; error?: unknown };
     if (anyRes.error) {
-      return {
-        sent: false,
-        error: anyRes.error instanceof Error ? anyRes.error.message : String(anyRes.error),
-      };
+      const message =
+        anyRes.error instanceof Error
+          ? anyRes.error.message
+          : String(anyRes.error);
+      // Operations needs a typed signal that Resend itself rejected the send,
+      // distinct from the missing-key branch above. Don't throw — the cron
+      // keeps running.
+      logger.warn("[send-email] Resend API rejected send", {
+        code: NOTIFICATION_ERROR_CODES.RESEND_API_FAILED,
+        template: opts.template,
+        error: message,
+      });
+      return { sent: false, error: message };
     }
     return { sent: true, id: anyRes.data?.id };
   } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
+    const message = err instanceof Error ? err.message : String(err);
+    // Network / runtime exception talking to Resend — same fail-loud policy as
+    // the API-error branch above: warn with a typed code, keep cron running.
+    logger.warn("[send-email] Resend send threw", {
+      code: NOTIFICATION_ERROR_CODES.RESEND_API_FAILED,
+      template: opts.template,
+      error: message,
+    });
+    return { sent: false, error: message };
   }
 }
 
