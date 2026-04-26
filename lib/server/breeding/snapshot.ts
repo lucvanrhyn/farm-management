@@ -1,20 +1,26 @@
 // lib/server/breeding/snapshot.ts
-// Breeding snapshot — herd-level summary of bulls in service, pregnant/open
-// cows, expected calvings this month, and a calving calendar entry list.
+// Breeding snapshot — herd-level summary of breeding sires in service,
+// pregnant/open dams, expected births this month, and a parturition calendar.
 //
-// Cattle-only by design (per Wave-3 audit: this lib is consumed only from
-// cattle-only surfaces — `where: { species: "cattle" }` is intentional).
+// Phase F: species-aware. The optional `species` argument routes through
+// `lib/species/breeding-constants.ts` to pick gestation period, sire
+// category, and dam categories. Default ("cattle") preserves the historical
+// signature — old call sites work unchanged.
 
 import type { PrismaClient } from "@prisma/client";
 import type { BreedingSnapshot } from "./types";
-import { GESTATION_DAYS } from "./constants";
 import { addDays, daysFromNow, parseDetails } from "./utils";
+import { getBreedingConstants } from "@/lib/species/breeding-constants";
+import type { SpeciesId } from "@/lib/species/types";
 
 export async function getBreedingSnapshot(
   prisma: PrismaClient,
   farmSlug: string,
+  species: SpeciesId = "cattle",
 ): Promise<BreedingSnapshot> {
   void farmSlug;
+  const constants = getBreedingConstants(species);
+  const femaleCategorySet = new Set(constants.femaleCategories);
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000);
   const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
@@ -23,7 +29,7 @@ export async function getBreedingSnapshot(
 
   const [allAnimals, recentPregnancyScans, recentInseminations] = await Promise.all([
     prisma.animal.findMany({
-      where: { status: "Active", species: "cattle" },
+      where: { status: "Active", species },
       select: {
         id: true,
         animalId: true,
@@ -54,7 +60,7 @@ export async function getBreedingSnapshot(
     }),
   ]);
 
-  const bulls = allAnimals.filter((a) => a.category === "Bull");
+  const bulls = allAnimals.filter((a) => a.category === constants.sireCategory);
   const bullsInService = bulls.length;
 
   const latestScanByAnimal = new Map<string, { result: string; observedAt: Date }>();
@@ -76,7 +82,7 @@ export async function getBreedingSnapshot(
   const pregnantCows = pregnantAnimalIds.size;
 
   const femaleCows = allAnimals.filter(
-    (a) => a.sex === "Female" && (a.category === "Cow" || a.category === "Heifer"),
+    (a) => a.sex === "Female" && femaleCategorySet.has(a.category),
   );
   const openCows = femaleCows.filter((a) => !pregnantAnimalIds.has(a.id)).length;
 
@@ -102,7 +108,7 @@ export async function getBreedingSnapshot(
     const baseDate = scan?.observedAt ?? insem;
     if (!baseDate) continue;
 
-    const expectedDate = addDays(baseDate, GESTATION_DAYS);
+    const expectedDate = addDays(baseDate, constants.gestationDays);
     if (expectedDate > sixtyDaysFromNow) continue;
     if (daysFromNow(expectedDate) < -7) continue;
 
