@@ -235,6 +235,42 @@ resulting perf delta from step 10.
 
 ---
 
+## Post-cutover audit (added 2026-04-26)
+
+After every region cutover, run the source↔target diff tool to confirm no writes
+were silently lost in the dump-to-pointer-swap window. This step was **missing**
+from the original Phase E runbook — its absence is what produced the ad-hoc
+investigation documented in `docs/ops/wave1-data-recovery-diff-2026-04-25.md`.
+
+```bash
+# Reads legacy_turso_url (source) and turso_url (target) from the meta DB automatically:
+pnpm diff-farm-cutover -- --tenant <slug>
+
+# Or with explicit overrides:
+pnpm diff-farm-cutover -- --tenant <slug> \
+  --source-url libsql://<legacy>.turso.io \
+  --source-token <token> \
+  --target-url  libsql://<current>.turso.io \
+  --target-token <token>
+```
+
+**Exit code 0** — no source-only rows on any table. Safe to proceed with legacy DB
+retirement (step 12).
+
+**Exit code 1** — one or more source-only rows detected. These are potential lost
+writes. Investigate each listed row and replay manually before destroying the
+source DB.
+
+**Exit code 2** — schema or connection error. The diff may be partial. Resolve
+the reported issue and re-run before proceeding.
+
+The tool also writes a structured JSON file to `docs/ops/diff-<tenant>-<YYYY-MM-DD>.json`
+for archiving alongside the runbook. Required env: `META_TURSO_URL` +
+`META_TURSO_AUTH_TOKEN` (already set for any dev/prod session that reads the
+meta DB).
+
+---
+
 ## Known gotchas
 
 - **Turso CLI token** is separate from `TURSO_API_TOKEN`. The CLI uses `~/.config/turso/settings.json` (from `turso auth login`). The management API uses the env var. Both must be configured.
