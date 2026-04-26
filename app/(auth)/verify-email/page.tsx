@@ -31,14 +31,27 @@ function VerifyInner() {
   useEffect(() => {
     if (!token) return;
 
-    fetch(`/api/auth/verify-email?token=${token}`)
+    fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
-        if (res.ok) {
+        // Route always returns 200 with a typed payload so the browser never
+        // auto-logs a "Failed to load resource" network error. Error conditions
+        // are encoded in `valid: false` — never rely on res.ok here.
+        if (res.status === 500) {
+          setStatus("error");
+          setErrorMessage("Something went wrong. Please try again.");
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        if (!data) {
+          setStatus("error");
+          setErrorMessage("Unexpected response. Please try again.");
+          return;
+        }
+        if (data.valid) {
           setStatus("success");
         } else {
-          const data = await res.json().catch(() => ({}));
           setStatus("error");
-          setErrorMessage(data.error ?? "Verification failed.");
+          setErrorMessage("Your verification link has expired or is invalid.");
         }
       })
       .catch(() => {
