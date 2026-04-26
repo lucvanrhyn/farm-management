@@ -1,16 +1,30 @@
 // lib/server/breeding/scoring.ts
-// Score-and-explain a single bull x cow pairing given pre-computed trait
+// Score-and-explain a single sire x dam pairing given pre-computed trait
 // profiles and the COI for the hypothetical offspring.
+//
+// Phase F: the heifer-safety penalty (high birth weight × young dam) is now
+// parameterised per species. Cattle keep the historical 38 kg / "Heifer"
+// thresholds; sheep flag oversized lambs paired with maiden ewes; game
+// retains the shape but the rule rarely fires in practice (population
+// tracking).
 
 import type { PairingSuggestion, TraitProfile } from "./types";
-import { COI_HARD_LIMIT, COI_SOFT_LIMIT, HIGH_BIRTH_WEIGHT_KG } from "./constants";
+import { COI_HARD_LIMIT, COI_SOFT_LIMIT } from "./constants";
 import { clamp } from "./utils";
+
+export interface PairingScoreOptions {
+  /** Dam category that triggers the high-birth-weight safety penalty (e.g. "Heifer"). */
+  youngFemaleCategory: string;
+  /** Birth weight (kg) above which the sire is flagged risky for young dams. */
+  highBirthWeightKg: number;
+}
 
 export function calculatePairingScore(
   coi: number,
   bullProfile: TraitProfile,
   cowProfile: TraitProfile,
   cowCategory: string,
+  options: PairingScoreOptions,
 ): { score: number; reason: string; riskFlags: string[]; traitBreakdown: PairingSuggestion["traitBreakdown"] } {
   const riskFlags: string[] = [];
   const reasons: string[] = [];
@@ -31,13 +45,19 @@ export function calculatePairingScore(
     totalScore += 5;
   }
 
-  // --- Heifer safety: penalize high birth weight bulls ---
-  if (cowCategory === "Heifer" && bullProfile.birthWeight !== null && bullProfile.birthWeight > HIGH_BIRTH_WEIGHT_KG) {
+  // --- Young-dam safety: penalize high birth weight sires ---
+  if (
+    cowCategory === options.youngFemaleCategory &&
+    bullProfile.birthWeight !== null &&
+    bullProfile.birthWeight > options.highBirthWeightKg
+  ) {
     totalScore -= 20;
-    riskFlags.push(`Heifer + high BW bull (${bullProfile.birthWeight.toFixed(1)}kg avg)`);
-    reasons.push("Bull produces heavy calves — risk for heifer");
-  } else if (cowCategory === "Heifer") {
-    reasons.push("Heifer pairing — monitoring birth weights recommended");
+    riskFlags.push(
+      `${options.youngFemaleCategory} + high BW sire (${bullProfile.birthWeight.toFixed(1)}kg avg)`,
+    );
+    reasons.push("Sire produces heavy offspring — risk for young dam");
+  } else if (cowCategory === options.youngFemaleCategory) {
+    reasons.push(`${options.youngFemaleCategory} pairing — monitor birth weights`);
   }
 
   // --- Trait scores ---
