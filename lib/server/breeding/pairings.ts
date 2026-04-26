@@ -48,6 +48,7 @@ export async function suggestPairings(
     prisma.observation.findMany({
       where: {
         type: "pregnancy_scan",
+        species,
         observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
@@ -108,6 +109,7 @@ export async function suggestPairings(
     prisma.observation.findMany({
       where: {
         animalId: { in: allAnimalIds },
+        species,
         type: { in: ["body_condition_score", "temperament_score", "scrotal_circumference"] },
       },
       orderBy: { observedAt: "desc" },
@@ -115,12 +117,12 @@ export async function suggestPairings(
     }),
     // Calving observations linked to cows (by animalId)
     prisma.observation.findMany({
-      where: { animalId: { in: openCows.map((c) => c.id) }, type: "calving" },
+      where: { animalId: { in: openCows.map((c) => c.id) }, species, type: "calving" },
       select: { animalId: true, details: true },
     }),
     // Calving observations for bull offspring detection (time-bounded, filtered in memory)
     prisma.observation.findMany({
-      where: { type: "calving", observedAt: { gte: threeYearsAgo } },
+      where: { type: "calving", species, observedAt: { gte: threeYearsAgo } },
       select: { details: true },
     }),
   ]);
