@@ -7,12 +7,17 @@ export interface ExportButtonProps {
   farmSlug: string;
   exportType: "animals" | "withdrawal" | "calvings" | "camps" | "transactions" | "weight-history" | "reproduction" | "performance";
   label?: string;
+  /** When set, appends `&species=<value>` so the export is scoped to the
+   *  currently-active farm mode. Only meaningful for `exportType="animals"`.
+   *  Other exporters ignore the parameter. */
+  species?: "cattle" | "sheep" | "game";
 }
 
 export default function ExportButton({
   farmSlug,
   exportType,
   label = "Export",
+  species,
 }: ExportButtonProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -30,7 +35,8 @@ export default function ExportButton({
   }, [open]);
 
   function triggerDownload(format: "csv" | "pdf") {
-    const url = `/api/${farmSlug}/export?type=${exportType}&format=${format}`;
+    const speciesSegment = species ? `&species=${species}` : "";
+    const url = `/api/${farmSlug}/export?type=${exportType}&format=${format}${speciesSegment}`;
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener noreferrer";

@@ -90,7 +90,7 @@ export default async function AdminAnimalsPage({
           </p>
         </div>
         <div className="flex gap-2 items-center">
-          <ExportButton farmSlug={farmSlug} exportType="animals" />
+          <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} />
           <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
           <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
         </div>
