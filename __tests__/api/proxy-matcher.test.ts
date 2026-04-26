@@ -170,6 +170,14 @@ const KNOWN_PUBLIC_ROUTES: Array<{ label: string; path: string }> = [
   { label: "SW static asset", path: "/sw.js" },
   { label: "PNG asset", path: "/icons/logo.png" },
   { label: "JPG asset", path: "/og-image.jpg" },
+  // Phase C bug C1: uptime probe must be reachable unauthenticated.
+  { label: "Health probe (Phase C)", path: "/api/health" },
+  // Phase C bug C3: /demo is documented as a public marketing surface.
+  // Allow-listed in middleware so the page (when present) is reachable
+  // unauthenticated. If the page does not exist Next will render the
+  // app/not-found.tsx fallthrough — see Phase C bug C2.
+  { label: "Demo landing (Phase C)", path: "/demo" },
+  { label: "Demo nested (Phase C)", path: "/demo/vision" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,6 +209,45 @@ describe("middleware.ts config.matcher — known public routes must NOT trigger 
       expect(matchesProxy(route.path)).toBe(false);
     });
   }
+});
+
+// ── Phase C bug C2: isProtectedPath fall-through ──────────────────────────────
+//
+// The matcher controls which paths the proxy *runs* on. For paths that DO
+// reach the proxy without a token, the proxy must only redirect to /login
+// when the path is actually a protected one — otherwise it must fall through
+// to Next so app/not-found.tsx renders for typos. This block locks the
+// disposition of `isProtectedPath()` in.
+
+describe("proxy.ts isProtectedPath — Phase C bug C2 fall-through", () => {
+  it.each([
+    ["/", "anon root → login (preserved behaviour)"],
+    ["/farms", "farm hub"],
+    ["/farms/new", "farm hub sub-route"],
+    ["/home", "universal entry point"],
+    ["/home/dashboard", "home sub-route"],
+    ["/trio-b-boerdery/admin/animals", "tenant admin"],
+    ["/trio-b-boerdery/dashboard", "tenant dashboard"],
+    ["/trio-b-boerdery/logger", "tenant logger"],
+    ["/basson-boerdery/sheep", "tenant sheep"],
+    ["/api/camps", "authenticated API"],
+    ["/api/farm/settings/tasks", "deep authenticated API"],
+  ])("[PROTECTED] %s — %s", async (path) => {
+    const { isProtectedPath } = await import("../../proxy");
+    expect(isProtectedPath(path)).toBe(true);
+  });
+
+  it.each([
+    ["/some-nonexistent-path-12345", "random typo"],
+    ["/farmz", "near-miss for /farms"],
+    ["/about", "marketing page that does not exist"],
+    ["/pricing", "marketing page that does not exist"],
+    ["/.well-known/security.txt", "well-known probe"],
+    ["/robots-extra.txt", "asset-shaped path"],
+  ])("[FALL-THROUGH] %s — %s", async (path) => {
+    const { isProtectedPath } = await import("../../proxy");
+    expect(isProtectedPath(path)).toBe(false);
+  });
 });
 
 describe("middleware.ts config.matcher — edge cases", () => {
