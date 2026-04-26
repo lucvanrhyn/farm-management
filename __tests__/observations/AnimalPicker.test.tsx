@@ -209,4 +209,73 @@ describe("<AnimalPicker />", () => {
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain("camp=camp-7");
   });
+
+  it("ignores a slow in-flight response after the input is cleared", async () => {
+    // Phase H.2 regression — Codex adversarial review.
+    //
+    // Before the fix, clearing the input reset the UI state but did NOT
+    // invalidate the in-flight request id. A slow `/api/animals?search=Bessie`
+    // response could still match the current `requestIdRef` and re-render
+    // stale rows the user had already cleared, letting them bind an
+    // observation to an animal from an aborted search.
+    type FetchResolve = (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const captured: { resolve: FetchResolve | null; signal: AbortSignal | null } = {
+      resolve: null,
+      signal: null,
+    };
+    mockFetch.mockImplementation(async (_url: string, init?: { signal?: AbortSignal }) => {
+      captured.signal = init?.signal ?? null;
+      return await new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+        captured.resolve = resolve;
+      });
+    });
+
+    await act(async () => {
+      render(<AnimalPicker species="cattle" value="" onChange={() => {}} />);
+    });
+    const input = screen.getByPlaceholderText(/search/i);
+
+    // (a) Type "Bessie" — fetch fires after the debounce window.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Bessie" } });
+      vi.advanceTimersByTime(300);
+      await flushPromises();
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(captured.resolve).not.toBeNull();
+
+    // (b) Clear input — debounced empty query resets state.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "" } });
+      vi.advanceTimersByTime(300);
+      await flushPromises();
+    });
+
+    // (c) Slow response arrives AFTER the clear — must be ignored.
+    await act(async () => {
+      captured.resolve!({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              animalId: "B0042",
+              name: "Bessie",
+              category: "Cow",
+              currentCamp: "camp-1",
+            },
+          ],
+          nextCursor: null,
+          hasMore: false,
+        }),
+      });
+      await flushPromises();
+    });
+
+    // No stale row rendered.
+    expect(screen.queryByText("B0042")).not.toBeInTheDocument();
+    // No "Loading…" indicator stuck on (state should be settled).
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+    // AbortController bonus: the in-flight request should have been aborted.
+    expect(captured.signal?.aborted).toBe(true);
+  });
 });
