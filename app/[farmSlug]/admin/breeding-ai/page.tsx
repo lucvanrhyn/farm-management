@@ -10,6 +10,7 @@ import {
 import BreedingDashboard from "@/components/admin/BreedingDashboard";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 
 function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string }) {
   return (
@@ -75,7 +76,10 @@ export default async function BreedingAIPage({
     return <UpgradePrompt feature="Breeding AI" farmSlug={farmSlug} />;
   }
 
-  const prisma = await getPrismaForFarm(farmSlug);
+  const [prisma, species] = await Promise.all([
+    getPrismaForFarm(farmSlug),
+    getFarmMode(farmSlug),
+  ]);
 
   if (!prisma) {
     return (
@@ -86,10 +90,10 @@ export default async function BreedingAIPage({
   }
 
   const [snapshot, pairingResult, allAnimals] = await Promise.all([
-    getBreedingSnapshot(prisma, farmSlug),
-    suggestPairings(prisma, farmSlug),
+    getBreedingSnapshot(prisma, farmSlug, species),
+    suggestPairings(prisma, farmSlug, species),
     prisma.animal.findMany({
-      where: { status: "Active", species: "cattle" },
+      where: { status: "Active", species },
       select: {
         id: true,
         animalId: true,

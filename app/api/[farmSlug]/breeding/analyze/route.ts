@@ -4,6 +4,7 @@ import { getBreedingSnapshot, suggestPairings } from "@/lib/server/breeding-anal
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getFarmCreds } from "@/lib/meta-db";
 import { logger } from "@/lib/logger";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -38,15 +39,17 @@ export async function POST(
   }
 
   const prisma = ctx.prisma;
+  const species = await getFarmMode(farmSlug);
 
   // Gather herd data in parallel
   const [snapshot, pairings, settings, recentReproObs, recentCalvingObs] = await Promise.all([
-    getBreedingSnapshot(prisma, farmSlug),
-    suggestPairings(prisma, farmSlug),
+    getBreedingSnapshot(prisma, farmSlug, species),
+    suggestPairings(prisma, farmSlug, species),
     prisma.farmSettings.findFirst(),
     prisma.observation.findMany({
       where: {
         type: { in: ["pregnancy_scan", "insemination", "heat_detection"] },
+        species,
         observedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
       },
       orderBy: { observedAt: "desc" },
@@ -55,6 +58,7 @@ export async function POST(
     prisma.observation.findMany({
       where: {
         type: "calving",
+        species,
         observedAt: { gte: new Date(Date.now() - 365 * 86_400_000) },
       },
       orderBy: { observedAt: "desc" },

@@ -43,6 +43,7 @@ export async function getBreedingSnapshot(
     prisma.observation.findMany({
       where: {
         type: "pregnancy_scan",
+        species,
         observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
@@ -52,6 +53,7 @@ export async function getBreedingSnapshot(
     prisma.observation.findMany({
       where: {
         type: "insemination",
+        species,
         observedAt: { gte: ninetyDaysAgo },
         animalId: { not: null },
       },
