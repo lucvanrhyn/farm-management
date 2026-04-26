@@ -26,6 +26,7 @@
     "db:resync-passwords": "dotenv-cli -e .env.local -- tsx scripts/resync-passwords.ts",
     "db:verify-auth": "dotenv-cli -e .env.local -- tsx scripts/verify-auth.ts",
     "db:gen-schema": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
+    "diff-farm-cutover": "tsx scripts/diff-farm-cutover.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
