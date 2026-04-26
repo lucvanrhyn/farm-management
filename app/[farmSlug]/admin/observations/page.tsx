@@ -11,10 +11,9 @@ import ObservationsPageClient from "./ObservationsPageClient";
 // paginated client-side via /api/observations?limit=50&offset=…, so the only
 // SSR payload driver on this page is this animals prefetch. Without a cap,
 // trio-b's 874 Active animals add ~120 KB to the HTML document. Cap at 50
-// here and let the modal fetch additional rows on demand via /api/animals.
-// TODO(modal): wire the modal's animal picker to /api/animals?search=<q>
-// so users can still target animals outside the first 50 without a page
-// reload. Today the modal falls back to the raw animalId text field.
+// here. Animals outside the slice are reachable via the modal's debounced
+// `AnimalPicker` (Phase H) which talks to /api/animals?search=<q>; the
+// prefetch stays as the no-network "quick-pick from this camp" fast path.
 const PAGE_SIZE = 50;
 
 export default async function AdminObservationsPage({
@@ -70,7 +69,7 @@ export default async function AdminObservationsPage({
         </div>
         <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />
       </div>
-      <ObservationsPageClient camps={camps} animals={animals} />
+      <ObservationsPageClient camps={camps} animals={animals} species={mode} />
     </div>
   );
 }
