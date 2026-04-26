@@ -2,8 +2,11 @@
 // Top-N enhanced pairing suggestions: gates on pedigree-seed signal,
 // batches all trait observations into 3 queries, then scores and ranks.
 //
-// Cattle-only by design (per Wave-3 audit: this lib is consumed only from
-// cattle-only surfaces — `where: { species: "cattle" }` is intentional).
+// Phase F: species-aware. Optional `species` argument routes through
+// `lib/species/breeding-constants.ts` to pick sire / dam categories. The
+// COI calculation, calving observation type, and scoring rules are
+// cattle-grounded but applied generically to whichever species is
+// requested. Default ("cattle") preserves the historical signature.
 
 import type { PrismaClient } from "@prisma/client";
 import type { PairingResult, PairingSuggestion, TraitProfile } from "./types";
@@ -15,18 +18,23 @@ import {
   buildBullProfileInMemory,
   buildCowProfileInMemory,
 } from "./trait-profile";
+import { getBreedingConstants } from "@/lib/species/breeding-constants";
+import type { SpeciesId } from "@/lib/species/types";
 
 export async function suggestPairings(
   prisma: PrismaClient,
   farmSlug: string,
+  species: SpeciesId = "cattle",
 ): Promise<PairingResult> {
   void farmSlug;
+  const constants = getBreedingConstants(species);
+  const femaleCategorySet = new Set(constants.femaleCategories);
 
   const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
 
   const [allAnimals, recentScans] = await Promise.all([
     prisma.animal.findMany({
-      where: { status: "Active", species: "cattle" },
+      where: { status: "Active", species },
       select: {
         id: true,
         animalId: true,
@@ -80,10 +88,10 @@ export async function suggestPairings(
     }
   }
 
-  const bulls = allAnimals.filter((a) => a.category === "Bull");
+  const bulls = allAnimals.filter((a) => a.category === constants.sireCategory);
   const openCows = allAnimals.filter((a) => {
     if (a.sex !== "Female") return false;
-    if (a.category !== "Cow" && a.category !== "Heifer") return false;
+    if (!femaleCategorySet.has(a.category)) return false;
     const scan = latestScanResult.get(a.id);
     return scan !== "pregnant";
   });
@@ -145,6 +153,10 @@ export async function suggestPairings(
         bullProfile,
         cowProfile,
         cow.category,
+        {
+          youngFemaleCategory: constants.youngFemaleCategory,
+          highBirthWeightKg: constants.highBirthWeightKg,
+        },
       );
 
       suggestions.push({
