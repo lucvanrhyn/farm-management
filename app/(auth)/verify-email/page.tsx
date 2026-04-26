@@ -277,6 +277,8 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
       ) : (
         <form
           onSubmit={handleResend}
+          method="post"
+          action="/api/auth/resend-verification"
           className="w-full flex flex-col gap-2"
           aria-label="Request a fresh verification link"
         >
@@ -314,6 +316,7 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
           <button
             type="submit"
             disabled={resendState === "sending"}
+            aria-busy={resendState === "sending"}
             style={{
               marginTop: "0.25rem",
               background:
