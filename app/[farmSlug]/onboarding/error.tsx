@@ -12,6 +12,7 @@ import Link from "next/link";
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { ONBOARDING_COLORS } from "@/components/onboarding/theme";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding/storage";
+import { clientLogger } from "@/lib/client-logger";
 
 export default function OnboardingError({
   error,
@@ -21,8 +22,7 @@ export default function OnboardingError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // intentional console: client-side error boundary, no logger sink in browser.
-    console.warn("[onboarding] boundary caught:", error);
+    clientLogger.warn("[onboarding] boundary caught", { error });
   }, [error]);
 
   const handleReset = () => {

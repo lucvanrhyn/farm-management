@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Camp, ObservationType, PrismaObservation } from "@/lib/types";
+import { clientLogger } from "@/lib/client-logger";
 import { PAGE_SIZE } from "./observations-log/constants";
 import { EditModal } from "./observations-log/EditModal";
 import { Filters } from "./observations-log/Filters";
@@ -44,8 +45,7 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
       .then((data: Camp[]) => setCamps(data))
       .catch((err: unknown) => {
         if ((err as { name?: string }).name !== "AbortError") {
-          // intentional console: client-side fetch, no logger sink in browser.
-          console.error("[ObservationsLog] Failed to load camps:", err);
+          clientLogger.error("[ObservationsLog] Failed to load camps", { err });
         }
       });
     return () => controller.abort();
