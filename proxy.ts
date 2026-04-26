@@ -43,7 +43,22 @@ export async function proxy(req: NextRequest) {
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token || !Array.isArray(token.farms)) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    // Phase C bug C2: previously every unauthenticated request was 307'd to
+    // /login regardless of whether the path resolved to a real route. SEO
+    // crawlers chasing dead external links landed on the login wall and risked
+    // indexing it as the canonical destination for a broken URL; legitimate
+    // typos got no signal.
+    //
+    // Now we only redirect for paths that are *actually* gated (farm hub,
+    // tenant routes, authenticated APIs). Anything else falls through to the
+    // Next runtime, which renders `app/not-found.tsx` for unmatched paths and
+    // serves the matched route otherwise. Pages that need auth at render time
+    // (e.g. server components calling `getSession`) still redirect on their
+    // own, so this is safe by default.
+    if (isProtectedPath(pathname)) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+    return NextResponse.next();
   }
 
   // Enforce tenant isolation: verify user has access to the farm in the URL
@@ -92,6 +107,54 @@ export async function proxy(req: NextRequest) {
   }
 
   return withSessionHeaders(req, token, resolveActiveFarm(req, farms), NextResponse.next);
+}
+
+/**
+ * Phase C bug C2 — paths that MUST 307 to /login when the visitor is
+ * unauthenticated. Anything not in this list (and not already excluded by the
+ * matcher at the bottom of this file) falls through to Next, which either
+ * renders the matched route or `app/not-found.tsx` for a true 404.
+ *
+ * Membership rules
+ * ────────────────
+ * - `/farms` and `/home` — universal authenticated entry points. Direct hits
+ *   without a session must land on /login (preserves existing UX).
+ * - `/[slug]/(admin|dashboard|logger|home|tools|sheep|game)/...` — every
+ *   tenant-scoped surface that previously redirected. The regex below mirrors
+ *   the `farmRouteMatch` regex used a few lines down — keeping them in sync
+ *   means the protected-path check above and the tenant-isolation check below
+ *   agree on what "a tenant page" means.
+ * - `/api/...` — every authenticated API route. Specific public endpoints
+ *   (`/api/auth/*`, `/api/health`, `/api/einstein/*`, `/api/inngest`,
+ *   `/api/observations`, `/api/telemetry`, `/api/webhooks/*`) are already
+ *   excluded by the matcher, so they never reach this function in the first
+ *   place. Any other `/api/*` path that does reach the proxy IS protected.
+ *
+ * Exported (named export, not a config field) so the proxy-matcher unit test
+ * can assert disposition without booting the Edge runtime.
+ */
+const TENANT_ROUTE_RE =
+  /^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)(\/|$)/;
+
+export function isProtectedPath(pathname: string): boolean {
+  // Root: previously redirected unauth users to /login. Preserve that
+  // behaviour — `/` is a known route, not the unknown-route case bug C2 is
+  // about. (`app/page.tsx` itself short-circuits to /home for authenticated
+  // users; this branch handles the anonymous case.)
+  if (pathname === "/") return true;
+
+  // Exact authenticated entry points.
+  if (pathname === "/farms" || pathname.startsWith("/farms/")) return true;
+  if (pathname === "/home" || pathname.startsWith("/home/")) return true;
+
+  // Authenticated APIs that survive the matcher (i.e. not in the
+  // negative-lookahead exclusion list at the bottom of this file).
+  if (pathname.startsWith("/api/")) return true;
+
+  // Tenant-scoped pages.
+  if (TENANT_ROUTE_RE.test(pathname)) return true;
+
+  return false;
 }
 
 /**
@@ -158,8 +221,19 @@ function withSessionHeaders(
   return factory({ request: { headers } });
 }
 
+// Phase C additions (`api/health`, `demo`):
+//   • api/health — shallow uptime probe must answer 200/JSON to
+//     unauthenticated monitors (bug C1). Excluded so middleware never
+//     redirects to /login.
+//   • demo — public marketing surface documented in
+//     memory/farm-website-demo.md (bug C3). When a /demo page is
+//     present it renders for anonymous visitors; when it is absent the
+//     `app/not-found.tsx` fallthrough handles it (bug C2).
+// IMPORTANT: __tests__/api/proxy-matcher.test.ts greps the FIRST quoted
+// string inside `matcher: [...]`. Keep comments above `matcher:` (not
+// between `[` and the string) or the test parser falls over.
 export const config = {
   matcher: [
-    "/((?!login|register|verify-email|subscribe|api/auth|api/einstein|api/inngest|api/observations|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
+    "/((?!login|register|verify-email|subscribe|demo|api/auth|api/einstein|api/health|api/inngest|api/observations|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
   ],
 };
