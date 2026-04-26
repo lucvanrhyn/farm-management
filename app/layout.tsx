@@ -14,34 +14,65 @@ import "./globals.css";
  * files. `/login`, `/register` and `/verify-email` live under the
  * `(auth)` route group (see app/(auth)/layout.tsx) and therefore never
  * import SessionProvider / SWRegistrar / ReportWebVitals.
+ *
+ * Phase D — accessibility / i18n polish
+ * -------------------------------------
+ *  • <html lang="af-ZA">: SA Afrikaans is the primary user language
+ *    (first client basson-boerdery + ops memory). Screen readers and
+ *    browser translation prompts now get the right signal. A future
+ *    per-user locale system is out of scope for this fix; see TODO
+ *    near the <html> tag.
+ *  • Skip-to-content link: first focusable child of <body> jumps to
+ *    <main id="main">, hidden until focused via Tailwind's
+ *    `sr-only` + `focus:not-sr-only` pattern. Saves keyboard / screen
+ *    reader users from tabbing through the entire header on every nav.
+ *  • next/font already provides preload + display:swap (the defaults),
+ *    so the 6 s cold landing-page wall-clock from D3 is addressed by
+ *    the existing Geist / Playfair / DM_Sans / DM_Serif_Display
+ *    declarations below — no extra <link rel="preload"> needed.
  */
 
+// D3 fix — explicit `display: "swap"` + `preload: true` on every face so
+// Next.js emits <link rel="preload" as="font" type="font/woff2" crossOrigin>
+// in <head>. These are the next/font defaults, but stating them explicitly
+// keeps the intent reviewable and prevents a future "let's tune font
+// loading" change from accidentally regressing first-paint.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+  preload: true,
 });
 
 const playfair = Playfair_Display({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "600", "700", "900"],
+  display: "swap",
+  preload: true,
 });
 
 const dmSans = DM_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
+  display: "swap",
+  preload: true,
 });
 
 const dmSerifDisplay = DM_Serif_Display({
   variable: "--font-dm-serif",
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+  preload: true,
 });
 
 export const metadata: Metadata = {
@@ -64,11 +95,41 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // TODO(i18n): switch to a per-user locale once we add a translation
+    // workstream. Until then af-ZA is the right default — every current
+    // tenant uses Afrikaans as their primary working language and the
+    // English UI copy is intelligible to them. English-only users still
+    // see English strings; only screen readers and browser translation
+    // hints change.
+    <html lang="af-ZA">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
-        {children}
+        {/*
+          D2 — skip-to-content link. Visually hidden until focused
+          (Tailwind's sr-only / focus:not-sr-only pair). Must be the
+          first focusable element in <body> so a single Tab from the
+          page top reveals it. Activating it scrolls focus to the
+          #main wrapper below.
+
+          The wrapper is a <div tabIndex={-1}>, NOT a <main>, because
+          nested route layouts (app/[farmSlug]/admin/layout.tsx,
+          app/[farmSlug]/tools/layout.tsx, etc.) already render their
+          own <main> landmark. Nesting <main> inside <main> violates
+          the "single main landmark per document" rule of WAI-ARIA.
+          tabIndex={-1} keeps the wrapper programmatically focusable
+          (required so the in-page anchor jump moves both scroll and
+          keyboard focus on every browser).
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[1000] focus:rounded focus:bg-[var(--farm-text)] focus:px-4 focus:py-2 focus:text-white focus:outline-none focus:ring-2 focus:ring-[var(--farm-amber)]"
+        >
+          Spring na inhoud
+        </a>
+        <div id="main" tabIndex={-1}>
+          {children}
+        </div>
       </body>
     </html>
   );
