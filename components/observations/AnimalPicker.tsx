@@ -17,6 +17,9 @@
  *   - Empty query → no fetch (keeps the network quiet on mount + clear).
  *   - Search input is debounced ~250 ms.
  *   - A monotonic request-id guards against late-arriving stale responses.
+ *   - An AbortController actively cancels the previous in-flight request
+ *     whenever the query changes (including back to empty) or the component
+ *     unmounts. Defends against the stale-selection race caught in Phase H.2.
  *
  * UI states: idle (untouched), loading, results, empty, error.
  */
@@ -74,6 +77,7 @@ export default function AnimalPicker({
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Debounce.
   useEffect(() => {
@@ -82,7 +86,7 @@ export default function AnimalPicker({
   }, [query]);
 
   const fetchPage = useCallback(
-    async (search: string) => {
+    async (search: string, signal: AbortSignal) => {
       const myId = ++requestIdRef.current;
       setLoading(true);
       setError(null);
@@ -92,20 +96,25 @@ export default function AnimalPicker({
         params.set("search", search);
         if (species) params.set("species", species);
         if (campId) params.set("camp", campId);
-        const res = await fetch(`/api/animals?${params.toString()}`);
+        const res = await fetch(`/api/animals?${params.toString()}`, { signal });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(data.error ?? "Failed to load animals");
         }
         const data = (await res.json()) as PageResponse;
-        if (myId !== requestIdRef.current) return;
+        if (signal.aborted || myId !== requestIdRef.current) return;
         setResults(data.items);
       } catch (err) {
+        // AbortError fires when we cancel the in-flight request; that's expected
+        // and must not surface as an error to the user.
+        if (signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+          return;
+        }
         if (myId !== requestIdRef.current) return;
         setError(err instanceof Error ? err.message : "Unknown error");
         setResults([]);
       } finally {
-        if (myId === requestIdRef.current) setLoading(false);
+        if (!signal.aborted && myId === requestIdRef.current) setLoading(false);
       }
     },
     [species, campId],
@@ -113,16 +122,33 @@ export default function AnimalPicker({
 
   // Empty query → no request. This prevents a spurious round-trip on mount
   // and on backspace-clear, which matters for the offline-first PWA.
+  //
+  // The AbortController is owned by this effect: every time the debounced
+  // query changes (or the component unmounts), the previous in-flight fetch
+  // is cancelled. This closes the Phase H.2 stale-selection race where a
+  // slow response from a now-cleared query could re-render results the user
+  // had already dismissed.
   useEffect(() => {
+    abortRef.current?.abort();
     if (!debouncedQuery) {
+      // Bump the request id too so any response still in transit fails the
+      // monotonic guard even if AbortController is unavailable in the env.
+      requestIdRef.current++;
+      abortRef.current = null;
       // Reset state so a previous result list doesn't linger after clear.
       setResults([]);
       setError(null);
+      setLoading(false);
       setHasSearched(false);
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     setHasSearched(true);
-    void fetchPage(debouncedQuery);
+    void fetchPage(debouncedQuery, controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [debouncedQuery, fetchPage]);
 
   const showEmpty =
