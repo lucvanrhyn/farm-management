@@ -17,6 +17,14 @@ import { AUTH_ERROR_CODES } from "@/lib/auth-errors";
 // (see handleSubmit) so the ~12 KB brotli next-auth client chunk only
 // downloads when the user actually presses the button, not on the
 // cold first-paint of the login form.
+//
+// P1 — submit flow goes through `/api/auth/login-check` FIRST so the browser
+// network layer never sees a 401 on bad credentials (the browser auto-emits
+// "Failed to load resource: 401" to the console BEFORE app code can intercept,
+// same root-cause class as the A.2 verify-email fix in commit a0fe84c). The
+// pre-flight returns 200 + `{ ok, reason? }`. signIn() is only called when
+// `ok: true`, where it's guaranteed to succeed against the same authorize()
+// validation that the pre-flight just passed.
 
 /**
  * Map specific auth error codes (thrown by authorize()) to user-facing copy.
@@ -48,10 +56,32 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Lazy-load next-auth's React client on-submit so it doesn't
-      // bloat the /login cold bundle. The dynamic import resolves in
-      // ~20 ms on 4G — imperceptible vs. the server round-trip that
-      // follows. See tests in __tests__/auth/login-signin-flow.test.tsx.
+      // Pre-flight: validate credentials against /api/auth/login-check, which
+      // ALWAYS returns 200 (or 500 for true server errors) with a typed
+      // payload. This keeps wrong-credentials off the browser's auto-error
+      // network log — see header comment for the full rationale.
+      const res = await fetch("/api/auth/login-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
+      });
+      const check = (await res.json()) as
+        | { ok: true }
+        | { ok: false; reason?: string };
+
+      if (!check.ok) {
+        const reason = check.reason ?? AUTH_ERROR_CODES.INVALID_CREDENTIALS;
+        const copy =
+          AUTH_ERROR_COPY[reason] ??
+          AUTH_ERROR_COPY[AUTH_ERROR_CODES.INVALID_CREDENTIALS];
+        setError(copy);
+        return;
+      }
+
+      // Pre-flight passed — call signIn(). Lazy-load next-auth's React client
+      // on-submit so it doesn't bloat the /login cold bundle. The dynamic
+      // import resolves in ~20 ms on 4G — imperceptible vs. the server
+      // round-trip. See tests in __tests__/auth/login-signin-flow.test.tsx.
       const { signIn } = await import("next-auth/react");
       const result = await signIn("credentials", {
         identifier,
@@ -59,19 +89,15 @@ export default function LoginPage() {
         redirect: false,
       });
 
-      if (result?.error) {
-        // NextAuth surfaces the authorize()-thrown Error#message as result.error.
-        // Unknown strings fall back to the generic credentials copy.
-        const copy =
-          AUTH_ERROR_COPY[result.error] ??
-          AUTH_ERROR_COPY[AUTH_ERROR_CODES.INVALID_CREDENTIALS];
-        setError(copy);
-      } else if (result?.ok) {
+      if (result?.ok) {
         // Hard navigation — full document load picks up the fresh
         // session cookie next-auth just set.
         window.location.assign("/farms");
       } else {
-        setError("Sign in failed. Try again later.");
+        // Theoretically unreachable: pre-flight just confirmed the same
+        // creds are valid. If it happens, fall back to the generic message
+        // without leaking server internals.
+        setError(AUTH_ERROR_COPY[AUTH_ERROR_CODES.INVALID_CREDENTIALS]);
       }
     } catch {
       setError("Network error. Check your connection.");
@@ -227,9 +253,13 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Error */}
+          {/* Error — role="alert" + aria-live="assertive" so screen readers
+              interrupt and announce the failure immediately (P4). Credential
+              errors are action-blocking, so assertive (not polite) is correct. */}
           {error && (
             <p
+              role="alert"
+              aria-live="assertive"
               style={{
                 fontFamily: "var(--font-sans)",
                 color: "#E07060",
