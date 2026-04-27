@@ -45,8 +45,18 @@ afterEach(() => {
 });
 
 describe("login bad-creds — emits zero console.error events", () => {
-  it("does not call console.error when signIn returns {ok:false, error:'INVALID_CREDENTIALS'}", async () => {
-    signInMock.mockResolvedValue({ ok: false, error: "INVALID_CREDENTIALS" });
+  it("does not call console.error when /api/auth/login-check returns 200+{ok:false}", async () => {
+    // P1 — the login page now pre-flights `/api/auth/login-check` BEFORE
+    // calling signIn(). The pre-flight always returns HTTP 200 with a typed
+    // payload, so the browser never auto-emits a 401 to the network log and
+    // the form's error-handling path never invokes console.error.
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, reason: "INVALID_CREDENTIALS" }),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
     const { default: LoginPage } = await import("@/app/(auth)/login/page");
     render(<LoginPage />);
 
@@ -67,6 +77,9 @@ describe("login bad-creds — emits zero console.error events", () => {
     );
 
     expect(consoleErrorSpy).not.toHaveBeenCalled();
+    // signIn() must NOT be called when the pre-flight rejects — that's the
+    // whole point of the new route (it would re-introduce the 401 noise).
+    expect(signInMock).not.toHaveBeenCalled();
   });
 });
 

@@ -4,23 +4,23 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import React from "react";
 
 /**
- * Behaviour under test: submitting the login form with credentials that
- * `signIn()` resolves as `{ ok: true }` hard-navigates the browser to
- * /farms.
+ * Behaviour under test: submitting the login form with valid credentials
+ * pre-flights `/api/auth/login-check` (P1 — keeps wrong-creds 401s off the
+ * browser console) then calls `signIn()` and hard-navigates to /farms on
+ * success.
  *
- * This pins the core product flow after the P5 refactor:
- *  - the page calls `signIn("credentials", { redirect: false })` via
- *    a dynamic import of next-auth/react (keeps it off the cold
- *    first-load chunk)
- *  - it inspects the result and hard-navigates to /farms on success
- *    (window.location.assign — picks up the freshly-set cookie via
- *    a full document load)
- *
- * If either side of that contract changes, users either get stuck on
- * /login or lose their session in a redirect loop.
+ * Contract pinned here:
+ *  - the page calls `fetch('/api/auth/login-check', POST)` BEFORE signIn
+ *  - on `{ ok: true }` it then calls
+ *    `signIn("credentials", { redirect: false })` (dynamic import keeps
+ *    next-auth's React client off the cold bundle)
+ *  - on signIn `ok: true` it hard-navigates via window.location.assign
+ *  - on `{ ok: false }` from the pre-flight it surfaces the error and
+ *    NEVER calls signIn (so the browser never sees a 401)
  */
 
 const signInMock = vi.fn();
+const fetchMock = vi.fn();
 const assignMock = vi.fn();
 
 vi.mock("next-auth/react", () => ({
@@ -29,7 +29,9 @@ vi.mock("next-auth/react", () => ({
 
 beforeEach(() => {
   signInMock.mockReset();
+  fetchMock.mockReset();
   assignMock.mockReset();
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   Object.defineProperty(window, "location", {
     configurable: true,
     value: {
@@ -49,7 +51,12 @@ async function loadLoginPage(): Promise<React.ComponentType> {
 }
 
 describe("login page", () => {
-  it("hard-navigates to /farms on successful signIn", async () => {
+  it("hard-navigates to /farms on successful pre-flight + signIn", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
     signInMock.mockResolvedValue({ ok: true, error: null });
     const LoginPage = await loadLoginPage();
     render(<LoginPage />);
@@ -63,6 +70,12 @@ describe("login page", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/login-check",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    await waitFor(() => {
       expect(signInMock).toHaveBeenCalledWith("credentials", {
         identifier: "dicky",
         password: "correct-horse",
@@ -72,8 +85,12 @@ describe("login page", () => {
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith("/farms"));
   });
 
-  it("shows an error and does not redirect on invalid credentials", async () => {
-    signInMock.mockResolvedValue({ ok: false, error: "INVALID_CREDENTIALS" });
+  it("shows an error and does not call signIn on invalid credentials", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, reason: "INVALID_CREDENTIALS" }),
+    });
     const LoginPage = await loadLoginPage();
     render(<LoginPage />);
 
@@ -90,6 +107,7 @@ describe("login page", () => {
         screen.getByText(/incorrect email\/username or password/i),
       ).toBeInTheDocument();
     });
+    expect(signInMock).not.toHaveBeenCalled();
     expect(assignMock).not.toHaveBeenCalled();
   });
 });
