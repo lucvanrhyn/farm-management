@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth-options';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getFarmSubscription } from '@/lib/meta-db';
+import PublicPlanPicker from './PublicPlanPicker';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,16 @@ export default async function SubscribePage({
   const { farm: farmSlugParam, cancelled } = await searchParams;
 
   const session = await getServerSession(authOptions);
+
+  // P2 fix: anonymous visitors previously got a 307 to /login — a dead end
+  // for prospects following marketing copy or sharing the URL. Phase B's
+  // /subscribe/complete fix established the principle: fast-fail to a
+  // useful surface, never trap users in spinners or login walls. Render a
+  // public plan picker that hands them off to /register?tier=<slug> (the
+  // same query pattern the marketing site uses — see farm-website-v2
+  // lib/constants.ts + components/pricing/LsuPricingCalculator.tsx).
   if (!session?.user) {
-    redirect('/login');
+    return <PublicPlanPicker />;
   }
 
   // Identify which farm to subscribe (from proxy redirect param, or first unpaid basic farm)
