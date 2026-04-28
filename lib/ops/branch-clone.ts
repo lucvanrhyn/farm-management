@@ -9,12 +9,16 @@
  * - Hermetically testable: all external dependencies (CLI, meta-DB, clock)
  *   are injectable via the CloneBranchInput.
  * - Atomic: if any CLI step fails, meta-DB is NOT written (no partial record).
+ *
+ * Phase 3 additions: destroyBranchDb, promoteToProd.
  */
 import { createHash } from 'node:crypto';
+import { createClient } from '@libsql/client';
 import type { Client } from '@libsql/client';
 import type { TursoCli } from '@/lib/ops/turso-cli';
 import { realTursoCli } from '@/lib/ops/turso-cli';
 import { getMetaClient } from '@/lib/meta-db';
+import { loadMigrations, runMigrations } from '@/lib/migrator';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,6 +170,209 @@ export async function cloneBranch(
   };
 }
 
+// ── Phase 3 types ─────────────────────────────────────────────────────────────
+
+export interface DestroyBranchDbInput {
+  branchName: string;
+  /** Injectable CLI runner. Defaults to the real turso binary. */
+  cli?: TursoCli;
+  /** Injectable meta-DB client. Defaults to the production singleton. */
+  metaClient?: Client;
+  /**
+   * Skip the turso CLI destroy step. Use when the Turso DB was never created
+   * (or was already manually destroyed) and only the meta row needs cleaning.
+   */
+  skipTursoDestroy?: boolean;
+}
+
+export interface DestroyBranchDbResult {
+  branchName: string;
+  /** true if `turso db destroy` was executed successfully */
+  tursoDestroyed: boolean;
+  /** true if a meta row existed and was deleted */
+  metaRowDeleted: boolean;
+}
+
+export interface PromoteToProdInput {
+  branchName: string;
+  /**
+   * Minimum hours between clone creation and promote.
+   * Defaults to 1 hour.
+   */
+  minSoakHours?: number;
+  /**
+   * Bypass the soak gate explicitly (for emergency hotfixes — must be
+   * explicit, not a default).
+   */
+  forceSkipSoak?: boolean;
+  /** Injectable CLI runner (unused by promoteToProd, kept for API symmetry). */
+  cli?: TursoCli;
+  /** Injectable meta-DB client. Defaults to the production singleton. */
+  metaClient?: Client;
+  /** Injectable clock. Defaults to () => new Date(). */
+  now?: () => Date;
+  /**
+   * The migrator function to invoke against prod.
+   * Defaults to the real migrator using PROD_TENANT_DB_URL / PROD_TENANT_DB_AUTH_TOKEN env vars.
+   * In tests, inject a fake.
+   */
+  runProdMigration?: () => Promise<{ applied: string[]; skipped: string[] }>;
+}
+
+export interface PromoteToProdResult {
+  branchName: string;
+  prodMigrationAppliedFiles: string[];
+  prodMigrationSkippedFiles: string[];
+  /** ISO timestamp of the promotion moment */
+  promotedAt: string;
+}
+
+export class SoakNotMetError extends Error {
+  constructor(
+    readonly branchName: string,
+    readonly soakHoursElapsed: number,
+    readonly minSoakHours: number,
+  ) {
+    super(
+      `Branch '${branchName}' has only soaked ${soakHoursElapsed.toFixed(2)}h of the required ${minSoakHours}h before promote.`,
+    );
+    this.name = 'SoakNotMetError';
+  }
+}
+
+export class BranchCloneNotFoundError extends Error {
+  constructor(readonly branchName: string) {
+    super(`Branch clone record not found for branch: '${branchName}'`);
+    this.name = 'BranchCloneNotFoundError';
+  }
+}
+
+// ── Phase 3 functions ─────────────────────────────────────────────────────────
+
+/**
+ * Destroy the Turso DB clone for a branch and delete its meta row.
+ *
+ * Idempotent: if no meta row exists, returns false/false without touching Turso.
+ * Atomic around failure: if Turso destroy fails, the meta row is preserved so
+ * the operator can retry with skipTursoDestroy=true after manual cleanup.
+ */
+export async function destroyBranchDb(
+  input: DestroyBranchDbInput,
+): Promise<DestroyBranchDbResult> {
+  const {
+    branchName,
+    cli = realTursoCli,
+    skipTursoDestroy = false,
+  } = input;
+
+  const metaClient: Client = input.metaClient ?? getMetaClient();
+
+  // 1. Look up the existing row.
+  const existing = await _getBranchCloneViaClient(metaClient, branchName);
+  if (!existing) {
+    return { branchName, tursoDestroyed: false, metaRowDeleted: false };
+  }
+
+  // 2. Optionally run the turso CLI destroy step.
+  if (!skipTursoDestroy) {
+    // Throws TursoCliError on failure — meta row is NOT deleted in that case.
+    await cli.run(['db', 'destroy', existing.tursoDbName, '--yes']);
+  }
+
+  // 3. Delete the meta row (only reached if turso destroy succeeded or was skipped).
+  await _deleteBranchCloneViaClient(metaClient, branchName);
+
+  return {
+    branchName,
+    tursoDestroyed: !skipTursoDestroy,
+    metaRowDeleted: true,
+  };
+}
+
+/**
+ * Default runProdMigration implementation.
+ *
+ * Reads PROD_TENANT_DB_URL + PROD_TENANT_DB_AUTH_TOKEN from env, constructs a
+ * libSQL client against prod, and applies all pending migrations from the
+ * migrations/ directory at the repo root.
+ *
+ * Never auto-derived from branch metadata — the operator must set these env
+ * vars explicitly when running promote.
+ */
+async function _defaultRunProdMigration(): Promise<{ applied: string[]; skipped: string[] }> {
+  const url = process.env.PROD_TENANT_DB_URL;
+  const authToken = process.env.PROD_TENANT_DB_AUTH_TOKEN;
+
+  if (!url) {
+    throw new Error(
+      'PROD_TENANT_DB_URL not set — cannot promote. Set this env var to the prod tenant DB URL before running promote.',
+    );
+  }
+  if (!authToken) {
+    throw new Error(
+      'PROD_TENANT_DB_AUTH_TOKEN not set — cannot promote. Set this env var to the prod tenant DB auth token before running promote.',
+    );
+  }
+
+  const prodClient = createClient({ url, authToken });
+  const migrationsDir = new URL('../../migrations', import.meta.url).pathname;
+  const migrations = await loadMigrations(migrationsDir);
+  return runMigrations(prodClient, migrations);
+}
+
+/**
+ * Promote a branch clone to prod by:
+ * 1. Checking the clone exists.
+ * 2. Enforcing the soak gate (minSoakHours since clone creation).
+ * 3. Running prod migrations.
+ * 4. Marking the meta row promoted.
+ *
+ * If any step fails, the meta row is left unchanged.
+ */
+export async function promoteToProd(
+  input: PromoteToProdInput,
+): Promise<PromoteToProdResult> {
+  const {
+    branchName,
+    minSoakHours = 1,
+    forceSkipSoak = false,
+    now = () => new Date(),
+    runProdMigration = _defaultRunProdMigration,
+  } = input;
+
+  const metaClient: Client = input.metaClient ?? getMetaClient();
+
+  // 1. Fetch the meta row — must exist.
+  const row = await _getBranchCloneFullViaClient(metaClient, branchName);
+  if (!row) {
+    throw new BranchCloneNotFoundError(branchName);
+  }
+
+  // 2. Soak gate.
+  if (!forceSkipSoak) {
+    const nowMs = now().getTime();
+    const createdAtMs = new Date(row.createdAt).getTime();
+    const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
+    if (elapsedHours < minSoakHours) {
+      throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+    }
+  }
+
+  // 3. Run prod migration — error bubbles up, leaving meta row untouched.
+  const migrationResult = await runProdMigration();
+
+  // 4. Mark promoted in meta-DB.
+  const promotedAt = now().toISOString();
+  await _markBranchClonePromotedViaClient(metaClient, branchName, promotedAt);
+
+  return {
+    branchName,
+    prodMigrationAppliedFiles: migrationResult.applied,
+    prodMigrationSkippedFiles: migrationResult.skipped,
+    promotedAt,
+  };
+}
+
 // ── Internal client-accepting helpers ─────────────────────────────────────────
 // These duplicate the SQL from Phase 1 helpers so we can use the injected
 // client instead of the singleton. This avoids side-effects from swapping the
@@ -221,6 +428,64 @@ async function _recordBranchCloneViaClient(
       record.sourceDbName,
       record.createdAt,
     ],
+  });
+}
+
+async function _getBranchCloneFullViaClient(
+  client: Client,
+  branchName: string,
+): Promise<{
+  branchName: string;
+  tursoDbName: string;
+  tursoDbUrl: string;
+  tursoAuthToken: string;
+  sourceDbName: string;
+  createdAt: string;
+  lastPromotedAt: string | null;
+  prodMigrationAt: string | null;
+} | null> {
+  const result = await client.execute({
+    sql: `SELECT branch_name, turso_db_name, turso_db_url, turso_auth_token,
+                 source_db_name, created_at, last_promoted_at, prod_migration_at
+          FROM branch_db_clones
+          WHERE branch_name = ?
+          LIMIT 1`,
+    args: [branchName],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    branchName: row.branch_name as string,
+    tursoDbName: row.turso_db_name as string,
+    tursoDbUrl: row.turso_db_url as string,
+    tursoAuthToken: row.turso_auth_token as string,
+    sourceDbName: row.source_db_name as string,
+    createdAt: row.created_at as string,
+    lastPromotedAt: (row.last_promoted_at as string) ?? null,
+    prodMigrationAt: (row.prod_migration_at as string) ?? null,
+  };
+}
+
+async function _deleteBranchCloneViaClient(
+  client: Client,
+  branchName: string,
+): Promise<void> {
+  await client.execute({
+    sql: `DELETE FROM branch_db_clones WHERE branch_name = ?`,
+    args: [branchName],
+  });
+}
+
+async function _markBranchClonePromotedViaClient(
+  client: Client,
+  branchName: string,
+  promotedAt: string,
+): Promise<void> {
+  await client.execute({
+    sql: `UPDATE branch_db_clones
+          SET last_promoted_at = ?, prod_migration_at = ?
+          WHERE branch_name = ?`,
+    args: [promotedAt, promotedAt, branchName],
   });
 }
 
