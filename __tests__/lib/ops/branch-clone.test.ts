@@ -544,3 +544,399 @@ describe('cloneBranch — CLI arg shapes', () => {
     expect(tokenCall.args[expIdx + 1]).toBe('none');
   });
 });
+
+// ── Phase 3: destroyBranchDb ──────────────────────────────────────────────────
+
+async function getDestroyBranchDb() {
+  const mod = await import('@/lib/ops/branch-clone');
+  return mod.destroyBranchDb;
+}
+
+async function getPromoteToProd() {
+  const mod = await import('@/lib/ops/branch-clone');
+  return mod.promoteToProd;
+}
+
+/** Insert a row directly into the in-memory client for test setup. */
+async function insertCloneRow(
+  client: Client,
+  opts: {
+    branchName: string;
+    tursoDbName: string;
+    createdAt: string;
+  },
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT OR REPLACE INTO branch_db_clones
+            (branch_name, turso_db_name, turso_db_url, turso_auth_token,
+             source_db_name, created_at, last_promoted_at, prod_migration_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+    args: [
+      opts.branchName,
+      opts.tursoDbName,
+      'libsql://ft-test.turso.io',
+      'tok-test',
+      'basson-boerdery',
+      opts.createdAt,
+    ],
+  });
+}
+
+describe('destroyBranchDb — happy path', () => {
+  it('calls turso db destroy once with --yes and deletes the meta row', async () => {
+    const cli = makeFakeCli({ 'db:destroy': '' });
+    const destroyBranchDb = await getDestroyBranchDb();
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/destroy-test',
+      tursoDbName: 'ft-clone-destroy-test-abc123',
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await destroyBranchDb({
+      branchName: 'wave/destroy-test',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.branchName).toBe('wave/destroy-test');
+    expect(result.tursoDestroyed).toBe(true);
+    expect(result.metaRowDeleted).toBe(true);
+
+    // exactly one CLI call: db destroy <tursoDbName> --yes
+    expect(cli.calls).toHaveLength(1);
+    expect(cli.calls[0].args[0]).toBe('db');
+    expect(cli.calls[0].args[1]).toBe('destroy');
+    expect(cli.calls[0].args[2]).toBe('ft-clone-destroy-test-abc123');
+    expect(cli.calls[0].args).toContain('--yes');
+  });
+
+  it('meta row is gone from DB after successful destroy', async () => {
+    const cli = makeFakeCli({ 'db:destroy': '' });
+    const destroyBranchDb = await getDestroyBranchDb();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/gone-after',
+      tursoDbName: 'ft-clone-gone-abc000',
+      createdAt: new Date().toISOString(),
+    });
+
+    await destroyBranchDb({
+      branchName: 'wave/gone-after',
+      cli,
+      metaClient: memClient,
+    });
+
+    const row = await getBranchClone('wave/gone-after');
+    expect(row).toBeNull();
+  });
+});
+
+describe('destroyBranchDb — idempotent on missing branch', () => {
+  it('returns false/false and makes zero CLI calls when branch does not exist', async () => {
+    const cli = makeFakeCli({});
+    const destroyBranchDb = await getDestroyBranchDb();
+
+    const result = await destroyBranchDb({
+      branchName: 'wave/no-such-branch',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.branchName).toBe('wave/no-such-branch');
+    expect(result.tursoDestroyed).toBe(false);
+    expect(result.metaRowDeleted).toBe(false);
+    expect(cli.calls).toHaveLength(0);
+  });
+});
+
+describe('destroyBranchDb — turso failure preserves meta row', () => {
+  it('does NOT delete the meta row when turso destroy fails, and bubbles the error', async () => {
+    const cli = makeFakeCli({
+      'db:destroy': new TursoCliError(['db', 'destroy', 'ft-clone-wave-x', '--yes'], 1, 'not found'),
+    });
+    const destroyBranchDb = await getDestroyBranchDb();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/turso-fail',
+      tursoDbName: 'ft-clone-wave-x',
+      createdAt: new Date().toISOString(),
+    });
+
+    await expect(
+      destroyBranchDb({
+        branchName: 'wave/turso-fail',
+        cli,
+        metaClient: memClient,
+      }),
+    ).rejects.toBeInstanceOf(TursoCliError);
+
+    // Meta row must still be present so operator can retry
+    const row = await getBranchClone('wave/turso-fail');
+    expect(row).not.toBeNull();
+  });
+});
+
+describe('destroyBranchDb — skipTursoDestroy flag', () => {
+  it('skips the CLI call but still deletes the meta row when skipTursoDestroy=true', async () => {
+    const cli = makeFakeCli({});
+    const destroyBranchDb = await getDestroyBranchDb();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/orphan-row',
+      tursoDbName: 'ft-clone-orphan-abc999',
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await destroyBranchDb({
+      branchName: 'wave/orphan-row',
+      skipTursoDestroy: true,
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.tursoDestroyed).toBe(false);
+    expect(result.metaRowDeleted).toBe(true);
+    expect(cli.calls).toHaveLength(0);
+
+    const row = await getBranchClone('wave/orphan-row');
+    expect(row).toBeNull();
+  });
+});
+
+// ── Phase 3: promoteToProd ────────────────────────────────────────────────────
+
+describe('promoteToProd — happy path', () => {
+  it('runs migration, marks row promoted, and returns correct result', async () => {
+    const promoteToProd = await getPromoteToProd();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/promote-happy',
+      tursoDbName: 'ft-clone-promote-abc001',
+      createdAt: twoHoursAgo,
+    });
+
+    const fakeNow = new Date('2026-04-29T12:00:00.000Z');
+    const fakeMigration = async () => ({
+      applied: ['0001_init.sql', '0002_add_camps.sql'],
+      skipped: ['0000_bootstrap.sql'],
+    });
+
+    const result = await promoteToProd({
+      branchName: 'wave/promote-happy',
+      minSoakHours: 1,
+      metaClient: memClient,
+      now: () => fakeNow,
+      runProdMigration: fakeMigration,
+    });
+
+    expect(result.branchName).toBe('wave/promote-happy');
+    expect(result.prodMigrationAppliedFiles).toEqual(['0001_init.sql', '0002_add_camps.sql']);
+    expect(result.prodMigrationSkippedFiles).toEqual(['0000_bootstrap.sql']);
+    expect(result.promotedAt).toBe('2026-04-29T12:00:00.000Z');
+
+    const row = await getBranchClone('wave/promote-happy');
+    expect(row!.prodMigrationAt).toBe('2026-04-29T12:00:00.000Z');
+  });
+});
+
+describe('promoteToProd — soak gate enforcement', () => {
+  it('throws SoakNotMetError when clone is only 30 minutes old and minSoakHours=1', async () => {
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+
+    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/soak-fail',
+      tursoDbName: 'ft-clone-soak-abc002',
+      createdAt: thirtyMinsAgo,
+    });
+
+    let migrationCalled = false;
+    const fakeMigration = async () => {
+      migrationCalled = true;
+      return { applied: [], skipped: [] };
+    };
+
+    await expect(
+      promoteToProd({
+        branchName: 'wave/soak-fail',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => new Date(),
+        runProdMigration: fakeMigration,
+      }),
+    ).rejects.toBeInstanceOf(SoakNotMetError);
+
+    expect(migrationCalled).toBe(false);
+  });
+
+  it('SoakNotMetError carries correct branchName and hour values', async () => {
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+
+    const fixedCreatedAt = new Date('2026-04-29T10:00:00.000Z');
+    const fixedNow = new Date('2026-04-29T10:30:00.000Z'); // only 0.5h elapsed
+    await insertCloneRow(memClient, {
+      branchName: 'wave/soak-error-fields',
+      tursoDbName: 'ft-clone-soak-abc003',
+      createdAt: fixedCreatedAt.toISOString(),
+    });
+
+    let caughtError: unknown;
+    try {
+      await promoteToProd({
+        branchName: 'wave/soak-error-fields',
+        minSoakHours: 2,
+        metaClient: memClient,
+        now: () => fixedNow,
+        runProdMigration: async () => ({ applied: [], skipped: [] }),
+      });
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(SoakNotMetError);
+    const soakErr = caughtError as InstanceType<typeof SoakNotMetError>;
+    expect(soakErr.branchName).toBe('wave/soak-error-fields');
+    expect(soakErr.minSoakHours).toBe(2);
+    expect(soakErr.soakHoursElapsed).toBeCloseTo(0.5, 1);
+  });
+
+  it('meta row is NOT marked promoted when soak gate throws', async () => {
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/soak-no-mark',
+      tursoDbName: 'ft-clone-soak-abc004',
+      createdAt: tenMinsAgo,
+    });
+
+    await expect(
+      promoteToProd({
+        branchName: 'wave/soak-no-mark',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => new Date(),
+        runProdMigration: async () => ({ applied: [], skipped: [] }),
+      }),
+    ).rejects.toBeInstanceOf(SoakNotMetError);
+
+    const row = await getBranchClone('wave/soak-no-mark');
+    expect(row!.lastPromotedAt).toBeNull();
+    expect(row!.prodMigrationAt).toBeNull();
+  });
+});
+
+describe('promoteToProd — forceSkipSoak', () => {
+  it('runs migration when forceSkipSoak=true even if only 5 minutes old', async () => {
+    const promoteToProd = await getPromoteToProd();
+
+    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/force-skip',
+      tursoDbName: 'ft-clone-force-abc005',
+      createdAt: fiveMinsAgo,
+    });
+
+    let migrationCalled = false;
+    const fakeMigration = async () => {
+      migrationCalled = true;
+      return { applied: ['0001_init.sql'], skipped: [] };
+    };
+
+    const result = await promoteToProd({
+      branchName: 'wave/force-skip',
+      minSoakHours: 1,
+      forceSkipSoak: true,
+      metaClient: memClient,
+      now: () => new Date(),
+      runProdMigration: fakeMigration,
+    });
+
+    expect(migrationCalled).toBe(true);
+    expect(result.prodMigrationAppliedFiles).toEqual(['0001_init.sql']);
+  });
+});
+
+describe('promoteToProd — branch not found', () => {
+  it('throws BranchCloneNotFoundError when branch does not exist', async () => {
+    const { BranchCloneNotFoundError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+
+    await expect(
+      promoteToProd({
+        branchName: 'wave/does-not-exist',
+        metaClient: memClient,
+        now: () => new Date(),
+        runProdMigration: async () => ({ applied: [], skipped: [] }),
+      }),
+    ).rejects.toBeInstanceOf(BranchCloneNotFoundError);
+  });
+});
+
+describe('promoteToProd — migration failure', () => {
+  it('does NOT mark row promoted when runProdMigration throws', async () => {
+    const promoteToProd = await getPromoteToProd();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/migration-fail',
+      tursoDbName: 'ft-clone-migfail-abc006',
+      createdAt: twoHoursAgo,
+    });
+
+    const migrationError = new Error('migration failed: column already exists');
+    await expect(
+      promoteToProd({
+        branchName: 'wave/migration-fail',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => new Date(),
+        runProdMigration: async () => { throw migrationError; },
+      }),
+    ).rejects.toThrow('migration failed: column already exists');
+
+    const row = await getBranchClone('wave/migration-fail');
+    expect(row!.lastPromotedAt).toBeNull();
+    expect(row!.prodMigrationAt).toBeNull();
+  });
+});
+
+describe('promoteToProd — deterministic promotedAt via now injection', () => {
+  it('records the injected now() value as promotedAt in both result and meta row', async () => {
+    const promoteToProd = await getPromoteToProd();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/deterministic-promote',
+      tursoDbName: 'ft-clone-det-abc007',
+      createdAt: twoHoursAgo,
+    });
+
+    const fixedNow = new Date('2026-04-29T08:30:00.000Z');
+
+    const result = await promoteToProd({
+      branchName: 'wave/deterministic-promote',
+      minSoakHours: 1,
+      metaClient: memClient,
+      now: () => fixedNow,
+      runProdMigration: async () => ({ applied: [], skipped: [] }),
+    });
+
+    expect(result.promotedAt).toBe('2026-04-29T08:30:00.000Z');
+
+    const row = await getBranchClone('wave/deterministic-promote');
+    expect(row!.prodMigrationAt).toBe('2026-04-29T08:30:00.000Z');
+  });
+});
