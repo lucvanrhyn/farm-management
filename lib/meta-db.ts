@@ -82,6 +82,12 @@ export function __resetMetaClient(): void {
   _client = null;
 }
 
+// Test-only hook: inject a pre-built client (e.g. in-memory libSQL).
+// Never call from app code.
+export function __setMetaClientForTest(client: Client): void {
+  _client = client;
+}
+
 export interface MetaUser {
   id: string;
   email: string | null;
@@ -644,3 +650,123 @@ export async function isPlatformAdmin(email: string): Promise<boolean> {
 }
 
 export { ALLOWED_STATUS_TRANSITIONS, VALID_LEAD_STATUSES };
+
+// ─── Branch DB Clones (Option C — issue #19) ────────────────────────────────
+
+export interface BranchCloneRecord {
+  branchName: string;
+  tursoDbName: string;
+  tursoDbUrl: string;
+  tursoAuthToken: string;
+  sourceDbName: string;
+  createdAt: string;
+  lastPromotedAt: string | null;
+  prodMigrationAt: string | null;
+}
+
+function rowToBranchCloneRecord(row: Record<string, unknown>): BranchCloneRecord {
+  return {
+    branchName: row.branch_name as string,
+    tursoDbName: row.turso_db_name as string,
+    tursoDbUrl: row.turso_db_url as string,
+    tursoAuthToken: row.turso_auth_token as string,
+    sourceDbName: row.source_db_name as string,
+    createdAt: row.created_at as string,
+    lastPromotedAt: (row.last_promoted_at as string) ?? null,
+    prodMigrationAt: (row.prod_migration_at as string) ?? null,
+  };
+}
+
+/**
+ * Insert or replace a branch DB clone record.
+ * `created_at` is always set to now (INSERT OR REPLACE resets all columns).
+ */
+export async function recordBranchClone(input: {
+  branchName: string;
+  tursoDbName: string;
+  tursoDbUrl: string;
+  tursoAuthToken: string;
+  sourceDbName: string;
+}): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `INSERT OR REPLACE INTO branch_db_clones
+            (branch_name, turso_db_name, turso_db_url, turso_auth_token,
+             source_db_name, created_at, last_promoted_at, prod_migration_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+    args: [
+      input.branchName,
+      input.tursoDbName,
+      input.tursoDbUrl,
+      input.tursoAuthToken,
+      input.sourceDbName,
+      new Date().toISOString(),
+    ],
+  });
+}
+
+/**
+ * Fetch a single branch clone record by branch name.
+ * Returns null if not found.
+ */
+export async function getBranchClone(
+  branchName: string,
+): Promise<BranchCloneRecord | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT branch_name, turso_db_name, turso_db_url, turso_auth_token,
+                 source_db_name, created_at, last_promoted_at, prod_migration_at
+          FROM branch_db_clones
+          WHERE branch_name = ?
+          LIMIT 1`,
+    args: [branchName],
+  });
+  if (result.rows.length === 0) return null;
+  return rowToBranchCloneRecord(result.rows[0] as unknown as Record<string, unknown>);
+}
+
+/**
+ * Return all branch clone records ordered by created_at DESC.
+ */
+export async function listBranchClones(): Promise<BranchCloneRecord[]> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT branch_name, turso_db_name, turso_db_url, turso_auth_token,
+                 source_db_name, created_at, last_promoted_at, prod_migration_at
+          FROM branch_db_clones
+          ORDER BY created_at DESC`,
+    args: [],
+  });
+  return result.rows.map((row) =>
+    rowToBranchCloneRecord(row as unknown as Record<string, unknown>),
+  );
+}
+
+/**
+ * Mark a branch clone as promoted to prod.
+ * Sets last_promoted_at to now and prod_migration_at to the provided ISO string.
+ * No-op if the branch does not exist.
+ */
+export async function markBranchClonePromoted(
+  branchName: string,
+  prodMigrationAt: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE branch_db_clones
+          SET last_promoted_at = ?, prod_migration_at = ?
+          WHERE branch_name = ?`,
+    args: [new Date().toISOString(), prodMigrationAt, branchName],
+  });
+}
+
+/**
+ * Delete a branch clone record. Idempotent — no error if branch not found.
+ */
+export async function deleteBranchClone(branchName: string): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `DELETE FROM branch_db_clones WHERE branch_name = ?`,
+    args: [branchName],
+  });
+}
