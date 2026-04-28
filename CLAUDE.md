@@ -17,16 +17,47 @@ Deployed: https://farm-management-lilac.vercel.app
 
 ---
 
-## Workflow: Verify Then Commit to Main
+## Branching workflow — main is sacred
 
-After implementing any fix, before committing:
+**As of 2026-04-28, `main` is the live tenant branch.** It is mutated only via explicit `promote` events from Luc. No agent, no contractor, no future-Claude commits to `main` directly. This rule is non-negotiable — it exists because tenants pay for an app that must keep working while we ship new features.
 
-1. **Verify root cause, not symptom.** Re-read the diff and ask: does this change address *why* the bug happened, or just mask what the user noticed? Symptom-patches go back in the queue.
-2. **Prove it works.** Run the relevant layer — `npx tsc --noEmit` for type changes, `pnpm vitest run <path>` for logic changes, `pnpm lint` for style/compiler-rule changes. For UI changes start the dev server and click through the feature.
-3. **Re-audit the diff.** Look for collateral damage, dead code left behind, TODO comments that should be resolved, and tests that should have been added.
-4. **Only then commit** — and commit directly to `main` unless the session explicitly pins a different branch (e.g. a harness-provided feature branch). A single verified fix on `main` is better than a stack of unverified commits on a branch nobody reviews.
+The full rationale, module breakdown, and 13-issue rollout sequence live in [tasks/prd-stabilization-and-multi-species-2026-04-28.md](tasks/prd-stabilization-and-multi-species-2026-04-28.md). Read it before starting any new work.
 
-If verification fails, fix the underlying issue and re-verify. Don't commit a "good enough" fix and open a follow-up TODO unless the user explicitly accepts that trade-off.
+### What "main is sacred" means in practice
+
+- Every implementation task — bug fix, refactor, new feature, doc update — happens on a sub-branch off `main`.
+- Every sub-branch deploys to its own Vercel preview against its own Turso DB clone (Option C, GitHub issue #19). Preview never reads or writes prod.
+- Migrations run on the clone first and **soak ≥1h** before any prod migration is even considered. Running a migration against prod without prior soak on a clone is forbidden.
+- A PR can only merge into `main` when (a) build green, (b) Vitest green, (c) Playwright smoke green against the branch clone, (d) Luc has applied the `promote` label. The CI governance gate (issue #21) enforces this physically.
+- On merge, the post-merge job invokes `promote-to-prod <branch>` which runs the prod migration. No manual prod migrations.
+
+### Worktree convention
+
+- All sub-branch work happens inside `.worktrees/<wave-name>/` (the directory is gitignored at the repo root).
+- Branch name format: `wave/<issue-number>-<short-slug>` — e.g. `wave/18-claude-md-governance`.
+- Each worktree tracks `origin/main` so it can rebase cleanly. Long-running waves rebase daily.
+- After the PR is merged and promoted, delete the branch + worktree (`git worktree remove`) so ops debt doesn't accumulate.
+
+### Per-wave dispatch convention
+
+Each issue in the rollout corresponds to one wave dispatched as one TDD-agent run:
+
+1. **One TDD agent per wave.** Never bundle waves into one agent call.
+2. **File allow-list** is provided in the agent's initial prompt. The agent may not edit files outside the allow-list. This makes scope creep structurally impossible.
+3. **Target branch is named in the initial prompt** — the agent works inside the worktree, on the wave's branch, never touching `main`.
+4. **TDD red-green-refactor** for any code change: failing test first, minimal implementation, refactor green. For pure docs/governance changes (like this issue), the equivalent is: define a verifiable acceptance check (e.g., a grep) before writing, write the change, run the check.
+5. **8-gate demo-ready bar** before merge: build green, Vitest green, Playwright green, deep-audit green, telemetry typed, beta soak ≥24h on the preview, cold demo dry-run, Luc-typed `promote`.
+
+### Verify-before-promote (replaces the old "commit to main" workflow)
+
+After implementing any change on a sub-branch, before requesting promote:
+
+1. **Verify root cause, not symptom.** Re-read the diff and ask: does this address *why* the bug happened, or just mask what the user noticed? Symptom-patches go back in the queue.
+2. **Prove it works.** Run the relevant layer — `npx tsc --noEmit` for type changes, `pnpm vitest run <path>` for logic, `pnpm lint` for style. For UI start the preview deploy and click through the feature in a browser.
+3. **Re-audit the diff.** Look for collateral damage, dead code, unresolved TODOs, missing tests.
+4. **Push the branch + open a PR.** Reference the issue number. Wait for the CI gate. Wait for Luc's `promote` label. Never push to `main` directly.
+
+If verification fails, fix the underlying issue and re-verify on the preview before opening the PR.
 
 ---
 
