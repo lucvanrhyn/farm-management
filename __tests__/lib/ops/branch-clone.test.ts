@@ -714,7 +714,7 @@ describe('promoteToProd — happy path', () => {
     const promoteToProd = await getPromoteToProd();
     const { getBranchClone } = await import('@/lib/meta-db');
 
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const twoHoursAgo = '2026-04-29T06:30:00.000Z'; // 2h before fixedNow
     await insertCloneRow(memClient, {
       branchName: 'wave/promote-happy',
       tursoDbName: 'ft-clone-promote-abc001',
@@ -888,7 +888,7 @@ describe('promoteToProd — migration failure', () => {
     const promoteToProd = await getPromoteToProd();
     const { getBranchClone } = await import('@/lib/meta-db');
 
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const twoHoursAgo = '2026-04-29T06:30:00.000Z'; // 2h before fixedNow
     await insertCloneRow(memClient, {
       branchName: 'wave/migration-fail',
       tursoDbName: 'ft-clone-migfail-abc006',
@@ -917,7 +917,7 @@ describe('promoteToProd — deterministic promotedAt via now injection', () => {
     const promoteToProd = await getPromoteToProd();
     const { getBranchClone } = await import('@/lib/meta-db');
 
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const twoHoursAgo = '2026-04-29T06:30:00.000Z'; // 2h before fixedNow
     await insertCloneRow(memClient, {
       branchName: 'wave/deterministic-promote',
       tursoDbName: 'ft-clone-det-abc007',
