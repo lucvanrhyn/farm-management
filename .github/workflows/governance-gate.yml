@@ -62,6 +62,11 @@ jobs:
             echo "TURSO_AUTH_TOKEN=$TOKEN"
           } >> "$GITHUB_ENV"
 
+      - name: Generate Prisma client
+        # Vitest imports server modules that pull in @prisma/client; the
+        # generated client needs to exist before the suite runs.
+        run: pnpm prisma generate
+
       - name: Vitest
         run: pnpm test
 
