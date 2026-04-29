@@ -1,0 +1,69 @@
+name: Governance gate
+# Runs on every PR to main. Provisions a per-branch Turso DB clone, builds the
+# app, runs Vitest, then runs a Playwright smoke spec against the built app.
+# Upstream CLI project: tursodatabase/turso-cli (installed via curl below).
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      META_TURSO_URL: ${{ secrets.META_TURSO_URL }}
+      META_TURSO_AUTH_TOKEN: ${{ secrets.META_TURSO_AUTH_TOKEN }}
+      TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+      BRANCH_CLONE_SOURCE_DB: ${{ vars.BRANCH_CLONE_SOURCE_DB || 'basson-boerdery' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Turso CLI
+        run: curl -sSfL https://get.tur.so/install.sh | bash && echo "$HOME/.turso" >> $GITHUB_PATH
+
+      - name: Provision branch clone
+        id: clone
+        run: pnpm ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" | tee clone-output.json
+
+      - name: Export clone env to GITHUB_ENV
+        run: cat clone-output.json | tsx scripts/ci/parse-clone-output.ts >> $GITHUB_ENV
+
+      - name: Vitest
+        run: pnpm test
+
+      - name: Build (prisma + eslint + next)
+        run: pnpm build
+
+      - name: Start server
+        run: nohup pnpm start > server.log 2>&1 & echo $! > server.pid
+
+      - name: Wait for server
+        run: pnpm dlx wait-on http://localhost:3000 --timeout 60000
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright smoke
+        run: pnpm smoke
+
+      - name: Stop server
+        if: always()
+        run: kill $(cat server.pid) || true
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: server.log

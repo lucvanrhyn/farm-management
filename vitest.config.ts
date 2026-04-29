@@ -29,6 +29,9 @@ export default defineConfig({
       '**/.next/**',
       '**/.worktrees/**',
       '**/.claude/worktrees/**',
+      // Playwright specs use @playwright/test runner, not Vitest.
+      // Run them separately with `pnpm smoke`.
+      'e2e/**',
     ],
     coverage: {
       provider: 'v8',
