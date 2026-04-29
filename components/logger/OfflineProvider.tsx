@@ -17,6 +17,10 @@ import {
   getCachedCamps,
   getCachedFarmSettings,
   setActiveFarmSlug,
+  getFarmEpoch,
+  getCachedCampsForEpoch,
+  getLastSyncedAtForEpoch,
+  getCachedFarmSettingsForEpoch,
 } from '@/lib/offline-store';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
@@ -110,11 +114,14 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     setCamps(updated);
   }, []);
 
-  // Pull the hero image URL out of cached farm settings. `heroImageUrl` is
-  // seeded by refreshCachedData → seedFarmSettings on every sync, so the
-  // logger layout no longer needs its own /api/farm fetch.
+  // M3: heroImageUrl is no longer stored per-tenant in the IDB cache.
+  // The background is always /farm-hero.jpg — a single shared asset.
+  // refreshHeroImage is retained as a no-op placeholder so call sites
+  // in refreshData/syncNow compile without changes.
   const refreshHeroImage = useCallback(async () => {
     const settings = await getCachedFarmSettings();
+    // heroImageUrl will always be undefined from the cache layer (M3 stripped it);
+    // the null here tells consumers to use their own '/farm-hero.jpg' fallback.
     setHeroImageUrl(settings?.heroImageUrl ?? null);
   }, []);
 
@@ -167,9 +174,16 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   // Initialize on farm switch — set farm slug for IndexedDB isolation BEFORE any DB calls.
   // The `cancelled` flag discards async results that resolve after a subsequent farm switch,
   // preventing farm A data from briefly appearing on a farm B screen.
+  //
+  // M4 — farmEpoch: capture the epoch synchronously immediately after setActiveFarmSlug so
+  // any IDB read that resolves AFTER a subsequent farm switch can detect staleness and
+  // discard the result. The epoch check is a second-layer guard alongside `cancelled` —
+  // the cancelled flag handles React StrictMode double-mount, epoch handles the
+  // genuinely concurrent "two different farms" case.
   useEffect(() => {
     if (!farmSlug) return;
     setActiveFarmSlug(farmSlug); // synchronous — must be first
+    const epoch = getFarmEpoch(); // capture immediately after slug set
 
     let cancelled = false;
 
@@ -183,10 +197,17 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // /api/camps + /api/animals + /api/farm + /api/camps/status fan-outs.
     // Cache-first is correct here and online-reconnect schedules its own
     // refresh, so users coming back from offline never serve stale data.
-    Promise.all([getCachedCamps(), getCachedFarmSettings(), getLastSyncedAt()]).then(
+    Promise.all([
+      getCachedCampsForEpoch(epoch),
+      getCachedFarmSettingsForEpoch(epoch),
+      getLastSyncedAtForEpoch(epoch),
+    ]).then(
       ([cachedCamps, cachedSettings, lastSyncedIso]) => {
+        // Discard if React unmounted OR if epoch is stale (farm switched mid-flight)
         if (cancelled) return;
+        if (cachedCamps === null) return; // stale epoch — another farm's data
         if (cachedCamps.length > 0) setCamps(cachedCamps);
+        // M3: heroImageUrl is no longer stored in cache; always fall back to /farm-hero.jpg
         setHeroImageUrl(cachedSettings?.heroImageUrl ?? null);
         setCampsLoaded(true);
         setLastSyncedAtState(lastSyncedIso);
