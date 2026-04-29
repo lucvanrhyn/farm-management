@@ -1,0 +1,84 @@
+name: Post-merge promote
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  promote:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'promote')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      META_TURSO_URL: ${{ secrets.META_TURSO_URL }}
+      META_TURSO_AUTH_TOKEN: ${{ secrets.META_TURSO_AUTH_TOKEN }}
+      TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+      PROD_TENANT_DB_URL: ${{ secrets.PROD_TENANT_DB_URL }}
+      PROD_TENANT_DB_AUTH_TOKEN: ${{ secrets.PROD_TENANT_DB_AUTH_TOKEN }}
+      BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Turso CLI
+        run: curl -sSfL https://get.tur.so/install.sh | bash && echo "$HOME/.turso" >> $GITHUB_PATH
+
+      - name: Promote branch to prod
+        id: promote
+        run: pnpm ops:promote-branch "$BRANCH_NAME"
+
+      - name: Comment success on PR
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `✅ Promoted \`${process.env.BRANCH_NAME}\` to prod at ${new Date().toISOString()}.`
+            });
+            await core.summary
+              .addHeading('Promote succeeded')
+              .addRaw(`Branch \`${process.env.BRANCH_NAME}\` promoted to prod at ${new Date().toISOString()}.`)
+              .write();
+
+      - name: Recycle clone
+        if: success()
+        run: pnpm ops:destroy-branch "$BRANCH_NAME"
+
+      - name: Comment failure on PR + open incident
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = process.env.BRANCH_NAME;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `❌ Promote failed for \`${branch}\`. Workflow run: ${runUrl}`
+            });
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Prod promote failed for ${branch}`,
+              body: `Post-merge promote of \`${branch}\` failed. PR #${context.payload.pull_request.number}. Run: ${runUrl}\n\nRunbook: tasks/option-c-runbook.md section 6 (Promoting a branch to prod) and section 9 (Failure recovery).`,
+              labels: ['incident', 'prod-promote-failed']
+            });

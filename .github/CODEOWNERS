@@ -1,0 +1,14 @@
+# CODEOWNERS — review gate for governance-critical paths.
+# CODEOWNERS gates REVIEW approval, not label application — the
+# `promote` label is gated by `.github/workflows/promote-label-guard.yml`.
+
+# Default — every change needs Luc's review when added to required reviewers.
+* @lucvanrhyn
+
+# Governance-critical: workflows, branch policy docs, promote runbook, ops scripts.
+/.github/             @lucvanrhyn
+/CLAUDE.md            @lucvanrhyn
+/tasks/promote-runbook.md   @lucvanrhyn
+/scripts/branch-clone.ts    @lucvanrhyn
+/scripts/vercel-prebuild.ts @lucvanrhyn
+/lib/ops/             @lucvanrhyn

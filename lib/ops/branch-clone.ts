@@ -29,6 +29,8 @@ export interface CloneBranchInput {
   sourceDbName: string;
   /** Prefix for the clone DB name. Defaults to 'ft-clone'. */
   cliPrefix?: string;
+  /** Turso DB group to create the clone in. Required when the org has more than one group. */
+  groupName?: string;
   /** Injectable CLI runner. Defaults to the real turso binary. */
   cli?: TursoCli;
   /** Injectable meta-DB client. Defaults to the production singleton. */
@@ -102,6 +104,7 @@ export async function cloneBranch(
     branchName,
     sourceDbName,
     cliPrefix = 'ft-clone',
+    groupName,
     cli = realTursoCli,
     now = () => new Date(),
   } = input;
@@ -132,7 +135,14 @@ export async function cloneBranch(
 
   // ── 3. Invoke turso CLI (three steps, abort on any failure) ──────────────
   //    a. Create the clone
-  await cli.run(['db', 'create', tursoDbName, '--from-db', sourceDbName]);
+  await cli.run([
+    'db',
+    'create',
+    tursoDbName,
+    '--from-db',
+    sourceDbName,
+    ...(groupName ? ['--group', groupName] : []),
+  ]);
 
   //    b. Retrieve the libsql URL
   const tursoDbUrl = await cli.run(['db', 'show', tursoDbName, '--url']);
