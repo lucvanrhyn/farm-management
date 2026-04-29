@@ -48,11 +48,12 @@ const USAGE = `
 Usage: branch-clone <command> [options]
 
 Commands:
-  clone <branchName> --source <sourceDbName> [--prefix <prefix>]
+  clone <branchName> --source <sourceDbName> [--prefix <prefix>] [--group <group>]
       Clone a Turso DB for a branch. Records the clone in the meta-DB.
       Options:
         --source <name>   Source Turso DB name to clone from (required)
         --prefix <prefix> DB name prefix (default: ft-clone)
+        --group <name>    Turso DB group to create the clone in (required when org has >1 group)
 
   destroy <branchName> [--skip-turso]
       Destroy the Turso DB clone and remove the meta-DB record.
@@ -131,12 +132,14 @@ async function handleClone(
   }
 
   const cliPrefix = typeof flags['prefix'] === 'string' ? flags['prefix'] : 'ft-clone';
+  const groupName = typeof flags['group'] === 'string' ? flags['group'] : undefined;
 
   try {
     const result = await deps.cloneBranchImpl({
       branchName,
       sourceDbName,
       cliPrefix,
+      groupName,
     });
 
     // Omit tursoAuthToken from output for log safety.

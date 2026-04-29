@@ -16,7 +16,8 @@ jobs:
       META_TURSO_URL: ${{ secrets.META_TURSO_URL }}
       META_TURSO_AUTH_TOKEN: ${{ secrets.META_TURSO_AUTH_TOKEN }}
       TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
-      BRANCH_CLONE_SOURCE_DB: ${{ vars.BRANCH_CLONE_SOURCE_DB || 'basson-boerdery' }}
+      BRANCH_CLONE_SOURCE_DB: ${{ vars.BRANCH_CLONE_SOURCE_DB || 'basson-boerdery-dub' }}
+      BRANCH_CLONE_GROUP: ${{ vars.BRANCH_CLONE_GROUP || 'eu-dub' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,10 +38,28 @@ jobs:
 
       - name: Provision branch clone
         id: clone
-        run: pnpm ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" | tee clone-output.json
+        run: pnpm ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" --group "$BRANCH_CLONE_GROUP" | tee clone-output.json
 
-      - name: Export clone env to GITHUB_ENV
-        run: cat clone-output.json | pnpm exec tsx scripts/ci/parse-clone-output.ts >> $GITHUB_ENV
+      - name: Mint clone auth token + export env
+        run: |
+          DB_NAME=$(jq -r .tursoDbName clone-output.json)
+          DB_URL=$(jq -r .tursoDbUrl clone-output.json)
+          if [ -z "$DB_NAME" ] || [ "$DB_NAME" = "null" ]; then
+            echo "::error::tursoDbName missing from clone-output.json" >&2
+            exit 1
+          fi
+          if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
+            echo "::error::tursoDbUrl missing from clone-output.json" >&2
+            exit 1
+          fi
+          # Branch-clone CLI omits the auth token from stdout for log safety;
+          # mint a fresh non-expiring token for the gate's runtime.
+          TOKEN=$(turso db tokens create "$DB_NAME" --expiration none)
+          echo "::add-mask::$TOKEN"
+          {
+            echo "TURSO_DATABASE_URL=$DB_URL"
+            echo "TURSO_AUTH_TOKEN=$TOKEN"
+          } >> "$GITHUB_ENV"
 
       - name: Vitest
         run: pnpm test
