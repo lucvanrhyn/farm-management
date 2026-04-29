@@ -1,0 +1,23 @@
+name: Require promote label
+# Enforces that a PR to main must carry the `promote` label before merge is unblocked.
+# This is the presence-check layer; promote-label-guard.yml is the authorization layer.
+# Together: only @lucvanrhyn can add the label (guard removes anyone else's), AND merge
+# is blocked until the label is present (this check fails without it).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [main]
+jobs:
+  require:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check promote label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (!labels.includes('promote')) {
+              core.setFailed('PR is missing the `promote` label. Only @lucvanrhyn can apply it.');
+            } else {
+              core.info('promote label present — merge gate satisfied.');
+            }
