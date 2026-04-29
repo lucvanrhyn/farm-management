@@ -1,5 +1,6 @@
 {
   "regions": ["fra1"],
+  "buildCommand": "tsx scripts/vercel-prebuild.ts && pnpm build --webpack",
   "crons": [
     {
       "path": "/api/inngest",
