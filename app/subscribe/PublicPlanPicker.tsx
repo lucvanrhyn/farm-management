@@ -1,4 +1,8 @@
 import Link from 'next/link';
+import {
+  BASIC_DISPLAY_MONTHLY_ZAR,
+  ADVANCED_DISPLAY_MONTHLY_ZAR,
+} from '@/lib/pricing/compute-total-lsu';
 
 /**
  * Public plan picker rendered at /subscribe for anonymous visitors.
@@ -18,6 +22,9 @@ import Link from 'next/link';
  *
  * No client-side JS, no session check, no DB calls — purely a static
  * server-rendered surface. Safe to render anywhere this file is imported.
+ *
+ * Prices sourced from lib/pricing/compute-total-lsu.ts — do NOT hardcode
+ * them here. Update the canonical module, not this file.
  */
 
 type PlanTier = {
@@ -34,7 +41,7 @@ const PLANS: PlanTier[] = [
   {
     slug: 'basic',
     name: 'Basic',
-    price: 'R200',
+    price: `R${BASIC_DISPLAY_MONTHLY_ZAR}`,
     cadence: 'per month',
     blurb: 'Run the day-to-day farm in one place.',
     bullets: [
@@ -47,7 +54,7 @@ const PLANS: PlanTier[] = [
   {
     slug: 'advanced',
     name: 'Advanced',
-    price: 'R450',
+    price: `R${ADVANCED_DISPLAY_MONTHLY_ZAR}`,
     cadence: 'per month',
     blurb: 'Everything in Basic + insight that compounds.',
     bullets: [

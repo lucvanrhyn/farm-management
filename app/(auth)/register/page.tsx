@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { clientLogger } from "@/lib/client-logger";
+import { BASIC_DISPLAY_MONTHLY_ZAR } from "@/lib/pricing/compute-total-lsu";
 
 // framer-motion removed for bundle-budget compliance — see P5 perf
 // work. CSS-based fade/rise-in is defined in app/globals.css as
@@ -227,7 +228,7 @@ export default function RegisterPage() {
             textAlign: "center",
           }}
         >
-          Start with our Basic plan at R200/month. Upgrade to Advanced anytime.
+          {`Start with our Basic plan at R${BASIC_DISPLAY_MONTHLY_ZAR}/month. Upgrade to Advanced anytime.`}
         </p>
 
         {/*
