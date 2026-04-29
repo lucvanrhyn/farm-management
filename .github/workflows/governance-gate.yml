@@ -38,7 +38,8 @@ jobs:
 
       - name: Provision branch clone
         id: clone
-        run: pnpm ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" --group "$BRANCH_CLONE_GROUP" | tee clone-output.json
+        # `--silent` suppresses pnpm's script-header lines so stdout is pure JSON.
+        run: pnpm --silent ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" --group "$BRANCH_CLONE_GROUP" | tee clone-output.json
 
       - name: Mint clone auth token + export env
         run: |
