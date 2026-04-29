@@ -12,15 +12,19 @@ import { test, expect } from '@playwright/test';
 
 test('login page renders the auth form', async ({ page }) => {
   await page.goto('/login');
-  await expect(page.locator('input[name="email"]')).toBeVisible();
-  await expect(page.locator('input[name="password"]')).toBeVisible();
+  await expect(page.locator('input#identifier')).toBeVisible();
+  await expect(page.locator('input#password')).toBeVisible();
   await expect(page.locator('button[type="submit"]')).toBeVisible();
 });
 
-test('home page returns 200 with no console errors', async ({ page }) => {
+test('home page returns 200 with no app console errors', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    // Browser-emitted advisory about the report-only CSP — not an app error.
+    if (text.includes('upgrade-insecure-requests') && text.includes('report-only')) return;
+    consoleErrors.push(text);
   });
 
   const response = await page.goto('/');
