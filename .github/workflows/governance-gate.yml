@@ -5,6 +5,9 @@ name: Governance gate
 on:
   pull_request:
     branches: [main]
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -37,7 +40,7 @@ jobs:
         run: pnpm ops:clone-branch "${{ github.head_ref }}" --source "$BRANCH_CLONE_SOURCE_DB" | tee clone-output.json
 
       - name: Export clone env to GITHUB_ENV
-        run: cat clone-output.json | tsx scripts/ci/parse-clone-output.ts >> $GITHUB_ENV
+        run: cat clone-output.json | pnpm exec tsx scripts/ci/parse-clone-output.ts >> $GITHUB_ENV
 
       - name: Vitest
         run: pnpm test
@@ -59,7 +62,10 @@ jobs:
 
       - name: Stop server
         if: always()
-        run: kill $(cat server.pid) || true
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" 2>/dev/null || true
+          fi
 
       - name: Upload server log on failure
         if: failure()
