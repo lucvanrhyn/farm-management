@@ -8,6 +8,7 @@ import DroughtExportCard from "@/components/admin/DroughtExportCard";
 import It3ExportCard from "@/components/admin/It3ExportCard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmCreds } from "@/lib/meta-db";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 interface ReportCard {
@@ -72,7 +73,7 @@ export default async function ReportsPage({
   }
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1C1815]">Reports</h1>
         <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
@@ -111,6 +112,6 @@ export default async function ReportsPage({
         <DroughtExportCard farmSlug={farmSlug} />
         <It3ExportCard farmSlug={farmSlug} />
       </div>
-    </div>
+    </AdminPage>
   );
 }

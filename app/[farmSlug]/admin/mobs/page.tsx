@@ -3,6 +3,7 @@ import MobsManager from "@/components/admin/MobsManager";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob } from "@/lib/types";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 export default async function AdminMobsPage({
@@ -14,9 +15,11 @@ export default async function AdminMobsPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-red-500">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -72,7 +75,7 @@ export default async function AdminMobsPage({
   }));
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1C1815]">Mob Management</h1>
         <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
@@ -85,6 +88,6 @@ export default async function AdminMobsPage({
         membership={membership}
         farmSlug={farmSlug}
       />
-    </div>
+    </AdminPage>
   );
 }
