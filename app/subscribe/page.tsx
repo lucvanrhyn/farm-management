@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth-options';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getFarmSubscription } from '@/lib/meta-db';
+import { BASIC_DISPLAY_MONTHLY_ZAR } from '@/lib/pricing/compute-total-lsu';
 import PublicPlanPicker from './PublicPlanPicker';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,7 @@ export default async function SubscribePage({
 
   const pfParams = buildSubscriptionParams({
     tier: 'basic',
-    amountZar: 200,
+    amountZar: BASIC_DISPLAY_MONTHLY_ZAR,
     frequency: 'monthly',
     farmSlug,
     farmDisplayName: farm.displayName,
@@ -183,7 +184,7 @@ export default async function SubscribePage({
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontFamily: 'var(--font-display)', color: '#C49030', fontSize: '1.5rem', fontWeight: 700 }}>
-              R200
+              R{BASIC_DISPLAY_MONTHLY_ZAR}
             </p>
             <p style={{ fontFamily: 'var(--font-sans)', color: '#8A6840', fontSize: '0.75rem' }}>
               per month
