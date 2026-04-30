@@ -88,6 +88,9 @@ export default async function AdminLayout({
   let enabledSpecies: string[] | undefined;
   let onboardingComplete = true; // fail-open: if settings fetch fails, do NOT bounce
   let assistantName: string | null = null; // null → provider falls back to "Einstein"
+  // Number of farms the authenticated user has access to — used by AdminNav to
+  // conditionally render the "← Switch farm" link (only shown when N ≥ 2).
+  const farmCount = (session.user.farms ?? []).length;
 
   const [credsResult, prismaResult] = await Promise.allSettled([
     getFarmCreds(farmSlug),
@@ -168,7 +171,7 @@ export default async function AdminLayout({
     <AssistantNameProvider name={assistantName}>
       <TierProvider tier={tier}>
         <div className="flex min-h-screen">
-          <AdminNav tier={tier} enabledSpecies={enabledSpecies} />
+          <AdminNav tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount} />
           <main className="flex-1">{children}</main>
         </div>
       </TierProvider>

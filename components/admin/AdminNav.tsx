@@ -34,6 +34,7 @@ import {
   Cloud,
   Landmark,
   Sparkles,
+  ArrowLeft,
 } from "lucide-react";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
@@ -398,9 +399,14 @@ function writeStoredExpanded(farmSlug: string, expanded: Set<string>): void {
 export default function AdminNav({
   tier,
   enabledSpecies,
+  farmCount = 1,
 }: {
   tier: FarmTier;
   enabledSpecies?: string[];
+  /** Total number of farms the authenticated user has access to. When ≥2, a
+   * "← Switch farm" link is rendered at the bottom of the nav so multi-farm
+   * users can navigate back to the farm selector without signing out. */
+  farmCount?: number;
 }) {
   const pathname = usePathname();
   const farmSlug = pathname.split("/")[1];
@@ -673,6 +679,18 @@ export default function AdminNav({
         </motion.div>
 
         <div className="mt-auto pt-4 flex flex-col gap-2">
+          {farmCount >= 2 && (
+            <Link
+              href="/farms"
+              prefetch={false}
+              className="flex items-center justify-center md:justify-start gap-2 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ color: "rgba(210,180,140,0.7)" }}
+              title="Switch farm"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(210,180,140,0.55)" }} />
+              <span className="hidden md:inline">Switch farm</span>
+            </Link>
+          )}
           <NotificationBell farmSlug={farmSlug} />
           <SignOutButton />
         </div>
