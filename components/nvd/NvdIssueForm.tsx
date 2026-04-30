@@ -62,6 +62,11 @@ export default function NvdIssueForm({ farmSlug, onIssued }: NvdIssueFormProps) 
   const [buyerContact, setBuyerContact] = useState("");
   const [destinationAddress, setDestinationAddress] = useState("");
 
+  // Transport fields (Stock Theft Act §8 — driver + vehicle)
+  const [driverName, setDriverName] = useState("");
+  const [vehicleRegNumber, setVehicleRegNumber] = useState("");
+  const [vehicleMakeModel, setVehicleMakeModel] = useState("");
+
   // Animal selection
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
@@ -158,6 +163,15 @@ export default function NvdIssueForm({ farmSlug, onIssued }: NvdIssueFormProps) 
     setErrorMsg(null);
 
     try {
+      const transportPayload =
+        driverName.trim() || vehicleRegNumber.trim()
+          ? {
+              driverName: driverName.trim(),
+              vehicleRegNumber: vehicleRegNumber.trim(),
+              vehicleMakeModel: vehicleMakeModel.trim() || undefined,
+            }
+          : undefined;
+
       const res = await fetch(`/api/${farmSlug}/nvd`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,6 +183,7 @@ export default function NvdIssueForm({ farmSlug, onIssued }: NvdIssueFormProps) 
           destinationAddress: destinationAddress.trim() || undefined,
           animalIds: [...selectedIds],
           declarationsJson: JSON.stringify(declarations),
+          transport: transportPayload,
         }),
       });
 
@@ -186,6 +201,9 @@ export default function NvdIssueForm({ farmSlug, onIssued }: NvdIssueFormProps) 
       setBuyerAddress("");
       setBuyerContact("");
       setDestinationAddress("");
+      setDriverName("");
+      setVehicleRegNumber("");
+      setVehicleMakeModel("");
       setSelectedIds(new Set());
       setBlockers([]);
       setDeclarations(DEFAULT_DECLARATIONS);
@@ -256,6 +274,52 @@ export default function NvdIssueForm({ farmSlug, onIssued }: NvdIssueFormProps) 
             value={destinationAddress}
             onChange={(e) => setDestinationAddress(e.target.value)}
             placeholder="Where animals are going (if different)"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+      </Section>
+
+      {/* Transport Details — Stock Theft Act §8 */}
+      <Section title="Transport Details (Stock Theft Act §8)">
+        <p className="text-xs mb-3" style={{ color: "#9C8E7A" }}>
+          Required for roadblock-compliant removal certificates. Provide driver and vehicle details for any vehicular movement.
+        </p>
+        <FieldRow label="Driver Name">
+          <input
+            type="text"
+            name="driverName"
+            value={driverName}
+            onChange={(e) => setDriverName(e.target.value)}
+            placeholder="Full name of driver / transporter"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Vehicle Reg. Number">
+          <input
+            type="text"
+            name="vehicleRegNumber"
+            value={vehicleRegNumber}
+            onChange={(e) => setVehicleRegNumber(e.target.value)}
+            placeholder="e.g. CA 123-456"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Vehicle Make / Model">
+          <input
+            type="text"
+            name="vehicleMakeModel"
+            value={vehicleMakeModel}
+            onChange={(e) => setVehicleMakeModel(e.target.value)}
+            placeholder="e.g. Toyota Hilux 2.8 GD-6 (optional)"
             className={inputCls}
             style={inputStyle}
             onFocus={focusStyle}

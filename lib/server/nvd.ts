@@ -38,6 +38,20 @@ export type ValidationResult =
   | { ok: true }
   | { ok: false; blockers: WithdrawalAnimal[] };
 
+/**
+ * Transport details required by Stock Theft Act 57/1959 §8 when animals are
+ * conveyed by vehicle. The driver/transporter name and vehicle registration are
+ * mandatory for a roadblock-compliant removal certificate.
+ *
+ * Optional at the type level because some movements may be on-foot or not
+ * vehicular, but the NVD issue form MUST collect and display these fields.
+ */
+export interface NvdTransportDetails {
+  driverName: string;
+  vehicleRegNumber: string;
+  vehicleMakeModel?: string;
+}
+
 export interface NvdIssueInput {
   saleDate: string;           // YYYY-MM-DD
   buyerName: string;
@@ -48,6 +62,8 @@ export interface NvdIssueInput {
   declarationsJson: string;  // JSON string of 7 declaration booleans
   generatedBy?: string;
   transactionId?: string;
+  /** Transport details (driver + vehicle) per Stock Theft Act §8. */
+  transport?: NvdTransportDetails;
 }
 
 // ── generateNvdNumber ─────────────────────────────────────────────────────────
@@ -240,6 +256,7 @@ export async function issueNvd(
         animalSnapshot: JSON.stringify(animalSnapshot),
         sellerSnapshot: JSON.stringify(sellerSnapshot),
         declarationsJson: input.declarationsJson,
+        transportJson: input.transport ? JSON.stringify(input.transport) : null,
         generatedBy: input.generatedBy ?? null,
       },
       select: { id: true, nvdNumber: true },

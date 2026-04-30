@@ -53,7 +53,7 @@ export default function It3PageClient({ farmSlug, isAdmin }: It3PageClientProps)
               Admin access required
             </p>
             <p className="text-xs" style={{ color: "#9C8E7A" }}>
-              Only ADMIN users can issue IT3 snapshots. You can still view and download previously issued snapshots below.
+              Only ADMIN users can issue ITR12 Farming Schedule snapshots. You can still view and download previously issued snapshots below.
             </p>
           </div>
         )}

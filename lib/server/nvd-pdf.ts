@@ -10,7 +10,7 @@
 
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
-import type { SellerSnapshot, AnimalSnapshotEntry } from "./nvd";
+import type { SellerSnapshot, AnimalSnapshotEntry, NvdTransportDetails } from "./nvd";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,12 @@ interface NvdRecordView {
   sellerSnapshot: string;    // JSON string of SellerSnapshot
   animalSnapshot: string;    // JSON string of AnimalSnapshotEntry[]
   declarationsJson: string;  // JSON string of declaration booleans
+  /**
+   * JSON string of NvdTransportDetails (driverName, vehicleRegNumber, vehicleMakeModel).
+   * Required by Stock Theft Act §8 for vehicular movements.
+   * Null for records issued before wave/26 or for non-vehicular movements.
+   */
+  transport?: NvdTransportDetails | null;
   generatedBy: string | null;
   pdfHash: string | null;
 }
@@ -244,6 +250,45 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     const noteLines = doc.splitTextToSize(`Notes: ${decl.notes}`, contentWidth) as string[];
     doc.text(noteLines, margin, y);
     y += noteLines.length * 4 + 4;
+  }
+
+  // ── Transport block (Stock Theft Act §8) ─────────────────────────────────
+
+  doc.setDrawColor(...MID_GREY);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(DARK);
+  doc.text("TRANSPORT", margin, y);
+  y += 5;
+
+  const transport = record.transport ?? null;
+  if (transport && transport.driverName) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+
+    const transportRows: [string, string][] = [
+      ["Driver:", transport.driverName],
+      ["Vehicle reg:", transport.vehicleRegNumber],
+      ["Vehicle make/model:", transport.vehicleMakeModel ?? "—"],
+    ];
+    const labelX = margin;
+    const valueX = margin + 40;
+    transportRows.forEach(([label, value], i) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(label, labelX, y + i * 5.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(value, valueX, y + i * 5.5);
+    });
+    y += transportRows.length * 5.5 + 4;
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 100, 80);
+    doc.text("Transport details not provided.", margin, y);
+    y += 8;
   }
 
   // ── Signature block ───────────────────────────────────────────────────────
