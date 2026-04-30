@@ -12,6 +12,7 @@ import {
   encodeTaskCursor,
   tupleGtWhere,
 } from "@/lib/tasks/cursor";
+import AdminPage from "@/app/_components/AdminPage";
 
 // SSR page size. Matches /api/tasks?limit= default. Phase K's recurrence
 // engine materialises TaskOccurrence rows daily, so the Task table grows
@@ -41,9 +42,9 @@ export default async function TasksPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+      <AdminPage>
         <p className="text-sm text-red-600">Farm not found.</p>
-      </div>
+      </AdminPage>
     );
   }
 
@@ -83,7 +84,7 @@ export default async function TasksPage({
   }));
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1C1815]">Tasks</h1>
         <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
@@ -98,6 +99,6 @@ export default async function TasksPage({
         nextCursor={nextCursor}
         hasMore={hasMore}
       />
-    </div>
+    </AdminPage>
   );
 }

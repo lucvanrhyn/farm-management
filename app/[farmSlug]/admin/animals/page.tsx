@@ -9,6 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
+import AdminPage from "@/app/_components/AdminPage";
 
 // SSR page size. 50 keeps the initial HTML payload under ~100 KB for trio-b
 // (measured baseline: 557 KB with the old unbounded findMany). The matching
@@ -28,9 +29,11 @@ export default async function AdminAnimalsPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-red-500">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -81,7 +84,7 @@ export default async function AdminAnimalsPage({
     animals.length === PAGE_SIZE ? animals[animals.length - 1].animalId : null;
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
@@ -107,6 +110,6 @@ export default async function AdminAnimalsPage({
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>
-    </div>
+    </AdminPage>
   );
 }
