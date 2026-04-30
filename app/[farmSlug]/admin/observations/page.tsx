@@ -5,6 +5,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import ObservationsPageClient from "./ObservationsPageClient";
+import AdminPage from "@/app/_components/AdminPage";
 
 // Page size for the animals autocomplete prefetch that's serialised into the
 // observation-create modal. The visible observations timeline itself is
@@ -35,9 +36,11 @@ export default async function AdminObservationsPage({
 
   if (!prisma) {
     return (
-      <div className="flex-1 min-w-0 p-4 md:p-8">
-        <p className="text-red-500">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex-1 min-w-0">
+          <p className="text-red-500">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -61,7 +64,7 @@ export default async function AdminObservationsPage({
   const animals = prismaAnimals.map((a) => ({ id: a.animalId, tag: a.animalId, campId: a.currentCamp }));
 
   return (
-    <div className="flex-1 min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
@@ -70,6 +73,6 @@ export default async function AdminObservationsPage({
         <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />
       </div>
       <ObservationsPageClient camps={camps} animals={animals} species={mode} />
-    </div>
+    </AdminPage>
   );
 }

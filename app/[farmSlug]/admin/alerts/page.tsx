@@ -4,6 +4,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getDashboardAlerts } from "@/lib/server/dashboard-alerts";
 import AlertsFilterClient from "@/components/admin/AlertsFilterClient";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 export default async function AlertsPage({
@@ -22,9 +23,11 @@ export default async function AlertsPage({
 
   if (!prisma) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-red-500">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -44,7 +47,7 @@ export default async function AlertsPage({
   const allAlerts = [...dashboardAlerts.red, ...dashboardAlerts.amber];
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1C1815]">Alerts</h1>
         <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
@@ -53,6 +56,6 @@ export default async function AlertsPage({
       </div>
 
       <AlertsFilterClient alerts={allAlerts} />
-    </div>
+    </AdminPage>
   );
 }
