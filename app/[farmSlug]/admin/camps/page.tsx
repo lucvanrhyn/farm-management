@@ -15,6 +15,7 @@ import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import { VeldTab } from "@/components/admin/camps/VeldTab";
 import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { FeedOnOfferTab } from "@/components/admin/camps/FeedOnOfferTab";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 // Advanced-tier only tabs. The `camps` overview and `rainfall` tab stay
@@ -43,9 +44,11 @@ export default async function AdminCampsPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p className="text-red-500">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -75,7 +78,7 @@ export default async function AdminCampsPage({
   }));
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1C1815]">Camps</h1>
         <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
@@ -124,6 +127,6 @@ export default async function AdminCampsPage({
       {!gatedFeature && activeTab === "feed-on-offer" && feedOnOfferPayload && (
         <FeedOnOfferTab farmSlug={farmSlug} payload={feedOnOfferPayload} />
       )}
-    </div>
+    </AdminPage>
   );
 }

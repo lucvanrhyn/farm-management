@@ -11,10 +11,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: 'e2e',
-  // Only run the gate smoke spec. The other e2e/*.spec.ts files use the
+  // Only run gate-blocking specs. The other e2e/*.spec.ts files use the
   // pre-Playwright `test.skip` placeholder pattern (no import of `test`)
-  // and would fail to load. New gate-blocking specs go in this file.
-  testMatch: ['smoke.spec.ts'],
+  // and would fail to load. New gate-blocking specs are explicitly listed here.
+  testMatch: ['smoke.spec.ts', 'wave-22-layout-shell.spec.ts'],
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:3000',
