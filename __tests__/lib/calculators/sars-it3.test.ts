@@ -97,13 +97,13 @@ describe("mapTransactionToLine", () => {
     expect(mapped).toEqual({
       schedule: "income",
       line: IT3_SCHEDULE_MAP["Animal Sales"].line,
-      code: IT3_SCHEDULE_MAP["Animal Sales"].code,
+      code: "", // no per-line SARS codes on ITR12 (wave/26 fix)
     });
   });
 
   it("remaps 'Animal Purchases' onto the expense schedule regardless of tx.type", () => {
     // Default-categories has 'Animal Purchases' as type "income" (historical
-    // quirk). The IT3 calculator must still treat it as a cost-of-sales line.
+    // quirk). The ITR12 calculator must still treat it as a cost-of-sales line.
     const mapped = mapTransactionToLine({
       type: "income",
       category: "Animal Purchases",
@@ -111,7 +111,8 @@ describe("mapTransactionToLine", () => {
       date: "2025-07-15",
     });
     expect(mapped?.schedule).toBe("expense");
-    expect(mapped?.code).toBe("4201");
+    // 4201 was a fabricated code — removed in wave/26
+    expect(mapped?.code).toBe("");
   });
 
   it("falls through to 'Other farming income' for unmapped income category", () => {
@@ -124,7 +125,7 @@ describe("mapTransactionToLine", () => {
     expect(mapped).toEqual({
       schedule: "income",
       line: IT3_OTHER_INCOME_LINE.line,
-      code: IT3_OTHER_INCOME_LINE.code,
+      code: "", // no per-line codes (wave/26 fix)
     });
   });
 
@@ -138,7 +139,7 @@ describe("mapTransactionToLine", () => {
     expect(mapped).toEqual({
       schedule: "expense",
       line: IT3_OTHER_EXPENSE_LINE.line,
-      code: IT3_OTHER_EXPENSE_LINE.code,
+      code: "", // no per-line codes (wave/26 fix)
     });
   });
 
@@ -188,34 +189,35 @@ describe("computeIt3Schedules", () => {
   });
 
   it("excludes the 999_999 row from the previous tax year", () => {
-    const sales = result.income.find((r) => r.code === "4101");
+    // Look up by line text — no per-line codes in wave/26
+    const sales = result.income.find((r) => r.line === IT3_SCHEDULE_MAP["Animal Sales"].line);
     expect(sales?.amount).toBe(120_000 + 80_000); // no 999_999 leak
   });
 
   it("excludes the 777_777 row from the next tax year", () => {
-    const feed = result.expense.find((r) => r.code === "4202");
+    const feed = result.expense.find((r) => r.line === IT3_SCHEDULE_MAP["Feed/Supplements"].line);
     expect(feed?.amount).toBe(22_000); // no 777_777 leak
   });
 
   it("includes 1 March start boundary", () => {
-    const fuel = result.expense.find((r) => r.code === "4205");
+    const fuel = result.expense.find((r) => r.line === IT3_SCHEDULE_MAP["Fuel/Transport"].line);
     expect(fuel?.amount).toBe(2_500);
   });
 
   it("includes end-of-Feb boundary", () => {
-    const livestock = result.income.find((r) => r.code === "4102");
+    const livestock = result.income.find((r) => r.line === IT3_SCHEDULE_MAP["Livestock Production"].line);
     expect(livestock?.amount).toBe(9_000);
   });
 
   it("moves Animal Purchases onto the expense schedule", () => {
-    const ap = result.expense.find((r) => r.code === "4201");
+    const ap = result.expense.find((r) => r.line === IT3_SCHEDULE_MAP["Animal Purchases"].line);
     expect(ap?.amount).toBe(40_000);
     // …and does NOT appear in the income schedule
-    expect(result.income.find((r) => r.code === "4201")).toBeUndefined();
+    expect(result.income.find((r) => r.line === IT3_SCHEDULE_MAP["Animal Purchases"].line)).toBeUndefined();
   });
 
   it("buckets unrecognised expense category into Other farming expenses", () => {
-    const other = result.expense.find((r) => r.code === IT3_OTHER_EXPENSE_LINE.code);
+    const other = result.expense.find((r) => r.line === IT3_OTHER_EXPENSE_LINE.line);
     expect(other?.amount).toBe(1_200);
     expect(other?.sourceCategories).toContain("Something Random");
   });
@@ -234,9 +236,9 @@ describe("computeIt3Schedules", () => {
     expect(result.netFarmingIncome).toBe(136_800);
   });
 
-  it("sorts schedule rows by code ascending", () => {
-    const codes = result.expense.map((r) => r.code);
-    expect([...codes].sort()).toEqual(codes);
+  it("sorts schedule rows by line text ascending", () => {
+    const lines = result.expense.map((r) => r.line);
+    expect([...lines].sort()).toEqual(lines);
   });
 
   it("handles an empty transaction list", () => {
@@ -250,7 +252,7 @@ describe("computeIt3Schedules", () => {
   });
 
   it("aggregates multiple transactions into the same line and counts contributions", () => {
-    const sales = result.income.find((r) => r.code === "4101");
+    const sales = result.income.find((r) => r.line === IT3_SCHEDULE_MAP["Animal Sales"].line);
     expect(sales?.count).toBe(2); // two Animal Sales rows inside the window
   });
 });

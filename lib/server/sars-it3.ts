@@ -51,6 +51,8 @@ export interface It3SnapshotPayload {
     sourceTransactionCount: number;
     categoryMapVersion: string;
     mappedCategories: string[];
+    /** SARS ITR12 farming activity code (e.g. "0104" Livestock Profit). */
+    farmingActivityCode?: string;
   };
 }
 
