@@ -1,8 +1,9 @@
 import AnimalImporter from "@/components/admin/AnimalImporter";
+import AdminPage from "@/app/_components/AdminPage";
 
 export default function AdminImportPage() {
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <AdminPage>
       <div className="max-w-2xl">
         <h1 className="text-2xl font-bold text-[#1C1815] mb-1">Import Animals</h1>
         <p className="text-sm mb-2" style={{ color: "#9C8E7A" }}>
@@ -16,6 +17,6 @@ export default function AdminImportPage() {
         </ol>
         <AnimalImporter />
       </div>
-    </div>
+    </AdminPage>
   );
 }

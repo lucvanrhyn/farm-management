@@ -16,6 +16,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import AdminPage from "@/app/_components/AdminPage";
 
 // Finance transactions page size. 50 keeps the initial HTML payload bounded
 // while the visible ledger (TransactionLedger) is ordered newest-first, so
@@ -75,7 +76,7 @@ export default async function FinansiesPage({
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   return (
-    <div className="min-w-0 p-4 md:p-8 space-y-2 bg-[#FAFAF8]">
+    <AdminPage className="space-y-2">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
           <div className="flex items-center gap-2">
@@ -110,6 +111,6 @@ export default async function FinansiesPage({
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
           <FinancialChartsSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
-    </div>
+    </AdminPage>
   );
 }

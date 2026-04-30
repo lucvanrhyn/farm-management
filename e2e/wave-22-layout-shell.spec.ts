@@ -39,6 +39,39 @@ const ADMIN_PAGES = [
     slug: "camps",
     path: (farm: string) => `/${farm}/admin/camps`,
   },
+  // wave/22-rest — 8 additional surfaces migrated to <AdminPage> shell
+  {
+    slug: "mobs",
+    path: (farm: string) => `/${farm}/admin/mobs`,
+  },
+  {
+    slug: "reports",
+    path: (farm: string) => `/${farm}/admin/reports`,
+  },
+  {
+    slug: "tasks",
+    path: (farm: string) => `/${farm}/admin/tasks`,
+  },
+  {
+    slug: "import",
+    path: (farm: string) => `/${farm}/admin/import`,
+  },
+  {
+    slug: "reproduction",
+    path: (farm: string) => `/${farm}/admin/reproduction`,
+  },
+  {
+    slug: "finansies",
+    path: (farm: string) => `/${farm}/admin/finansies`,
+  },
+  {
+    slug: "animals",
+    path: (farm: string) => `/${farm}/admin/animals`,
+  },
+  {
+    slug: "settings/subscription",
+    path: (farm: string) => `/${farm}/admin/settings/subscription`,
+  },
 ] as const;
 
 /**

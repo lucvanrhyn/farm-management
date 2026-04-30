@@ -3,6 +3,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { Check, Minus } from "lucide-react";
 import type { FarmTier } from "@/lib/tier";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 type TierKey = "basic" | "advanced" | "consulting";
@@ -98,7 +99,7 @@ export default async function SubscriptionPage({
   const isBasic = tier === "basic";
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
+    <AdminPage>
       <div className="mb-6">
         <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
           Subscription
@@ -234,6 +235,6 @@ export default async function SubscriptionPage({
           />
         )}
       </div>
-    </div>
+    </AdminPage>
   );
 }

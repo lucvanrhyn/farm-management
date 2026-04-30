@@ -27,6 +27,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { COPY_BY_MODE } from "./copy";
 import type { GestationBreed } from "@/lib/species/gestation";
+import AdminPage from "@/app/_components/AdminPage";
 
 
 function formatDate(date: Date): string {
@@ -89,9 +90,11 @@ export default async function ReproductionPage({
 
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-red-500 text-sm">Farm not found.</p>
-      </div>
+      <AdminPage>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-red-500 text-sm">Farm not found.</p>
+        </div>
+      </AdminPage>
     );
   }
 
@@ -140,7 +143,7 @@ export default async function ReproductionPage({
   const totalEvents = stats.inHeat7d + stats.inseminations30d + stats.scanCounts.pregnant + stats.scanCounts.empty + stats.scanCounts.uncertain + stats.daysOpen.length;
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
+    <AdminPage className="max-w-5xl">
         {/* Header */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
@@ -723,6 +726,6 @@ export default async function ReproductionPage({
             </div>
           )}
         </div>
-    </div>
+    </AdminPage>
   );
 }
