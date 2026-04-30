@@ -28,15 +28,16 @@ All steps happen in the GitHub web UI unless otherwise noted.
    | Require conversation resolution before merging | Enabled |
 
    **Pull-request sub-settings:**
-   - Required approvals: **1**
+   - Required approvals: **0** (during solo-dev phase) — flip to **1** when a second human reviewer joins
    - Dismiss stale reviews when new commits are pushed: **Yes**
-   - Require review from Code Owners: **Yes** (enforces CODEOWNERS)
-   - Require approval of the most recent reviewable push: **Yes**
+   - Require review from Code Owners: **No** (during solo-dev phase) — flip to **Yes** when a second human reviewer joins. With a single CODEOWNER + this enabled + last-push-approval, GitHub deadlocks self-merges (see `feedback-solo-dev-ruleset-trap.md`).
+   - Require approval of the most recent reviewable push: **No** (during solo-dev phase) — flip to **Yes** when a second human reviewer joins.
 
    **Required status checks** (add each by name — they must have run at least once to appear in the picker; if they haven't run yet, type the exact name and select "Add check"):
    - `Governance gate / gate`
-   - `Promote label guard / guard`
    - `Require promote label / require`
+
+   The `Promote label guard / guard` workflow is intentionally NOT a required check — it runs on `pull_request_target: [labeled]` only, so it does not fire on every push and would block unlabelled PRs from ever passing required-checks if marked required. Its enforcement is observational (removes unauthorized `promote` labels), not gating.
 
 7. Click **Save ruleset**.
 
@@ -86,9 +87,7 @@ exactly this flow.
 ...
 ```
 
-`@lucvanrhyn` is the sole Code Owner. The "Require review from Code Owners" rule in the ruleset
-means every PR to `main` requires Luc's explicit approval in the GitHub review UI, on top of the
-label gate and status checks.
+`@lucvanrhyn` is the sole Code Owner. During solo-dev phase the "Require review from Code Owners" rule is **off** (flipping it on with a single CODEOWNER deadlocks self-approval); the substantive protections come from required status checks (`gate` + `require`) plus the `promote` label gate. Re-enable code-owner review when a second human reviewer joins.
 
 ---
 
