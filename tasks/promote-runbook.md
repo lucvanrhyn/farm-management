@@ -39,17 +39,18 @@ gh variable set BRANCH_CLONE_SOURCE_DB --body "acme-cattle"
 
 Full UI walkthrough: `tasks/branch-protection-setup.md`.
 
-Three required status checks (all must be green before merge unlocks):
+Two required status checks (both must be green before merge unlocks):
 
 | Check name | Workflow |
 |---|---|
 | `Governance gate / gate` | `.github/workflows/governance-gate.yml` |
-| `Promote label guard / guard` | `.github/workflows/promote-label-guard.yml` |
 | `Require promote label / require` | `.github/workflows/require-promote-label.yml` |
+
+`Promote label guard / guard` (`.github/workflows/promote-label-guard.yml`) runs on `pull_request_target: [labeled]` and is intentionally NOT a required status check — labelled events do not fire on every push, so making it required would deadlock unlabelled PRs. The guard's enforcement is observational: it runs on every label application and removes any `promote` label applied by a non-CODEOWNER actor before the `Require promote label` check next runs.
 
 Additional ruleset settings:
 - Squash-only merge (no merge commits, no rebase).
-- CODEOWNERS-required reviews (see `.github/CODEOWNERS`).
+- CODEOWNERS-required reviews + last-push-approval are currently `false` (solo-dev relax — see `feedback-solo-dev-ruleset-trap.md`). Re-enable when a second human reviewer joins.
 
 ---
 
@@ -62,7 +63,7 @@ Additional ruleset settings:
 3. `Require promote label` check fails (blocking) until the authorised actor applies the `promote` label.
 4. If an unauthorised actor applies `promote`, `Promote label guard` removes it, posts a rejection comment linking to this runbook, and marks its check failed.
 5. Luc (CODEOWNERS) reviews the PR and applies `promote`. `Require promote label` re-evaluates and goes green.
-6. Once all three required checks are green and CODEOWNERS approval is recorded, the merge button unlocks. Squash-merge.
+6. Once both required checks (`gate` + `require`) are green, the merge button unlocks. Squash-merge.
 7. `post-merge-promote.yml` fires on `main` push:
    - Provisions Turso CLI.
    - Calls `pnpm ops:promote-branch <branch>`.
