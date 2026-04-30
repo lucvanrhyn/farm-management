@@ -183,6 +183,7 @@ model NvdRecord {
   animalSnapshot     String    // JSON array of {animalId, category, sex, breed, dateOfBirth, lastCampId, lastMovementDate}
   sellerSnapshot     String    // JSON of FarmSettings seller fields at time of issue
   declarationsJson   String    // JSON of 7 NVD declaration booleans + notes
+  transportJson      String?   // JSON of NvdTransportDetails (driverName, vehicleRegNumber, vehicleMakeModel) — Stock Theft Act §8
   generatedBy        String?   // user email
   pdfHash            String?   // sha256 of generated PDF for tamper-evident audit
   voidedAt           DateTime?

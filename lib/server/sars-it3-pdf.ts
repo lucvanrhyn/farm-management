@@ -79,6 +79,7 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
       totalExpenses: 0,
       netFarmingIncome: 0,
       transactionCount: 0,
+      farmingActivityCode: "0102",
     },
     inventory: { activeAtPeriodEnd: 0, byCategory: [] },
     meta: {
@@ -103,7 +104,7 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("FARMING INCOME SCHEDULE — SARS / ITR12", margin, 10);
+  doc.text("SARS ITR12 Farming Schedule", margin, 10);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
@@ -164,6 +165,23 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
 
   y += 46;
 
+  // ── Farming activity code block ──────────────────────────────────────────
+
+  const farmingCode = payload.schedules.farmingActivityCode ?? payload.meta.farmingActivityCode ?? "—";
+  doc.setFillColor(...LIGHT_GREEN);
+  doc.rect(margin, y, contentWidth, 10, "F");
+  doc.setTextColor(DARK);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("SARS Farming Activity Code (ITR12):", margin + 3, y + 7);
+  doc.setFontSize(9);
+  doc.text(farmingCode, margin + 72, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text("Enter this code on your ITR12 under 'Farming Operations'. Verify at sars.gov.za before filing.", margin + 82, y + 7);
+  y += 16;
+
   // ── Income schedule ──────────────────────────────────────────────────────
 
   doc.setFontSize(9);
@@ -173,9 +191,8 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
   y += 4;
 
   autoTable(doc, {
-    head: [["Code", "Line Item", "Contributing Categories", "Amount (R)"]],
+    head: [["Line Item", "Contributing Categories", "Amount (R)"]],
     body: payload.schedules.income.map((r) => [
-      r.code,
       r.line,
       r.sourceCategories.join(", "),
       formatZar(r.amount),
@@ -183,7 +200,6 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
     foot:
       payload.schedules.income.length > 0
         ? [[
-            "",
             "Total farming income",
             "",
             formatZar(payload.schedules.totalIncome),
@@ -196,10 +212,9 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
     footStyles: { fillColor: LIGHT_GREEN, textColor: DARK, fontStyle: "bold" },
     alternateRowStyles: { fillColor: GREY },
     columnStyles: {
-      0: { cellWidth: 18 },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 64 },
-      3: { cellWidth: 30, halign: "right" },
+      0: { cellWidth: 88 },
+      1: { cellWidth: 64 },
+      2: { cellWidth: 30, halign: "right" },
     },
   });
 
@@ -221,9 +236,8 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
   y += 4;
 
   autoTable(doc, {
-    head: [["Code", "Line Item", "Contributing Categories", "Amount (R)"]],
+    head: [["Line Item", "Contributing Categories", "Amount (R)"]],
     body: payload.schedules.expense.map((r) => [
-      r.code,
       r.line,
       r.sourceCategories.join(", "),
       formatZar(r.amount),
@@ -231,7 +245,6 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
     foot:
       payload.schedules.expense.length > 0
         ? [[
-            "",
             "Total farming expenses",
             "",
             formatZar(payload.schedules.totalExpenses),
@@ -244,10 +257,9 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
     footStyles: { fillColor: LIGHT_GREEN, textColor: DARK, fontStyle: "bold" },
     alternateRowStyles: { fillColor: GREY },
     columnStyles: {
-      0: { cellWidth: 18 },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 64 },
-      3: { cellWidth: 30, halign: "right" },
+      0: { cellWidth: 88 },
+      1: { cellWidth: 64 },
+      2: { cellWidth: 30, halign: "right" },
     },
   });
 
@@ -342,16 +354,29 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
   doc.line(margin, y, pageWidth - margin, y);
   y += 5;
 
-  doc.setFont("helvetica", "italic");
+  // Fix 3: Bold "NOT an IT3-series form" disclaimer (audit finding)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(80, 30, 30);
+  doc.text(
+    "WARNING: This is NOT an IT3-series form.",
+    margin,
+    y,
+  );
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(100, 100, 100);
-  const advisory = [
-    "This report is a farm-management aid to support your SARS ITR12 filing. Line codes shown are advisory — SARS may",
-    "reshuffle line numbers between tax years. Confirm current codes on the SARS ITR12 individual return before filing.",
+  const disclaimer = [
+    "Forms in the IT3-series (IT3(a), IT3(b), IT3(c)) are third-party data submission certificates (employer payroll,",
+    "dividends, retirement). This document is the ITR12 Farming Schedule (individual taxpayer) or IT48 (companies).",
+    "Do NOT attach this document to an IT3(a) or any other IT3-series submission.",
+    "Confirm current source codes at: https://www.sars.gov.za/types-of-tax/personal-income-tax/filing-season/find-a-source-code/",
     "All transaction data is a frozen snapshot at issue time; later edits to your Farm records do not change this PDF.",
   ];
-  advisory.forEach((line, i) => doc.text(line, margin, y + i * 4));
-  y += advisory.length * 4 + 4;
+  disclaimer.forEach((line, i) => doc.text(line, margin, y + i * 4));
+  y += disclaimer.length * 4 + 4;
 
   // ── Footer ───────────────────────────────────────────────────────────────
 

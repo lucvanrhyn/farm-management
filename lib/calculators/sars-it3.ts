@@ -24,14 +24,69 @@ export type It3ScheduleKey = "income" | "expense";
 export interface It3Line {
   /** Canonical SARS line label (displayed in the PDF and CSV). */
   line: string;
-  /** SARS source code — historical ITR12 farming schedule code. Advisory. */
-  code: string;
 }
 
 export interface It3MappedCategory extends It3Line {
   schedule: It3ScheduleKey;
   /** The FarmTrack `Transaction.category` this line maps from. */
   sourceCategory: string;
+}
+
+/**
+ * Input for deriving the SARS ITR12 top-level farming activity code.
+ *
+ * SARS ITR12 uses a single 4-digit profit/loss code to classify the dominant
+ * farming activity (e.g. 0104 Livestock Farming Profit, 0105 Loss). These are
+ * the real codes from the SARS "Find a Source Code" register.
+ *
+ * Reference: https://www.sars.gov.za/types-of-tax/personal-income-tax/filing-season/find-a-source-code/
+ */
+export interface FarmingActivityCodeInput {
+  /** The dominant species class. Null/undefined → mixed farming (0102/0103). */
+  dominantSpecies?: string | null;
+  /** "profit" or "loss" based on net farming income sign. */
+  netResult: "profit" | "loss";
+}
+
+/**
+ * Derive the SARS ITR12 top-level farming activity code from the dominant
+ * species and net profit/loss result.
+ *
+ * Pairs (profit / loss):
+ *   0102/0103 Mixed farming (default)
+ *   0104/0105 Livestock Farming
+ *   0108/0109 Milk (Dairy)
+ *   0114/0115 Poultry
+ *   0140/0141 Wool (Sheep)
+ *   0142/0143 Game Farming
+ *
+ * The per-line codes (4101..4299) that appeared in earlier FarmTrack versions
+ * were fabricated and are NOT used here. Only the top-level activity code is
+ * real and required on the ITR12.
+ */
+export function getFarmingActivityCode(input: FarmingActivityCodeInput): string {
+  const { dominantSpecies, netResult } = input;
+  const profit = netResult === "profit";
+
+  const species = (dominantSpecies ?? "").toLowerCase();
+
+  if (species === "cattle" || species === "livestock") {
+    return profit ? "0104" : "0105";
+  }
+  if (species === "sheep" || species === "wool") {
+    return profit ? "0140" : "0141";
+  }
+  if (species === "game") {
+    return profit ? "0142" : "0143";
+  }
+  if (species === "dairy" || species === "milk") {
+    return profit ? "0108" : "0109";
+  }
+  if (species === "poultry") {
+    return profit ? "0114" : "0115";
+  }
+  // Default: mixed farming
+  return profit ? "0102" : "0103";
 }
 
 export interface TransactionLike {
@@ -44,6 +99,8 @@ export interface TransactionLike {
 
 export interface It3ScheduleLineTotal {
   line: string;
+  /** Kept for backward-compat with stored JSON payloads. Always empty string now.
+   *  Per-line SARS codes do not exist on the ITR12 farming schedule. */
   code: string;
   amount: number;
   sourceCategories: string[]; // which Transaction categories contributed
@@ -57,35 +114,45 @@ export interface It3ScheduleTotals {
   totalExpenses: number;
   netFarmingIncome: number;
   transactionCount: number;
+  /**
+   * SARS ITR12 top-level farming activity code, e.g. "0104" (Livestock Farming
+   * Profit) or "0105" (Livestock Farming Loss). Derived from dominantSpecies +
+   * sign of netFarmingIncome. This is the real SARS code that goes on the ITR12.
+   */
+  farmingActivityCode: string;
 }
 
-// ── SARS IT3 schedule map ─────────────────────────────────────────────────────
+// ── SARS ITR12 farming schedule line descriptions ─────────────────────────────
 //
-// Maps FarmTrack default category names onto SARS farming schedule lines.
-// Keys are case-sensitive and must match lib/constants/default-categories.ts
-// exactly. Unmapped categories fall through to the "Other" buckets below.
+// Maps FarmTrack default category names onto SARS ITR12 farming schedule line
+// descriptions. Keys are case-sensitive and must match
+// lib/constants/default-categories.ts exactly.
 //
-// Codes below are from the ITR12 "Farming Operations" schedule (historical,
-// advisory only — SARS may reshuffle line numbers between tax years).
+// Per-line SARS codes (the old 4101..4299 range) have been REMOVED because:
+//   - Those codes were entirely fabricated and do not exist on the ITR12.
+//   - 4101/4102 are PAYE codes from the IT3(a) payroll certificate.
+//   - The real ITR12 farming schedule uses only a single top-level activity
+//     code (e.g. 0104 Livestock Farming Profit) — there are no per-line codes
+//     for the individual income/expense rows.
+//
+// The top-level farming activity code is derived via getFarmingActivityCode()
+// and stored at It3ScheduleTotals.farmingActivityCode.
 
 export const IT3_SCHEDULE_MAP: Record<string, It3MappedCategory> = {
   // ─ Income lines ─
   "Animal Sales": {
     schedule: "income",
     line: "Sales of livestock",
-    code: "4101",
     sourceCategory: "Animal Sales",
   },
   "Livestock Production": {
     schedule: "income",
     line: "Livestock production and other farming income",
-    code: "4102",
     sourceCategory: "Livestock Production",
   },
   "Subsidies": {
     schedule: "income",
     line: "Government subsidies and rebates",
-    code: "4103",
     sourceCategory: "Subsidies",
   },
 
@@ -93,59 +160,50 @@ export const IT3_SCHEDULE_MAP: Record<string, It3MappedCategory> = {
   // NOTE: "Animal Purchases" is categorised by the shipped defaults as
   // `type: "income"` (a historical quirk in default-categories.ts), but
   // economically it is a cost of sales line. We remap it to the expense
-  // schedule here so the IT3 totals reflect economic reality.
+  // schedule here so the ITR12 totals reflect economic reality.
   "Animal Purchases": {
     schedule: "expense",
     line: "Livestock purchases (cost of sales)",
-    code: "4201",
     sourceCategory: "Animal Purchases",
   },
   "Feed/Supplements": {
     schedule: "expense",
     line: "Feed and supplements",
-    code: "4202",
     sourceCategory: "Feed/Supplements",
   },
   "Medication/Vet": {
     schedule: "expense",
     line: "Veterinary services and medicine",
-    code: "4203",
     sourceCategory: "Medication/Vet",
   },
   "Labour": {
     schedule: "expense",
     line: "Wages and salaries",
-    code: "4204",
     sourceCategory: "Labour",
   },
   "Fuel/Transport": {
     schedule: "expense",
     line: "Fuel and transport",
-    code: "4205",
     sourceCategory: "Fuel/Transport",
   },
   "Equipment/Repairs": {
     schedule: "expense",
     line: "Repairs and maintenance",
-    code: "4206",
     sourceCategory: "Equipment/Repairs",
   },
   "Camp Maintenance": {
     schedule: "expense",
     line: "Camp and land maintenance",
-    code: "4207",
     sourceCategory: "Camp Maintenance",
   },
 };
 
 export const IT3_OTHER_INCOME_LINE: It3Line = {
   line: "Other farming income",
-  code: "4199",
 };
 
 export const IT3_OTHER_EXPENSE_LINE: It3Line = {
   line: "Other farming expenses",
-  code: "4299",
 };
 
 // ── SA tax year helpers ───────────────────────────────────────────────────────
@@ -208,27 +266,42 @@ export function mapTransactionToLine(
 
   const mapped = IT3_SCHEDULE_MAP[tx.category];
   if (mapped) {
-    return { schedule: mapped.schedule, line: mapped.line, code: mapped.code };
+    // code is always "" — no per-line SARS codes exist on the ITR12
+    return { schedule: mapped.schedule, line: mapped.line, code: "" };
   }
 
   if (tx.type === "income") {
-    return { schedule: "income", line: IT3_OTHER_INCOME_LINE.line, code: IT3_OTHER_INCOME_LINE.code };
+    return { schedule: "income", line: IT3_OTHER_INCOME_LINE.line, code: "" };
   }
   if (tx.type === "expense") {
-    return { schedule: "expense", line: IT3_OTHER_EXPENSE_LINE.line, code: IT3_OTHER_EXPENSE_LINE.code };
+    return { schedule: "expense", line: IT3_OTHER_EXPENSE_LINE.line, code: "" };
   }
   return null;
 }
 
+export interface ComputeIt3Options {
+  /**
+   * The dominant livestock/farming species for this farm. Used to derive the
+   * SARS ITR12 top-level farming activity code (e.g. "cattle" → 0104/0105).
+   * If omitted or unknown, defaults to mixed farming (0102/0103).
+   */
+  dominantSpecies?: string | null;
+}
+
 /**
- * Aggregate a list of transactions into SARS IT3 schedule totals for a given
- * tax year. Transactions outside the tax year window are ignored so callers
- * don't need to pre-filter.
+ * Aggregate a list of transactions into SARS ITR12 farming schedule totals for
+ * a given tax year. Transactions outside the tax year window are ignored so
+ * callers don't need to pre-filter.
+ *
+ * Returns farmingActivityCode — the real SARS top-level activity code for the
+ * ITR12, derived from dominantSpecies and sign of netFarmingIncome.
  */
 export function computeIt3Schedules(
   transactions: TransactionLike[],
   taxYearEndingIn: number,
+  options: ComputeIt3Options = {},
 ): It3ScheduleTotals {
+  // Use line text as the bucket key (no per-line codes)
   const incomeAcc = new Map<
     string,
     { line: string; code: string; amount: number; sources: Set<string>; count: number }
@@ -251,15 +324,16 @@ export function computeIt3Schedules(
 
     const amount = Math.abs(tx.amount);
     const bucket = mapped.schedule === "income" ? incomeAcc : expenseAcc;
-    const existing = bucket.get(mapped.code);
+    // Bucket by line text (unique per schedule side)
+    const existing = bucket.get(mapped.line);
     if (existing) {
       existing.amount += amount;
       existing.sources.add(tx.category);
       existing.count += 1;
     } else {
-      bucket.set(mapped.code, {
+      bucket.set(mapped.line, {
         line: mapped.line,
-        code: mapped.code,
+        code: "",  // no per-line SARS codes on ITR12
         amount,
         sources: new Set([tx.category]),
         count: 1,
@@ -282,15 +356,22 @@ export function computeIt3Schedules(
         sourceCategories: [...r.sources].sort(),
         count: r.count,
       }))
-      .sort((a, b) => a.code.localeCompare(b.code));
+      .sort((a, b) => a.line.localeCompare(b.line));
+
+  const net = round2(totalIncome - totalExpenses);
+  const farmingActivityCode = getFarmingActivityCode({
+    dominantSpecies: options.dominantSpecies,
+    netResult: net >= 0 ? "profit" : "loss",
+  });
 
   return {
     income: toRows(incomeAcc),
     expense: toRows(expenseAcc),
     totalIncome: round2(totalIncome),
     totalExpenses: round2(totalExpenses),
-    netFarmingIncome: round2(totalIncome - totalExpenses),
+    netFarmingIncome: net,
     transactionCount: included,
+    farmingActivityCode,
   };
 }
 
