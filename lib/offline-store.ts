@@ -7,8 +7,28 @@ const DB_VERSION = 5;
 // same browser never leaks data across tenants.
 let _activeFarmSlug: string | null = null;
 
+// ── farmEpoch — monotonic counter for cross-tenant cache invalidation (M4) ───
+//
+// Every call to setActiveFarmSlug bumps this counter. Epoch-aware read helpers
+// (getCachedCampsForEpoch, getLastSyncedAtForEpoch, getCachedFarmSettingsForEpoch)
+// compare the caller's snapshot against the current epoch and return null if they
+// diverge — this prevents any in-flight Promise that resolved AFTER a farm switch
+// from delivering stale-tenant data into the new farm's UI.
+//
+// The epoch is a plain module-level number so the check is always synchronous,
+// which eliminates the race window between "read epoch" and "read IDB value".
+let _farmEpoch = 0;
+
 export function setActiveFarmSlug(slug: string): void {
   _activeFarmSlug = slug;
+  // Bump epoch synchronously so any subsequent getFarmEpoch() sees the new value
+  // before any async IDB operation can complete.
+  _farmEpoch += 1;
+}
+
+/** Returns the current farm epoch. Synchronous — safe to read in render. */
+export function getFarmEpoch(): number {
+  return _farmEpoch;
 }
 
 function getDBName(): string {
@@ -148,6 +168,27 @@ export async function getCachedCamps(): Promise<Camp[]> {
   return db.getAll('camps');
 }
 
+/**
+ * Epoch-aware variant of getCachedCamps (M4).
+ *
+ * Returns null if the caller's epoch snapshot no longer matches the current
+ * epoch — meaning setActiveFarmSlug was called after the caller captured the
+ * epoch, so the IDB data belongs to a different tenant context.
+ *
+ * Usage:
+ *   const epoch = getFarmEpoch();   // capture synchronously before any await
+ *   const camps = await getCachedCampsForEpoch(epoch);
+ *   if (camps === null) return; // farm switched mid-flight — discard
+ */
+export async function getCachedCampsForEpoch(epoch: number): Promise<Camp[] | null> {
+  const db = await getDB();
+  if (epoch !== _farmEpoch) return null;
+  const camps = await db.getAll('camps');
+  // Re-check after the async IDB read in case another switch happened mid-await
+  if (epoch !== _farmEpoch) return null;
+  return camps;
+}
+
 export async function seedAnimals(animals: Animal[]): Promise<void> {
   // Defensive early-return: a transient API failure or pagination bug that
   // returns an empty list must NOT orphan-sweep the whole local cache. A
@@ -239,6 +280,18 @@ export async function getLastSyncedAt(): Promise<string | null> {
   return (meta as { key: string; value: string } | undefined)?.value ?? null;
 }
 
+/**
+ * Epoch-aware variant of getLastSyncedAt (M4).
+ * Returns null if the epoch is stale (farm switched since caller captured it).
+ */
+export async function getLastSyncedAtForEpoch(epoch: number): Promise<string | null> {
+  if (epoch !== _farmEpoch) return null;
+  const db = await getDB();
+  const meta = await db.get('metadata', 'lastSyncedAt');
+  if (epoch !== _farmEpoch) return null;
+  return (meta as { key: string; value: string } | undefined)?.value ?? null;
+}
+
 export async function setLastSyncedAt(iso: string): Promise<void> {
   const db = await getDB();
   await db.put('metadata', { key: 'lastSyncedAt', value: iso });
@@ -247,12 +300,25 @@ export async function setLastSyncedAt(iso: string): Promise<void> {
 export interface CachedFarmSettings {
   farmName: string;
   breed: string;
-  heroImageUrl?: string;
+  // heroImageUrl is intentionally absent from the persisted cache (M3).
+  // The background image is always /farm-hero.jpg — a single shared asset.
+  // Storing a per-tenant URL here created a cross-tenant cache-leak vector
+  // when the IDB metadata store was read before setActiveFarmSlug completed.
+  // Callers that need the fallback URL should use: settings?.heroImageUrl ?? '/farm-hero.jpg'
+  // but the value will always be undefined from the cache layer onward.
+  /** @deprecated — not stored. Always falls back to /farm-hero.jpg at the call site. */
+  heroImageUrl?: never;
 }
 
-export async function seedFarmSettings(settings: CachedFarmSettings): Promise<void> {
+export async function seedFarmSettings(settings: Omit<CachedFarmSettings, 'heroImageUrl'> & { heroImageUrl?: string }): Promise<void> {
+  // M3: strip heroImageUrl before persisting — the background image is always
+  // /farm-hero.jpg. Accepting the field in the signature avoids a TS error at
+  // existing call sites (sync-manager passes heroImageUrl from /api/farm) while
+  // silently discarding it, which is the correct behaviour.
+  const { heroImageUrl: _dropped, ...safe } = settings;
+  void _dropped; // explicitly unused — discarded intentionally
   const db = await getDB();
-  await db.put('metadata', { key: 'farmSettings', value: JSON.stringify(settings) });
+  await db.put('metadata', { key: 'farmSettings', value: JSON.stringify(safe) });
 }
 
 export async function getCachedFarmSettings(): Promise<CachedFarmSettings | null> {
@@ -264,6 +330,17 @@ export async function getCachedFarmSettings(): Promise<CachedFarmSettings | null
   } catch {
     return null;
   }
+}
+
+/**
+ * Epoch-aware variant of getCachedFarmSettings (M4).
+ * Returns null if the epoch is stale (farm switched since caller captured it).
+ */
+export async function getCachedFarmSettingsForEpoch(epoch: number): Promise<CachedFarmSettings | null> {
+  if (epoch !== _farmEpoch) return null;
+  const result = await getCachedFarmSettings();
+  if (epoch !== _farmEpoch) return null;
+  return result;
 }
 
 export async function updateCampCondition(

@@ -16,31 +16,45 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Track cache read resolution so the test can observe the pre-settle state.
-let resolveCampsRead: ((camps: unknown[]) => void) | null = null;
-let resolveSettingsRead: ((s: unknown) => void) | null = null;
+// The OfflineProvider now uses the epoch-aware variants (getCachedCampsForEpoch
+// etc.) so we mock those too. The controlled-Promise pattern is preserved so
+// the test can still observe the pre-settle state.
+let resolveCampsRead: ((camps: unknown[] | null) => void) | null = null;
+let resolveSettingsRead: ((s: unknown | null) => void) | null = null;
 let resolveLastSyncedRead: ((s: string | null) => void) | null = null;
+
+// A simple incrementing epoch stub so getFarmEpoch() returns a stable number
+// during each test (the actual value doesn't matter — the Provider captures it
+// synchronously and the mocked epoch-helpers always resolve non-null here).
+let _stubEpoch = 0;
 
 vi.mock('@/lib/offline-store', () => ({
   getPendingCount: vi.fn(async () => 0),
-  getLastSyncedAt: vi.fn(
+  // Non-epoch variants (still imported by refreshCampsState, refreshHeroImage etc.)
+  getLastSyncedAt: vi.fn(async () => null),
+  getCachedCamps: vi.fn(async () => []),
+  getCachedFarmSettings: vi.fn(async () => null),
+  setActiveFarmSlug: vi.fn(() => { _stubEpoch += 1; }),
+  getFarmEpoch: vi.fn(() => _stubEpoch),
+  // Epoch-aware variants — these are what OfflineProvider uses in the mount effect.
+  getCachedCampsForEpoch: vi.fn(
+    () =>
+      new Promise<unknown[] | null>((resolve) => {
+        resolveCampsRead = resolve;
+      }),
+  ),
+  getCachedFarmSettingsForEpoch: vi.fn(
+    () =>
+      new Promise<unknown | null>((resolve) => {
+        resolveSettingsRead = resolve;
+      }),
+  ),
+  getLastSyncedAtForEpoch: vi.fn(
     () =>
       new Promise<string | null>((resolve) => {
         resolveLastSyncedRead = resolve;
       }),
   ),
-  getCachedCamps: vi.fn(
-    () =>
-      new Promise<unknown[]>((resolve) => {
-        resolveCampsRead = resolve;
-      }),
-  ),
-  getCachedFarmSettings: vi.fn(
-    () =>
-      new Promise<unknown>((resolve) => {
-        resolveSettingsRead = resolve;
-      }),
-  ),
-  setActiveFarmSlug: vi.fn(),
 }));
 
 // refreshCachedData may be invoked after campsLoaded flips — stub to a resolved
