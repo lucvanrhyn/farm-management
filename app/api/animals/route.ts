@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { animalId, name, sex, dateOfBirth, breed, category, currentCamp, status, motherId, fatherId, species } = body;
+  const { animalId, name, sex, dateOfBirth, breed, category, currentCamp, status, motherId, fatherId, species, tagNumber, brandSequence } = body;
 
   if (!animalId || !sex || !category || !currentCamp) {
     return NextResponse.json({ error: "Missing required fields: animalId, sex, category, currentCamp" }, { status: 400 });
@@ -136,6 +136,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid dateOfBirth" }, { status: 400 });
   }
 
+  // AIA 2002 — tagNumber + brandSequence are optional free-text fields, but
+  // we cap length and reject obviously bad payloads (objects, numbers).
+  if (tagNumber != null && (typeof tagNumber !== "string" || tagNumber.length > 50)) {
+    return NextResponse.json({ error: "Invalid tagNumber" }, { status: 400 });
+  }
+  if (brandSequence != null && (typeof brandSequence !== "string" || brandSequence.length > 50)) {
+    return NextResponse.json({ error: "Invalid brandSequence" }, { status: 400 });
+  }
+
   const animal = await prisma.animal.create({
     data: {
       animalId,
@@ -150,6 +159,8 @@ export async function POST(req: NextRequest) {
       fatherId: fatherId ?? null,
       species: species ?? "cattle",
       dateAdded: new Date().toISOString().split("T")[0],
+      tagNumber: typeof tagNumber === "string" && tagNumber.trim() ? tagNumber.trim() : null,
+      brandSequence: typeof brandSequence === "string" && brandSequence.trim() ? brandSequence.trim() : null,
     },
   });
 
