@@ -117,7 +117,8 @@ function makeEinsteinPrisma(overrides: Record<string, FnOrFns> = {}) {
   );
   return makePrisma({
     observation: { findMany: emptyFindMany(), findUnique: emptyFindUnique() },
-    camp: { findMany: emptyFindMany(), findUnique: emptyFindUnique() },
+    // Phase A of #28: einstein worker uses findFirst (campId no longer globally unique).
+    camp: { findMany: emptyFindMany(), findUnique: emptyFindUnique(), findFirst: emptyFindUnique() },
     animal: { findMany: emptyFindMany(), findUnique: emptyFindUnique() },
     task: { findMany: emptyFindMany(), findUnique: emptyFindUnique() },
     taskTemplate: { findMany: emptyFindMany(), findUnique: emptyFindUnique() },

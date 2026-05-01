@@ -541,7 +541,11 @@ export async function reindexForEntity(
                 select: { name: true, species: true, breed: true },
               })
             : Promise.resolve(null),
-          prisma.camp.findUnique({
+          // Phase A of #28: campId is no longer globally unique (composite
+          // UNIQUE on species+campId). findFirst preserves single-species
+          // behaviour; Phase B will thread species through this read once
+          // species is denormalised onto Observation more thoroughly.
+          prisma.camp.findFirst({
             where: { campId: r.campId },
             select: { campName: true },
           }),
@@ -565,7 +569,8 @@ export async function reindexForEntity(
     case "animal": {
       const r = await prisma.animal.findUnique({ where: { id: entityId } });
       if (r) {
-        const camp = await prisma.camp.findUnique({
+        // Phase A of #28: see comment above on findFirst rationale.
+        const camp = await prisma.camp.findFirst({
           where: { campId: r.currentCamp },
           select: { campName: true },
         });

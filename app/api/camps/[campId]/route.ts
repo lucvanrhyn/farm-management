@@ -17,7 +17,10 @@ export async function PATCH(
   }
 
   const { campId } = await params;
-  const camp = await prisma.camp.findUnique({ where: { campId } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is single-species-safe; Phase B will scope by
+  // species and use the compound key.
+  const camp = await prisma.camp.findFirst({ where: { campId } });
   if (!camp) return NextResponse.json({ error: "Camp not found" }, { status: 404 });
 
   const body = await req.json() as {
@@ -56,8 +59,11 @@ export async function PATCH(
     }
   }
 
+  // Phase A of #28: campId is no longer globally unique. Update via the
+  // CUID primary key resolved above; Phase B will switch to the compound
+  // key once the API layer carries a `species` discriminator.
   await prisma.camp.update({
-    where: { campId },
+    where: { id: camp.id },
     data: {
       ...(body.campName !== undefined && { campName: body.campName }),
       ...(body.sizeHectares !== undefined && { sizeHectares: body.sizeHectares }),
@@ -91,7 +97,9 @@ export async function DELETE(
 
   const { campId } = await params;
 
-  const camp = await prisma.camp.findUnique({ where: { campId } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is single-species-safe; Phase B will scope.
+  const camp = await prisma.camp.findFirst({ where: { campId } });
   if (!camp) {
     return NextResponse.json({ error: "Camp not found" }, { status: 404 });
   }
@@ -107,7 +115,9 @@ export async function DELETE(
     );
   }
 
-  await prisma.camp.delete({ where: { campId } });
+  // Phase A of #28: delete via the resolved CUID primary key (campId is no
+  // longer globally unique). Phase B will switch to the compound key.
+  await prisma.camp.delete({ where: { id: camp.id } });
 
   revalidateCampWrite(slug);
 

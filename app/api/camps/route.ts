@@ -44,7 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "color must be a valid hex color (e.g. #2563EB)" }, { status: 400 });
   }
 
-  const existing = await prisma.camp.findUnique({ where: { campId } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst preserves the single-species duplicate-block
+  // semantics; Phase D wires the species-aware compound key + typed
+  // `DUPLICATE_CAMP_ID_FOR_SPECIES` error.
+  const existing = await prisma.camp.findFirst({ where: { campId } });
   if (existing) {
     return NextResponse.json({ error: "A camp with this ID already exists" }, { status: 409 });
   }
