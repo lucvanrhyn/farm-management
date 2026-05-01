@@ -1,3 +1,7 @@
+-- 0010_sars_livestock_election.sql
+-- Renumbered from 0005 → 0010 in wave/56 to break a prefix collision with
+-- 0005_camp_mob_species.sql. See 0008_record_legacy_renames.sql.
+--
 -- wave/26b — SARS opening/closing stock at standard values + ±20% election
 -- First Schedule paragraph 6(1)(b)/(c)/(d)(ii) read with paragraph 7:
 --   The taxpayer may adopt their own value within ±20% of the gazetted standard
