@@ -66,10 +66,10 @@ model Animal {
   species            String   @default("cattle")
   speciesData        String?
 
-  sireNote      String?
-  damNote       String?
-  importJobId   String?
-  importJob     ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+  sireNote    String?
+  damNote     String?
+  importJobId String?
+  importJob   ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
 
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
@@ -90,13 +90,13 @@ model Transaction {
   createdBy     String?
   createdAt     DateTime @default(now())
   // Livestock purchase/sale fields
-  saleType      String?  // "auction" | "private"
-  counterparty  String?  // buyer or seller name
-  quantity      Int?     // number of animals in batch
-  avgMassKg     Float?   // average mass at transaction (kg)
-  fees          Float?   // auction fees / commission
-  transportCost Float?   // transport cost
-  animalIds     String?  // JSON array of animal IDs for batch transactions
+  saleType      String? // "auction" | "private"
+  counterparty  String? // buyer or seller name
+  quantity      Int? // number of animals in batch
+  avgMassKg     Float? // average mass at transaction (kg)
+  fees          Float? // auction fees / commission
+  transportCost Float? // transport cost
+  animalIds     String? // JSON array of animal IDs for batch transactions
 
   @@index([date], name: "idx_transaction_date")
   @@index([animalId], name: "idx_transaction_animal")
@@ -106,59 +106,59 @@ model Transaction {
 model TransactionCategory {
   id        String   @id @default(cuid())
   name      String
-  type      String   // "income" | "expense"
+  type      String // "income" | "expense"
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 
 model FarmSettings {
-  id                       String   @id @default("singleton")
-  alertThresholdHours      Int      @default(48)
-  farmName                 String   @default("My Farm")
-  breed                    String   @default("Mixed")
-  updatedAt                DateTime @updatedAt
-  updatedBy                String?
+  id                      String   @id @default("singleton")
+  alertThresholdHours     Int      @default(48)
+  farmName                String   @default("My Farm")
+  breed                   String   @default("Mixed")
+  updatedAt               DateTime @updatedAt
+  updatedBy               String?
   // Configurable thresholds
-  adgPoorDoerThreshold     Float    @default(0.7)   // kg/day below which animal is a poor doer
-  calvingAlertDays         Int      @default(14)    // days before expected calving to alert
-  daysOpenLimit            Int      @default(365)   // max acceptable days open for a cow
-  campGrazingWarningDays   Int      @default(7)     // days grazing remaining to trigger camp warning
+  adgPoorDoerThreshold    Float    @default(0.7) // kg/day below which animal is a poor doer
+  calvingAlertDays        Int      @default(14) // days before expected calving to alert
+  daysOpenLimit           Int      @default(365) // max acceptable days open for a cow
+  campGrazingWarningDays  Int      @default(7) // days grazing remaining to trigger camp warning
   // Rotation planner defaults
-  defaultRestDays          Int      @default(60)    // target rest period between grazings (days)
-  defaultMaxGrazingDays    Int      @default(7)     // max days a mob stays in a camp before overstay alert
-  rotationSeasonMode       String   @default("auto") // "auto" | "growing" | "dormant"
-  dormantSeasonMultiplier  Float    @default(1.4)    // rest-days multiplier during dormant season
+  defaultRestDays         Int      @default(60) // target rest period between grazings (days)
+  defaultMaxGrazingDays   Int      @default(7) // max days a mob stays in a camp before overstay alert
+  rotationSeasonMode      String   @default("auto") // "auto" | "growing" | "dormant"
+  dormantSeasonMultiplier Float    @default(1.4) // rest-days multiplier during dormant season
   // Location and farm settings
-  latitude                 Float?
-  longitude                Float?
-  targetStockingRate       Float?
-  breedingSeasonStart      String?
-  breedingSeasonEnd        String?
-  weaningDate              String?
-  openaiApiKey             String?
-  heroImageUrl             String?  @default("/farm-hero.jpg")
+  latitude                Float?
+  longitude               Float?
+  targetStockingRate      Float?
+  breedingSeasonStart     String?
+  breedingSeasonEnd       String?
+  weaningDate             String?
+  openaiApiKey            String?
+  heroImageUrl            String?  @default("/farm-hero.jpg")
   // NVD seller identity fields
-  ownerName                String?
-  ownerIdNumber            String?  // SA ID number (optional, farmer discretion)
-  physicalAddress          String?
-  postalAddress            String?
-  contactPhone             String?
-  contactEmail             String?
-  propertyRegNumber        String?  // SA property registration / LPHS number
-  farmRegion               String?  // district / province
-  biomeType                String?  // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
+  ownerName               String?
+  ownerIdNumber           String? // SA ID number (optional, farmer discretion)
+  physicalAddress         String?
+  postalAddress           String?
+  contactPhone            String?
+  contactEmail            String?
+  propertyRegNumber       String? // SA property registration / LPHS number
+  farmRegion              String? // district / province
+  biomeType               String? // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
   // Onboarding state
-  onboardingComplete       Boolean  @default(false) // set true when wizard finishes OR tenant has substantial data (migration)
+  onboardingComplete      Boolean  @default(false) // set true when wizard finishes OR tenant has substantial data (migration)
   // Notification preferences (Phase J)
-  quietHoursStart          String?  @default("20:00")  // "HH:mm" local time; no non-critical push between start..end
-  quietHoursEnd            String?  @default("06:00")
-  timezone                 String?  @default("Africa/Johannesburg") // IANA tz for quiet-hour + digest scheduling
-  speciesAlertThresholds   String?                     // JSON: per-species override blob, e.g. { cattle: { daysOpenLimit: 110 }, sheep: { ... } }
+  quietHoursStart         String?  @default("20:00") // "HH:mm" local time; no non-critical push between start..end
+  quietHoursEnd           String?  @default("06:00")
+  timezone                String?  @default("Africa/Johannesburg") // IANA tz for quiet-hour + digest scheduling
+  speciesAlertThresholds  String? // JSON: per-species override blob, e.g. { cattle: { daysOpenLimit: 110 }, sheep: { ... } }
   // Phase K (Wave 3F) — task/map preference blobs. Nullable JSON strings
   // (shape enforced in API route handlers). Opting for JSON blobs avoids
   // needing a per-field migration for a grab-bag of admin-only preferences.
-  taskSettings             String?                     // JSON: { defaultReminderOffset: number, autoObservation: boolean, horizonDays: 30|60|90 }
-  mapSettings              String?                     // JSON: { eskomAreaId?: string }
+  taskSettings            String? // JSON: { defaultReminderOffset: number, autoObservation: boolean, horizonDays: 30|60|90 }
+  mapSettings             String? // JSON: { eskomAreaId?: string }
   // Phase L (Wave 1) — Farm Einstein settings + Farm Methodology Object.
   // JSON blob shape enforced in lib/einstein/settings-schema.ts:
   //   { assistantName: string (default "Einstein"),
@@ -166,26 +166,26 @@ model FarmSettings {
   //     methodology: { tier, speciesMix, breedingCalendar?, rotationPolicy?, lsuThresholds?, farmerNotes? },
   //     ragConfig: { enabled, budgetCapZarPerMonth (default 100), monthSpentZar, currentMonthKey },
   //     learnedPreferences?: { swipeHistory } }
-  aiSettings               String?
+  aiSettings              String?
 }
 
 model NvdRecord {
   id                 String    @id @default(cuid())
-  nvdNumber          String    @unique  // farm-scoped running number, format: "NVD-2026-0001"
+  nvdNumber          String    @unique // farm-scoped running number, format: "NVD-2026-0001"
   issuedAt           DateTime  @default(now())
-  saleDate           String    // YYYY-MM-DD (match Transaction.date convention)
-  transactionId      String?   // links to Transaction if user created sale from NVD flow
+  saleDate           String // YYYY-MM-DD (match Transaction.date convention)
+  transactionId      String? // links to Transaction if user created sale from NVD flow
   buyerName          String
   buyerAddress       String?
   buyerContact       String?
   destinationAddress String?
-  animalIds          String    // JSON array of animalId strings (snapshot)
-  animalSnapshot     String    // JSON array of {animalId, category, sex, breed, dateOfBirth, lastCampId, lastMovementDate}
-  sellerSnapshot     String    // JSON of FarmSettings seller fields at time of issue
-  declarationsJson   String    // JSON of 7 NVD declaration booleans + notes
-  transportJson      String?   // JSON of NvdTransportDetails (driverName, vehicleRegNumber, vehicleMakeModel) — Stock Theft Act §8
-  generatedBy        String?   // user email
-  pdfHash            String?   // sha256 of generated PDF for tamper-evident audit
+  animalIds          String // JSON array of animalId strings (snapshot)
+  animalSnapshot     String // JSON array of {animalId, category, sex, breed, dateOfBirth, lastCampId, lastMovementDate}
+  sellerSnapshot     String // JSON of FarmSettings seller fields at time of issue
+  declarationsJson   String // JSON of 7 NVD declaration booleans + notes
+  transportJson      String? // JSON of NvdTransportDetails (driverName, vehicleRegNumber, vehicleMakeModel) — Stock Theft Act §8
+  generatedBy        String? // user email
+  pdfHash            String? // sha256 of generated PDF for tamper-evident audit
   voidedAt           DateTime?
   voidReason         String?
 
@@ -195,25 +195,36 @@ model NvdRecord {
 
 model Camp {
   id                     String   @id @default(cuid())
-  campId                 String   @unique
+  campId                 String
   campName               String
   sizeHectares           Float?
   waterSource            String?
   geojson                String?
   color                  String?
   createdAt              DateTime @default(now())
+  // Phase A of #28 multi-species refactor: `species` is NOT NULL with a
+  // `'cattle'` default, so existing rows backfill on ALTER TABLE ADD COLUMN.
+  // Treat this as immutable at the API layer — Phase B's PATCH handler
+  // returns typed 422 `CAMP_SPECIES_IMMUTABLE` for any change attempt.
+  species                String   @default("cattle")
   // Rotation planner (all optional — fall back to FarmSettings defaults)
-  veldType               String?  // 'sweetveld' | 'sourveld' | 'mixedveld' | 'cultivated'
+  veldType               String? // 'sweetveld' | 'sourveld' | 'mixedveld' | 'cultivated'
   restDaysOverride       Int?
   maxGrazingDaysOverride Int?
   rotationNotes          String?
+
+  // The legacy global `@unique` on `campId` is replaced by a composite key
+  // so the same campId can exist across species (e.g. cattle's "NORTH-01"
+  // and sheep's "NORTH-01" are distinct rows).
+  @@unique([species, campId], name: "Camp_species_campId_key")
+  @@index([species], name: "Camp_species_idx")
 }
 
 model CampCoverReading {
   id            String  @id @default(cuid())
   campId        String
-  coverCategory String  // "Good" | "Fair" | "Poor"
-  kgDmPerHa     Float   // derived from category or manually set
+  coverCategory String // "Good" | "Fair" | "Poor"
+  kgDmPerHa     Float // derived from category or manually set
   useFactor     Float   @default(0.35)
   recordedAt    String
   recordedBy    String
@@ -227,8 +238,11 @@ model Mob {
   name        String
   currentCamp String
   createdAt   DateTime @default(now())
+  // Phase A of #28: matches Camp.species — see model Camp comment.
+  species     String   @default("cattle")
 
   @@index([currentCamp], name: "idx_mob_camp")
+  @@index([species], name: "Mob_species_idx")
 }
 
 model Task {
@@ -246,16 +260,16 @@ model Task {
   createdAt   DateTime @default(now())
 
   // Phase K — Tasks + Geo-Map (additive, nullable)
-  taskType                String? // weighing|treatment|dipping|pregnancy_scan|shearing|crutching|vaccination|brucellosis_test|camp_inspection|camp_move|water_point_service|fence_repair|fire_break_maintenance|rainfall_reading|generic
-  lat                     Float?
-  lng                     Float?
-  recurrenceRule          String? // RFC5545 RRULE or livestock shortcut: "after:calving+21d", "before:lambing-30d", "season:spring_autumn_dip"
-  reminderOffset          Int?    // minutes before dueDate
-  assigneeIds             String? // JSON-stringified array for SQLite
-  templateId              String?
-  blockedByIds            String? // JSON-stringified array
-  completedObservationId  String?
-  recurrenceSource        String? // audit trail: rule that expanded this occurrence
+  taskType               String? // weighing|treatment|dipping|pregnancy_scan|shearing|crutching|vaccination|brucellosis_test|camp_inspection|camp_move|water_point_service|fence_repair|fire_break_maintenance|rainfall_reading|generic
+  lat                    Float?
+  lng                    Float?
+  recurrenceRule         String? // RFC5545 RRULE or livestock shortcut: "after:calving+21d", "before:lambing-30d", "season:spring_autumn_dip"
+  reminderOffset         Int? // minutes before dueDate
+  assigneeIds            String? // JSON-stringified array for SQLite
+  templateId             String?
+  blockedByIds           String? // JSON-stringified array
+  completedObservationId String?
+  recurrenceSource       String? // audit trail: rule that expanded this occurrence
 
   occurrences TaskOccurrence[]
 
@@ -266,34 +280,34 @@ model Task {
 }
 
 model TaskTemplate {
-  id               String   @id @default(cuid())
-  tenantSlug       String
-  name             String
-  name_af          String?
-  taskType         String
-  description      String?
-  description_af   String?
-  priorityDefault  String?  // low|medium|high
-  recurrenceRule   String?
-  reminderOffset   Int?     // minutes
-  species          String?  // cattle|sheep|game|null for any
-  isPublic         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(cuid())
+  tenantSlug      String
+  name            String
+  name_af         String?
+  taskType        String
+  description     String?
+  description_af  String?
+  priorityDefault String? // low|medium|high
+  recurrenceRule  String?
+  reminderOffset  Int? // minutes
+  species         String? // cattle|sheep|game|null for any
+  isPublic        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([tenantSlug, name])
   @@index([tenantSlug, taskType], name: "idx_task_template_tenant_type")
 }
 
 model TaskOccurrence {
-  id                    String    @id @default(cuid())
-  taskId                String
-  occurrenceAt          DateTime
-  reminderAt            DateTime?
-  status                String    @default("pending") // pending|completed|skipped
-  completedAt           DateTime?
-  reminderDispatchedAt  DateTime?
-  createdAt             DateTime  @default(now())
+  id                   String    @id @default(cuid())
+  taskId               String
+  occurrenceAt         DateTime
+  reminderAt           DateTime?
+  status               String    @default("pending") // pending|completed|skipped
+  completedAt          DateTime?
+  reminderDispatchedAt DateTime?
+  createdAt            DateTime  @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -305,20 +319,20 @@ model TaskOccurrence {
 // ── Multi-Species Settings ──────────────────────────────────────────────────
 
 model FarmSpeciesSettings {
-  id                    String   @id @default(cuid())
-  species               String   @unique
-  enabled               Boolean  @default(true)
-  gestationDays         Int?
-  voluntaryWaitingDays  Int?
-  breedingSeasonStart   String?
-  breedingSeasonEnd     String?
-  weaningAgeDays        Int?
-  targetStockingRate    Float?
-  customLsuValues       String?
-  customCategories      String?
-  quotaConfig           String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  species              String   @unique
+  enabled              Boolean  @default(true)
+  gestationDays        Int?
+  voluntaryWaitingDays Int?
+  breedingSeasonStart  String?
+  breedingSeasonEnd    String?
+  weaningAgeDays       Int?
+  targetStockingRate   Float?
+  customLsuValues      String?
+  customCategories     String?
+  quotaConfig          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 // ── Game Module Tables ──────────────────────────────────────────────────────
@@ -359,16 +373,16 @@ model GameCensusEvent {
 }
 
 model GameCensusResult {
-  id              String   @id @default(cuid())
-  censusEventId   String
-  speciesId       String
-  totalCount      Int
-  maleCount       Int?
-  femaleCount     Int?
-  juvenileCount   Int?
-  campId          String?
-  notes           String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  censusEventId String
+  speciesId     String
+  totalCount    Int
+  maleCount     Int?
+  femaleCount   Int?
+  juvenileCount Int?
+  campId        String?
+  notes         String?
+  createdAt     DateTime @default(now())
 
   @@index([censusEventId], name: "idx_census_result_event")
   @@index([speciesId], name: "idx_census_result_species")
@@ -499,40 +513,40 @@ model GameMortality {
 }
 
 model GameWaterPoint {
-  id                  String   @id @default(cuid())
-  name                String
-  type                String
-  campId              String?
-  gpsLat              Float?
-  gpsLon              Float?
-  depthMeters         Float?
-  yieldLitersPerHour  Float?
-  capacityLiters      Float?
-  pumpType            String?
-  status              String   @default("operational")
-  lastInspected       String?
-  notes               String?
-  createdAt           DateTime @default(now())
+  id                 String   @id @default(cuid())
+  name               String
+  type               String
+  campId             String?
+  gpsLat             Float?
+  gpsLon             Float?
+  depthMeters        Float?
+  yieldLitersPerHour Float?
+  capacityLiters     Float?
+  pumpType           String?
+  status             String   @default("operational")
+  lastInspected      String?
+  notes              String?
+  createdAt          DateTime @default(now())
 
   @@index([campId], name: "idx_water_point_camp")
   @@index([status], name: "idx_water_point_status")
 }
 
 model GameInfrastructure {
-  id                  String   @id @default(cuid())
-  type                String
-  name                String
-  campId              String?
-  gpsLat              Float?
-  gpsLon              Float?
-  lengthKm            Float?
-  capacityAnimals     Int?
-  condition           String   @default("good")
-  lastMaintenanceDate String?
-  nextMaintenanceDate String?
+  id                   String   @id @default(cuid())
+  type                 String
+  name                 String
+  campId               String?
+  gpsLat               Float?
+  gpsLon               Float?
+  lengthKm             Float?
+  capacityAnimals      Int?
+  condition            String   @default("good")
+  lastMaintenanceDate  String?
+  nextMaintenanceDate  String?
   maintenanceCostRands Float?
-  notes               String?
-  createdAt           DateTime @default(now())
+  notes                String?
+  createdAt            DateTime @default(now())
 
   @@index([type], name: "idx_infra_type")
   @@index([condition], name: "idx_infra_condition")
@@ -557,41 +571,41 @@ model GamePermit {
 }
 
 model GameVeldCondition {
-  id                       String   @id @default(cuid())
-  campId                   String
-  date                     String
-  assessor                 String
-  method                   String   @default("grazing_index")
-  grazingScore             Float?
-  browseScore              Float?
-  coverCategory            String?
-  kgDmPerHa                Float?
-  grassSpeciesComposition  String?
-  bushEncroachment         String?
-  erosionLevel             String?
-  notes                    String?
-  createdAt                DateTime @default(now())
+  id                      String   @id @default(cuid())
+  campId                  String
+  date                    String
+  assessor                String
+  method                  String   @default("grazing_index")
+  grazingScore            Float?
+  browseScore             Float?
+  coverCategory           String?
+  kgDmPerHa               Float?
+  grassSpeciesComposition String?
+  bushEncroachment        String?
+  erosionLevel            String?
+  notes                   String?
+  createdAt               DateTime @default(now())
 
   @@index([campId, date], name: "idx_veld_camp_date")
 }
 
 model VeldAssessment {
-  id                      String   @id @default(cuid())
-  campId                  String
-  assessmentDate          String   // YYYY-MM-DD (match RainfallRecord / CampCoverReading convention)
-  assessor                String
+  id                    String   @id @default(cuid())
+  campId                String
+  assessmentDate        String // YYYY-MM-DD (match RainfallRecord / CampCoverReading convention)
+  assessor              String
   // Raw farmer inputs (DFFE EIM)
-  palatableSpeciesPct     Float    // 0..100
-  bareGroundPct           Float    // 0..100
-  erosionLevel            Int      // 0=none, 1=moderate, 2=severe
-  bushEncroachmentLevel   Int      // 0=sparse, 1=moderate, 2=dense
+  palatableSpeciesPct   Float // 0..100
+  bareGroundPct         Float // 0..100
+  erosionLevel          Int // 0=none, 1=moderate, 2=severe
+  bushEncroachmentLevel Int // 0=sparse, 1=moderate, 2=dense
   // Computed at insert time (denormalised for fast reads, replayable from inputs)
-  veldScore               Float    // 0..10 output of calcVeldScore
-  biomeAtAssessment       String?  // snapshot of FarmSettings.biomeType at insert
-  haPerLsu                Float?   // snapshot of calcGrazingCapacity().haPerLsu
-  notes                   String?
-  createdAt               DateTime @default(now())
-  createdBy               String?  // user email
+  veldScore             Float // 0..10 output of calcVeldScore
+  biomeAtAssessment     String? // snapshot of FarmSettings.biomeType at insert
+  haPerLsu              Float? // snapshot of calcGrazingCapacity().haPerLsu
+  notes                 String?
+  createdAt             DateTime @default(now())
+  createdBy             String? // user email
 
   @@index([campId, assessmentDate], name: "idx_veld_assessment_camp_date")
   @@index([assessmentDate], name: "idx_veld_assessment_date")
@@ -608,8 +622,8 @@ model RainfallRecord {
   lng         Float?
   createdAt   DateTime @default(now())
 
-  @@map("GameRainfallRecord")
   @@index([date], name: "idx_rainfall_date")
+  @@map("GameRainfallRecord")
 }
 
 // ── Rainfall Climatology Cache ──────────────────────────────────────────────
@@ -618,10 +632,10 @@ model RainfallNormal {
   id          String   @id @default(cuid())
   latitude    Float
   longitude   Float
-  monthIdx    Int      // 1..12 (calendar month)
-  meanMm      Float    // long-term mean monthly rainfall (mm)
-  stdDevMm    Float    // population stdDev (mm)
-  sampleYears Int      // number of years used to compute the normal
+  monthIdx    Int // 1..12 (calendar month)
+  meanMm      Float // long-term mean monthly rainfall (mm)
+  stdDevMm    Float // population stdDev (mm)
+  sampleYears Int // number of years used to compute the normal
   computedAt  DateTime @default(now())
 
   @@unique([latitude, longitude, monthIdx], name: "rain_norm_latlng_month")
@@ -631,16 +645,16 @@ model RainfallNormal {
 // ── SARS / IT3 Tax Export Snapshot ──────────────────────────────────────────
 
 model It3Snapshot {
-  id           String    @id @default(cuid())
-  taxYear      Int       // the calendar year the SA tax year ends in (e.g. 2026 → 2025-03-01..2026-02-28)
-  issuedAt     DateTime  @default(now())
-  periodStart  String    // YYYY-MM-DD
-  periodEnd    String    // YYYY-MM-DD
-  payload      String    // JSON: { schedules, totals, farmSnapshot, categoryMap, meta }
-  generatedBy  String?   // user email at issue time
-  pdfHash      String?   // sha256 of generated PDF for tamper-evident audit
-  voidedAt     DateTime?
-  voidReason   String?
+  id          String    @id @default(cuid())
+  taxYear     Int // the calendar year the SA tax year ends in (e.g. 2026 → 2025-03-01..2026-02-28)
+  issuedAt    DateTime  @default(now())
+  periodStart String // YYYY-MM-DD
+  periodEnd   String // YYYY-MM-DD
+  payload     String // JSON: { schedules, totals, farmSnapshot, categoryMap, meta }
+  generatedBy String? // user email at issue time
+  pdfHash     String? // sha256 of generated PDF for tamper-evident audit
+  voidedAt    DateTime?
+  voidReason  String?
 
   @@index([taxYear], name: "idx_it3_tax_year")
   @@index([issuedAt], name: "idx_it3_issued_at")
@@ -649,18 +663,18 @@ model It3Snapshot {
 // ── Notifications ───────────────────────────────────────────────────────────
 
 model Notification {
-  id          String   @id @default(cuid())
-  type        String   // e.g. "calving_due_7d" | "calving_overdue" | "poor_doer" | "withdrawal_expiring" | "stale_inspection"
-  severity    String   // "red" | "amber"
-  message     String
-  href        String
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime
+  id                 String    @id @default(cuid())
+  type               String // e.g. "calving_due_7d" | "calving_overdue" | "poor_doer" | "withdrawal_expiring" | "stale_inspection"
+  severity           String // "red" | "amber"
+  message            String
+  href               String
+  isRead             Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  expiresAt          DateTime
   // Phase J — dedup + digest support
-  dedupKey           String?   // stable key like "NO_WEIGHING_90D:camp-7:2026-W16" — merge+bump on collision
-  payload            String?   // JSON: { animalIds?, campId?, count?, speciesId?, ...renderer inputs }
-  collapseKey        String?   // grouping unit: campId, speciesId, tenantId — used by digest algorithm
+  dedupKey           String? // stable key like "NO_WEIGHING_90D:camp-7:2026-W16" — merge+bump on collision
+  payload            String? // JSON: { animalIds?, campId?, count?, speciesId?, ...renderer inputs }
+  collapseKey        String? // grouping unit: campId, speciesId, tenantId — used by digest algorithm
   updatedAt          DateTime  @updatedAt
   // Phase J — dispatch idempotency (at-most-once delivery under Inngest retry)
   pushDispatchedAt   DateTime? // set BEFORE push send; retries skip if non-null
@@ -680,12 +694,12 @@ model Notification {
 model AlertPreference {
   id              String   @id @default(cuid())
   userId          String
-  category        String   // "reproduction" | "performance" | "veld" | "finance" | "compliance" | "weather" | "predator"
-  alertType       String?  // null = whole-category pref; specific type like "lambing_due_7d" for per-alert override
-  channel         String   // "bell" | "email" | "push" | "whatsapp"
+  category        String // "reproduction" | "performance" | "veld" | "finance" | "compliance" | "weather" | "predator"
+  alertType       String? // null = whole-category pref; specific type like "lambing_due_7d" for per-alert override
+  channel         String // "bell" | "email" | "push" | "whatsapp"
   enabled         Boolean  @default(true)
   digestMode      String   @default("realtime") // "realtime" | "daily" | "weekly"
-  speciesOverride String?  // null = all species; "cattle" | "sheep" | "game" to scope
+  speciesOverride String? // null = all species; "cattle" | "sheep" | "game" to scope
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -713,7 +727,7 @@ model RotationPlan {
   id        String             @id @default(cuid())
   name      String
   startDate DateTime
-  status    String             @default("draft")  // draft|active|completed|archived
+  status    String             @default("draft") // draft|active|completed|archived
   notes     String?
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
@@ -728,7 +742,7 @@ model RotationPlanStep {
   mobId                 String?
   plannedStart          DateTime
   plannedDays           Int
-  status                String       @default("pending")  // pending|executed|skipped
+  status                String       @default("pending") // pending|executed|skipped
   actualStart           DateTime?
   actualEnd             DateTime?
   executedObservationId String?
@@ -771,7 +785,7 @@ model ImportJob {
   costZar        Float?
   createdAt      DateTime  @default(now())
   confirmedBy    String
-  status         String?   // "pending" | "running" | "complete" | "failed"
+  status         String? // "pending" | "running" | "complete" | "failed"
   completedAt    DateTime?
   animals        Animal[]
 
@@ -805,13 +819,13 @@ model CustomField {
 
 model EinsteinChunk {
   id              String   @id @default(cuid())
-  entityType      String   // "observation" | "camp" | "animal" | "task" | "task_template" | "notification" | "it3_snapshot"
+  entityType      String // "observation" | "camp" | "animal" | "task" | "task_template" | "notification" | "it3_snapshot"
   entityId        String
   langTag         String   @default("en") // "en" | "af"
   text            String
-  embedding       Bytes    // libSQL F32_BLOB(1536) under the hood — see Wave 4 migration
+  embedding       Bytes // libSQL F32_BLOB(1536) under the hood — see Wave 4 migration
   tokensUsed      Int
-  modelId         String   // "text-embedding-3-small"
+  modelId         String // "text-embedding-3-small"
   sourceUpdatedAt DateTime // source row's updatedAt/editedAt at embed time — drives stale detection
   createdAt       DateTime @default(now())
 
@@ -828,21 +842,21 @@ model EinsteinChunk {
 model RagQueryLog {
   id                 String   @id @default(cuid())
   userId             String
-  assistantName      String   // snapshot of aiSettings.assistantName at query time
+  assistantName      String // snapshot of aiSettings.assistantName at query time
   question           String
   answerText         String?
-  citations          String   // JSON array of Citation objects (empty [] on refusal)
+  citations          String // JSON array of Citation objects (empty [] on refusal)
   retrievalLatencyMs Int
   answerLatencyMs    Int
   inputTokens        Int
   outputTokens       Int
   cachedInputTokens  Int      @default(0)
-  costZar            Float    // rand cost (embed + planner + answer combined)
-  modelId            String   // e.g. "claude-sonnet-4-6"
-  feedback           String?  // "up" | "down" | null
+  costZar            Float // rand cost (embed + planner + answer combined)
+  modelId            String // e.g. "claude-sonnet-4-6"
+  feedback           String? // "up" | "down" | null
   feedbackNote       String?
-  errorCode          String?  // typed per silent-failure pattern
-  refusedReason      String?  // "NO_GROUNDED_EVIDENCE" | "OUT_OF_SCOPE" | "TIER_LIMIT" | null
+  errorCode          String? // typed per silent-failure pattern
+  refusedReason      String? // "NO_GROUNDED_EVIDENCE" | "OUT_OF_SCOPE" | "TIER_LIMIT" | null
   createdAt          DateTime @default(now())
 
   @@index([userId, createdAt], name: "idx_rag_query_user_date")

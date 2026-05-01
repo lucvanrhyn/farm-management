@@ -46,7 +46,8 @@ const mockDelete = vi.fn().mockResolvedValue({});
 
 const mockPrisma = {
   animal: { create: mockCreate, findUnique: mockFindUnique, findMany: mockFindMany, count: mockCount, groupBy: mockGroupBy, update: mockUpdate, delete: mockDelete },
-  camp: { create: mockCreate, findUnique: mockFindUnique, findMany: mockFindMany, count: mockCount },
+  // Phase A of #28: camp routes now use findFirst (campId no longer globally unique).
+  camp: { create: mockCreate, findUnique: mockFindUnique, findFirst: mockFindUnique, findMany: mockFindMany, count: mockCount },
   observation: { create: mockCreate, findMany: mockFindMany, count: mockCount },
   task: { create: mockCreate, findMany: mockFindMany, findUnique: mockFindUnique, update: mockUpdate, delete: mockDelete },
   taskOccurrence: { findMany: mockFindMany, findUnique: mockFindUnique, update: mockUpdate },

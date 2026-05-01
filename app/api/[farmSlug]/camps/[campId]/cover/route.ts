@@ -45,7 +45,9 @@ export async function GET(
       orderBy: { recordedAt: "desc" },
       take: 30,
     }),
-    prisma.camp.findUnique({
+    // Phase A of #28: campId is no longer globally unique. findFirst is
+    // single-species-safe; Phase B will scope by species.
+    prisma.camp.findFirst({
       where: { campId },
       select: { sizeHectares: true },
     }),
@@ -98,7 +100,9 @@ export async function POST(
 
   // Fetch camp and animal count in parallel (both needed before the create)
   const [camp, animalCount] = await Promise.all([
-    prisma.camp.findUnique({
+    // Phase A of #28: campId is no longer globally unique. findFirst is
+    // single-species-safe; Phase B will scope by species.
+    prisma.camp.findFirst({
       where: { campId },
       select: { sizeHectares: true },
     }),
