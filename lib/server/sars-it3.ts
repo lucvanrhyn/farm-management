@@ -35,6 +35,13 @@ export interface FarmIdentitySnapshot {
   farmName: string;
   ownerName: string;
   ownerIdNumber: string;
+  /**
+   * SARS Tax Reference Number — the *one* identifier SARS uses to key the
+   * return. 10 digits, but accept any string the user types; SARS validates
+   * at submission. Optional in the payload type so legacy snapshots
+   * (issued before wave/26c) parse without runtime error.
+   */
+  taxReferenceNumber?: string;
   physicalAddress: string;
   postalAddress: string;
   contactPhone: string;
@@ -108,6 +115,7 @@ export async function buildFarmIdentitySnapshot(
     farmName: settings?.farmName ?? "My Farm",
     ownerName: settings?.ownerName ?? "",
     ownerIdNumber: settings?.ownerIdNumber ?? "",
+    taxReferenceNumber: settings?.taxReferenceNumber ?? "",
     physicalAddress: settings?.physicalAddress ?? "",
     postalAddress: settings?.postalAddress ?? "",
     contactPhone: settings?.contactPhone ?? "",

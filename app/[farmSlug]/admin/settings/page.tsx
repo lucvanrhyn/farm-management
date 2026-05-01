@@ -42,6 +42,7 @@ export default async function SettingsPage({
     openaiApiKeyConfigured: !!(raw?.openaiApiKey),
     ownerName: raw?.ownerName ?? "",
     ownerIdNumber: raw?.ownerIdNumber ?? "",
+    taxReferenceNumber: raw?.taxReferenceNumber ?? "",
     physicalAddress: raw?.physicalAddress ?? "",
     postalAddress: raw?.postalAddress ?? "",
     contactPhone: raw?.contactPhone ?? "",

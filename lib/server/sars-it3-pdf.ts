@@ -65,6 +65,7 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
       farmName: "My Farm",
       ownerName: "",
       ownerIdNumber: "",
+      taxReferenceNumber: "",
       physicalAddress: "",
       postalAddress: "",
       contactPhone: "",
@@ -142,9 +143,15 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
   doc.text("FARMING ENTITY (SELLER / OPERATOR)", margin + 3, y + 6);
   doc.setFont("helvetica", "normal");
 
+  // wave/26c (refs #26, audit finding #7): SARS Tax Reference Number is the
+  // *one* number SARS uses to key the return. Render it prominently *above*
+  // the ID line, with an em-dash placeholder when missing — that surfaces
+  // the gap to the user before they paste anything into eFiling.
+  const taxRefLine = `Tax Ref Number: ${payload.farm.taxReferenceNumber?.trim() || "—"}`;
   const farmLines = [
     payload.farm.farmName,
     payload.farm.ownerName,
+    taxRefLine,
     payload.farm.ownerIdNumber ? `ID: ${payload.farm.ownerIdNumber}` : "",
     payload.farm.physicalAddress,
     payload.farm.postalAddress ? `Postal: ${payload.farm.postalAddress}` : "",

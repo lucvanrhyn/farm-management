@@ -48,6 +48,7 @@ const BASE_SETTINGS: FarmSettingsData = {
   biomeType: null,
   ownerName: "",
   ownerIdNumber: "",
+  taxReferenceNumber: "",
   physicalAddress: "",
   postalAddress: "",
   contactPhone: "",
