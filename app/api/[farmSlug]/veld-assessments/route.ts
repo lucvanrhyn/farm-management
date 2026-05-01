@@ -89,7 +89,9 @@ export async function POST(
     return NextResponse.json({ error: 'bushEncroachmentLevel must be 0|1|2' }, { status: 400 });
   }
 
-  const camp = await prisma.camp.findUnique({ where: { campId: body.campId }, select: { campId: true } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is single-species-safe; Phase B will scope by species.
+  const camp = await prisma.camp.findFirst({ where: { campId: body.campId }, select: { campId: true } });
   if (!camp) return NextResponse.json({ error: 'Camp not found' }, { status: 404 });
 
   const settings = await prisma.farmSettings.findUnique({

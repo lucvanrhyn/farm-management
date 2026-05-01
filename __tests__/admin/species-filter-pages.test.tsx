@@ -220,7 +220,8 @@ describe("species-filter regression lock — admin pages bind species: mode", ()
 
   it("admin/camps/[campId] page filters animal.findMany by species: mode", async () => {
     getFarmModeMock.mockResolvedValue("sheep");
-    campFindUniqueMock.mockResolvedValue({
+    // Phase A of #28: page now uses findFirst (campId no longer globally unique).
+    campFindFirstMock.mockResolvedValue({
       campId: "camp-1",
       campName: "Camp 1",
       sizeHectares: 10,

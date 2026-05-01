@@ -13,7 +13,9 @@ export async function GET(
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { prisma } = ctx;
 
-  const camp = await prisma.camp.findUnique({ where: { campId } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is single-species-safe; Phase B will tighten.
+  const camp = await prisma.camp.findFirst({ where: { campId } });
   if (!camp) {
     return NextResponse.json({ error: "Camp not found" }, { status: 404 });
   }

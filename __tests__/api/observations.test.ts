@@ -15,7 +15,9 @@ vi.mock('next-auth', () => ({
 
 // Mock prisma client methods used by the route
 const mockCreate = vi.fn().mockResolvedValue({ id: 'test-obs-id' });
-const mockCampFindUnique = vi.fn().mockResolvedValue({ campId: 'A' });
+// Phase A of #28: observations route now uses findFirst (campId is no longer
+// globally unique under the composite UNIQUE on species+campId).
+const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: 'A' });
 // Phase I.3 — observations POST now looks up Animal.species at write time
 // to keep the denormalised column fresh.
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
@@ -25,7 +27,7 @@ const mockPrisma = {
     create: mockCreate,
   },
   camp: {
-    findUnique: mockCampFindUnique,
+    findFirst: mockCampFindFirst,
   },
   animal: {
     findUnique: mockAnimalFindUnique,

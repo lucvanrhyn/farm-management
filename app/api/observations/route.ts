@@ -87,8 +87,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify camp_id belongs to this farm's DB (prevents writing to arbitrary camps)
-  const campExists = await prisma.camp.findUnique({ where: { campId: camp_id }, select: { campId: true } });
+  // Verify camp_id belongs to this farm's DB (prevents writing to arbitrary camps).
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is single-species-safe; Phase B will scope.
+  const campExists = await prisma.camp.findFirst({ where: { campId: camp_id }, select: { campId: true } });
   if (!campExists) {
     return NextResponse.json({ error: "Camp not found" }, { status: 404 });
   }

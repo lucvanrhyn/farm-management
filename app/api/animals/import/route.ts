@@ -110,7 +110,11 @@ export async function POST(req: NextRequest) {
 
       validCampIds.add(campName);
 
-      const existing = await prisma.camp.findUnique({ where: { campId: campName } });
+      // Phase A of #28: campId is no longer globally unique (composite UNIQUE
+      // on species+campId). findFirst is single-species-safe — bulk imports
+      // currently target the tenant's primary species and Phase B/D will
+      // wire species into the import wizard.
+      const existing = await prisma.camp.findFirst({ where: { campId: campName } });
       if (!existing) {
         try {
           await prisma.camp.create({

@@ -59,7 +59,10 @@ export default async function CampDetailPage({
     );
   }
 
-  const camp = await prisma.camp.findUnique({ where: { campId } });
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). findFirst is a single-species-safe drop-in; Phase B
+  // threads species into this read at the route layer.
+  const camp = await prisma.camp.findFirst({ where: { campId } });
   if (!camp) notFound();
 
   const mode = await getFarmMode(farmSlug);
