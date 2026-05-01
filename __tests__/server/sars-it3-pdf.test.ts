@@ -212,6 +212,99 @@ describe("buildIt3Pdf — voided record", () => {
   });
 });
 
+// ── Wave/26b: Stock at Standard Values block ──────────────────────────────────
+
+describe("buildIt3Pdf — Wave/26b: opening + closing stock at standard values", () => {
+  function makeStockRecord() {
+    const payload: It3SnapshotPayload = JSON.parse(makeMockRecord().payload);
+    payload.stockMovement = {
+      opening: {
+        asOfDate: "2025-03-01",
+        totalZar: 5_000,
+        electionApplied: false,
+        lines: [
+          {
+            species: "cattle",
+            ageCategory: "Bulls",
+            count: 100,
+            standardValueZar: 50,
+            effectiveValueZar: 50,
+            subtotalZar: 5_000,
+          },
+        ],
+      },
+      closing: {
+        asOfDate: "2026-02-28",
+        totalZar: 10_000,
+        electionApplied: false,
+        lines: [
+          {
+            species: "cattle",
+            ageCategory: "Bulls",
+            count: 200,
+            standardValueZar: 50,
+            effectiveValueZar: 50,
+            subtotalZar: 10_000,
+          },
+        ],
+      },
+      deltaZar: 5_000,
+      unmapped: [],
+      source:
+        "GN R105 (GG 1011, 1965-01-22) as amended by GN R1814 (GG 5309, 1976-10-08); reproduced in SARS Guide IT35 (2023-10-13) Annexure pp. 71-72",
+    };
+    payload.schedules.openingStockValueZar = 5_000;
+    payload.schedules.closingStockValueZar = 10_000;
+    payload.schedules.stockMovementZar = 5_000;
+    payload.schedules.netFarmingIncomeBeforeStockMovement = 40_000;
+    payload.schedules.netFarmingIncome = 45_000;
+    return makeMockRecord({ payload: JSON.stringify(payload) });
+  }
+
+  it("renders Opening Stock at Standard Values heading", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("OPENING STOCK AT STANDARD VALUES");
+  });
+
+  it("renders Closing Stock at Standard Values heading", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("CLOSING STOCK AT STANDARD VALUES");
+  });
+
+  it("renders the Stock Movement Reconciliation block", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("STOCK MOVEMENT RECONCILIATION");
+  });
+
+  it("renders the GN R105 / R1814 citation", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("GN R105");
+    expect(text).toContain("GN R1814");
+  });
+
+  it("renders the IT35 (2023) citation", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("IT35");
+  });
+
+  it("retains the 'NOT an IT3-series form' disclaimer alongside stock blocks", () => {
+    const buffer = buildIt3Pdf(makeStockRecord());
+    const text = pdfToText(buffer);
+    expect(text).toContain("NOT an IT3-series form");
+  });
+
+  it("payload without stockMovement does NOT throw and skips the block", () => {
+    const buffer = buildIt3Pdf(makeMockRecord());
+    const text = pdfToText(buffer);
+    expect(text).not.toContain("STOCK MOVEMENT RECONCILIATION");
+  });
+});
+
 // ── Payload with zero transactions ────────────────────────────────────────────
 
 describe("buildIt3Pdf — empty payload", () => {

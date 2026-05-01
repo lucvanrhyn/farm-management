@@ -660,6 +660,27 @@ model It3Snapshot {
   @@index([issuedAt], name: "idx_it3_issued_at")
 }
 
+// ── SARS / Adopted-value election (First Schedule paragraph 6/7) ────────────
+// Stores the per-class adopted standard value the taxpayer elects under
+// paragraph 6(1)(b)/(c)/(d)(ii). Once made, the election is binding for all
+// subsequent years (paragraph 7) and may not be changed without SARS approval
+// (sarsChangeApprovalRef must be set on the new row in that case).
+//
+// `electedValueZar` is whole rand (the gazetted figures are integer rand).
+
+model SarsLivestockElection {
+  id                    String   @id @default(cuid())
+  species               String
+  ageCategory           String
+  electedValueZar       Int
+  electedYear           Int
+  sarsChangeApprovalRef String?
+  createdAt             DateTime @default(now())
+
+  @@unique([species, ageCategory, electedYear], name: "SarsLivestockElection_class_year_key")
+  @@index([species, ageCategory], name: "SarsLivestockElection_class_idx")
+}
+
 // ── Notifications ───────────────────────────────────────────────────────────
 
 model Notification {
