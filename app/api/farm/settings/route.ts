@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     contactPhone: settings?.contactPhone ?? "",
     contactEmail: settings?.contactEmail ?? "",
     propertyRegNumber: settings?.propertyRegNumber ?? "",
+    aiaIdentificationMark: settings?.aiaIdentificationMark ?? "",
     farmRegion: settings?.farmRegion ?? "",
   });
 }
@@ -160,6 +161,7 @@ export async function PATCH(req: NextRequest) {
     contactPhone?: string | null;
     contactEmail?: string | null;
     propertyRegNumber?: string | null;
+    aiaIdentificationMark?: string | null;
     farmRegion?: string | null;
     biomeType?: string | null;
   } = {};
@@ -267,6 +269,28 @@ export async function PATCH(req: NextRequest) {
       const val = body[field];
       (updateData as Record<string, unknown>)[field] =
         typeof val === "string" && val.trim() ? val.trim() : null;
+    }
+  }
+
+  // AIA identification mark — Animal Identification Act 6 of 2002 caps the
+  // BrandsAIS-issued mark at 3 characters and uppercase-normalises it. We
+  // accept any case + whitespace on input, then trim → uppercase → slice 3,
+  // matching how DALRRD prints the mark on the registration certificate.
+  if ("aiaIdentificationMark" in body) {
+    const val = body.aiaIdentificationMark;
+    if (typeof val !== "string" || !val.trim()) {
+      updateData.aiaIdentificationMark = null;
+    } else {
+      const normalised = val.trim().toUpperCase().slice(0, 3);
+      // Reject anything that contains characters outside the AIA charset
+      // (alpha-numeric only, no punctuation/diacritics).
+      if (!/^[A-Z0-9]{1,3}$/.test(normalised)) {
+        return NextResponse.json(
+          { error: "aiaIdentificationMark must be 1-3 alphanumeric characters" },
+          { status: 400 }
+        );
+      }
+      updateData.aiaIdentificationMark = normalised;
     }
   }
 

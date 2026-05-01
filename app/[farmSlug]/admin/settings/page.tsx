@@ -48,6 +48,7 @@ export default async function SettingsPage({
     contactPhone: raw?.contactPhone ?? "",
     contactEmail: raw?.contactEmail ?? "",
     propertyRegNumber: raw?.propertyRegNumber ?? "",
+    aiaIdentificationMark: raw?.aiaIdentificationMark ?? "",
     farmRegion: raw?.farmRegion ?? "",
     biomeType: raw?.biomeType ?? null,
   };

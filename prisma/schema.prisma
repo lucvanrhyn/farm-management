@@ -71,6 +71,10 @@ model Animal {
   importJobId String?
   importJob   ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
 
+  // AIA 2002 compliance — physical identification on the animal
+  tagNumber      String? // ear-tag number (numeric or alphanumeric)
+  brandSequence  String? // brand or tattoo sequence linking to FarmSettings.aiaIdentificationMark
+
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
   @@index([species, status], name: "idx_animal_species_status")
@@ -146,6 +150,7 @@ model FarmSettings {
   contactPhone            String?
   contactEmail            String?
   propertyRegNumber       String? // SA property registration / LPHS number
+  aiaIdentificationMark   String? // DALRRD/BrandsAIS-registered AIA mark (max 3 chars per regulation)
   farmRegion              String? // district / province
   biomeType               String? // 'highveld' | 'bushveld' | 'lowveld' | 'karoo' | 'mixedveld'
   // Onboarding state

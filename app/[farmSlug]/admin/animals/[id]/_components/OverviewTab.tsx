@@ -80,6 +80,18 @@ export function OverviewTab({ animal, camp, farmSlug }: OverviewTabProps) {
             <p className="font-mono" style={{ color: "#1C1815" }}>{animal.registrationNumber}</p>
           </div>
         )}
+        {animal.tagNumber && (
+          <div>
+            <p className="text-xs" style={{ color: "#9C8E7A" }}>Tag Nr</p>
+            <p className="font-mono" style={{ color: "#1C1815" }}>{animal.tagNumber}</p>
+          </div>
+        )}
+        {animal.brandSequence && (
+          <div>
+            <p className="text-xs" style={{ color: "#9C8E7A" }}>Brand Sequence</p>
+            <p className="font-mono" style={{ color: "#1C1815" }}>{animal.brandSequence}</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -54,6 +54,7 @@ const BASE_SETTINGS: FarmSettingsData = {
   contactPhone: "",
   contactEmail: "",
   propertyRegNumber: "",
+  aiaIdentificationMark: "",
   farmRegion: "",
 };
 
