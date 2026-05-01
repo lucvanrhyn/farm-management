@@ -59,6 +59,8 @@ export interface FarmingActivityCodeInput {
  *   0114/0115 Poultry
  *   0140/0141 Wool (Sheep)
  *   0142/0143 Game Farming
+ *   0192/0193 Foreign farming income (any farming income earned outside SA —
+ *             e.g. SA tenants leasing cross-border in Lesotho/Eswatini)
  *
  * The per-line codes (4101..4299) that appeared in earlier FarmTrack versions
  * were fabricated and are NOT used here. Only the top-level activity code is
@@ -70,6 +72,9 @@ export function getFarmingActivityCode(input: FarmingActivityCodeInput): string 
 
   const species = (dominantSpecies ?? "").toLowerCase();
 
+  if (species === "foreign") {
+    return profit ? "0192" : "0193";
+  }
   if (species === "cattle" || species === "livestock") {
     return profit ? "0104" : "0105";
   }
@@ -95,6 +100,30 @@ export interface TransactionLike {
   amount: number;            // Rand, always positive
   date: string;              // YYYY-MM-DD (SA locale)
   description?: string | null;
+  /**
+   * True when this transaction's income/expense was earned outside South
+   * Africa (Lesotho/Eswatini/etc.). Drives SARS source code 0192/0193 on
+   * the ITR12. Optional for backward-compat with legacy callers — undefined
+   * is treated as domestic (false).
+   */
+  isForeign?: boolean | null;
+}
+
+/**
+ * Pure split: partition a transaction list into domestic (default) vs foreign
+ * (isForeign === true) buckets. Used by `computeIt3Schedules` so the foreign-
+ * derived rows roll into a parallel SARS 0192/0193 reporting block.
+ */
+export function splitTransactionsByForeignness(
+  transactions: TransactionLike[],
+): { domestic: TransactionLike[]; foreign: TransactionLike[] } {
+  const domestic: TransactionLike[] = [];
+  const foreign: TransactionLike[] = [];
+  for (const tx of transactions) {
+    if (tx?.isForeign === true) foreign.push(tx);
+    else domestic.push(tx);
+  }
+  return { domestic, foreign };
 }
 
 export interface It3ScheduleLineTotal {
@@ -135,6 +164,30 @@ export interface It3ScheduleTotals {
    * sign of netFarmingIncome. This is the real SARS code that goes on the ITR12.
    */
   farmingActivityCode: string;
+  /**
+   * Foreign-derived totals (SARS code 0192 profit / 0193 loss). Null when no
+   * foreign-flagged transactions exist in the period — backward-compat for
+   * legacy callers / UIs.
+   *
+   * When present, these totals are EXCLUDED from the main income/expense/
+   * netFarmingIncome figures: they're a parallel SA-tax-jurisdiction reporting
+   * line on the ITR12, not a re-aggregation of the same revenue.
+   */
+  foreignFarmingIncome?: It3ForeignFarmingIncome | null;
+}
+
+/**
+ * Parallel SARS-0192/0193 reporting block — sums of all transactions where
+ * `isForeign === true`. Carries its own activity code.
+ */
+export interface It3ForeignFarmingIncome {
+  income: It3ScheduleLineTotal[];
+  expense: It3ScheduleLineTotal[];
+  totalIncome: number;
+  totalExpenses: number;
+  net: number;
+  /** "0192" (profit) or "0193" (loss). */
+  activityCode: string;
 }
 
 // ── SARS ITR12 farming schedule line descriptions ─────────────────────────────
@@ -333,53 +386,51 @@ export function computeIt3Schedules(
   taxYearEndingIn: number,
   options: ComputeIt3Options = {},
 ): It3ScheduleTotals {
-  // Use line text as the bucket key (no per-line codes)
-  const incomeAcc = new Map<
+  type Acc = Map<
     string,
     { line: string; code: string; amount: number; sources: Set<string>; count: number }
-  >();
-  const expenseAcc = new Map<
-    string,
-    { line: string; code: string; amount: number; sources: Set<string>; count: number }
-  >();
+  >;
 
-  let totalIncome = 0;
-  let totalExpenses = 0;
-  let included = 0;
+  const aggregate = (txs: TransactionLike[]) => {
+    const incomeAcc: Acc = new Map();
+    const expenseAcc: Acc = new Map();
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    let included = 0;
 
-  for (const tx of transactions) {
-    if (!tx || typeof tx.date !== "string") continue;
-    if (!isInTaxYear(tx.date, taxYearEndingIn)) continue;
+    for (const tx of txs) {
+      if (!tx || typeof tx.date !== "string") continue;
+      if (!isInTaxYear(tx.date, taxYearEndingIn)) continue;
 
-    const mapped = mapTransactionToLine(tx);
-    if (!mapped) continue;
+      const mapped = mapTransactionToLine(tx);
+      if (!mapped) continue;
 
-    const amount = Math.abs(tx.amount);
-    const bucket = mapped.schedule === "income" ? incomeAcc : expenseAcc;
-    // Bucket by line text (unique per schedule side)
-    const existing = bucket.get(mapped.line);
-    if (existing) {
-      existing.amount += amount;
-      existing.sources.add(tx.category);
-      existing.count += 1;
-    } else {
-      bucket.set(mapped.line, {
-        line: mapped.line,
-        code: "",  // no per-line SARS codes on ITR12
-        amount,
-        sources: new Set([tx.category]),
-        count: 1,
-      });
+      const amount = Math.abs(tx.amount);
+      const bucket = mapped.schedule === "income" ? incomeAcc : expenseAcc;
+      const existing = bucket.get(mapped.line);
+      if (existing) {
+        existing.amount += amount;
+        existing.sources.add(tx.category);
+        existing.count += 1;
+      } else {
+        bucket.set(mapped.line, {
+          line: mapped.line,
+          code: "",
+          amount,
+          sources: new Set([tx.category]),
+          count: 1,
+        });
+      }
+
+      if (mapped.schedule === "income") totalIncome += amount;
+      else totalExpenses += amount;
+      included += 1;
     }
 
-    if (mapped.schedule === "income") totalIncome += amount;
-    else totalExpenses += amount;
-    included += 1;
-  }
+    return { incomeAcc, expenseAcc, totalIncome, totalExpenses, included };
+  };
 
-  const toRows = (
-    acc: Map<string, { line: string; code: string; amount: number; sources: Set<string>; count: number }>,
-  ): It3ScheduleLineTotal[] =>
+  const toRows = (acc: Acc): It3ScheduleLineTotal[] =>
     [...acc.values()]
       .map((r) => ({
         line: r.line,
@@ -390,7 +441,13 @@ export function computeIt3Schedules(
       }))
       .sort((a, b) => a.line.localeCompare(b.line));
 
-  const netBeforeStock = round2(totalIncome - totalExpenses);
+  // Split foreign-derived from domestic — they're parallel SARS reporting
+  // lines (0192/0193 vs the domestic activity code).
+  const { domestic, foreign } = splitTransactionsByForeignness(transactions);
+
+  const dom = aggregate(domestic);
+
+  const netBeforeStock = round2(dom.totalIncome - dom.totalExpenses);
   const stockDelta = options.stockMovement?.deltaZar ?? 0;
   const net = round2(netBeforeStock + stockDelta);
   const farmingActivityCode = getFarmingActivityCode({
@@ -398,14 +455,35 @@ export function computeIt3Schedules(
     netResult: net >= 0 ? "profit" : "loss",
   });
 
+  // Foreign block — only emit when at least one in-window foreign tx exists.
+  let foreignFarmingIncome: It3ForeignFarmingIncome | null = null;
+  if (foreign.length > 0) {
+    const fx = aggregate(foreign);
+    if (fx.included > 0) {
+      const fxNet = round2(fx.totalIncome - fx.totalExpenses);
+      foreignFarmingIncome = {
+        income: toRows(fx.incomeAcc),
+        expense: toRows(fx.expenseAcc),
+        totalIncome: round2(fx.totalIncome),
+        totalExpenses: round2(fx.totalExpenses),
+        net: fxNet,
+        activityCode: getFarmingActivityCode({
+          dominantSpecies: "foreign",
+          netResult: fxNet >= 0 ? "profit" : "loss",
+        }),
+      };
+    }
+  }
+
   const result: It3ScheduleTotals = {
-    income: toRows(incomeAcc),
-    expense: toRows(expenseAcc),
-    totalIncome: round2(totalIncome),
-    totalExpenses: round2(totalExpenses),
+    income: toRows(dom.incomeAcc),
+    expense: toRows(dom.expenseAcc),
+    totalIncome: round2(dom.totalIncome),
+    totalExpenses: round2(dom.totalExpenses),
     netFarmingIncome: net,
-    transactionCount: included,
+    transactionCount: dom.included + (foreignFarmingIncome ? foreign.filter((t) => t && typeof t.date === "string" && isInTaxYear(t.date, taxYearEndingIn) && mapTransactionToLine(t)).length : 0),
     farmingActivityCode,
+    foreignFarmingIncome,
   };
 
   if (options.stockMovement) {

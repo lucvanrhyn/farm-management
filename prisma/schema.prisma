@@ -101,6 +101,10 @@ model Transaction {
   fees          Float? // auction fees / commission
   transportCost Float? // transport cost
   animalIds     String? // JSON array of animal IDs for batch transactions
+  // Foreign-derived flag: true when this transaction's income/expense was
+  // earned outside South Africa (Lesotho/Eswatini/etc.). SARS uses code
+  // 0192/0193 for foreign farming income on the ITR12.
+  isForeign     Boolean? @default(false)
 
   @@index([date], name: "idx_transaction_date")
   @@index([animalId], name: "idx_transaction_animal")
