@@ -21,6 +21,7 @@ export async function PATCH(
   const {
     type, category, amount, date, description, animalId, campId, reference,
     saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
+    isForeign,
   } = body;
 
   if (saleType != null && saleType !== "auction" && saleType !== "private") {
@@ -46,6 +47,7 @@ export async function PATCH(
   if (fees !== undefined) data.fees = fees != null ? parseFloat(fees) : null;
   if (transportCost !== undefined) data.transportCost = transportCost != null ? parseFloat(transportCost) : null;
   if (animalIds !== undefined) data.animalIds = animalIds ?? null;
+  if (isForeign !== undefined) data.isForeign = isForeign === true;
 
   const transaction = await prisma.transaction.update({
     where: { id },

@@ -23,6 +23,7 @@ interface Transaction {
   fees?: number | null;
   transportCost?: number | null;
   animalIds?: string | null;
+  isForeign?: boolean | null;
 }
 
 interface Props {
@@ -79,6 +80,9 @@ export default function TransactionModal({
   const [transportCost, setTransportCost] = useState(
     transaction?.transportCost != null ? String(transaction.transportCost) : ""
   );
+  const [isForeign, setIsForeign] = useState<boolean>(
+    transaction?.isForeign === true,
+  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,6 +113,7 @@ export default function TransactionModal({
         amount: parseFloat(amount),
         date,
         description,
+        isForeign,
       };
 
       if (isLivestock) {
@@ -230,6 +235,19 @@ export default function TransactionModal({
               style={fieldStyle}
             />
           </div>
+
+          {/* Foreign-derived flag — drives SARS source code 0192/0193 on the ITR12. */}
+          <label className="flex items-center gap-2 cursor-pointer text-xs" style={{ color: "#1C1815" }}>
+            <input
+              type="checkbox"
+              checked={isForeign}
+              onChange={(e) => setIsForeign(e.target.checked)}
+            />
+            <span>
+              Foreign-derived income (Lesotho/Eswatini/cross-border) —
+              SARS code 0192/0193 on the ITR12 Farming Schedule.
+            </span>
+          </label>
 
           {/* Livestock Details — shown only for Animal Sales / Animal Purchases */}
           {isLivestock && (

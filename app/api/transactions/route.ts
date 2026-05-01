@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
   const {
     type, category, amount, date, description, animalId, campId, reference,
     saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
+    isForeign,
   } = body;
 
   if (!type || !category || amount == null || !date) {
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
       fees: fees != null ? parseFloat(fees) : null,
       transportCost: transportCost != null ? parseFloat(transportCost) : null,
       animalIds: animalIds ?? null,
+      isForeign: isForeign === true,
     },
   });
 

@@ -307,6 +307,103 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
 
   y += summaryHeight + 6;
 
+  // ── Foreign farming income (SARS code 0192/0193) ──────────────────────────
+  // Parallel reporting line for SA tenants with farming income earned outside
+  // South Africa (e.g. Lesotho/Eswatini cross-border leases). Foreign tx are
+  // EXCLUDED from the domestic totals above — this block carries them on the
+  // 0192/0193 source code per the SARS ITR12 register.
+
+  const foreign = payload.schedules.foreignFarmingIncome ?? null;
+  if (foreign) {
+    if (y > pageHeight - 60) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(DARK);
+    doc.text(
+      `FOREIGN FARMING INCOME  (SARS source code ${foreign.activityCode})`,
+      margin,
+      y,
+    );
+    y += 4;
+
+    if (foreign.income.length === 0 && foreign.expense.length === 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("No foreign-derived transactions in this tax year.", margin, y + 4);
+      y += 12;
+    } else {
+      autoTable(doc, {
+        head: [["Schedule", "Line", "Categories", "Count", "Amount (R)"]],
+        body: [
+          ...foreign.income.map((r) => [
+            "Income",
+            r.line,
+            r.sourceCategories.join(", "),
+            String(r.count),
+            formatZar(r.amount),
+          ]),
+          ...foreign.expense.map((r) => [
+            "Expense",
+            r.line,
+            r.sourceCategories.join(", "),
+            String(r.count),
+            formatZar(r.amount),
+          ]),
+        ],
+        foot: [
+          [
+            "",
+            "Total foreign income",
+            "",
+            "",
+            formatZar(foreign.totalIncome),
+          ],
+          [
+            "",
+            "Total foreign expenses",
+            "",
+            "",
+            formatZar(foreign.totalExpenses),
+          ],
+          [
+            "",
+            "Net foreign farming income",
+            "",
+            "",
+            formatZar(foreign.net),
+          ],
+        ],
+        startY: y,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 7.8, cellPadding: 1.6 },
+        headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold" },
+        footStyles: { fillColor: LIGHT_GREEN, textColor: DARK, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: GREY },
+        columnStyles: {
+          4: { halign: "right" },
+        },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      y = ((doc as any).lastAutoTable?.finalY ?? y) + 4;
+    }
+
+    // Citation
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.8);
+    doc.setTextColor(100, 100, 100);
+    const foreignCitation = [
+      `Per SARS ITR12 source code ${foreign.activityCode} (foreign farming ${foreign.activityCode === "0192" ? "profit" : "loss"}).`,
+      "Reported alongside (not within) the domestic farming totals above.",
+    ];
+    foreignCitation.forEach((line, i) => doc.text(line, margin, y + i * 3.4));
+    y += foreignCitation.length * 3.4 + 4;
+  }
+
   // ── Stock at Standard Values (First Schedule paragraph 5(1)) ─────────────
 
   if (payload.stockMovement) {
