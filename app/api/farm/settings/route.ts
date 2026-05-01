@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
     // NVD seller identity
     ownerName: settings?.ownerName ?? "",
     ownerIdNumber: settings?.ownerIdNumber ?? "",
+    taxReferenceNumber: settings?.taxReferenceNumber ?? "",
     physicalAddress: settings?.physicalAddress ?? "",
     postalAddress: settings?.postalAddress ?? "",
     contactPhone: settings?.contactPhone ?? "",
@@ -153,6 +154,7 @@ export async function PATCH(req: NextRequest) {
     // NVD seller identity
     ownerName?: string | null;
     ownerIdNumber?: string | null;
+    taxReferenceNumber?: string | null;
     physicalAddress?: string | null;
     postalAddress?: string | null;
     contactPhone?: string | null;
@@ -247,10 +249,13 @@ export async function PATCH(req: NextRequest) {
     updateData.biomeType = (body.biomeType as string | null) ?? null;
   }
 
-  // NVD seller identity — nullable text fields, empty string = clear to null
+  // NVD seller identity — nullable text fields, empty string = clear to null.
+  // taxReferenceNumber added for wave/26c (refs #26, audit finding #7) — see
+  // lib/server/sars-it3.ts and sars-it3-pdf.ts for the PDF surfacing.
   for (const field of [
     "ownerName",
     "ownerIdNumber",
+    "taxReferenceNumber",
     "physicalAddress",
     "postalAddress",
     "contactPhone",
