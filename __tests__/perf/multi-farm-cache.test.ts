@@ -169,7 +169,10 @@ describe("getCachedMultiFarmOverview — DB call savings", () => {
     const coldMs = performance.now() - coldStart;
 
     expect(_fetcherCallCount).toBe(1);
-    expect(coldMs).toBeGreaterThanOrEqual(SIMULATED_DB_LATENCY_MS);
+    // Allow 1ms slack for performance.now() jitter on busy CI runners.
+    // A cache hit would still be <1ms, so the signal that the fetcher actually
+    // ran is preserved.
+    expect(coldMs).toBeGreaterThanOrEqual(SIMULATED_DB_LATENCY_MS - 1);
     expect(result).toHaveLength(MOCK_FARMS.length);
   });
 
