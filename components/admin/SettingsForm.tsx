@@ -330,7 +330,7 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             onBlur={blurStyle}
           />
         </FieldRow>
-        <FieldRow label="Stale Inspection Alert (hours)" description="Alert when a camp has not been inspected within this many hours.">
+        <FieldRow label="Alert if a camp has not been inspected for this many hours" description="We'll flag the camp on your dashboard once this many hours have passed without an inspection (e.g. 48 = 2 days).">
           <input
             type="number"
             step="1"
