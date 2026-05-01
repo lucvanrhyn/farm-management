@@ -29,6 +29,25 @@ import {
 } from "@/lib/calculators/sars-livestock-values";
 import { reconstructStockSnapshots } from "@/lib/server/inventory-replay";
 
+/**
+ * Prisma `select` shape for transactions consumed by `getIt3Payload`.
+ *
+ * Exported (and unit-tested) because a missing field here is a *silent*
+ * correctness bug: the omitted column lands as `undefined` on each row, and
+ * downstream consumers (`splitTransactionsByForeignness`, `computeIt3Schedules`)
+ * treat undefined as the default. Wave/26e (foreign-income code 0192/0193)
+ * shipped without `isForeign` in this select, which made every transaction
+ * look domestic regardless of the persisted flag. Lock the shape with a test.
+ */
+export const TRANSACTION_SELECT_FOR_IT3 = {
+  type: true,
+  category: true,
+  amount: true,
+  date: true,
+  description: true,
+  isForeign: true,
+} as const;
+
 // ── Snapshot shape ────────────────────────────────────────────────────────────
 
 export interface FarmIdentitySnapshot {
@@ -225,13 +244,7 @@ export async function getIt3Payload(
   const [transactions, farm, inventory, replay, elections] = await Promise.all([
     prisma.transaction.findMany({
       where: { date: { gte: start, lte: end } },
-      select: {
-        type: true,
-        category: true,
-        amount: true,
-        date: true,
-        description: true,
-      },
+      select: TRANSACTION_SELECT_FOR_IT3,
     }),
     buildFarmIdentitySnapshot(prisma),
     buildInventorySnapshot(prisma),
