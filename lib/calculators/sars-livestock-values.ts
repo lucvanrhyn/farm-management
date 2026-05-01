@@ -214,18 +214,48 @@ export interface EffectiveValueInput {
   class: LivestockClass;
   /** Election for the current year (if any). */
   election?: ElectionRecord | null;
-  /** Election from the prior year — used to enforce paragraph 7 lock-in. */
+  /**
+   * Defence-in-depth: a previous-year election for the same class.
+   *
+   * **Paragraph 7 lock-in is NOT primarily enforced here.** Per the SARS
+   * First Schedule paragraph 7 ("Once an option is exercised it shall be
+   * binding in respect of all subsequent returns rendered by the farmer
+   * and may not be varied without the consent of the Commissioner"), the
+   * binding effect is achieved operationally by the combination of:
+   *
+   *   (a) `SarsLivestockElection` rows being unique on
+   *       `(species, ageCategory, electedYear)` — a re-election creates a
+   *       *new* row with `sarsChangeApprovalRef` set, never silently
+   *       overwriting the historical value.
+   *   (b) `loadElectionsForYear(taxYear)` returning the *latest* election
+   *       per class whose `electedYear <= taxYear`. Until SARS approves a
+   *       new election, the original row remains the latest, so every
+   *       subsequent year's IT3 keeps using it. That IS the lock-in.
+   *
+   * Because the data layer + latest-wins resolver already encode the rule,
+   * `getIt3Payload` always passes ONE election per class and never supplies
+   * `priorElection`. The parameter therefore has no effect on the production
+   * flow — it is preserved as a defence-in-depth assertion that would still
+   * fire if a future caller ever fed two elections for the same class
+   * without a `sarsChangeApprovalRef`. Internal tests in
+   * `sars-livestock-values.test.ts` continue to exercise this defensive
+   * path; the operational Para 7 contract is pinned by
+   * `sars-livestock-values-para7.test.ts`.
+   */
   priorElection?: ElectionRecord | null;
 }
 
 /**
- * Resolve the per-class value to use on the IT3 stock schedule, taking into
- * account any taxpayer election under paragraph 6 and paragraph 7 lock-in.
+ * Resolve the per-class value to use on the IT3 stock schedule, applying any
+ * paragraph-6 ±20% election. Paragraph 7 lock-in is enforced upstream by the
+ * data layer plus `loadElectionsForYear` (see `priorElection` JSDoc).
  *
  * Throws:
  *   - UnknownLivestockClassError — class not in STANDARD_VALUES.
  *   - ElectionExceedsTwentyPercentBandError — election outside ±20%.
- *   - ElectionLockInError — value changed between years without SARS approval.
+ *   - ElectionLockInError — defensive only; fires when a caller explicitly
+ *     supplies a conflicting `priorElection` without `sarsChangeApprovalRef`.
+ *     Production callers do not exercise this branch.
  */
 export function effectiveValue(input: EffectiveValueInput): number {
   const standard = lookupStandardValue(input.class);
@@ -239,7 +269,10 @@ export function effectiveValue(input: EffectiveValueInput): number {
     throw new ElectionExceedsTwentyPercentBandError(standard, elected, input.class);
   }
 
-  // Paragraph 7 — election locked in once made; re-election needs SARS approval.
+  // Defence-in-depth: not the primary lock-in mechanism (see `priorElection`
+  // JSDoc). Production callers do not supply `priorElection`; this branch
+  // exists to fail loudly if a future caller ever passes two conflicting
+  // elections for the same class without a SARS approval ref.
   if (
     input.priorElection &&
     input.priorElection.species === input.election.species &&

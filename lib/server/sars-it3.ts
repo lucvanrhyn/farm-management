@@ -164,32 +164,43 @@ async function buildInventorySnapshot(
   return { activeAtPeriodEnd, byCategory };
 }
 
-async function loadElectionsForYear(
+/**
+ * Load taxpayer livestock-value elections that apply to a given tax year.
+ *
+ * Returns the *latest* election per `(species, ageCategory)` whose
+ * `electedYear <= taxYear`. That latest-wins dedup is the operational
+ * implementation of the SARS First Schedule paragraph 7 lock-in — once an
+ * election is recorded, it remains the binding value for every subsequent
+ * return until a SARS-approved re-election (a *new* row with
+ * `sarsChangeApprovalRef` set) supersedes it.
+ *
+ * Exported (and unit-tested in `__tests__/server/sars-it3-elections.test.ts`)
+ * because the dedup invariant + the year filter are both regulatory-correctness
+ * gates: a silent change to either would mis-value every taxpayer's stock
+ * block. Internal-tests-pass ≠ external-spec-correct — see
+ * `feedback-regulatory-output-validate-against-spec.md`.
+ *
+ * Backwards compatibility: legacy tenants whose Turso clone has not yet had
+ * the SarsLivestockElection migration applied (originally `0005_…`, renamed
+ * to `0010_…` in PR #56) will surface a runtime "no such table" error from
+ * libSQL. We catch that and return `[]` — equivalent to "no elections", which
+ * causes the calculator to fall back to gazetted standard values, the
+ * SARS-correct default behaviour absent any election.
+ */
+export async function loadElectionsForYear(
   prisma: PrismaClient,
   taxYear: number,
 ): Promise<ElectionRecord[]> {
-  // The SarsLivestockElection table is added by migration 0005.
-  // Use the model on the prisma client; if the migration hasn't run yet on
-  // a stale env, swallow the error and return an empty list (election is
-  // an opt-in feature; absence = standard values only, which is correct
-  // default behaviour).
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await (prisma as any).sarsLivestockElection.findMany({
+    const rows = await prisma.sarsLivestockElection.findMany({
       where: { electedYear: { lte: taxYear } },
       orderBy: { electedYear: "desc" },
     });
     // Latest election per (species, ageCategory) wins. Iterate in desc-year
-    // order and keep the first sighting.
+    // order and keep the first sighting — the operational Para 7 lock-in.
     const seen = new Set<string>();
     const result: ElectionRecord[] = [];
-    for (const r of rows as Array<{
-      species: string;
-      ageCategory: string;
-      electedValueZar: number;
-      electedYear: number;
-      sarsChangeApprovalRef: string | null;
-    }>) {
+    for (const r of rows) {
       const key = `${r.species}/${r.ageCategory}`;
       if (seen.has(key)) continue;
       seen.add(key);
