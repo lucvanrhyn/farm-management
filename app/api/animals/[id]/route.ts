@@ -58,6 +58,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (key in body) update[key] = body[key];
   }
 
+  // #28 Phase B — cross-species parent guard. If the patch sets motherId or
+  // fatherId, the parent must (a) exist and (b) share the child's species.
+  // Edge case: NULL species on either side (legacy data) is treated as
+  // "unknown, allow" with a TODO so legacy tenants don't break in prod.
+  // TODO(#28): tighten once species backfill is verified across all tenants.
+  const parentFields: Array<"motherId" | "fatherId"> = [];
+  if ("motherId" in body && body.motherId) parentFields.push("motherId");
+  if ("fatherId" in body && body.fatherId) parentFields.push("fatherId");
+
+  if (parentFields.length > 0) {
+    const child = await prisma.animal.findUnique({
+      where: { animalId: id },
+      select: { species: true },
+    });
+    for (const field of parentFields) {
+      const parentAnimalId = body[field] as string;
+      const parent = await prisma.animal.findUnique({
+        where: { animalId: parentAnimalId },
+        select: { species: true },
+      });
+      if (!parent) {
+        return NextResponse.json({ error: "PARENT_NOT_FOUND" }, { status: 422 });
+      }
+      // NULL species on either side = legacy/unknown, allow with TODO.
+      if (child?.species && parent.species && child.species !== parent.species) {
+        return NextResponse.json({ error: "CROSS_SPECIES_BLOCKED" }, { status: 422 });
+      }
+    }
+  }
+
   const animal = await prisma.animal.update({
     where: { animalId: id },
     data: update,
