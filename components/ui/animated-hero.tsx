@@ -45,7 +45,13 @@ function wordState(
   return activeIndex > wordIndex ? "above" : "below";
 }
 
-export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: string) => void }) {
+export function AnimatedHero({
+  farmSlug,
+  onHeroImageLoad,
+}: {
+  farmSlug?: string;
+  onHeroImageLoad?: (url: string) => void;
+}) {
   const [wordIndex, setWordIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [farm, setFarm] = useState<FarmStats | null>(null);
@@ -55,12 +61,25 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
     [],
   );
 
+  // Slogan word rotator + mounted flag are tenant-independent — kept in
+  // their own effect so navigating tenants doesn't restart the animation.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const interval = setInterval(() => {
       setWordIndex((i) => (i + 1) % words.length);
     }, 2500);
+    return () => clearInterval(interval);
+  }, [words.length]);
+
+  // Tenant fetch — refires on farmSlug change so the parent's reset hero
+  // (see app/[farmSlug]/home/page.tsx, refs #24) is re-populated under the
+  // new tenant. /api/farm reads the current tenant from session/proxy
+  // headers; including farmSlug in deps is the trigger, not part of the
+  // URL. Title / breed / animal-count surfaces still update only when
+  // this fetch resolves (a separate follow-up tracks resetting them
+  // synchronously on slug change).
+  useEffect(() => {
     const controller = new AbortController();
     fetch("/api/farm", { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
@@ -71,11 +90,11 @@ export function AnimatedHero({ onHeroImageLoad }: { onHeroImageLoad?: (url: stri
         }
       })
       .catch((err) => { if (err?.name !== "AbortError") clientLogger.error("[animated-hero] fetch failed", { err }); });
-    return () => {
-      clearInterval(interval);
-      controller.abort();
-    };
-  }, [words.length]);
+    return () => controller.abort();
+    // onHeroImageLoad intentionally excluded — parent re-creates it each
+    // render; including it would refetch on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmSlug]);
 
   const now = new Date();
   const greeting = getGreeting(now.getHours());
