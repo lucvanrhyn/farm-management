@@ -5,7 +5,12 @@ name: Require promote label
 # is blocked until the label is present (this check fails without it).
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # Re-running on synchronize/reopened is pure noise: the label state
+    # doesn't change with code pushes, so the verdict can't change either.
+    # Each re-run also fires a "workflow failed" email — death by a thousand
+    # notifications on long-lived branches. Trigger only when the label
+    # state can actually change.
+    types: [opened, labeled, unlabeled]
     branches: [main]
 jobs:
   require:
