@@ -1,5 +1,7 @@
--- 0005_camp_mob_species.sql
+-- 0009_camp_mob_species.sql
 -- Phase A of #28 multi-species refactor (wave/28a).
+-- Renumbered from 0005 → 0009 in wave/56 to break a prefix collision with
+-- 0005_sars_livestock_election.sql. See 0008_record_legacy_renames.sql.
 --
 -- Adds a NOT NULL `species` column to Camp + Mob, replaces the global
 -- UNIQUE on Camp.campId with a composite UNIQUE(species, campId), and
@@ -22,7 +24,7 @@
 -- recreate. Per the wave/26 lesson, this PR must soak ≥1h on its
 -- per-branch Turso clone before promote.
 --
--- Rollback: see migrations/rollback/0005_camp_mob_species.down.sql —
+-- Rollback: see migrations/rollback/0009_camp_mob_species.down.sql —
 -- operator-only, never auto-applied (the migrator does not recurse into
 -- subdirectories).
 

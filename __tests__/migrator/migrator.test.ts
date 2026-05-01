@@ -60,6 +60,59 @@ describe('loadMigrations', () => {
     expect(list.map((m) => m.name)).toEqual(['0001_first.sql', '0002_second.sql']);
     expect(list[0].sql).toContain('CREATE TABLE a');
   });
+
+  it('throws when two .sql files share the same NNNN_ numeric prefix', async () => {
+    // Wave/56 SEV-1 root cause: two files with `0005_*` prefix shipped
+    // together. `localeCompare` picks ONE deterministic ordering of the pair,
+    // but post-merge-promote was stamped against a different ordering on a
+    // peer tenant — so at least one column from each colliding pair never
+    // landed on prod. The runner must hard-fail instead of silently picking
+    // one. The error message must name BOTH offenders so the operator can
+    // renumber.
+    const dir = await makeDir({
+      '0005_camp_mob_species.sql': 'ALTER TABLE Camp ADD COLUMN species TEXT;',
+      '0005_sars_livestock_election.sql': 'CREATE TABLE SarsLivestockElection (id TEXT);',
+      '0006_aia_tag_fields.sql': 'ALTER TABLE Animal ADD COLUMN tagNumber TEXT;',
+    });
+    await expect(loadMigrations(dir)).rejects.toThrow(
+      /duplicate migration prefix.*0005.*camp_mob_species.*sars_livestock_election|duplicate migration prefix.*0005.*sars_livestock_election.*camp_mob_species/i,
+    );
+  });
+
+  it('throws when more than two .sql files share the same NNNN_ numeric prefix', async () => {
+    const dir = await makeDir({
+      '0009_a.sql': 'SELECT 1;',
+      '0009_b.sql': 'SELECT 1;',
+      '0009_c.sql': 'SELECT 1;',
+    });
+    await expect(loadMigrations(dir)).rejects.toThrow(/duplicate migration prefix.*0009/i);
+  });
+
+  it('does not flag distinct prefixes', async () => {
+    const dir = await makeDir({
+      '0008_one.sql': 'SELECT 1;',
+      '0009_two.sql': 'SELECT 1;',
+      '0010_three.sql': 'SELECT 1;',
+    });
+    const list = await loadMigrations(dir);
+    expect(list.map((m) => m.name)).toEqual(['0008_one.sql', '0009_two.sql', '0010_three.sql']);
+  });
+
+  it('ignores files that do not match the NNNN_ prefix shape', async () => {
+    // README.md / non-migration files in `migrations/` should be passed
+    // through (they're filtered to .sql) without provoking the prefix check.
+    // A `.sql` file without a leading `NNNN_` is unusual but should not crash
+    // the collision check — it just isn't part of any prefix bucket.
+    const dir = await makeDir({
+      '0001_real.sql': 'SELECT 1;',
+      'rollback-helper.sql': 'SELECT 1;',
+    });
+    const list = await loadMigrations(dir);
+    expect(list.map((m) => m.name).sort()).toEqual([
+      '0001_real.sql',
+      'rollback-helper.sql',
+    ]);
+  });
 });
 
 describe('runMigrations', () => {
@@ -180,6 +233,122 @@ describe('runMigrations', () => {
     expect(recorded.rows.map((r) => r.name)).toEqual([
       '0001_first.sql',
       '0002_second.sql',
+    ]);
+  });
+});
+
+describe('wave/56 — 0008_record_legacy_renames.sql against the live migrations dir', () => {
+  // Belt-and-braces integration: replay the bookkeeping migration against a
+  // pre-stamped tenant and make sure the renamed 0009..0012 files are
+  // skipped on the next run. This guards against the wave/56 SEV-1 root
+  // cause being silently re-introduced by a future renumber that forgets
+  // the rename-bookkeeping step.
+  let db: Client;
+
+  beforeEach(async () => {
+    db = await openMemoryDb();
+  });
+
+  it('a tenant pre-stamped with the legacy 0005/0006 names skips the renamed files', async () => {
+    // Simulate a tenant that already applied the OLD-named migrations on a
+    // prior run (the actual schema state isn't relevant — `runMigrations`
+    // only consults `_migrations.name`).
+    await db.execute(
+      `CREATE TABLE IF NOT EXISTS "_migrations" (
+        "name" TEXT PRIMARY KEY,
+        "applied_at" TEXT NOT NULL
+      )`,
+    );
+    const stamp = '2026-04-30T00:00:00.000Z';
+    for (const legacy of [
+      '0005_camp_mob_species.sql',
+      '0005_sars_livestock_election.sql',
+      '0006_aia_tag_fields.sql',
+      '0006_farmsettings_tax_ref_number.sql',
+    ]) {
+      await db.execute({
+        sql: `INSERT INTO "_migrations" (name, applied_at) VALUES (?, ?)`,
+        args: [legacy, stamp],
+      });
+    }
+
+    // Load only the rename-bookkeeping file from a temp dir mirroring the
+    // real `migrations/` content for this assertion.
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const recorder = all.find(
+      (m) => m.name === '0008_record_legacy_renames.sql',
+    );
+    expect(recorder, 'rename-bookkeeping file must exist').toBeTruthy();
+
+    // Run the rename-bookkeeping plus the four renamed files. Because
+    // 0008_record_legacy_renames.sql runs FIRST (sort order), the four
+    // renamed files must be in `_migrations` already by the time
+    // runMigrations gets to them, and so must be skipped.
+    const subset = all.filter((m) =>
+      [
+        '0008_record_legacy_renames.sql',
+        '0009_camp_mob_species.sql',
+        '0010_sars_livestock_election.sql',
+        '0011_aia_tag_fields.sql',
+        '0012_farmsettings_tax_ref_number.sql',
+      ].includes(m.name),
+    );
+    expect(subset).toHaveLength(5);
+
+    const result = await runMigrations(db, subset);
+
+    // The bookkeeping file itself is the only thing actually applied.
+    expect(result.applied).toEqual(['0008_record_legacy_renames.sql']);
+    expect(result.skipped.sort()).toEqual([
+      '0009_camp_mob_species.sql',
+      '0010_sars_livestock_election.sql',
+      '0011_aia_tag_fields.sql',
+      '0012_farmsettings_tax_ref_number.sql',
+    ]);
+
+    // Final `_migrations` state holds BOTH the legacy and the new names —
+    // the legacy rows from the seed plus the new-name rows inserted by
+    // 0008_record_legacy_renames.sql.
+    const recorded = await db.execute(
+      `SELECT name FROM "_migrations" ORDER BY name`,
+    );
+    expect(recorded.rows.map((r) => r.name)).toEqual([
+      '0005_camp_mob_species.sql',
+      '0005_sars_livestock_election.sql',
+      '0006_aia_tag_fields.sql',
+      '0006_farmsettings_tax_ref_number.sql',
+      '0008_record_legacy_renames.sql',
+      '0009_camp_mob_species.sql',
+      '0010_sars_livestock_election.sql',
+      '0011_aia_tag_fields.sql',
+      '0012_farmsettings_tax_ref_number.sql',
+    ]);
+  });
+
+  it('a fresh tenant (no legacy rows) skips the rename-bookkeeping no-op and runs the renamed files normally', async () => {
+    // The WHERE EXISTS guard means INSERT OR IGNORE is a true no-op for a
+    // fresh clone. The renamed 0009..0012 files must then be applied normally
+    // (we don't actually exercise their schema here — that's covered by the
+    // dedicated migration-camp-mob-species suite — only the bookkeeping
+    // contract).
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const bookkeeping = all.find(
+      (m) => m.name === '0008_record_legacy_renames.sql',
+    )!;
+
+    // Empty `_migrations` table — fresh tenant.
+    await runMigrations(db, [bookkeeping]);
+    const recorded = await db.execute(
+      `SELECT name FROM "_migrations" ORDER BY name`,
+    );
+    // Only the bookkeeping file itself ends up applied; the four conditional
+    // INSERTs all WHERE-EXISTS-fail.
+    expect(recorded.rows.map((r) => r.name)).toEqual([
+      '0008_record_legacy_renames.sql',
     ]);
   });
 });

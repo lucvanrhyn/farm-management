@@ -30,8 +30,10 @@ import { loadMigrations } from '../../../lib/migrator';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const MIGRATIONS_DIR = join(REPO_ROOT, 'migrations');
-const UP_FILE = '0005_camp_mob_species.sql';
-const DOWN_FILE = join('rollback', '0005_camp_mob_species.down.sql');
+// Renumbered 0005 → 0009 in wave/56 to break a prefix collision with the
+// 0005 SARS election migration. See migrations/0008_record_legacy_renames.sql.
+const UP_FILE = '0009_camp_mob_species.sql';
+const DOWN_FILE = join('rollback', '0009_camp_mob_species.down.sql');
 
 async function readMigration(relativePath: string): Promise<string> {
   return readFile(join(MIGRATIONS_DIR, relativePath), 'utf-8');
@@ -298,6 +300,6 @@ describe('0005_camp_mob_species — migrator integration', () => {
 
   it('the rollback subdirectory contains exactly the down file for this migration', async () => {
     const entries = await readdir(join(MIGRATIONS_DIR, 'rollback'));
-    expect(entries).toContain('0005_camp_mob_species.down.sql');
+    expect(entries).toContain('0009_camp_mob_species.down.sql');
   });
 });

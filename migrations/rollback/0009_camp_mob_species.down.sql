@@ -1,13 +1,17 @@
--- 0005_camp_mob_species.down.sql
--- OPERATOR-ONLY ROLLBACK for migration 0005_camp_mob_species.sql.
+-- 0009_camp_mob_species.down.sql
+-- OPERATOR-ONLY ROLLBACK for migration 0009_camp_mob_species.sql.
+-- (Renumbered from 0005 → 0009 in wave/56 — see 0008_record_legacy_renames.sql.
+--  Older tenant `_migrations` rows may still carry the legacy 0005 name; the
+--  rename-bookkeeping ensures both names map to the same applied state.)
 --
 -- This file lives under `migrations/rollback/` so the tenant migration
 -- runner (lib/migrator.ts loadMigrations) — which only reads the immediate
 -- contents of `migrations/` — never auto-applies it.
 --
 -- TO APPLY MANUALLY:
---   turso db shell <tenant-db> < migrations/rollback/0005_camp_mob_species.down.sql
---   then:  DELETE FROM _migrations WHERE name = '0005_camp_mob_species.sql';
+--   turso db shell <tenant-db> < migrations/rollback/0009_camp_mob_species.down.sql
+--   then:  DELETE FROM _migrations
+--          WHERE name IN ('0005_camp_mob_species.sql', '0009_camp_mob_species.sql');
 --
 -- WARNING: The composite UNIQUE permits the same campId across species.
 -- This rollback re-installs the GLOBAL UNIQUE on `campId`, so it WILL FAIL
