@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface ImportResult {
@@ -15,6 +15,11 @@ interface ImportProgress {
   total: number;
 }
 
+// Wave 27a (issue #27 O3) — preview the AI Grill Wizard disambiguation flow
+// shipping in #30. Shown on first visit, dismissed via this localStorage key
+// so repeat-importers don't see it.
+const DISAMBIG_STUB_KEY = "seen:import-disambig-stub";
+
 export default function AnimalImporter() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +28,31 @@ export default function AnimalImporter() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // SSR-safe: render the stub on the server (no `window`) and during the very
+  // first client paint so the markup matches; useEffect then hides it if the
+  // user has dismissed it before. This avoids the SSR/CSR hydration warning
+  // that an `if (typeof window …)` initialiser would trigger.
+  const [showDisambigStub, setShowDisambigStub] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(DISAMBIG_STUB_KEY) === "1") {
+        setShowDisambigStub(false);
+      }
+    } catch {
+      /* localStorage unavailable — keep default */
+    }
+  }, []);
+
+  function dismissDisambigStub() {
+    setShowDisambigStub(false);
+    try {
+      window.localStorage.setItem(DISAMBIG_STUB_KEY, "1");
+    } catch {
+      /* noop */
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -103,6 +133,73 @@ export default function AnimalImporter() {
 
   return (
     <div className="space-y-6">
+      {/* AI Grill Wizard disambiguation stub (issue #27 O3). */}
+      {showDisambigStub && (
+        <div
+          role="note"
+          aria-label="Upcoming feature preview"
+          style={{
+            background: "rgba(74,124,89,0.06)",
+            border: "1px solid rgba(74,124,89,0.25)",
+            borderRadius: "0.75rem",
+            padding: "1rem",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <p
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                color: "#2D6A4F",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Coming soon — AI assist
+            </p>
+            <p style={{ fontSize: "0.8125rem", color: "#1C1815", lineHeight: 1.5 }}>
+              If your CSV has rows we can&apos;t auto-match (e.g. a{" "}
+              <code
+                style={{
+                  background: "rgba(74,124,89,0.12)",
+                  padding: "0 0.25rem",
+                  borderRadius: "0.25rem",
+                  color: "#2D6A4F",
+                  fontSize: "0.75rem",
+                }}
+              >
+                breed
+              </code>{" "}
+              value we don&apos;t recognise, or two animals with the same tag),
+              we&apos;ll pause and ask you about each one. You can confirm,
+              correct, or skip.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissDisambigStub}
+            style={{
+              flexShrink: 0,
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              color: "#2D6A4F",
+              background: "transparent",
+              border: "1px solid rgba(74,124,89,0.4)",
+              borderRadius: "0.5rem",
+              padding: "0.375rem 0.75rem",
+              cursor: "pointer",
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      )}
+
       {/* Template download */}
       <div style={{
         background: "#F5F2EE",

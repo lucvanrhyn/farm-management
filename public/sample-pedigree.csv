@@ -1,0 +1,9 @@
+animalId,sex,birthDate,motherId,fatherId,breed,category,sireRegNumber,damRegNumber,notes
+COW-1001,F,2018-09-12,COW-0732,BULL-220,Brangus,Cow,SAB-2014-0220,SAB-2012-0732,Foundation dam — full pedigree on file
+COW-1002,F,2019-04-03,COW-0741,BULL-220,Brangus,Cow,SAB-2014-0220,SAB-2013-0741,Half-sister to COW-1001
+COW-1003,F,2020-02-20,COW-0855,,Brangus,Cow,,SAB-2015-0855,Sire unknown — purchased in-calf at auction
+BULL-1101,M,2017-08-15,COW-0612,BULL-118,Brangus,Bull,SAB-2009-0118,SAB-2010-0612,Active herd sire
+HEIFER-1201,F,2024-03-30,COW-1001,BULL-1101,Brangus,Heifer,SAB-2017-1101,SAB-2018-1001,F1 from foundation pair
+HEIFER-1202,F,2024-04-12,COW-1002,BULL-1101,Brangus,Heifer,SAB-2017-1101,SAB-2019-1002,
+STEER-1301,M,2024-05-04,COW-1003,BULL-1101,Brangus,Steer,SAB-2017-1101,,Dam-side pedigree partial
+COW-1004,F,2021-11-18,,,Brangus,Cow,,,Newly purchased — pedigree pending from seller
