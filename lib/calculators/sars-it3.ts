@@ -112,7 +112,22 @@ export interface It3ScheduleTotals {
   expense: It3ScheduleLineTotal[];
   totalIncome: number;
   totalExpenses: number;
+  /**
+   * Net farming income per First Schedule paragraph 5(1):
+   *   net = grossSales − allowableDeductions + (closingStock − openingStock)
+   * When `stockMovement` is omitted from compute options, the trailing
+   * stock-movement term is zero (backward-compat path for callers not yet
+   * wired to the inventory replay).
+   */
   netFarmingIncome: number;
+  /** netFarmingIncome before adding the stock movement delta. Always set. */
+  netFarmingIncomeBeforeStockMovement?: number;
+  /** Opening livestock value at standard values (R), if computed. */
+  openingStockValueZar?: number;
+  /** Closing livestock value at standard values (R), if computed. */
+  closingStockValueZar?: number;
+  /** closingStockValueZar − openingStockValueZar. Rolls into netFarmingIncome. */
+  stockMovementZar?: number;
   transactionCount: number;
   /**
    * SARS ITR12 top-level farming activity code, e.g. "0104" (Livestock Farming
@@ -286,6 +301,23 @@ export interface ComputeIt3Options {
    * If omitted or unknown, defaults to mixed farming (0102/0103).
    */
   dominantSpecies?: string | null;
+  /**
+   * Opening + closing stock at standard values (per First Schedule paragraph
+   * 5(1) read with paragraph 2 + paragraph 3). When provided, the delta
+   * (closing − opening) is added to netFarmingIncome.
+   *
+   * Caller is responsible for computing this via summariseStockMovement() in
+   * lib/calculators/sars-stock.ts. Omitting it preserves the legacy
+   * income−expenses behaviour for backward compatibility.
+   *
+   * Use the local type alias to avoid a circular import: the field is purely
+   * a triple of numbers.
+   */
+  stockMovement?: {
+    openingStockValueZar: number;
+    closingStockValueZar: number;
+    deltaZar: number;
+  };
 }
 
 /**
@@ -358,13 +390,15 @@ export function computeIt3Schedules(
       }))
       .sort((a, b) => a.line.localeCompare(b.line));
 
-  const net = round2(totalIncome - totalExpenses);
+  const netBeforeStock = round2(totalIncome - totalExpenses);
+  const stockDelta = options.stockMovement?.deltaZar ?? 0;
+  const net = round2(netBeforeStock + stockDelta);
   const farmingActivityCode = getFarmingActivityCode({
     dominantSpecies: options.dominantSpecies,
     netResult: net >= 0 ? "profit" : "loss",
   });
 
-  return {
+  const result: It3ScheduleTotals = {
     income: toRows(incomeAcc),
     expense: toRows(expenseAcc),
     totalIncome: round2(totalIncome),
@@ -373,6 +407,15 @@ export function computeIt3Schedules(
     transactionCount: included,
     farmingActivityCode,
   };
+
+  if (options.stockMovement) {
+    result.netFarmingIncomeBeforeStockMovement = netBeforeStock;
+    result.openingStockValueZar = round2(options.stockMovement.openingStockValueZar);
+    result.closingStockValueZar = round2(options.stockMovement.closingStockValueZar);
+    result.stockMovementZar = round2(options.stockMovement.deltaZar);
+  }
+
+  return result;
 }
 
 function round2(n: number): number {

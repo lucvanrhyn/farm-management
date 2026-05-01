@@ -18,6 +18,16 @@ import {
   type It3ScheduleTotals,
   type TransactionLike,
 } from "@/lib/calculators/sars-it3";
+import {
+  summariseStockMovement,
+  valueStockBlock,
+  type StockBlockTotal,
+} from "@/lib/calculators/sars-stock";
+import {
+  STANDARD_VALUES_SOURCE,
+  type ElectionRecord,
+} from "@/lib/calculators/sars-livestock-values";
+import { reconstructStockSnapshots } from "@/lib/server/inventory-replay";
 
 // ── Snapshot shape ────────────────────────────────────────────────────────────
 
@@ -38,6 +48,30 @@ export interface It3LivestockInventorySnapshot {
   byCategory: Array<{ category: string; count: number }>;
 }
 
+export interface It3StockBlockSnapshot {
+  asOfDate: string; // ISO YYYY-MM-DD
+  totalZar: number;
+  electionApplied: boolean;
+  lines: Array<{
+    species: string;
+    ageCategory: string;
+    count: number;
+    standardValueZar: number;
+    effectiveValueZar: number;
+    subtotalZar: number;
+  }>;
+}
+
+export interface It3StockMovementSnapshot {
+  opening: It3StockBlockSnapshot;
+  closing: It3StockBlockSnapshot;
+  deltaZar: number;
+  /** Animals that couldn't be mapped — taxpayer must value separately. */
+  unmapped: Array<{ animalId: string; species: string; category: string }>;
+  /** Citation block emitted into the PDF footer. */
+  source: string;
+}
+
 export interface It3SnapshotPayload {
   taxYear: number;
   periodStart: string;
@@ -45,6 +79,12 @@ export interface It3SnapshotPayload {
   farm: FarmIdentitySnapshot;
   schedules: It3ScheduleTotals;
   inventory: It3LivestockInventorySnapshot;
+  /**
+   * Opening + closing stock at standard values per First Schedule paragraph
+   * 5(1). Optional — older snapshots issued before wave/26b will not have
+   * this block; the PDF renderer falls back to "stock movement not computed".
+   */
+  stockMovement?: It3StockMovementSnapshot;
   meta: {
     generatedAtIso: string;
     generatedBy: string | null;
@@ -97,10 +137,75 @@ async function buildInventorySnapshot(
   return { activeAtPeriodEnd, byCategory };
 }
 
+async function loadElectionsForYear(
+  prisma: PrismaClient,
+  taxYear: number,
+): Promise<ElectionRecord[]> {
+  // The SarsLivestockElection table is added by migration 0005.
+  // Use the model on the prisma client; if the migration hasn't run yet on
+  // a stale env, swallow the error and return an empty list (election is
+  // an opt-in feature; absence = standard values only, which is correct
+  // default behaviour).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = await (prisma as any).sarsLivestockElection.findMany({
+      where: { electedYear: { lte: taxYear } },
+      orderBy: { electedYear: "desc" },
+    });
+    // Latest election per (species, ageCategory) wins. Iterate in desc-year
+    // order and keep the first sighting.
+    const seen = new Set<string>();
+    const result: ElectionRecord[] = [];
+    for (const r of rows as Array<{
+      species: string;
+      ageCategory: string;
+      electedValueZar: number;
+      electedYear: number;
+      sarsChangeApprovalRef: string | null;
+    }>) {
+      const key = `${r.species}/${r.ageCategory}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({
+        species: r.species,
+        ageCategory: r.ageCategory,
+        electedValueZar: r.electedValueZar,
+        electedYear: r.electedYear,
+        sarsChangeApprovalRef: r.sarsChangeApprovalRef,
+      });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+function blockToSnapshot(
+  asOfDate: string,
+  block: StockBlockTotal,
+): It3StockBlockSnapshot {
+  return {
+    asOfDate,
+    totalZar: block.totalZar,
+    electionApplied: block.electionApplied,
+    lines: block.lines.map((l) => ({
+      species: l.species,
+      ageCategory: l.ageCategory,
+      count: l.count,
+      standardValueZar: l.standardValueZar,
+      effectiveValueZar: l.effectiveValueZar,
+      subtotalZar: l.subtotalZar,
+    })),
+  };
+}
+
 /**
  * Aggregate a tax-year IT3 payload for the given tax year (YYYY = calendar
  * year the SA Feb falls in). Does NOT persist anything — caller decides
  * whether to preview or commit.
+ *
+ * As of wave/26b this includes opening/closing stock at standard values per
+ * First Schedule paragraph 5(1) and rolls the delta into netFarmingIncome.
  */
 export async function getIt3Payload(
   prisma: PrismaClient,
@@ -109,7 +214,7 @@ export async function getIt3Payload(
 ): Promise<It3SnapshotPayload> {
   const { start, end } = getSaTaxYearRange(taxYear);
 
-  const [transactions, farm, inventory] = await Promise.all([
+  const [transactions, farm, inventory, replay, elections] = await Promise.all([
     prisma.transaction.findMany({
       where: { date: { gte: start, lte: end } },
       select: {
@@ -122,12 +227,33 @@ export async function getIt3Payload(
     }),
     buildFarmIdentitySnapshot(prisma),
     buildInventorySnapshot(prisma),
+    reconstructStockSnapshots(prisma, taxYear),
+    loadElectionsForYear(prisma, taxYear),
   ]);
+
+  const movement = summariseStockMovement(replay.opening, replay.closing, elections);
+  const openingBlock = valueStockBlock(replay.opening, elections);
+  const closingBlock = valueStockBlock(replay.closing, elections);
 
   const schedules = computeIt3Schedules(
     transactions as TransactionLike[],
     taxYear,
+    {
+      stockMovement: movement,
+    },
   );
+
+  const stockMovement: It3StockMovementSnapshot = {
+    opening: blockToSnapshot(start, openingBlock),
+    closing: blockToSnapshot(end, closingBlock),
+    deltaZar: movement.deltaZar,
+    unmapped: replay.unmapped.map((u) => ({
+      animalId: u.animalId,
+      species: u.species,
+      category: u.category,
+    })),
+    source: STANDARD_VALUES_SOURCE,
+  };
 
   return {
     taxYear,
@@ -136,6 +262,7 @@ export async function getIt3Payload(
     farm,
     schedules,
     inventory,
+    stockMovement,
     meta: {
       generatedAtIso: new Date().toISOString(),
       generatedBy,

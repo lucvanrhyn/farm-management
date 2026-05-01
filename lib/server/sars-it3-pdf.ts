@@ -300,6 +300,175 @@ export function buildIt3Pdf(record: It3RecordView): ArrayBuffer {
 
   y += summaryHeight + 6;
 
+  // ── Stock at Standard Values (First Schedule paragraph 5(1)) ─────────────
+
+  if (payload.stockMovement) {
+    if (y > pageHeight - 80) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Opening
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(DARK);
+    doc.text(
+      `OPENING STOCK AT STANDARD VALUES  (as at ${payload.stockMovement.opening.asOfDate})`,
+      margin,
+      y,
+    );
+    y += 4;
+
+    if (payload.stockMovement.opening.lines.length === 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("No livestock recorded at opening of tax year.", margin, y + 4);
+      y += 12;
+    } else {
+      autoTable(doc, {
+        head: [["Class", "Count", "Std Value (R)", "Effective (R)", "Subtotal (R)"]],
+        body: payload.stockMovement.opening.lines.map((l) => [
+          `${l.species} / ${l.ageCategory}`,
+          String(l.count),
+          formatZar(l.standardValueZar),
+          formatZar(l.effectiveValueZar),
+          formatZar(l.subtotalZar),
+        ]),
+        foot: [[
+          "Total opening stock",
+          "",
+          "",
+          "",
+          formatZar(payload.stockMovement.opening.totalZar),
+        ]],
+        startY: y,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 7.4, cellPadding: 1.5 },
+        headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold" },
+        footStyles: { fillColor: LIGHT_GREEN, textColor: DARK, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: GREY },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 18, halign: "right" },
+          2: { cellWidth: 30, halign: "right" },
+          3: { cellWidth: 30, halign: "right" },
+          4: { cellWidth: 34, halign: "right" },
+        },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      y = ((doc as any).lastAutoTable?.finalY ?? y) + 6;
+    }
+
+    if (y > pageHeight - 80) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Closing
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(DARK);
+    doc.text(
+      `CLOSING STOCK AT STANDARD VALUES  (as at ${payload.stockMovement.closing.asOfDate})`,
+      margin,
+      y,
+    );
+    y += 4;
+
+    if (payload.stockMovement.closing.lines.length === 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("No livestock recorded at close of tax year.", margin, y + 4);
+      y += 12;
+    } else {
+      autoTable(doc, {
+        head: [["Class", "Count", "Std Value (R)", "Effective (R)", "Subtotal (R)"]],
+        body: payload.stockMovement.closing.lines.map((l) => [
+          `${l.species} / ${l.ageCategory}`,
+          String(l.count),
+          formatZar(l.standardValueZar),
+          formatZar(l.effectiveValueZar),
+          formatZar(l.subtotalZar),
+        ]),
+        foot: [[
+          "Total closing stock",
+          "",
+          "",
+          "",
+          formatZar(payload.stockMovement.closing.totalZar),
+        ]],
+        startY: y,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 7.4, cellPadding: 1.5 },
+        headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold" },
+        footStyles: { fillColor: LIGHT_GREEN, textColor: DARK, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: GREY },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 18, halign: "right" },
+          2: { cellWidth: 30, halign: "right" },
+          3: { cellWidth: 30, halign: "right" },
+          4: { cellWidth: 34, halign: "right" },
+        },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      y = ((doc as any).lastAutoTable?.finalY ?? y) + 6;
+    }
+
+    // Stock movement reconciliation block
+    if (y > pageHeight - 50) {
+      doc.addPage();
+      y = 20;
+    }
+    const reconHeight = 24;
+    doc.setFillColor(...LIGHT_GREEN);
+    doc.rect(margin, y, contentWidth, reconHeight, "F");
+    doc.setTextColor(DARK);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("STOCK MOVEMENT RECONCILIATION (First Schedule para 5(1))", margin + 3, y + 6);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("Closing stock − Opening stock", rowX1, y + 12);
+    doc.text(
+      `${formatZar(payload.stockMovement.closing.totalZar)} − ${formatZar(payload.stockMovement.opening.totalZar)}`,
+      rowX2,
+      y + 12,
+      { align: "right" },
+    );
+    doc.setFont("helvetica", "bold");
+    doc.text("= Stock movement (rolled into net farming income)", rowX1, y + 19);
+    doc.text(formatZar(payload.stockMovement.deltaZar), rowX2, y + 19, { align: "right" });
+    y += reconHeight + 4;
+
+    // Citation under the reconciliation
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.8);
+    doc.setTextColor(100, 100, 100);
+    const citationLines = [
+      "Source: Standard values per GN R105 (1965) as amended by GN R1814 (1976), reproduced in",
+      "SARS Guide IT35 (2023-10-13) Annexure pp. 71-72. Game has no gazetted standard value (IT35 §3.4.2).",
+      "Adopted-value election within ±20% per First Schedule paragraph 6; binding per paragraph 7.",
+    ];
+    citationLines.forEach((line, i) => doc.text(line, margin, y + i * 3.4));
+    y += citationLines.length * 3.4 + 4;
+
+    // Unmapped surfacing
+    if (payload.stockMovement.unmapped.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(DARK);
+      doc.text(
+        `UNCATEGORISED — ${payload.stockMovement.unmapped.length} animal(s); taxpayer to value separately`,
+        margin,
+        y,
+      );
+      y += 5;
+    }
+  }
+
   // ── Inventory block ──────────────────────────────────────────────────────
 
   if (y > pageHeight - 50) {
