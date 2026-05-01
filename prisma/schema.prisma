@@ -140,6 +140,7 @@ model FarmSettings {
   // NVD seller identity fields
   ownerName               String?
   ownerIdNumber           String? // SA ID number (optional, farmer discretion)
+  taxReferenceNumber      String? // SARS Tax Reference Number (10 digits, SA-format) — wave/26c
   physicalAddress         String?
   postalAddress           String?
   contactPhone            String?

@@ -32,6 +32,8 @@ export interface FarmSettingsData {
   // NVD Seller Identity
   ownerName: string;
   ownerIdNumber: string;
+  /** SARS Tax Reference Number — appears on the SARS ITR12 Farming Schedule PDF. 10 digits. */
+  taxReferenceNumber: string;
   physicalAddress: string;
   postalAddress: string;
   contactPhone: string;
@@ -558,6 +560,25 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             value={values.ownerIdNumber}
             onChange={(e) => handleText("ownerIdNumber", e.target.value)}
             placeholder="e.g. 8001015009087"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow
+          label="SARS Tax Reference Number"
+          description="Your SARS Tax Reference Number — appears on the SARS ITR12 Farming Schedule PDF. 10 digits."
+        >
+          <input
+            type="text"
+            name="taxReferenceNumber"
+            value={values.taxReferenceNumber}
+            onChange={(e) => handleText("taxReferenceNumber", e.target.value)}
+            pattern="\d{10}"
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="SARS Tax Reference Number (10 digits)"
             className={inputCls}
             style={inputStyle}
             onFocus={focusStyle}
