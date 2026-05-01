@@ -88,6 +88,7 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     contactPhone: "",
     contactEmail: "",
     propertyRegNumber: "",
+    aiaIdentificationMark: "",
     farmRegion: "",
   });
 
@@ -145,6 +146,10 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     seller.contactPhone ? `Tel: ${seller.contactPhone}` : "",
     seller.contactEmail ? `Email: ${seller.contactEmail}` : "",
     seller.propertyRegNumber ? `Prop. Reg: ${seller.propertyRegNumber}` : "",
+    // AIA Mark — surfaced on every NVD per Animal Identification Act 2002.
+    // Always rendered (with em-dash when unset) so a roadblock inspector
+    // sees the field exists even when the farmer has not yet registered.
+    `AIA Mark: ${seller.aiaIdentificationMark || "—"}`,
     seller.farmRegion,
   ].filter(Boolean);
   sellerLines.forEach((line, i) => {
@@ -182,10 +187,15 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
 
   // ── Animals table ─────────────────────────────────────────────────────────
 
+  // Animals table — AIA 2002 requires Tag + Brand columns alongside the
+  // FarmTrack-internal animalId. `tagNumber` and `brandSequence` are nullable
+  // and default to em-dash for legacy snapshots issued before wave/26d.
   autoTable(doc, {
-    head: [["Animal ID", "Category", "Sex", "Breed", "D.O.B", "Last Camp", "Last Move"]],
+    head: [["Animal ID", "Tag", "Brand", "Category", "Sex", "Breed", "D.O.B", "Last Camp", "Last Move"]],
     body: animals.map((a) => [
       a.animalId,
+      a.tagNumber ?? "—",
+      a.brandSequence ?? "—",
       a.category,
       a.sex,
       a.breed,
@@ -195,17 +205,19 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     ]),
     startY: y,
     margin: { left: margin, right: margin },
-    styles: { fontSize: 7.5, cellPadding: 1.8 },
+    styles: { fontSize: 7, cellPadding: 1.5 },
     headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: GREY },
     columnStyles: {
-      0: { cellWidth: 24 },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 10 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 20 },
-      5: { cellWidth: 24 },
-      6: { cellWidth: 22 },
+      0: { cellWidth: 20 }, // Animal ID
+      1: { cellWidth: 18 }, // Tag
+      2: { cellWidth: 16 }, // Brand
+      3: { cellWidth: 20 }, // Category
+      4: { cellWidth: 9 },  // Sex
+      5: { cellWidth: 18 }, // Breed
+      6: { cellWidth: 18 }, // D.O.B
+      7: { cellWidth: 22 }, // Last Camp
+      8: { cellWidth: 21 }, // Last Move
     },
   });
 

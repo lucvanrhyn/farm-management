@@ -39,6 +39,11 @@ export interface FarmSettingsData {
   contactPhone: string;
   contactEmail: string;
   propertyRegNumber: string;
+  /**
+   * DALRRD/BrandsAIS-registered AIA mark (1-3 alphanumeric chars).
+   * Required on every NVD/removal certificate per Animal Identification Act 2002.
+   */
+  aiaIdentificationMark: string;
   farmRegion: string;
 }
 
@@ -639,6 +644,30 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             value={values.propertyRegNumber}
             onChange={(e) => handleText("propertyRegNumber", e.target.value)}
             placeholder="e.g. LP-2024-00123"
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow
+          label="AIA Identification Mark"
+          description="Your DALRRD-registered Animal Identification Mark (1-3 characters). Required on all NVDs and removal certificates per Animal Identification Act 2002."
+        >
+          <input
+            type="text"
+            value={values.aiaIdentificationMark}
+            onChange={(e) =>
+              handleText(
+                "aiaIdentificationMark",
+                // Normalise on input so the user sees the mark in its
+                // legally-canonical form (uppercase, alphanumeric, ≤3 chars).
+                e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3)
+              )
+            }
+            pattern="[A-Z0-9]{1,3}"
+            maxLength={3}
+            placeholder="e.g. ABC"
             className={inputCls}
             style={inputStyle}
             onFocus={focusStyle}

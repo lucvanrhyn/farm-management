@@ -20,6 +20,13 @@ export interface SellerSnapshot {
   contactPhone: string;
   contactEmail: string;
   propertyRegNumber: string;
+  /**
+   * DALRRD/BrandsAIS-registered AIA mark (max 3 chars). Required on every
+   * NVD/removal certificate per Animal Identification Act 6 of 2002. Distinct
+   * asset from `propertyRegNumber` (which is the LPHS property registration).
+   * Empty string when not yet registered.
+   */
+  aiaIdentificationMark: string;
   farmRegion: string;
 }
 
@@ -32,6 +39,14 @@ export interface AnimalSnapshotEntry {
   dateOfBirth: string | null;
   lastCampId: string;
   lastMovementDate: string | null;
+  /**
+   * Per-animal AIA 2002 identification — ear-tag number and brand/tattoo
+   * sequence linking to the farm's `aiaIdentificationMark`. Null on legacy
+   * NvdRecords issued before wave/26d, or when the farmer has not yet
+   * captured these fields.
+   */
+  tagNumber: string | null;
+  brandSequence: string | null;
 }
 
 export type ValidationResult =
@@ -134,6 +149,7 @@ export async function buildSellerSnapshot(
     contactPhone: settings?.contactPhone ?? "",
     contactEmail: settings?.contactEmail ?? "",
     propertyRegNumber: settings?.propertyRegNumber ?? "",
+    aiaIdentificationMark: settings?.aiaIdentificationMark ?? "",
     farmRegion: settings?.farmRegion ?? "",
   };
 }
@@ -164,6 +180,8 @@ export async function buildAnimalSnapshot(
       category: true,
       dateOfBirth: true,
       currentCamp: true,
+      tagNumber: true,
+      brandSequence: true,
     },
   });
 
@@ -203,6 +221,8 @@ export async function buildAnimalSnapshot(
       dateOfBirth: a.dateOfBirth ?? null,
       lastCampId: a.currentCamp,
       lastMovementDate: lastMovementMap.get(a.animalId) ?? null,
+      tagNumber: a.tagNumber ?? null,
+      brandSequence: a.brandSequence ?? null,
     });
   }
 
