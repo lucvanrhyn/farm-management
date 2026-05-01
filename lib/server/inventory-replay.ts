@@ -119,6 +119,11 @@ export async function reconstructStockSnapshots(
   const { start, end } = getSaTaxYearRange(taxYearEndingIn);
   const yearEndDate = new Date(`${end}T23:59:59.999Z`);
 
+  // SARS IT3 inventory replay must scan every Animal row for the tenant —
+  // First Schedule paragraph 5(1) requires opening + closing snapshots that
+  // include every animal alive at any point in the tax year. Bounding by
+  // `take` would silently truncate the return and falsify the tax filing.
+  // audit-allow-findmany: full-tenant scan required by tax-law contract
   const animals = await prisma.animal.findMany({
     select: {
       id: true,
@@ -136,17 +141,21 @@ export async function reconstructStockSnapshots(
   // window. Used to time-anchor sales/dispatches that don't carry a deceasedAt.
   const exitTypes = ["death", "predation_loss", "game_mortality", "game_predation", "animal_movement"];
   const animalIds = animals.map((a) => a.id);
-  const exitObsRaw =
-    animalIds.length === 0
-      ? []
-      : await prisma.observation.findMany({
-          where: {
-            type: { in: exitTypes },
-            animalId: { in: animalIds },
-            observedAt: { gte: start, lte: end },
-          },
-          select: { id: true, type: true, animalId: true, observedAt: true, details: true },
-        });
+  let exitObsRaw: ObservationRow[] = [];
+  if (animalIds.length > 0) {
+    // Bounded by animalIds (capped by the animal scan above) AND by the SA
+    // tax-year window — full population is required to reproduce paragraph
+    // 5(1) opening/closing reconciliation faithfully.
+    // audit-allow-findmany: bounded by animalIds + tax-year date window
+    exitObsRaw = await prisma.observation.findMany({
+      where: {
+        type: { in: exitTypes },
+        animalId: { in: animalIds },
+        observedAt: { gte: start, lte: end },
+      },
+      select: { id: true, type: true, animalId: true, observedAt: true, details: true },
+    });
+  }
 
   // Map: animalId -> earliest exit date (ISO YYYY-MM-DD) within the year.
   const exitDateByAnimal = new Map<string, string>();
