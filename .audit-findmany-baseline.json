@@ -1,5 +1,10 @@
 {
   "allowlist": [
+    "__tests__/server/farm-context-retry.test.ts::animal::0",
+    "__tests__/server/farm-context-retry.test.ts::animal::1",
+    "__tests__/server/farm-context-retry.test.ts::animal::2",
+    "__tests__/server/farm-context-retry.test.ts::animal::3",
+    "__tests__/server/farm-context-retry.test.ts::animal::4",
     "app/[farmSlug]/admin/animals/[id]/page.tsx::animal::0",
     "app/[farmSlug]/admin/breeding-ai/page.tsx::animal::0",
     "app/[farmSlug]/admin/camps/[campId]/page.tsx::animal::0",
