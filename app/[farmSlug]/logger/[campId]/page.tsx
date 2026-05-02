@@ -75,6 +75,36 @@ export default function CampInspectionPage({
   const [mobDestCamp, setMobDestCamp] = useState("");
   const [mobMoving, setMobMoving] = useState(false);
 
+  // useState-pair pattern (memory/feedback-react-state-from-props.md): Next.js
+  // does NOT unmount this page when only the [campId] dynamic segment changes
+  // — it re-renders the same instance. Without the camp-tracking pair below,
+  // every state field above would leak across the camp A → camp B transition:
+  //  - `activeModal` + `selectedAnimalId` + `selectedMob` + `mobDestCamp` +
+  //    `mobMoving` keep an in-progress flow visible on the new camp's page.
+  //  - `flaggedAnimalIds` carries the prior camp's flag set, mis-styling the
+  //    new camp's animal rows + mis-counting the "Done — N flagged" copy.
+  //  - `allNormalDone` keeps the green "Visit recorded" banner up after the
+  //    user has navigated to a brand-new, un-inspected camp.
+  //  - `animals` + `mobsInCamp` flash the prior camp's roster until the
+  //    `useEffect` chain refires and the new fetches resolve.
+  // Resetting all nine synchronously during the transition render is React's
+  // officially-blessed pattern for adjusting state in response to prop change
+  // — runs before commit, no extra render, no flicker. Same fix shape as
+  // PR #59 (hero-image leak across [farmSlug]).
+  const [prevCampId, setPrevCampId] = useState(decodedId);
+  if (prevCampId !== decodedId) {
+    setPrevCampId(decodedId);
+    setActiveModal(null);
+    setSelectedAnimalId("");
+    setAllNormalDone(false);
+    setAnimals([]);
+    setFlaggedAnimalIds(new Set());
+    setMobsInCamp([]);
+    setSelectedMob(null);
+    setMobDestCamp("");
+    setMobMoving(false);
+  }
+
   const camp = camps.find((c) => c.camp_id === decodedId);
   // camps in IndexedDB may carry merged condition fields (grazing_quality etc.) from updateCampCondition
   const campWithCondition = camp as (Camp & { grazing_quality?: string }) | undefined;
