@@ -6,8 +6,50 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { issueNvd } from "@/lib/server/nvd";
+import { issueNvd, type NvdTransportDetails } from "@/lib/server/nvd";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
+
+/**
+ * Validate `body.transport` per Stock Theft Act 57/1959 §8 — when present,
+ * the driver/transporter name AND vehicle reg are mandatory non-empty
+ * strings. The whole field is optional (some movements are on-foot), but
+ * we never want to persist a half-populated transport object that would
+ * embarrass the farmer at a SAPS roadblock.
+ *
+ * Returns the trimmed `NvdTransportDetails` or null when the field was
+ * absent/null. Throws `Error` with a user-facing message on invalid input
+ * (the route translates that to a 400 response).
+ */
+function parseTransport(raw: unknown): NvdTransportDetails | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("transport must be an object with driverName and vehicleRegNumber");
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.driverName !== "string" || obj.driverName.trim().length === 0) {
+    throw new Error("transport.driverName is required (non-empty string)");
+  }
+  if (typeof obj.vehicleRegNumber !== "string" || obj.vehicleRegNumber.trim().length === 0) {
+    throw new Error("transport.vehicleRegNumber is required (non-empty string)");
+  }
+  if (
+    obj.vehicleMakeModel !== undefined &&
+    obj.vehicleMakeModel !== null &&
+    typeof obj.vehicleMakeModel !== "string"
+  ) {
+    throw new Error("transport.vehicleMakeModel must be a string when provided");
+  }
+
+  const transport: NvdTransportDetails = {
+    driverName: obj.driverName.trim(),
+    vehicleRegNumber: obj.vehicleRegNumber.trim(),
+  };
+  if (typeof obj.vehicleMakeModel === "string" && obj.vehicleMakeModel.trim().length > 0) {
+    transport.vehicleMakeModel = obj.vehicleMakeModel.trim();
+  }
+  return transport;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +150,17 @@ export async function POST(
     return NextResponse.json({ error: "declarationsJson is required" }, { status: 400 });
   }
 
+  // Stock Theft Act §8 — driver + vehicle reg required when conveyed by
+  // vehicle. Optional at the route boundary (on-foot is legal); validate
+  // shape if present so we never persist a half-populated transport blob.
+  let transport: NvdTransportDetails | null;
+  try {
+    transport = parseTransport(body.transport);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid transport";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   try {
     const record = await issueNvd(prisma, {
       saleDate: saleDate.trim(),
@@ -119,6 +172,7 @@ export async function POST(
       declarationsJson,
       generatedBy: session.user?.email ?? undefined,
       transactionId: typeof body.transactionId === "string" ? body.transactionId : undefined,
+      ...(transport ? { transport } : {}),
     });
 
     revalidateObservationWrite(farmSlug);
