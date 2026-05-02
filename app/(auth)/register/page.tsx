@@ -312,11 +312,31 @@ export default function RegisterPage() {
               autoComplete="new-password"
               required
               minLength={8}
+              aria-describedby="password-rules"
               value={form.password}
               onChange={(e) => updateField("password", e.target.value)}
               placeholder="Min 8 characters"
               style={inputStyle}
             />
+            {/*
+              A4 a11y: a single visible rules description, programmatically
+              linked from both password inputs via `aria-describedby`. AT
+              users hear the rule when either field gains focus, sighted
+              users see the same hint, and `minLength={8}` on both inputs
+              means the browser's native validation flags short values
+              before our JS "passwords do not match" path runs.
+            */}
+            <p
+              id="password-rules"
+              style={{
+                fontFamily: "var(--font-sans)",
+                color: "#6A4E30",
+                fontSize: "0.75rem",
+                marginTop: "0.125rem",
+              }}
+            >
+              Must be at least 8 characters.
+            </p>
           </div>
 
           {/* Confirm Password */}
@@ -327,6 +347,8 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               required
+              minLength={8}
+              aria-describedby="password-rules"
               value={form.confirmPassword}
               onChange={(e) => updateField("confirmPassword", e.target.value)}
               placeholder="••••••••"
