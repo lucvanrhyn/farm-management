@@ -77,10 +77,26 @@ function getSections(mode: FarmMode) {
   ];
 }
 
+const DEFAULT_HERO = "/farm-hero.jpg";
+
 export default function HomePage() {
   const params = useParams();
   const farmSlug = params.farmSlug as string;
-  const [heroImage, setHeroImage] = useState("/farm-hero.jpg");
+  // useState-pair pattern (memory/feedback-react-state-from-props.md):
+  // Next.js does NOT unmount this page when only the [farmSlug] segment
+  // changes — it re-renders the same instance. Without the slug-tracking
+  // pair below, `heroImage` would stick on the previous tenant's URL until
+  // AnimatedHero's new /api/farm fetch resolves, leaking that tenant's
+  // hero onto the new tenant's home page (refs #24). Resetting to
+  // DEFAULT_HERO during the transition render swaps to a neutral image
+  // instantly; the next `onHeroImageLoad` callback then promotes the new
+  // tenant's URL once /api/farm resolves under the new slug.
+  const [prevSlug, setPrevSlug] = useState(farmSlug);
+  const [heroImage, setHeroImage] = useState(DEFAULT_HERO);
+  if (prevSlug !== farmSlug) {
+    setPrevSlug(farmSlug);
+    setHeroImage(DEFAULT_HERO);
+  }
   const { mode, isMultiMode } = useFarmMode();
 
   const handleHeroImage = (url: string) => {
@@ -111,7 +127,7 @@ export default function HomePage() {
       {/* Content */}
       <div className="relative w-full max-w-2xl flex flex-col items-center gap-10" style={{ zIndex: 10 }}>
         {/* Hero */}
-        <AnimatedHero onHeroImageLoad={handleHeroImage} />
+        <AnimatedHero farmSlug={farmSlug} onHeroImageLoad={handleHeroImage} />
 
         {/* Mode switcher — only shown when farm has multiple species enabled */}
         {isMultiMode && (
