@@ -34,6 +34,11 @@ vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
   getPrismaWithAuth: getPrismaWithAuthMock,
   getPrismaForSlugWithAuth: getPrismaForSlugWithAuthMock,
+  // Wave 4 A5: getFarmContext now wraps the resolved client with one-shot
+  // Turso auth-expiry retry. In these tests we don't exercise the retry
+  // path; the identity passthrough preserves the existing assertions
+  // (`ctx.prisma === fakePrisma`).
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 vi.mock('next-auth', () => ({

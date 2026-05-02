@@ -123,6 +123,27 @@ export async function withFarmPrisma<T>(
   if (!client) {
     throw new Error(`withFarmPrisma: farm "${slug}" not found`);
   }
+  return runWithRetry(slug, client, fn);
+}
+
+/**
+ * Shared retry primitive — single source of truth for the
+ * "evict-client + evict-creds + rebuild + retry once" sequence used by
+ * both `withFarmPrisma` (callback shape) and `wrapPrismaWithRetry` (Proxy
+ * shape backing `getFarmContext().prisma`).
+ *
+ * Wave 4 A5 (Codex 2026-05-02 HIGH): the retry boundary used to live only
+ * inside `withFarmPrisma`, so ~95% of routes (those reading
+ * `getFarmContext().prisma` directly) crashed with 500 the first time the
+ * cached Turso token expired. Centralising the retry here lets us apply
+ * the same defence-in-depth to the main path without drifting between two
+ * implementations.
+ */
+async function runWithRetry<T>(
+  slug: string,
+  client: PrismaClient,
+  fn: (prisma: PrismaClient) => Promise<T>,
+): Promise<T> {
   try {
     return await fn(client);
   } catch (err) {
@@ -134,6 +155,131 @@ export async function withFarmPrisma<T>(
     if (!fresh) throw err;
     return await fn(fresh);
   }
+}
+
+/**
+ * Wrap a PrismaClient in a Proxy that applies one-shot Turso auth-expiry
+ * retry to every model accessor (`prisma.animal.findMany(...)`) and to
+ * top-level escape hatches (`$transaction`, `$queryRaw*`, `$executeRaw*`).
+ *
+ * Used by `getFarmContext` so that route handlers consuming `ctx.prisma`
+ * directly inherit the same retry boundary that `withFarmPrisma` provides.
+ *
+ * Implementation notes:
+ *   - The wrapper resolves the live cached client on each method call (via
+ *     `globalForPrisma.farmClients.get(slug)`), NOT a closed-over reference.
+ *     This is critical: after `runWithRetry` evicts and rebuilds, subsequent
+ *     calls must hit the FRESH instance, not the freed one. See
+ *     `feedback-vercel-cached-prisma-client.md`.
+ *   - Non-function model property accesses (e.g. `prisma.animal` returning
+ *     a delegate object) are wrapped recursively — Prisma model delegates
+ *     expose `findMany`, `update`, etc. as bound functions on the delegate.
+ *   - The Proxy preserves the `PrismaClient` static type — callers see the
+ *     same shape as a bare client.
+ *   - Top-level non-Prisma properties (`$on`, `$connect`, `$disconnect`,
+ *     `$use`, `$extends`) are passed through unwrapped: they don't issue
+ *     queries, so retry is a no-op for them.
+ */
+const RETRYABLE_TOP_LEVEL = new Set([
+  '$transaction',
+  '$queryRaw',
+  '$queryRawUnsafe',
+  '$executeRaw',
+  '$executeRawUnsafe',
+]);
+
+const PASSTHROUGH_TOP_LEVEL = new Set([
+  '$on',
+  '$connect',
+  '$disconnect',
+  '$use',
+  '$extends',
+  'then', // Prevents `await prisma` from looking thenable.
+  Symbol.toStringTag.toString(),
+]);
+
+export function wrapPrismaWithRetry(slug: string, client: PrismaClient): PrismaClient {
+  // Cache wrapped delegates so `prisma.animal === prisma.animal` semantics
+  // hold for callers that compare or destructure (Prisma's own internals
+  // sometimes do this). The Map is keyed by property name on the underlying
+  // PrismaClient instance — when the cached client is evicted/rebuilt, this
+  // Proxy stays valid because it always re-reads the live cached client at
+  // call time (see resolveLive() below).
+  const delegateCache = new Map<string | symbol, unknown>();
+
+  function resolveLive(): PrismaClient {
+    // After a retry, the cached entry was replaced. Always read the live one.
+    return globalForPrisma.farmClients!.get(slug) ?? client;
+  }
+
+  return new Proxy(client, {
+    get(_target, prop, receiver) {
+      const live = resolveLive();
+
+      if (typeof prop === 'symbol' || PASSTHROUGH_TOP_LEVEL.has(prop)) {
+        const value = Reflect.get(live, prop, receiver);
+        return typeof value === 'function' ? value.bind(live) : value;
+      }
+
+      if (RETRYABLE_TOP_LEVEL.has(prop)) {
+        return (...args: unknown[]) =>
+          runWithRetry(slug, live, (p) => {
+            const fn = (p as unknown as Record<string, unknown>)[prop as string] as
+              | ((...a: unknown[]) => Promise<unknown>)
+              | undefined;
+            if (typeof fn !== 'function') {
+              throw new Error(`wrapPrismaWithRetry: ${String(prop)} is not a function on PrismaClient`);
+            }
+            return fn.apply(p, args);
+          });
+      }
+
+      // Model delegate (`prisma.animal`, `prisma.observation`, ...) — wrap
+      // each method call in the retry boundary. Cache the delegate proxy
+      // per property name so identity holds across reads.
+      if (delegateCache.has(prop)) return delegateCache.get(prop);
+
+      const liveDelegate = (live as unknown as Record<string, unknown>)[prop as string];
+      if (liveDelegate === undefined || liveDelegate === null) return liveDelegate;
+      if (typeof liveDelegate !== 'object' && typeof liveDelegate !== 'function') {
+        return liveDelegate;
+      }
+
+      const delegateProxy = new Proxy(liveDelegate as object, {
+        get(_dt, methodProp, _dr) {
+          // Always resolve through the live cached client, not the snapshot
+          // from when this delegate proxy was created — otherwise after a
+          // retry-and-rebuild, the next call would reach into the evicted
+          // PrismaClient.
+          const liveClient = resolveLive();
+          const liveDelegateNow = (liveClient as unknown as Record<string, unknown>)[
+            prop as string
+          ] as Record<string | symbol, unknown> | undefined;
+          if (!liveDelegateNow) return undefined;
+          const method = liveDelegateNow[methodProp as string];
+          if (typeof method !== 'function') return method;
+          return (...args: unknown[]) =>
+            runWithRetry(slug, liveClient, (p) => {
+              const freshDelegate = (p as unknown as Record<string, unknown>)[prop as string] as
+                | Record<string, unknown>
+                | undefined;
+              const freshMethod = freshDelegate?.[methodProp as string] as
+                | ((...a: unknown[]) => Promise<unknown>)
+                | undefined;
+              if (typeof freshMethod !== 'function') {
+                throw new Error(
+                  `wrapPrismaWithRetry: ${String(prop)}.${String(methodProp)} is not a function`,
+                );
+              }
+              return freshMethod.apply(freshDelegate, args);
+            });
+        },
+      });
+
+      delegateCache.set(prop, delegateProxy);
+      return delegateProxy;
+    },
+  });
 }
 
 /**
