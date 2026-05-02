@@ -7,6 +7,29 @@ export class MobNotFoundError extends Error {
   }
 }
 
+/**
+ * Typed error code for #28 Phase B cross-species hard-block. The API layer
+ * maps this onto an HTTP 422 with `{ error: "CROSS_SPECIES_BLOCKED" }`.
+ *
+ * Spec: each species (cattle/sheep/game) is a fully-isolated workspace inside
+ * one tenant. A cattle mob may never sit in a sheep camp; an animal's parent
+ * must always be the same species as the child.
+ */
+export const CROSS_SPECIES_BLOCKED = "CROSS_SPECIES_BLOCKED";
+
+export class CrossSpeciesBlockedError extends Error {
+  readonly code = CROSS_SPECIES_BLOCKED;
+  readonly mobSpecies: string | null;
+  readonly campSpecies: string | null;
+
+  constructor(mobSpecies: string | null, campSpecies: string | null) {
+    super(CROSS_SPECIES_BLOCKED);
+    this.name = "CrossSpeciesBlockedError";
+    this.mobSpecies = mobSpecies;
+    this.campSpecies = campSpecies;
+  }
+}
+
 export interface PerformMobMoveArgs {
   readonly mobId: string;
   readonly toCampId: string;
@@ -48,6 +71,21 @@ export async function performMobMove(
     // Guard: moving to same camp would create phantom observations
     if (sourceCamp === toCampId) {
       throw new Error(`Mob ${mob.name} is already in camp ${toCampId}`);
+    }
+
+    // #28 Phase B — cross-species hard-block. Look up the destination camp
+    // by `campId`. If the camp exists and its species differs from the mob's,
+    // throw CROSS_SPECIES_BLOCKED. If no camp row is found at all
+    // (legacy/unknown), allow the move so legacy data doesn't break in prod —
+    // Phase A backfilled species to 'cattle', so this null branch is
+    // defensive.
+    // TODO(#28): once all tenants are confirmed migrated, tighten to throw on null.
+    const destCamp = await tx.camp.findFirst({
+      where: { campId: toCampId },
+      select: { species: true },
+    });
+    if (destCamp && destCamp.species !== mob.species) {
+      throw new CrossSpeciesBlockedError(mob.species, destCamp.species);
     }
 
     const affectedAnimals = await tx.animal.findMany({
