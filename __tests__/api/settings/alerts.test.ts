@@ -40,6 +40,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   // lookup to error keeps the helper on its slug-validated fallback.
   getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
   getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 const mockVerifyFreshAdminRole = vi.fn();

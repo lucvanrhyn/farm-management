@@ -27,6 +27,7 @@ vi.mock('@/lib/meta-db', () => ({
 
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: (...args: unknown[]) => getPrismaForFarmMock(...args),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 // Imports AFTER mocks so the module-under-test receives our doubles.

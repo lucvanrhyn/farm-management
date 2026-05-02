@@ -21,6 +21,7 @@ const embeddingToBytesMock = vi.fn();
 
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: (...args: unknown[]) => getPrismaForFarmMock(...args),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 vi.mock('@/lib/einstein/embeddings', () => ({

@@ -23,6 +23,7 @@ vi.mock("@/lib/farm-prisma", () => ({
     slug: "test-farm-slug",
     role: "admin",
   }),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 vi.mock("next/cache", () => ({

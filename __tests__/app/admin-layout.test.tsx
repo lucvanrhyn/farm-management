@@ -25,6 +25,7 @@ const getUserRoleForFarmMock = vi.fn();
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 vi.mock('next/headers', () => ({ headers: headersMock }));
 vi.mock('@/lib/meta-db', () => ({ getFarmCreds: getFarmCredsMock }));
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 vi.mock('@/lib/farm-prisma', () => ({ getPrismaForFarm: getPrismaForFarmMock }));
 vi.mock('@/lib/auth', () => ({
   getSession: getSessionMock,

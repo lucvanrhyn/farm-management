@@ -42,6 +42,7 @@ const getPrismaWithAuthMock = vi.fn(async () => ({
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
   getPrismaWithAuth: getPrismaWithAuthMock,
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 const getServerSessionMock = vi.fn();

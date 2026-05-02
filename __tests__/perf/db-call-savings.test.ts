@@ -88,6 +88,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForFarm: vi.fn(),
   getPrismaWithAuth: vi.fn(),
   getPrismaForSlugWithAuth: vi.fn(),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 // Stub helper functions that wrap their own Prisma calls

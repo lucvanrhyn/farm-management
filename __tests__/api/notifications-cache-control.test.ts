@@ -36,6 +36,7 @@ vi.mock("@/lib/farm-prisma", () => ({
     slug: "trio-b",
     role: "ADMIN",
   }),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 // ── Cached helper stub: returns the canonical payload shape ─────────────────

@@ -26,6 +26,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/trio-b-boerdery/admin/finansies",
   useSearchParams: () => new URLSearchParams(),
 }));
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 vi.mock("@/lib/constants/default-categories", () => ({ DEFAULT_CATEGORIES: [] }));

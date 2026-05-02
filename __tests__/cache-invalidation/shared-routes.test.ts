@@ -65,6 +65,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   }),
   getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
   withFarmPrisma: vi.fn().mockImplementation((_slug: string, fn: (p: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)),
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 // ── Cache mocks ──────────────────────────────────────────────────────────────
