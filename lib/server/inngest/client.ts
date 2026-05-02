@@ -16,6 +16,15 @@ import { logger } from "@/lib/logger";
 // and INNGEST_SIGNING_KEY (to verify signed webhooks). The SDK only throws when
 // you try to send — we want a loud startup signal if they're missing so a bad
 // deploy surfaces immediately instead of at the first cron fire.
+//
+// Source of truth for the production gate: `scripts/vercel-prebuild.ts` — Wave 4 A9
+// (Codex 2026-05-02 MEDIUM). The prebuild hard-fails the Vercel build (exit 1)
+// when either key is missing in `VERCEL_ENV=production`, so a misconfigured
+// deploy never ships. The runtime checks below remain as defence-in-depth for
+// paths that don't go through the Vercel prebuild — local dev with NODE_ENV
+// manually set to "production", smoke scripts, or an alternate deploy host.
+// They MUST stay non-throwing because module-load time runs in preview/dev too,
+// where missing keys are expected.
 if (process.env.NODE_ENV === "production") {
   if (!process.env.INNGEST_EVENT_KEY) {
     logger.error('[inngest] INNGEST_EVENT_KEY is not set — cloud event sends will fail');
