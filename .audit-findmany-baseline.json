@@ -147,6 +147,7 @@
     "lib/server/rotation-engine.ts::camp::0",
     "lib/server/rotation-engine.ts::mob::0",
     "lib/server/rotation-engine.ts::observation::0",
+    "lib/server/sars-it3.ts::sarsLivestockElection::0",
     "lib/server/sars-it3.ts::transaction::0",
     "lib/server/veld-score.ts::camp::0",
     "lib/server/veld-score.ts::veldAssessment::1",
