@@ -74,6 +74,21 @@ function tick(value: boolean): string {
   return value ? "✓" : "✗";
 }
 
+/**
+ * Neutral em-dash fallback for any optional string field that would otherwise
+ * coerce to the literal "undefined" or "null" inside the rendered PDF.
+ *
+ * Why: jsPDF's `doc.text(value, x, y)` THROWS when `value` is undefined,
+ * killing the PDF route in prod. autoTable's cell renderer is more forgiving
+ * (it silently coerces via String()), but a roadblock-compliant NVD must never
+ * display the word "undefined" — the document is regulated under the Stock
+ * Theft Act §8 and Animal Identification Act 6/2002. See
+ * memory/feedback-regulatory-output-validate-against-spec.md.
+ */
+function dash(value: string | null | undefined): string {
+  return value == null || value === "" ? "—" : value;
+}
+
 // ── Main renderer ─────────────────────────────────────────────────────────────
 
 export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
@@ -149,7 +164,7 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     // AIA Mark — surfaced on every NVD per Animal Identification Act 2002.
     // Always rendered (with em-dash when unset) so a roadblock inspector
     // sees the field exists even when the farmer has not yet registered.
-    `AIA Mark: ${seller.aiaIdentificationMark || "—"}`,
+    `AIA Mark: ${dash(seller.aiaIdentificationMark)}`,
     seller.farmRegion,
   ].filter(Boolean);
   sellerLines.forEach((line, i) => {
@@ -164,7 +179,7 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
   doc.text("BUYER / CONSIGNEE", buyerX + 3, y + 6);
   doc.setFont("helvetica", "normal");
   const buyerLines = [
-    record.buyerName,
+    dash(record.buyerName),
     record.buyerAddress ?? "",
     record.buyerContact ? `Contact: ${record.buyerContact}` : "",
     record.destinationAddress ? `Destination: ${record.destinationAddress}` : "",
@@ -193,15 +208,15 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
   autoTable(doc, {
     head: [["Animal ID", "Tag", "Brand", "Category", "Sex", "Breed", "D.O.B", "Last Camp", "Last Move"]],
     body: animals.map((a) => [
-      a.animalId,
-      a.tagNumber ?? "—",
-      a.brandSequence ?? "—",
-      a.category,
-      a.sex,
-      a.breed,
-      a.dateOfBirth ?? "—",
-      a.lastCampId,
-      a.lastMovementDate ?? "—",
+      dash(a.animalId),
+      dash(a.tagNumber),
+      dash(a.brandSequence),
+      dash(a.category),
+      dash(a.sex),
+      dash(a.breed),
+      dash(a.dateOfBirth),
+      dash(a.lastCampId),
+      dash(a.lastMovementDate),
     ]),
     startY: y,
     margin: { left: margin, right: margin },
@@ -282,9 +297,9 @@ export function buildNvdPdf(record: NvdRecordView): ArrayBuffer {
     doc.setFontSize(8);
 
     const transportRows: [string, string][] = [
-      ["Driver:", transport.driverName],
-      ["Vehicle reg:", transport.vehicleRegNumber],
-      ["Vehicle make/model:", transport.vehicleMakeModel ?? "—"],
+      ["Driver:", dash(transport.driverName)],
+      ["Vehicle reg:", dash(transport.vehicleRegNumber)],
+      ["Vehicle make/model:", dash(transport.vehicleMakeModel)],
     ];
     const labelX = margin;
     const valueX = margin + 40;
