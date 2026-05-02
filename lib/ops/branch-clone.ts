@@ -17,8 +17,10 @@ import { createClient } from '@libsql/client';
 import type { Client } from '@libsql/client';
 import type { TursoCli } from '@/lib/ops/turso-cli';
 import { realTursoCli } from '@/lib/ops/turso-cli';
-import { getMetaClient } from '@/lib/meta-db';
+import { getMetaClient, getAllFarmSlugs, getFarmCreds } from '@/lib/meta-db';
+import type { FarmCreds } from '@/lib/meta-db';
 import { loadMigrations, runMigrations } from '@/lib/migrator';
+import type { MigrationResult } from '@/lib/migrator';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -223,8 +225,10 @@ export interface PromoteToProdInput {
   now?: () => Date;
   /**
    * The migrator function to invoke against prod.
-   * Defaults to the real migrator using PROD_TENANT_DB_URL / PROD_TENANT_DB_AUTH_TOKEN env vars.
-   * In tests, inject a fake.
+   *
+   * Defaults to {@link runProdMigrationsAllTenants}, which enumerates every
+   * tenant from the meta-DB and runs migrations against each (Wave 4 A1 fix
+   * for the Codex CRITICAL "all-tenant migration gap"). In tests, inject a fake.
    */
   runProdMigration?: () => Promise<{ applied: string[]; skipped: string[] }>;
 }
@@ -300,34 +304,124 @@ export async function destroyBranchDb(
 }
 
 /**
- * Default runProdMigration implementation.
+ * Options for {@link runProdMigrationsAllTenants}.
  *
- * Reads PROD_TENANT_DB_URL + PROD_TENANT_DB_AUTH_TOKEN from env, constructs a
- * libSQL client against prod, and applies all pending migrations from the
- * migrations/ directory at the repo root.
+ * All fields are injectable so tests can verify the per-tenant fan-out without
+ * touching real Turso endpoints or the meta-DB singleton. Production callers
+ * leave them undefined to get the real wiring (meta-DB enumeration + libSQL
+ * client per tenant + migrations/ folder at repo root).
+ */
+export interface RunProdMigrationsAllTenantsOpts {
+  /**
+   * Meta-DB client. Reserved for forward-compat — current default helpers
+   * (`getAllFarmSlugs`, `getFarmCreds`) read from the singleton, but tests
+   * still pass it for documentation and to make the dependency explicit.
+   */
+  metaClient?: Client;
+  /** Slug enumerator. Defaults to the meta-DB-backed `getAllFarmSlugs`. */
+  getSlugs?: () => Promise<string[]>;
+  /** Per-slug creds lookup. Defaults to the meta-DB-backed `getFarmCreds`. */
+  getCredsForSlug?: (slug: string) => Promise<FarmCreds | null>;
+  /**
+   * Per-tenant migration runner. Receives the slug + the resolved creds and
+   * must apply pending migrations to that tenant's DB. Defaults to a real
+   * libSQL client + the migrator at `migrations/`.
+   */
+  runForTenant?: (slug: string, creds: FarmCreds) => Promise<MigrationResult>;
+}
+
+/**
+ * Default per-tenant migration runner — opens a libSQL client against the
+ * tenant's URL/token, loads the bundled migrations directory once, applies
+ * pending migrations, and closes the client. Used by
+ * {@link runProdMigrationsAllTenants} when `runForTenant` is not injected.
+ */
+async function _defaultRunForTenant(
+  _slug: string,
+  creds: FarmCreds,
+): Promise<MigrationResult> {
+  const tenantClient = createClient({
+    url: creds.tursoUrl,
+    authToken: creds.tursoAuthToken,
+  });
+  try {
+    const migrationsDir = new URL('../../migrations', import.meta.url).pathname;
+    const migrations = await loadMigrations(migrationsDir);
+    return await runMigrations(tenantClient, migrations);
+  } finally {
+    tenantClient.close();
+  }
+}
+
+/**
+ * Run pending migrations against EVERY tenant DB enumerated from the meta-DB.
  *
- * Never auto-derived from branch metadata — the operator must set these env
- * vars explicitly when running promote.
+ * Wave 4 A1 fix (Codex CRITICAL, 2026-05-02): the previous default only
+ * migrated the single DB pointed to by `PROD_TENANT_DB_URL`, so any tenant
+ * onboarded after Basson Boerdery would silently miss schema changes at
+ * promote time. This helper now mirrors `scripts/migrate.ts`'s loop:
+ *
+ *   1. Enumerate all farm slugs from the meta-DB.
+ *   2. For each slug, resolve its Turso creds via the meta-DB. If a slug has
+ *      no creds (orphan row), warn + skip.
+ *   3. Apply pending migrations to that tenant. Collect applied/skipped lists
+ *      with slug prefixes for traceability.
+ *   4. If ANY tenant throws, attempt all remaining tenants first (so the
+ *      operator sees the full damage report), then throw an aggregate error
+ *      so the post-merge-promote workflow's `if: failure()` step opens an
+ *      incident. Never silently swallow per-tenant failures.
+ */
+export async function runProdMigrationsAllTenants(
+  opts: RunProdMigrationsAllTenantsOpts = {},
+): Promise<{ applied: string[]; skipped: string[] }> {
+  const getSlugs = opts.getSlugs ?? getAllFarmSlugs;
+  const getCreds = opts.getCredsForSlug ?? getFarmCreds;
+  const runForTenant = opts.runForTenant ?? _defaultRunForTenant;
+
+  const slugs = await getSlugs();
+  const aggregateApplied: string[] = [];
+  const aggregateSkipped: string[] = [];
+  const failures: { slug: string; error: unknown }[] = [];
+
+  for (const slug of slugs) {
+    const creds = await getCreds(slug);
+    if (!creds) {
+      // Mirrors scripts/migrate.ts:39-42 — orphan slug, warn + continue.
+      console.warn(`[promote] [${slug}] skip: no creds in meta-db`);
+      continue;
+    }
+    try {
+      const result = await runForTenant(slug, creds);
+      for (const name of result.applied) aggregateApplied.push(`${slug}:${name}`);
+      for (const name of result.skipped) aggregateSkipped.push(`${slug}:${name}`);
+    } catch (err) {
+      // Record + continue so we surface every failure in one aggregate throw.
+      failures.push({ slug, error: err });
+      console.error(`[promote] [${slug}] FAILED:`, err);
+    }
+  }
+
+  if (failures.length > 0) {
+    const detail = failures
+      .map((f) => `${f.slug}: ${f.error instanceof Error ? f.error.message : String(f.error)}`)
+      .join('; ');
+    throw new Error(
+      `Prod migration failed for ${failures.length}/${slugs.length} tenant(s): ${detail}`,
+    );
+  }
+
+  return { applied: aggregateApplied, skipped: aggregateSkipped };
+}
+
+/**
+ * Default `runProdMigration` injected into {@link promoteToProd}.
+ *
+ * Thin wrapper that delegates to {@link runProdMigrationsAllTenants} with no
+ * overrides — production wiring uses the singleton meta-DB client and a real
+ * libSQL connection per tenant.
  */
 async function _defaultRunProdMigration(): Promise<{ applied: string[]; skipped: string[] }> {
-  const url = process.env.PROD_TENANT_DB_URL;
-  const authToken = process.env.PROD_TENANT_DB_AUTH_TOKEN;
-
-  if (!url) {
-    throw new Error(
-      'PROD_TENANT_DB_URL not set — cannot promote. Set this env var to the prod tenant DB URL before running promote.',
-    );
-  }
-  if (!authToken) {
-    throw new Error(
-      'PROD_TENANT_DB_AUTH_TOKEN not set — cannot promote. Set this env var to the prod tenant DB auth token before running promote.',
-    );
-  }
-
-  const prodClient = createClient({ url, authToken });
-  const migrationsDir = new URL('../../migrations', import.meta.url).pathname;
-  const migrations = await loadMigrations(migrationsDir);
-  return runMigrations(prodClient, migrations);
+  return runProdMigrationsAllTenants();
 }
 
 /**
