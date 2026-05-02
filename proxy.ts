@@ -229,11 +229,15 @@ function withSessionHeaders(
 //     memory/farm-website-demo.md (bug C3). When a /demo page is
 //     present it renders for anonymous visitors; when it is absent the
 //     `app/not-found.tsx` fallthrough handles it (bug C2).
+//   • api/csp-report — Wave 4 A8: browser-emitted CSP violation reports
+//     are POSTed without cookies; gating would 307 every report to
+//     /login and the soak telemetry would be empty. The route handler
+//     itself does not authenticate.
 // IMPORTANT: __tests__/api/proxy-matcher.test.ts greps the FIRST quoted
 // string inside `matcher: [...]`. Keep comments above `matcher:` (not
 // between `[` and the string) or the test parser falls over.
 export const config = {
   matcher: [
-    "/((?!login|register|verify-email|subscribe|demo|api/auth|api/einstein|api/health|api/inngest|api/observations|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
+    "/((?!login|register|verify-email|subscribe|demo|api/auth|api/csp-report|api/einstein|api/health|api/inngest|api/observations|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
   ],
 };
