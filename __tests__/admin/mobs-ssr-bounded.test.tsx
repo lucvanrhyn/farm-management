@@ -32,7 +32,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   redirect: vi.fn(),
 }));
-vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
+
+vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
 
 function fakeMembership(n: number) {

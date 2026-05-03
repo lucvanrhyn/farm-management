@@ -60,6 +60,8 @@ vi.mock("@/lib/farm-prisma", () => ({
   // slug-validated helper re-issues the URL-slug auth.
   getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
   getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
+
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 // ── helpers ─────────────────────────────────────────────────────────────

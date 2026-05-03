@@ -23,7 +23,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: getSessionMock }));
-vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
+
+vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 
 // Capture props passed to TaskBoard without needing to mount its UI.
