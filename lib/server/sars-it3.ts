@@ -167,17 +167,38 @@ async function buildInventorySnapshot(
 /**
  * Load taxpayer livestock-value elections that apply to a given tax year.
  *
- * Returns the *latest* election per `(species, ageCategory)` whose
- * `electedYear <= taxYear`. That latest-wins dedup is the operational
- * implementation of the SARS First Schedule paragraph 7 lock-in — once an
- * election is recorded, it remains the binding value for every subsequent
- * return until a SARS-approved re-election (a *new* row with
- * `sarsChangeApprovalRef` set) supersedes it.
+ * Returns the *binding* election per `(species, ageCategory)` whose
+ * `electedYear <= taxYear`, applying the SARS First Schedule paragraph 7
+ * lock-in defensively at the read path:
+ *
+ *   "Once an option is exercised, it shall be binding in respect of all
+ *    subsequent returns rendered by the farmer and may not be varied
+ *    without the consent of the Commissioner."
+ *   — IT35 (2023-10-13) Annexure pp. 71-72, paragraph 7
+ *
+ * Resolution rules per class, walking in descending `electedYear`:
+ *
+ *   1. The first row encountered is the candidate winner.
+ *   2. A LATER row may only override an EARLIER row when the later row
+ *      carries a non-empty `sarsChangeApprovalRef` (i.e. SARS has consented
+ *      to the re-election). An unapproved later row is skipped — the
+ *      earlier locked election remains binding, per Para 7.
+ *   3. Empty-string `sarsChangeApprovalRef` is treated as no approval —
+ *      a defensive guard against data-entry sentinel values.
+ *
+ * Why this is the read-path defence (not just data-layer):
+ *   - The schema's `@@unique([species, ageCategory, electedYear])` blocks
+ *     duplicate rows for the SAME year, but does NOT prevent a careless
+ *     operator inserting a different value in a LATER year without setting
+ *     `sarsChangeApprovalRef`. There is no insert API today (the management
+ *     page at app/[farmSlug]/admin/tax/elections/page.tsx is read-only and
+ *     elections are inserted via Turso shell). The loader is therefore the
+ *     last line of defence against an unapproved silent override.
  *
  * Exported (and unit-tested in `__tests__/server/sars-it3-elections.test.ts`)
- * because the dedup invariant + the year filter are both regulatory-correctness
- * gates: a silent change to either would mis-value every taxpayer's stock
- * block. Internal-tests-pass ≠ external-spec-correct — see
+ * because the lock-in invariant + the year filter are both regulatory-
+ * correctness gates: a silent change to either would mis-value every
+ * taxpayer's stock block. Internal-tests-pass ≠ external-spec-correct — see
  * `feedback-regulatory-output-validate-against-spec.md`.
  *
  * Backwards compatibility: legacy tenants whose Turso clone has not yet had
@@ -196,15 +217,47 @@ export async function loadElectionsForYear(
       where: { electedYear: { lte: taxYear } },
       orderBy: { electedYear: "desc" },
     });
-    // Latest election per (species, ageCategory) wins. Iterate in desc-year
-    // order and keep the first sighting — the operational Para 7 lock-in.
-    const seen = new Set<string>();
-    const result: ElectionRecord[] = [];
+    // Para-7 lock-in resolver. Walk desc-year. For each (species, ageCategory)
+    // class, the EARLIEST election is binding; a later row only overrides it
+    // when it carries SARS approval. Practically, in desc-year iteration,
+    // skip any later row that lacks approval and let the next-older row win.
+    const winners = new Map<string, ElectionRecord>();
     for (const r of rows) {
       const key = `${r.species}/${r.ageCategory}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({
+      if (winners.has(key)) {
+        // Already locked in by a later (or this) row — older rows only
+        // surface here when the newer one was skipped, which means the
+        // older row IS the binding one. Keep it.
+        continue;
+      }
+      const approval = r.sarsChangeApprovalRef;
+      const hasApproval =
+        typeof approval === "string" && approval.trim().length > 0;
+      // For the newest row in a class we have not yet seen, accept it
+      // unconditionally (it may be the *first* election for the class —
+      // first elections do not need approval). We then peek at older rows;
+      // if an older unapproved row exists for the same class, the unapproved
+      // newer row is invalid and we should fall back. We detect that case
+      // by deferring acceptance until we have inspected the next older row.
+      //
+      // Implementation: if an older row exists for this class, then the
+      // current newer row must carry approval to override it. If no older
+      // row exists, the current row IS the first election for the class
+      // and is binding regardless of approval ref.
+      const olderExists = rows.some(
+        (other) =>
+          other !== r &&
+          other.species === r.species &&
+          other.ageCategory === r.ageCategory &&
+          other.electedYear < r.electedYear,
+      );
+      if (olderExists && !hasApproval) {
+        // Skip this unapproved later row — it does not override the
+        // earlier lock-in per Para 7. The next iteration will reach the
+        // older row and accept it.
+        continue;
+      }
+      winners.set(key, {
         species: r.species,
         ageCategory: r.ageCategory,
         electedValueZar: r.electedValueZar,
@@ -212,7 +265,7 @@ export async function loadElectionsForYear(
         sarsChangeApprovalRef: r.sarsChangeApprovalRef,
       });
     }
-    return result;
+    return [...winners.values()];
   } catch {
     return [];
   }

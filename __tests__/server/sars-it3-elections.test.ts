@@ -203,3 +203,211 @@ describe("loadElectionsForYear — graceful degradation", () => {
     expect(elections).toEqual([]);
   });
 });
+
+// ── Para 7 lock-in — defence against an unapproved later election ─────────────
+//
+// Wave 4 A6 / Codex HIGH #7 (2026-05-02): the prior latest-wins implementation
+// silently adopted any later-year election even when its `sarsChangeApprovalRef`
+// was null. Per the SARS First Schedule paragraph 7 ("Once an option is
+// exercised, it shall be binding in respect of all subsequent returns rendered
+// by the farmer and may not be varied without the consent of the Commissioner"
+// — verbatim per IT35 (2023-10-13) Annexure pp. 71-72), an unapproved later
+// election is not a valid re-election: the original lock-in must remain
+// binding.
+//
+// The data layer's `@@unique([species, ageCategory, electedYear])` blocks
+// duplicate rows for the SAME year, but does NOT prevent a careless operator
+// inserting a different value in a LATER year without setting the SARS
+// approval ref (no insert API exists today; the management page is read-only,
+// per app/[farmSlug]/admin/tax/elections/page.tsx). The loader is therefore
+// the last line of defence — and that is what these tests pin.
+//
+// See `feedback-regulatory-output-validate-against-spec.md`: internal-tests-
+// pass ≠ external-spec-correct. Each test below cites the rule it enforces.
+
+describe("loadElectionsForYear — Para 7 lock-in defence", () => {
+  it("keeps the EARLIER election when the later one has no sarsChangeApprovalRef", async () => {
+    // Two elections, both with `sarsChangeApprovalRef: null`. Per Para 7 the
+    // 2020 lock-in is binding — the unapproved 2025 row is invalid as a
+    // re-election. Loader must hold the line and return the 2020 value.
+    const prisma = stubPrisma([
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 55,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 45,
+        electedYear: 2025,
+        sarsChangeApprovalRef: null,
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(1);
+    expect(elections[0].electedYear).toBe(2020);
+    expect(elections[0].electedValueZar).toBe(55);
+    expect(elections[0].sarsChangeApprovalRef).toBeNull();
+  });
+
+  it("adopts the LATER election when it carries a sarsChangeApprovalRef (re-election)", async () => {
+    // Para 7's escape hatch: "may not be varied without the consent of the
+    // Commissioner". A later row WITH `sarsChangeApprovalRef` is a sanctioned
+    // re-election and must override the earlier value.
+    const prisma = stubPrisma([
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 55,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 45,
+        electedYear: 2025,
+        sarsChangeApprovalRef: "SARS-APPROVAL-XYZ-2025",
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(1);
+    expect(elections[0].electedYear).toBe(2025);
+    expect(elections[0].electedValueZar).toBe(45);
+    expect(elections[0].sarsChangeApprovalRef).toBe("SARS-APPROVAL-XYZ-2025");
+  });
+
+  it("treats an empty-string sarsChangeApprovalRef as no approval (defensive)", async () => {
+    // Approval references are SARS-issued strings; an empty string is a
+    // data-entry artifact, not consent. Treat as missing-approval so we
+    // do not let a single space or empty sentinel value bypass Para 7.
+    const prisma = stubPrisma([
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 55,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 45,
+        electedYear: 2025,
+        sarsChangeApprovalRef: "",
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(1);
+    expect(elections[0].electedYear).toBe(2020);
+    expect(elections[0].electedValueZar).toBe(55);
+  });
+
+  it("collapses chained re-elections to the latest SARS-approved one", async () => {
+    // 2020 (initial, unapproved by definition — a first election needs no
+    // approval), 2023 (approved re-election), 2026 (approved re-election).
+    // Latest SARS-approved row wins: R45 from 2026.
+    const prisma = stubPrisma([
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 7,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 5,
+        electedYear: 2023,
+        sarsChangeApprovalRef: "SARS-APPROVAL-2023",
+      },
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 6,
+        electedYear: 2026,
+        sarsChangeApprovalRef: "SARS-APPROVAL-2026",
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(1);
+    expect(elections[0].electedYear).toBe(2026);
+    expect(elections[0].electedValueZar).toBe(6);
+  });
+
+  it("ignores an unapproved later row even when the previous winner was approved", async () => {
+    // Worst-case audit scenario: SARS approved a 2023 re-election to R5; in
+    // 2025 a careless operator inserted R8 with no approval ref. The 2023
+    // approved row remains binding under Para 7.
+    const prisma = stubPrisma([
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 7,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 5,
+        electedYear: 2023,
+        sarsChangeApprovalRef: "SARS-APPROVAL-2023",
+      },
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 8,
+        electedYear: 2025,
+        sarsChangeApprovalRef: null,
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(1);
+    expect(elections[0].electedYear).toBe(2023);
+    expect(elections[0].electedValueZar).toBe(5);
+    expect(elections[0].sarsChangeApprovalRef).toBe("SARS-APPROVAL-2023");
+  });
+
+  it("each (species, ageCategory) class enforces its own lock-in independently", async () => {
+    // Bulls had a 2020 lock-in and a 2025 unapproved re-election (must keep 2020).
+    // Ewes had only a single 2021 election (must use it as-is).
+    const prisma = stubPrisma([
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 55,
+        electedYear: 2020,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "cattle",
+        ageCategory: "Bulls",
+        electedValueZar: 45,
+        electedYear: 2025,
+        sarsChangeApprovalRef: null,
+      },
+      {
+        species: "sheep",
+        ageCategory: "Ewes",
+        electedValueZar: 7,
+        electedYear: 2021,
+        sarsChangeApprovalRef: null,
+      },
+    ]);
+    const elections = await loadElectionsForYear(prisma, 2026);
+    expect(elections).toHaveLength(2);
+    const byKey = Object.fromEntries(
+      elections.map((e) => [
+        `${e.species}/${e.ageCategory}`,
+        { value: e.electedValueZar, year: e.electedYear },
+      ]),
+    );
+    expect(byKey["cattle/Bulls"]).toEqual({ value: 55, year: 2020 });
+    expect(byKey["sheep/Ewes"]).toEqual({ value: 7, year: 2021 });
+  });
+});
