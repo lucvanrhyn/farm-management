@@ -752,6 +752,24 @@ model PushSubscription {
   @@index([userEmail], name: "idx_push_user")
 }
 
+// ── PayFast ITN Idempotency Ledger (Wave 4c A11) ────────────────────────────
+//
+// One row per processed PayFast ITN. The webhook INSERTs first; a P2002
+// collision on `pfPaymentId` proves the event was already processed and
+// short-circuits the rest of the handler. `eventTime` lets the handler
+// reject stale (out-of-order) events from PayFast's retry queue before
+// they overwrite newer subscription state. Migration: 0013.
+model PayfastEvent {
+  id            String   @id @default(cuid())
+  pfPaymentId   String   @unique(map: "payfast_events_pf_payment_id_idx")
+  eventTime     DateTime
+  paymentStatus String
+  payloadHash   String
+  processedAt   DateTime @default(now())
+
+  @@index([eventTime], map: "payfast_events_event_time_idx")
+}
+
 // ── Rotation Plans ───────────────────────────────────────────────────────────
 
 model RotationPlan {
