@@ -19,7 +19,32 @@
  * two weeks. After 2026-05-11 — once we've watched browser violation reports
  * and fixed any false positives — flip the header name to
  * `Content-Security-Policy` to enforce. Do NOT enforce sooner.
+ *
+ * Report sink (Wave 4 A8, 2026-05-02)
+ * ───────────────────────────────────
+ * For the soak telemetry to mean anything we have to give browsers an
+ * endpoint to POST violations to. We do this two ways:
+ *
+ *   • `report-uri /api/csp-report` inside the policy string — the legacy
+ *     CSP2 directive. Universally supported back to Chrome 25 / Firefox 23.
+ *     Body is `application/csp-report` (single report object).
+ *
+ *   • `report-to csp-endpoint` inside the policy string + a
+ *     `Reporting-Endpoints` HTTP header binding `csp-endpoint` to the same
+ *     URL — the modern Reporting API v1 path. Body is
+ *     `application/reports+json` (array of reports).
+ *
+ * `Reporting-Endpoints` (v1) is the replacement for the deprecated
+ * `Report-To` JSON-config header (v0). Chromium accepts both; we ship only
+ * `Reporting-Endpoints` so we don't leave deprecated config on the wire when
+ * we flip to enforce.
+ *
+ * Both directives target the same handler (`app/api/csp-report/route.ts`)
+ * which content-negotiates on the request body shape.
  */
+
+const CSP_REPORT_URI = "/api/csp-report";
+const CSP_REPORT_GROUP = "csp-endpoint";
 
 /**
  * Source allowlists for the CSP. One spot to read when adding a new
@@ -118,6 +143,10 @@ export function buildCsp(): string {
     "base-uri": ["'self'"],
     "object-src": ["'none'"],
     "upgrade-insecure-requests": [],
+    // Report sink — see top-of-file rationale. We ship BOTH directives so
+    // older browsers (which ignore `report-to`) still post during the soak.
+    "report-uri": [CSP_REPORT_URI],
+    "report-to": [CSP_REPORT_GROUP],
   };
 
   return Object.entries(directives)
@@ -148,5 +177,12 @@ export function buildSecurityHeaders(): Array<{ key: string; value: string }> {
     // TODO(2026-05-11): rename to 'Content-Security-Policy' to enforce
     // after a clean 2-week report-only soak. Owner: security review.
     { key: "Content-Security-Policy-Report-Only", value: buildCsp() },
+    // Reporting API v1 — names the `csp-endpoint` group referenced by the
+    // `report-to csp-endpoint` directive in the CSP. Structured-fields
+    // dictionary syntax (RFC 8941). See top-of-file rationale.
+    {
+      key: "Reporting-Endpoints",
+      value: `${CSP_REPORT_GROUP}="${CSP_REPORT_URI}"`,
+    },
   ];
 }

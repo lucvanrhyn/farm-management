@@ -50,13 +50,17 @@ describe("buildSecurityHeaders", () => {
     expect(map.has("Content-Security-Policy")).toBe(false);
   });
 
-  it("emits exactly the six expected headers (no surprise additions)", () => {
+  it("emits exactly the seven expected headers (no surprise additions)", () => {
+    // Wave 4 A8 (2026-05-02): added `Reporting-Endpoints` so the CSP
+    // report-only soak actually collects telemetry. Detailed contract
+    // for the new header lives in `csp-report.test.ts`.
     const keys = headers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
         "Content-Security-Policy-Report-Only",
         "Permissions-Policy",
         "Referrer-Policy",
+        "Reporting-Endpoints",
         "Strict-Transport-Security",
         "X-Content-Type-Options",
         "X-Frame-Options",

@@ -178,6 +178,10 @@ const KNOWN_PUBLIC_ROUTES: Array<{ label: string; path: string }> = [
   // app/not-found.tsx fallthrough — see Phase C bug C2.
   { label: "Demo landing (Phase C)", path: "/demo" },
   { label: "Demo nested (Phase C)", path: "/demo/vision" },
+  // Wave 4 A8: CSP violation reports are POSTed by browsers without
+  // cookies — gating would drop every report and leave the report-only
+  // soak telemetry empty.
+  { label: "CSP report sink (Wave 4 A8)", path: "/api/csp-report" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
