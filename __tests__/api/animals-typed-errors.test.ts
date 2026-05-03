@@ -52,6 +52,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   // getFarmContext fast-path falls back to legacy when no signed headers,
   // so we don't need to mock getPrismaForFarm for these tests.
   getPrismaForFarm: vi.fn().mockResolvedValue(null),
+  wrapPrismaWithRetry: vi.fn((_slug, client) => client),
 }));
 
 vi.mock("next/cache", () => ({
