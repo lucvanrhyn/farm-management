@@ -74,10 +74,19 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
     setLoading(true);
     setError(null);
     try {
+      // Wave 4 A2: POST /api/mobs now requires `species`. The admin is
+      // working inside a species-scoped context (FarmModeProvider), so the
+      // active mode IS the species the new mob belongs to. The API will
+      // 422 with CROSS_SPECIES_BLOCKED if the chosen camp doesn't match —
+      // surfacing the mismatch instead of silently defaulting to cattle.
       const res = await fetch("/api/mobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), currentCamp: newCamp }),
+        body: JSON.stringify({
+          name: newName.trim(),
+          currentCamp: newCamp,
+          species: mode,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
