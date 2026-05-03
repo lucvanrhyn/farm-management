@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
-import {
-  performMobMove,
-  MobNotFoundError,
-  CrossSpeciesBlockedError,
-} from "@/lib/server/mob-move";
+import { performMobMove } from "@/lib/server/mob-move";
+import { mapApiDomainError } from "@/lib/server/api-errors";
 import { revalidateMobWrite } from "@/lib/server/revalidate";
 
 export async function PATCH(
@@ -31,20 +28,15 @@ export async function PATCH(
 
   const loggedBy = session.user?.email ?? null;
 
-  // Handle camp change via shared performMobMove helper (updates mob + animals + observations)
+  // Handle camp change via shared performMobMove helper (updates mob + animals + observations).
+  // Domain errors (MobNotFoundError → 404, CrossSpeciesBlockedError → 422) are
+  // mapped through the shared mapApiDomainError helper. Anything else rethrows.
   if (body.currentCamp && body.currentCamp !== mob.currentCamp) {
     try {
       await performMobMove(prisma, { mobId, toCampId: body.currentCamp, loggedBy });
     } catch (err) {
-      if (err instanceof MobNotFoundError) {
-        return NextResponse.json({ error: "Mob not found" }, { status: 404 });
-      }
-      // #28 Phase B — cross-species hard-block. PR #60 wired this contract
-      // through the animals route; this branch closes the W2-C follow-up so
-      // PATCH /api/mobs/[mobId] returns the same typed 422 instead of a 500.
-      if (err instanceof CrossSpeciesBlockedError) {
-        return NextResponse.json({ error: err.code }, { status: 422 });
-      }
+      const mapped = mapApiDomainError(err);
+      if (mapped) return mapped;
       throw err;
     }
   }
