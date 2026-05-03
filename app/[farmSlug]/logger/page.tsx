@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import { TodaysTasks } from "@/components/logger/TodaysTasks";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { logger } from "@/lib/logger";
 
 
 function getTodayLabel(): string {
@@ -14,6 +15,35 @@ function getTodayLabel(): string {
     month: "long",
     year: "numeric",
   }).format(new Date())
+}
+
+/**
+ * Hotfix P0.2 (2026-05-03) — never let a `farmSettings` lookup take down
+ * the entire logger surface. The page was returning a deterministic SSR
+ * 500 (digest 3514534429) on prod for trio-b-boerdery because any throw
+ * in `prisma.farmSettings.findFirst()` (cached-client schema drift,
+ * libSQL token expiry, network) propagated straight to Next.js's error
+ * boundary. Field workers couldn't open the logger at all.
+ *
+ * Resolution: catch + log + fall back to the brand default. The camp
+ * picker (the only thing field workers actually need) renders regardless.
+ *
+ * See memory/production-triage-2026-05-03.md (P0.2).
+ */
+async function resolveFarmName(farmSlug: string): Promise<string> {
+  const FALLBACK = "FarmTrack";
+  try {
+    const prisma = await getPrismaForFarm(farmSlug);
+    if (!prisma) return FALLBACK;
+    const farmSettings = await prisma.farmSettings.findFirst();
+    return farmSettings?.farmName ?? FALLBACK;
+  } catch (err) {
+    logger.error("[logger/page] farmSettings lookup failed — falling back to brand default", {
+      farmSlug,
+      error: err,
+    });
+    return FALLBACK;
+  }
 }
 
 export default async function LoggerPage({
@@ -26,9 +56,7 @@ export default async function LoggerPage({
   const session = await getSession();
   const loggerName = session?.user?.name ?? "Logger";
 
-  const prisma = await getPrismaForFarm(farmSlug);
-  const farmSettings = prisma ? await prisma.farmSettings.findFirst() : null;
-  const farmName = farmSettings?.farmName ?? "FarmTrack";
+  const farmName = await resolveFarmName(farmSlug);
 
   return (
     <div className="min-h-screen">
