@@ -1,0 +1,146 @@
+// @vitest-environment jsdom
+/**
+ * Regression test for the P0.3 hotfix (production-triage 2026-05-03):
+ *
+ *   Bug: clicking the ⇄ Move Mob control on `/<farmSlug>/admin/map` blew the
+ *   page up with `useOffline must be used within OfflineProvider`. The admin
+ *   subtree never wrapped <OfflineProvider>; the consumer was buried in
+ *   <MoveModePanel /> which is only rendered after the user clicks the move
+ *   toggle, so the crash was invisible until that interaction.
+ *
+ * The fix is to hoist <OfflineProvider> from `app/[farmSlug]/logger/layout.tsx`
+ * up to `app/[farmSlug]/layout.tsx` so it covers logger + admin trees both.
+ *
+ * Three guards pin the contract:
+ *   1. WITHOUT a provider in the tree, MoveModePanel throws — proves the
+ *      consumer requires the context (defends against a future "let's drop
+ *      OfflineProvider from the per-farm layout" refactor).
+ *   2. WITH the provider, MoveModePanel mounts cleanly with a non-idle phase.
+ *   3. The per-farm layout source imports + mounts <OfflineProvider> — pins
+ *      the actual hoist so removing the wrapper from
+ *      `app/[farmSlug]/layout.tsx` would fail the suite. The logger layout
+ *      no longer mounts its own (would double-wrap and reset IDB).
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
+import React from 'react';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import MoveModePanel from '@/components/map/MoveModePanel';
+import { OfflineProvider } from '@/components/logger/OfflineProvider';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/trio-b-boerdery/admin/map',
+}));
+
+// Stub farm-mode so MoveModePanel's useFarmModeSafe call has a value.
+vi.mock('@/lib/farm-mode', () => ({
+  useFarmModeSafe: () => ({ mode: 'cattle', setMode: () => {} }),
+}));
+
+// Stub logger-actions so submitMobMove never actually runs.
+vi.mock('@/lib/logger-actions', () => ({
+  submitMobMove: vi.fn(async () => ({ success: true })),
+}));
+
+// Stub the offline-store so OfflineProvider's mount effect doesn't touch IDB.
+let _stubEpoch = 0;
+vi.mock('@/lib/offline-store', () => ({
+  getPendingCount: vi.fn(async () => 0),
+  getLastSyncedAt: vi.fn(async () => null),
+  getCachedCamps: vi.fn(async () => []),
+  getCachedFarmSettings: vi.fn(async () => null),
+  setActiveFarmSlug: vi.fn(() => { _stubEpoch += 1; }),
+  getFarmEpoch: vi.fn(() => _stubEpoch),
+  getCachedCampsForEpoch: vi.fn(async () => []),
+  getCachedFarmSettingsForEpoch: vi.fn(async () => null),
+  getLastSyncedAtForEpoch: vi.fn(async () => null),
+}));
+
+vi.mock('@/lib/sync-manager', () => ({
+  refreshCachedData: vi.fn(async () => {}),
+  syncAndRefresh: vi.fn(async () => ({ synced: 0 })),
+}));
+
+beforeEach(() => {
+  globalThis.fetch = vi.fn(async () =>
+    new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
+  ) as typeof fetch;
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+const phase = { tag: 'source_selected' as const, campId: 'camp-A' };
+const actions = {
+  toggleActive: vi.fn(),
+  selectSourceCamp: vi.fn(),
+  selectMob: vi.fn(),
+  selectDestCamp: vi.fn(),
+  cancelMove: vi.fn(),
+  resetToSourceSelect: vi.fn(),
+};
+const campNameMap = { 'camp-A': 'Alpha' };
+const onMoveDone = vi.fn();
+
+describe('MoveModePanel — OfflineProvider context contract', () => {
+  it('throws "useOffline must be used within OfflineProvider" when no provider wraps it (admin/map regression)', () => {
+    // React 18+ logs the caught error to console.error before propagating —
+    // silence it so the test output stays readable.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => {
+      render(
+        <MoveModePanel
+          phase={phase}
+          campNameMap={campNameMap}
+          actions={actions}
+          onMoveDone={onMoveDone}
+        />,
+      );
+    }).toThrow(/useOffline must be used within OfflineProvider/);
+
+    errSpy.mockRestore();
+  });
+
+  it('mounts cleanly when wrapped in <OfflineProvider> (post-hoist behaviour)', () => {
+    const { container } = render(
+      <OfflineProvider>
+        <MoveModePanel
+          phase={phase}
+          campNameMap={campNameMap}
+          actions={actions}
+          onMoveDone={onMoveDone}
+        />
+      </OfflineProvider>,
+    );
+    // The header text "Move Mob" is rendered in any non-idle phase.
+    expect(container.textContent).toContain('Move Mob');
+  });
+});
+
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+
+describe('Per-farm layout hoists <OfflineProvider> above admin + logger trees', () => {
+  it('app/[farmSlug]/layout.tsx imports and renders <OfflineProvider>', () => {
+    const layoutPath = path.join(repoRoot, 'app', '[farmSlug]', 'layout.tsx');
+    expect(existsSync(layoutPath)).toBe(true);
+    const src = readFileSync(layoutPath, 'utf8');
+    // Defends against a future "decouple offline from admin" refactor that
+    // would silently reintroduce the Move-Mob crash.
+    expect(src).toMatch(/from ["']@\/components\/logger\/OfflineProvider["']/);
+    expect(src).toMatch(/<OfflineProvider>/);
+  });
+
+  it('app/[farmSlug]/logger/layout.tsx no longer mounts its own <OfflineProvider> (avoids double-wrap)', () => {
+    const loggerLayoutPath = path.join(repoRoot, 'app', '[farmSlug]', 'logger', 'layout.tsx');
+    expect(existsSync(loggerLayoutPath)).toBe(true);
+    const src = readFileSync(loggerLayoutPath, 'utf8');
+    // Two nested <OfflineProvider>s would each call setActiveFarmSlug +
+    // increment the farm epoch, racing the IDB cache reads. The hoisted
+    // provider in the parent layout is the single source of truth.
+    expect(src).not.toMatch(/<OfflineProvider>/);
+  });
+});

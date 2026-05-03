@@ -2,7 +2,10 @@
 
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
-import { OfflineProvider, useOffline } from '@/components/logger/OfflineProvider';
+// OfflineProvider is mounted in app/[farmSlug]/layout.tsx so admin + logger
+// trees both share a single provider instance — see hotfix P0.3 (2026-05-03).
+// This layout consumes the context but no longer mounts its own provider.
+import { useOffline } from '@/components/logger/OfflineProvider';
 import { useEffect, useRef } from 'react';
 
 // Hero image lives inside OfflineProvider so it can be pulled from the
@@ -110,10 +113,10 @@ export default function LoggerLayout({ children }: { children: React.ReactNode }
   const farmSlug = params.farmSlug as string;
 
   return (
-    <OfflineProvider>
+    <>
       <LoggerHero />
       <CampWarmup farmSlug={farmSlug} />
       <div className="relative z-10">{children}</div>
-    </OfflineProvider>
+    </>
   );
 }
