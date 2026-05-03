@@ -74,6 +74,13 @@ describe('production safety', () => {
       VERCEL_ENV: 'production',
       VERCEL_GIT_COMMIT_REF: 'main',
       BRANCH_CLONE_SOURCE_DB: 'acme-cattle',
+      // Wave 4 A9: production now requires the Inngest keys to be set; without
+      // them the prebuild hard-fails (exit 1). Provide them here so this test
+      // still asserts what it's named for — production NEVER clones / NEVER
+      // writes env lines. The Inngest gate itself is covered in
+      // scripts/__tests__/vercel-prebuild-inngest-gate.test.ts.
+      INNGEST_EVENT_KEY: 'event-key-secret-xxx',
+      INNGEST_SIGNING_KEY: 'signing-key-secret-yyy',
     });
 
     const code = await runPrebuild(deps);

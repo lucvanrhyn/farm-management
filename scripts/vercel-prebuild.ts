@@ -62,8 +62,29 @@ export async function runPrebuild(deps?: PrebuildDeps): Promise<number> {
 
   const vercelEnv = env.VERCEL_ENV;
 
-  // ── Production: strict no-op ───────────────────────────────────────────────
+  // ── Production: enforce required env, then strict no-op ───────────────────
   if (vercelEnv === 'production') {
+    // Wave 4 A9 (Codex 2026-05-02 MEDIUM): hard-fail the prod deploy when
+    // INNGEST_EVENT_KEY or INNGEST_SIGNING_KEY is missing. Without these the
+    // first cron fire silently fails (event sends are 401) and signed-webhook
+    // verification rejects every callback — neither symptom obviously points
+    // back to the missing env vars. Failing at build time forces the operator
+    // to set them in Vercel before the bad deploy ever ships.
+    //
+    // We collect ALL missing keys in one pass so the operator can fix every
+    // gap in one round-trip, not one-per-failed-deploy.
+    const missingInngest: string[] = [];
+    if (!env.INNGEST_EVENT_KEY) missingInngest.push('INNGEST_EVENT_KEY');
+    if (!env.INNGEST_SIGNING_KEY) missingInngest.push('INNGEST_SIGNING_KEY');
+    if (missingInngest.length > 0) {
+      log(
+        `vercel-prebuild ERROR: production deploy missing required Inngest env var(s): ${missingInngest.join(', ')}. ` +
+          `Set them in Vercel Project Settings → Environment Variables (Production scope) from the Inngest cloud dashboard, ` +
+          `then redeploy. Aborting build to prevent a deploy where cron fires would silently 401 and signed webhooks would reject.`,
+      );
+      return 1;
+    }
+
     log('vercel-prebuild: production build — using prod TURSO env, skipping clone');
     return 0;
   }
