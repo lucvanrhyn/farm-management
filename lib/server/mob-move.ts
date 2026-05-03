@@ -73,19 +73,28 @@ export async function performMobMove(
       throw new Error(`Mob ${mob.name} is already in camp ${toCampId}`);
     }
 
-    // #28 Phase B — cross-species hard-block. Look up the destination camp
-    // by `campId`. If the camp exists and its species differs from the mob's,
-    // throw CROSS_SPECIES_BLOCKED. If no camp row is found at all
-    // (legacy/unknown), allow the move so legacy data doesn't break in prod —
-    // Phase A backfilled species to 'cattle', so this null branch is
-    // defensive.
-    // TODO(#28): once all tenants are confirmed migrated, tighten to throw on null.
-    const destCamp = await tx.camp.findFirst({
-      where: { campId: toCampId },
+    // #28 Phase B — cross-species hard-block (Wave 4 A4 fix, Codex 2026-05-02).
+    //
+    // Multi-species refactor (#28 Phase A) made `(species, campId)` a
+    // composite-unique key on Camp, so the same `campId` string CAN exist
+    // across species (e.g. cattle "NORTH-01" + sheep "NORTH-01" are distinct
+    // rows). The previous `findFirst({ where: { campId } })` ignored species
+    // and returned a nondeterministic row — half the time the species check
+    // compared the wrong row, silently allowing cross-species moves.
+    //
+    // Use the composite-unique findUnique so the lookup resolves to the
+    // matching-species row deterministically. A null result means no camp
+    // exists for THIS species at this campId — under the spec
+    // (memory/multi-species-spec-2026-04-27.md, "fully-isolated workspace"),
+    // that's a cross-species attempt and must hard-block.
+    const destCamp = await tx.camp.findUnique({
+      where: {
+        Camp_species_campId_key: { species: mob.species, campId: toCampId },
+      },
       select: { species: true },
     });
-    if (destCamp && destCamp.species !== mob.species) {
-      throw new CrossSpeciesBlockedError(mob.species, destCamp.species);
+    if (!destCamp) {
+      throw new CrossSpeciesBlockedError(mob.species, null);
     }
 
     const affectedAnimals = await tx.animal.findMany({
