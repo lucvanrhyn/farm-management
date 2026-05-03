@@ -151,3 +151,21 @@ If similar functionality is needed, compute it from the live data passed as prop
 FarmTrack is a **multi-tenant SaaS** for any livestock farm — not a Trio B Boerdery-specific app.
 Keep all code generic: no hardcoded farm names, breed names, or farm-specific data in source code.
 Farm identity (`farmName`, `breed`) lives in the `FarmSettings` DB table.
+
+---
+
+## Agent skills
+
+Configuration for the [mattpocock/skills](https://github.com/mattpocock/skills) engineering skills (`/to-prd`, `/to-issues`, `/triage`, `/diagnose`, `/improve-codebase-architecture`, `/tdd`, `/grill-with-docs`).
+
+### Issue tracker
+
+GitHub Issues on `lucvanrhyn/farm-management` via the `gh` CLI. See [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Canonical vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — labels exist on the GitHub repo. See [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context — `CLAUDE.md` (this file) is authoritative; `CONTEXT.md` + `docs/adr/` at the repo root are produced lazily by `/grill-with-docs`. See [docs/agents/domain.md](docs/agents/domain.md).
