@@ -53,6 +53,7 @@ vi.mock('@/lib/farm-prisma', () => ({
     slug: 'test-farm-slug',
   }),
   getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

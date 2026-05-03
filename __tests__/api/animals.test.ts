@@ -34,6 +34,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   // "anonymous request" branch.
   getPrismaWithAuth: vi.fn().mockResolvedValue(null),
   getPrismaForFarm: vi.fn().mockResolvedValue(null),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

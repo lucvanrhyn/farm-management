@@ -30,6 +30,7 @@ vi.mock("@/lib/tasks/recurrence", () => ({
 // tasks.ts doesn't try to connect to a real libsql instance.
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForFarm: vi.fn().mockResolvedValue(null),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 vi.mock("@/lib/meta-db", () => ({

@@ -23,8 +23,7 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
-  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
-vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
+vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 vi.mock("@/components/admin/ClearSectionButton", () => ({

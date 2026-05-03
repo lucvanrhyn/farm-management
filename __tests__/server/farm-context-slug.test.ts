@@ -38,6 +38,7 @@ vi.mock('@/lib/farm-prisma', () => ({
   // Turso auth-expiry retry. In these tests we don't exercise the retry
   // path; the identity passthrough preserves the existing assertions
   // (`ctx.prisma === fakePrisma`).
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

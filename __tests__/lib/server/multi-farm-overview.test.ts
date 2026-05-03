@@ -11,6 +11,7 @@ import type { SessionFarm } from '@/types/next-auth';
 // Mock getPrismaForFarm — the module under test imports this.
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: vi.fn(),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

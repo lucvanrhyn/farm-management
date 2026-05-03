@@ -74,6 +74,7 @@ vi.mock("@/lib/farm-prisma", () => ({
     const role = session?.user?.farms?.[0]?.role ?? "field_logger";
     return Promise.resolve({ prisma: mockPrisma, slug: "test-farm", role });
   }),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

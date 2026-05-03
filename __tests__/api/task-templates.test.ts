@@ -74,6 +74,7 @@ vi.mock("@/lib/farm-prisma", () => ({
       role,
     });
   }),
+
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
