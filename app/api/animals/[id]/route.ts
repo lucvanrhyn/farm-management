@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { CrossSpeciesBlockedError } from "@/lib/server/mob-move";
+import { mapApiDomainError } from "@/lib/server/api-errors";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -72,19 +74,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { animalId: id },
       select: { species: true },
     });
-    for (const field of parentFields) {
-      const parentAnimalId = body[field] as string;
-      const parent = await prisma.animal.findUnique({
-        where: { animalId: parentAnimalId },
-        select: { species: true },
-      });
-      if (!parent) {
-        return NextResponse.json({ error: "PARENT_NOT_FOUND" }, { status: 422 });
+    try {
+      for (const field of parentFields) {
+        const parentAnimalId = body[field] as string;
+        const parent = await prisma.animal.findUnique({
+          where: { animalId: parentAnimalId },
+          select: { species: true },
+        });
+        if (!parent) {
+          return NextResponse.json({ error: "PARENT_NOT_FOUND" }, { status: 422 });
+        }
+        // NULL species on either side = legacy/unknown, allow with TODO.
+        if (child?.species && parent.species && child.species !== parent.species) {
+          throw new CrossSpeciesBlockedError(child.species, parent.species);
+        }
       }
-      // NULL species on either side = legacy/unknown, allow with TODO.
-      if (child?.species && parent.species && child.species !== parent.species) {
-        return NextResponse.json({ error: "CROSS_SPECIES_BLOCKED" }, { status: 422 });
-      }
+    } catch (err) {
+      const mapped = mapApiDomainError(err);
+      if (mapped) return mapped;
+      throw err;
     }
   }
 
