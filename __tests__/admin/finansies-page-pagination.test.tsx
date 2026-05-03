@@ -26,7 +26,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/delta-livestock/admin/finansies",
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
+
+vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 vi.mock("@/lib/constants/default-categories", () => ({ DEFAULT_CATEGORIES: [] }));
 

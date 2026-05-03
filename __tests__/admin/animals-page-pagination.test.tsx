@@ -30,7 +30,7 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
-vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
+vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
 vi.mock("@/lib/server/treatment-analytics", () => ({
   getAnimalsInWithdrawal: getAnimalsInWithdrawalMock,

@@ -40,7 +40,7 @@ import type { PrismaClient } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { authOptions } from '@/lib/auth-options';
-import { getPrismaForFarm, getPrismaWithAuth } from '@/lib/farm-prisma';
+import { getPrismaForFarm, getPrismaWithAuth, wrapPrismaWithRetry } from '@/lib/farm-prisma';
 
 export interface FarmContext {
   session: Session;
@@ -210,7 +210,13 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
         farms: [{ slug, role: signedRole } as unknown as Session['user']['farms'][number]],
       },
     } as unknown as Session;
-    return { session, prisma, slug, role: signedRole };
+    // Wave 4 A5 (Codex 2026-05-02 HIGH): wrap the bare client with one-shot
+    // Turso auth-expiry retry. Without this, every route that consumes
+    // `ctx.prisma.<model>.<op>(...)` directly (~95% of routes) crashes with
+    // 500 the first time the cached Turso token expires, until the next
+    // cold-start rebuilds the cache. The wrapper resolves the live cached
+    // client on each call so post-retry the rebuilt instance is reused.
+    return { session, prisma: wrapPrismaWithRetry(slug, prisma), slug, role: signedRole };
   }
 
   // Legacy path: middleware did not (or could not) authenticate. Fall back
@@ -222,9 +228,11 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
   const db = await getPrismaWithAuth(session);
   if ('error' in db) return null;
 
+  // Same wrap on the legacy path so behaviour is uniform regardless of
+  // which authentication branch resolved the context.
   return {
     session,
-    prisma: db.prisma,
+    prisma: wrapPrismaWithRetry(db.slug, db.prisma),
     slug: db.slug,
     role: db.role,
   };

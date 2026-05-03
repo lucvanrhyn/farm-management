@@ -14,6 +14,8 @@ const campFindManyMock = vi.fn();
 const getPrismaWithAuthMock = vi.fn();
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaWithAuth: (...args: unknown[]) => getPrismaWithAuthMock(...args),
+
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 const checkRateLimitMock = vi.fn();

@@ -28,6 +28,10 @@ vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
   getPrismaWithAuth: vi.fn(),
   getPrismaForSlugWithAuth: vi.fn(),
+  // Wave 4 A5: identity passthrough — these tests assert on the prisma
+  // marker the mock returns, not on retry behaviour.
+
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 vi.mock('next-auth', () => ({
