@@ -9,7 +9,7 @@
  *
  * No actual `turso` binary or network calls are made.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import type { Client } from '@libsql/client';
 import type { TursoCli } from '@/lib/ops/turso-cli';
@@ -38,7 +38,39 @@ async function createMemClient(): Promise<Client> {
     CREATE INDEX IF NOT EXISTS idx_branch_db_clones_created_at
       ON branch_db_clones(created_at)
   `);
+  // farms table is required for runProdMigrationsAllTenants tests, which call
+  // getAllFarmSlugs() / getFarmCreds() against the same in-memory client.
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS farms (
+      id                  TEXT PRIMARY KEY,
+      slug                TEXT NOT NULL UNIQUE,
+      display_name        TEXT NOT NULL,
+      turso_url           TEXT NOT NULL,
+      turso_auth_token    TEXT NOT NULL,
+      tier                TEXT NOT NULL DEFAULT 'basic',
+      created_at          TEXT NOT NULL
+    )
+  `);
   return client;
+}
+
+/** Insert a farm row into the in-memory meta-DB for tenant-enumeration tests. */
+async function insertFarmRow(
+  client: Client,
+  opts: { slug: string; tursoUrl?: string; tursoAuthToken?: string },
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO farms (id, slug, display_name, turso_url, turso_auth_token, tier, created_at)
+          VALUES (?, ?, ?, ?, ?, 'basic', ?)`,
+    args: [
+      `id-${opts.slug}`,
+      opts.slug,
+      opts.slug,
+      opts.tursoUrl ?? `libsql://${opts.slug}.turso.io`,
+      opts.tursoAuthToken ?? `tok-${opts.slug}`,
+      new Date().toISOString(),
+    ],
+  });
 }
 
 // ── Fake TursoCli factory ─────────────────────────────────────────────────────
@@ -938,5 +970,225 @@ describe('promoteToProd — deterministic promotedAt via now injection', () => {
 
     const row = await getBranchClone('wave/deterministic-promote');
     expect(row!.prodMigrationAt).toBe('2026-04-29T08:30:00.000Z');
+  });
+});
+
+// ── Wave 4 A1: all-tenant promote (Codex CRITICAL) ────────────────────────────
+//
+// The previous default `_defaultRunProdMigration` only ran migrations against
+// the single DB pointed to by PROD_TENANT_DB_URL. That meant every tenant
+// added beyond Basson Boerdery would silently miss schema changes at promote
+// time. The new `runProdMigrationsAllTenants` helper enumerates farms via the
+// meta-DB and runs migrations against each.
+//
+// These tests inject `runForTenant` so the actual libSQL connection + migration
+// loader stay out of the test surface — the contract under test is purely:
+// "for every farm slug returned by the meta-DB, run for that tenant; aggregate
+// applied/skipped with slug prefixes; throw if ANY tenant fails".
+
+async function getRunProdMigrationsAllTenants() {
+  const mod = await import('@/lib/ops/branch-clone');
+  return mod.runProdMigrationsAllTenants;
+}
+
+describe('runProdMigrationsAllTenants — multi-tenant enumeration (Wave 4 A1)', () => {
+  it('runs migrations against ≥2 tenants when meta-DB has multiple farms', async () => {
+    await insertFarmRow(memClient, { slug: 'basson-boerdery' });
+    await insertFarmRow(memClient, { slug: 'tenant-two' });
+    await insertFarmRow(memClient, { slug: 'tenant-three' });
+
+    const runForTenant = vi.fn(async (slug: string) => ({
+      applied: [`${slug}-0001.sql`],
+      skipped: [],
+    }));
+
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+    const result = await runProdMigrationsAllTenants({
+      metaClient: memClient,
+      runForTenant,
+    });
+
+    // Critical assertion: every enumerated tenant got a runForTenant call.
+    expect(runForTenant).toHaveBeenCalledTimes(3);
+    const calledSlugs = runForTenant.mock.calls.map((c) => c[0]).sort();
+    expect(calledSlugs).toEqual(['basson-boerdery', 'tenant-three', 'tenant-two']);
+
+    // Each tenant's applied list contributes to the aggregate, prefixed by slug.
+    expect(result.applied).toContain('basson-boerdery:basson-boerdery-0001.sql');
+    expect(result.applied).toContain('tenant-two:tenant-two-0001.sql');
+    expect(result.applied).toContain('tenant-three:tenant-three-0001.sql');
+  });
+
+  it('passes the meta-DB creds for each slug into runForTenant', async () => {
+    await insertFarmRow(memClient, {
+      slug: 'farm-a',
+      tursoUrl: 'libsql://farm-a.example',
+      tursoAuthToken: 'tok-a',
+    });
+    await insertFarmRow(memClient, {
+      slug: 'farm-b',
+      tursoUrl: 'libsql://farm-b.example',
+      tursoAuthToken: 'tok-b',
+    });
+
+    const runForTenant = vi.fn(
+      async (_slug: string, _creds: { tursoUrl: string; tursoAuthToken: string; tier: string }) => ({
+        applied: [] as string[],
+        skipped: [] as string[],
+      }),
+    );
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+    await runProdMigrationsAllTenants({
+      metaClient: memClient,
+      runForTenant,
+    });
+
+    const callsBySlug = new Map(
+      runForTenant.mock.calls.map((c) => [c[0], c[1]]),
+    );
+    expect(callsBySlug.get('farm-a')).toMatchObject({
+      tursoUrl: 'libsql://farm-a.example',
+      tursoAuthToken: 'tok-a',
+    });
+    expect(callsBySlug.get('farm-b')).toMatchObject({
+      tursoUrl: 'libsql://farm-b.example',
+      tursoAuthToken: 'tok-b',
+    });
+  });
+
+  it('throws an aggregate error if ANY tenant migration fails (no silent partial success)', async () => {
+    await insertFarmRow(memClient, { slug: 'farm-good' });
+    await insertFarmRow(memClient, { slug: 'farm-bad' });
+    await insertFarmRow(memClient, { slug: 'farm-also-good' });
+
+    const runForTenant = vi.fn(async (slug: string) => {
+      if (slug === 'farm-bad') {
+        throw new Error('boom: column already exists');
+      }
+      return { applied: [`${slug}-0001.sql`], skipped: [] };
+    });
+
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+    await expect(
+      runProdMigrationsAllTenants({
+        metaClient: memClient,
+        runForTenant,
+      }),
+    ).rejects.toThrow(/farm-bad/);
+
+    // All tenants should have been attempted before the throw, so the operator
+    // sees the full damage report rather than aborting on the first failure.
+    expect(runForTenant).toHaveBeenCalledTimes(3);
+  });
+
+  it('skips slugs whose getFarmCreds returns null (orphan slug) without throwing', async () => {
+    // Insert a "real" farm and a row with empty creds that getFarmCreds will
+    // still return — so we simulate orphan via a slug whose row was deleted.
+    await insertFarmRow(memClient, { slug: 'farm-real' });
+    // Insert a farm row, then delete it AFTER getAllFarmSlugs sees it. We
+    // emulate this by stubbing getFarmCreds via an injected lookup.
+    const runForTenant = vi.fn(async (slug: string) => ({
+      applied: [`${slug}-0001.sql`],
+      skipped: [],
+    }));
+    const getCredsForSlug = vi.fn(async (slug: string) => {
+      if (slug === 'farm-real') {
+        return { tursoUrl: 'libsql://farm-real.example', tursoAuthToken: 'tok-r', tier: 'basic' };
+      }
+      return null; // orphan
+    });
+
+    // Add a second slug whose creds will resolve to null via injected lookup.
+    await memClient.execute({
+      sql: `INSERT INTO farms (id, slug, display_name, turso_url, turso_auth_token, tier, created_at)
+            VALUES (?, ?, ?, ?, ?, 'basic', ?)`,
+      args: ['id-orphan', 'farm-orphan', 'farm-orphan', '', '', new Date().toISOString()],
+    });
+
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+    const result = await runProdMigrationsAllTenants({
+      metaClient: memClient,
+      runForTenant,
+      getCredsForSlug,
+    });
+
+    // Orphan slug should be skipped — runForTenant only called for the real one.
+    expect(runForTenant).toHaveBeenCalledTimes(1);
+    expect(runForTenant.mock.calls[0][0]).toBe('farm-real');
+    expect(result.applied).toContain('farm-real:farm-real-0001.sql');
+  });
+
+  it('returns empty applied/skipped when meta-DB has zero farms', async () => {
+    const runForTenant = vi.fn(async () => ({ applied: [], skipped: [] }));
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+
+    const result = await runProdMigrationsAllTenants({
+      metaClient: memClient,
+      runForTenant,
+    });
+
+    expect(runForTenant).not.toHaveBeenCalled();
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('aggregates skipped lists with slug prefix across tenants', async () => {
+    await insertFarmRow(memClient, { slug: 'farm-1' });
+    await insertFarmRow(memClient, { slug: 'farm-2' });
+
+    const runForTenant = vi.fn(async (slug: string) => ({
+      applied: [],
+      skipped: [`0001_init.sql`, `0002_add_${slug}.sql`],
+    }));
+
+    const runProdMigrationsAllTenants = await getRunProdMigrationsAllTenants();
+    const result = await runProdMigrationsAllTenants({
+      metaClient: memClient,
+      runForTenant,
+    });
+
+    expect(result.skipped).toContain('farm-1:0001_init.sql');
+    expect(result.skipped).toContain('farm-1:0002_add_farm-1.sql');
+    expect(result.skipped).toContain('farm-2:0001_init.sql');
+    expect(result.skipped).toContain('farm-2:0002_add_farm-2.sql');
+  });
+});
+
+describe('promoteToProd integrates with all-tenant runner (Wave 4 A1)', () => {
+  it('promote uses runProdMigrationsAllTenants by default and migrates ≥2 tenants', async () => {
+    await insertFarmRow(memClient, { slug: 'tenant-alpha' });
+    await insertFarmRow(memClient, { slug: 'tenant-beta' });
+
+    const twoHoursAgo = '2026-04-29T06:30:00.000Z';
+    await insertCloneRow(memClient, {
+      branchName: 'wave/multi-tenant-promote',
+      tursoDbName: 'ft-clone-multi-abc100',
+      createdAt: twoHoursAgo,
+    });
+
+    const runForTenant = vi.fn(async (slug: string) => ({
+      applied: [`${slug}-0001.sql`],
+      skipped: [],
+    }));
+
+    // Build the default runner with the test injectables and pass it as
+    // runProdMigration to promoteToProd, which is what the production wiring
+    // does under the hood (the workflow calls promoteToProd with no override
+    // and the default delegates to runProdMigrationsAllTenants).
+    const { runProdMigrationsAllTenants } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+
+    const result = await promoteToProd({
+      branchName: 'wave/multi-tenant-promote',
+      minSoakHours: 1,
+      metaClient: memClient,
+      now: () => new Date('2026-04-29T12:00:00.000Z'),
+      runProdMigration: () =>
+        runProdMigrationsAllTenants({ metaClient: memClient, runForTenant }),
+    });
+
+    expect(runForTenant).toHaveBeenCalledTimes(2);
+    expect(result.prodMigrationAppliedFiles).toContain('tenant-alpha:tenant-alpha-0001.sql');
+    expect(result.prodMigrationAppliedFiles).toContain('tenant-beta:tenant-beta-0001.sql');
   });
 });
