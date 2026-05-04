@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   getConsultingLeads,
   getConsultingEngagements,
+  isPlatformAdmin,
   type ConsultingLead,
 } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
@@ -72,6 +73,17 @@ export default async function ConsultingAdminPage({
   const session = await getSession();
   if (!session?.user) redirect("/login");
   if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
+    redirect(`/${farmSlug}/admin`);
+  }
+
+  // Codex deep-audit P1 (2026-05-03): the leads + engagements queries
+  // below reach across every tenant in the meta DB. Without this gate,
+  // any farm-level ADMIN of any tenant could read every other tenant's
+  // consulting pipeline by visiting /<their-slug>/admin/consulting.
+  // Mirror the same `isPlatformAdmin` check the matching PATCH endpoint
+  // performs at app/api/admin/consulting/[id]/route.ts:30.
+  const email = session.user.email;
+  if (!email || !(await isPlatformAdmin(email))) {
     redirect(`/${farmSlug}/admin`);
   }
 
