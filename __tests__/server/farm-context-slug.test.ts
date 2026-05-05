@@ -14,7 +14,9 @@
  *       getPrismaForSlugWithAuth(session, slug); returns context scoped to
  *       the URL slug (not the signed one)
  *   (3) no proxy headers → legacy getServerSession path
- *   (4) user has no access to URL slug → null
+ *   (4) session user has no access to URL slug → null
+ *   (5) #96 regression: slug-fallback path wraps prisma in wrapPrismaWithRetry
+ *       so expired-token failures are retried (Wave 4 A5 coverage for fallback)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,16 +32,18 @@ const getPrismaForSlugWithAuthMock = vi.fn();
 const getPrismaWithAuthMock = vi.fn();
 const getServerSessionMock = vi.fn();
 
+// Spy on wrapPrismaWithRetry so tests can assert it was called on the fallback
+// path. Identity passthrough keeps ctx.prisma === fakePrisma for value checks.
+const wrapPrismaWithRetryMock = vi.fn((_slug: string, client: unknown) => client);
+
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
   getPrismaWithAuth: getPrismaWithAuthMock,
   getPrismaForSlugWithAuth: getPrismaForSlugWithAuthMock,
   // Wave 4 A5: getFarmContext now wraps the resolved client with one-shot
-  // Turso auth-expiry retry. In these tests we don't exercise the retry
-  // path; the identity passthrough preserves the existing assertions
-  // (`ctx.prisma === fakePrisma`).
-
-  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
+  // Turso auth-expiry retry. The spy lets us verify the fallback path in
+  // farm-context-slug.ts also routes through the wrapper (#96).
+  wrapPrismaWithRetry: wrapPrismaWithRetryMock,
 }));
 
 vi.mock('next-auth', () => ({
@@ -86,6 +90,7 @@ describe('getFarmContextForSlug', () => {
     getPrismaForSlugWithAuthMock.mockReset();
     getPrismaWithAuthMock.mockReset();
     getServerSessionMock.mockReset();
+    wrapPrismaWithRetryMock.mockClear();
     // Sensible default — the legacy code path inside getFarmContext calls
     // getPrismaWithAuth when no signed headers are present. Tests that
     // exercise that path override this explicitly.
@@ -218,5 +223,69 @@ describe('getFarmContextForSlug', () => {
 
     const ctx = await getFarmContextForSlug('farm-b', req);
     expect(ctx).toBeNull();
+  });
+
+  it('(5) #96 regression: slug-fallback returns prisma wrapped in wrapPrismaWithRetry', async () => {
+    // Ensure both mismatch path and no-header path route through the retry
+    // wrapper. Before the fix, legacyFallback returned db.prisma bare,
+    // bypassing the Wave 4 A5 expired-token retry.
+
+    const fakePrisma = { marker: 'fallback-prisma' };
+    getPrismaForFarmMock.mockResolvedValue({ marker: 'A' });
+    getPrismaForSlugWithAuthMock.mockResolvedValue({
+      prisma: fakePrisma,
+      slug: 'farm-b',
+      role: 'ADMIN',
+    });
+    getServerSessionMock.mockResolvedValue({
+      user: {
+        id: 'user-dave',
+        email: 'dave@example.com',
+        farms: [
+          { slug: 'farm-a', role: 'ADMIN' },
+          { slug: 'farm-b', role: 'ADMIN' },
+        ],
+      },
+    });
+
+    const { getFarmContextForSlug } = await import('@/lib/server/farm-context-slug');
+
+    // Trigger the cookie-vs-URL mismatch fallback path (case 1c / legacyFallback).
+    const req = makeReqWithSignedHeaders({
+      email: 'dave@example.com',
+      slug: 'farm-a',
+      sub: 'user-dave',
+      role: 'ADMIN',
+    });
+    await getFarmContextForSlug('farm-b', req);
+
+    // wrapPrismaWithRetry MUST have been called with the URL slug and the
+    // bare prisma client returned by getPrismaForSlugWithAuth.
+    expect(wrapPrismaWithRetryMock).toHaveBeenCalledWith('farm-b', fakePrisma);
+  });
+
+  it('(5b) #96 regression: no-header fallback also wraps prisma in wrapPrismaWithRetry', async () => {
+    const fakePrisma = { marker: 'no-header-prisma' };
+    const fakeSession = {
+      user: {
+        id: 'user-eve',
+        email: 'eve@example.com',
+        farms: [{ slug: 'trio-b', role: 'ADMIN' }],
+      },
+    };
+    getServerSessionMock.mockResolvedValue(fakeSession);
+    getPrismaForSlugWithAuthMock.mockResolvedValue({
+      prisma: fakePrisma,
+      slug: 'trio-b',
+      role: 'ADMIN',
+    });
+
+    const { getFarmContextForSlug } = await import('@/lib/server/farm-context-slug');
+
+    // No signed headers → pure legacy path (case 1b / legacyFallback).
+    const req = makeReqNoHeaders();
+    await getFarmContextForSlug('trio-b', req);
+
+    expect(wrapPrismaWithRetryMock).toHaveBeenCalledWith('trio-b', fakePrisma);
   });
 });

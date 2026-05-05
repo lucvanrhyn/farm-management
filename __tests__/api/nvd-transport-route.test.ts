@@ -59,6 +59,9 @@ vi.mock("@/lib/farm-prisma", () => ({
   // falls through to the slug-validated legacy fallback.
   getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
   getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
+  // PR #96/#119: slug-fallback path now wraps prisma in wrapPrismaWithRetry
+  // to survive transient Turso disconnects. Test pass-through.
+  wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
 const mockVerifyFreshAdminRole = vi.fn();
