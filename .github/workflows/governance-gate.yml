@@ -36,6 +36,15 @@ jobs:
       - name: Install Turso CLI
         run: curl -sSfL https://get.tur.so/install.sh | bash && echo "$HOME/.turso" >> $GITHUB_PATH
 
+      - name: Apply meta-DB migrations
+        # Required before "Provision branch clone": cloneBranch reads
+        # `branch_db_clones.head_sha`/`soak_started_at` (added by
+        # meta-migrations/0001) to enforce per-commit soak. Without this step,
+        # every gate run on a meta-DB schema not yet at HEAD would fail with
+        # "no column named head_sha". Idempotent — already-applied migrations
+        # are skipped via `_meta_migrations` tracking table.
+        run: pnpm tsx scripts/migrate.ts --meta-only
+
       - name: Provision branch clone
         id: clone
         # `--silent` suppresses pnpm's script-header lines so stdout is pure JSON.

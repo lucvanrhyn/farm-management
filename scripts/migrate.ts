@@ -48,6 +48,14 @@ async function main() {
   // Step 1: meta-DB migrations (runs first).
   await runMetaMigrationsStep();
 
+  // `--meta-only`: skip the tenant fan-out. Used by the CI gate workflow,
+  // which only needs `branch_db_clones` schema to be current before cloning a
+  // tenant DB; running per-tenant migrations from CI would touch every prod
+  // tenant on every PR run, which is the wrong scope for a per-PR check.
+  if (process.argv.includes('--meta-only')) {
+    return;
+  }
+
   // Step 2: per-tenant migrations.
   const migrations = await loadMigrations(MIGRATIONS_DIR);
   if (migrations.length === 0) {
