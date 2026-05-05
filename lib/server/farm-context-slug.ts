@@ -31,7 +31,7 @@ import type { Session } from 'next-auth';
 import type { NextRequest } from 'next/server';
 
 import { authOptions } from '@/lib/auth-options';
-import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
+import { getPrismaForSlugWithAuth, wrapPrismaWithRetry } from '@/lib/farm-prisma';
 
 import { getFarmContext, type FarmContext } from './farm-context';
 
@@ -102,5 +102,10 @@ async function legacyFallback(
 
   const db = await getPrismaForSlugWithAuth(fullSession, slug);
   if ('error' in db) return null;
-  return { session: fullSession, prisma: db.prisma, slug: db.slug, role: db.role };
+  // Wave 4 A5 (issue #96): wrap the bare client so expired-token failures on
+  // the slug-fallback path are retried, identical to the fast-path behaviour
+  // in getFarmContext(). Without this, any route hitting legacyFallback after
+  // a long idle period surfaces a 500 instead of transparently re-minting the
+  // Turso token.
+  return { session: fullSession, prisma: wrapPrismaWithRetry(db.slug, db.prisma), slug: db.slug, role: db.role };
 }
