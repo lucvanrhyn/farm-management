@@ -118,6 +118,17 @@ describe("buildCsp", () => {
     }
   });
 
+  it("allows Open-Meteo forecast API in connect-src (browser WeatherWidget fetch)", () => {
+    // P0 (2026-05-04): components/dashboard/WeatherWidget.tsx is a "use client"
+    // component that fetches https://api.open-meteo.com/v1/forecast directly
+    // from the browser. Without this entry, the 2026-05-11 enforce-mode flip
+    // (Content-Security-Policy-Report-Only → Content-Security-Policy) blocks
+    // every weather fetch on every admin page. archive-api.open-meteo.com is
+    // server-only (lib/server/open-meteo.ts) and stays out of CSP.
+    const connect = directives.get("connect-src") ?? [];
+    expect(connect).toContain("https://api.open-meteo.com");
+  });
+
   it("allows Google Fonts in style-src + font-src (next/font/google)", () => {
     expect(directives.get("style-src")).toContain(
       "https://fonts.googleapis.com",
