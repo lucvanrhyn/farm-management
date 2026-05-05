@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AUTH_ERROR_CODES } from "@/lib/auth-errors";
+import { getSafeNext } from "@/lib/auth-redirect";
 
 // No `useRouter()` import: a successful login triggers a full-document
 // navigation to /farms via `window.location.assign()`. The session cookie was
@@ -44,7 +46,23 @@ const AUTH_ERROR_COPY: Record<string, string> = {
     "We can't reach the login database right now. Try again in a minute — your password is probably fine.",
 };
 
+// Visual audit P1 (2026-05-04): split into Suspense-wrapped shell + the
+// actual form so `useSearchParams()` in `LoginForm` does not opt the
+// whole page out of static generation. The Suspense boundary is required
+// by Next 16 whenever a client component reads search params.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  // `next` is user-controllable — sanitise via getSafeNext() before
+  // navigating to defend against open-redirect (`/login?next=//evil`).
+  const safeNext = getSafeNext(searchParams.get("next")) ?? "/farms";
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -91,8 +109,10 @@ export default function LoginPage() {
 
       if (result?.ok) {
         // Hard navigation — full document load picks up the fresh
-        // session cookie next-auth just set.
-        window.location.assign("/farms");
+        // session cookie next-auth just set. Visual P1: honour the
+        // sanitised `?next=` so deep-link clicks land back on the page
+        // the user originally tried to open.
+        window.location.assign(safeNext);
       } else {
         // Theoretically unreachable: pre-flight just confirmed the same
         // creds are valid. If it happens, fall back to the generic message

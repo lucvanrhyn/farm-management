@@ -3,6 +3,8 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { CrossSpeciesBlockedError } from "@/lib/server/mob-move";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
+import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
+import type { SpeciesId } from "@/lib/species/types";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 
@@ -62,37 +64,59 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // #28 Phase B — cross-species parent guard. If the patch sets motherId or
   // fatherId, the parent must (a) exist and (b) share the child's species.
-  // Edge case: NULL species on either side (legacy data) is treated as
+  // #98 — cross-species camp guard. If the patch sets currentCamp, the
+  // destination camp must (a) exist and (b) share the child's species.
+  // Edge case: NULL species on the child (legacy data) is treated as
   // "unknown, allow" with a TODO so legacy tenants don't break in prod.
   // TODO(#28): tighten once species backfill is verified across all tenants.
   const parentFields: Array<"motherId" | "fatherId"> = [];
   if ("motherId" in body && body.motherId) parentFields.push("motherId");
   if ("fatherId" in body && body.fatherId) parentFields.push("fatherId");
+  const hasCampMove = "currentCamp" in body && Boolean(body.currentCamp);
 
-  if (parentFields.length > 0) {
+  // Hoisted child-species lookup: shared between parent-guard and camp-guard
+  // so we issue exactly one read regardless of how many guards must run.
+  if (parentFields.length > 0 || hasCampMove) {
     const child = await prisma.animal.findUnique({
       where: { animalId: id },
       select: { species: true },
     });
-    try {
-      for (const field of parentFields) {
-        const parentAnimalId = body[field] as string;
-        const parent = await prisma.animal.findUnique({
-          where: { animalId: parentAnimalId },
-          select: { species: true },
-        });
-        if (!parent) {
-          return NextResponse.json({ error: "PARENT_NOT_FOUND" }, { status: 422 });
+
+    if (parentFields.length > 0) {
+      try {
+        for (const field of parentFields) {
+          const parentAnimalId = body[field] as string;
+          const parent = await prisma.animal.findUnique({
+            where: { animalId: parentAnimalId },
+            select: { species: true },
+          });
+          if (!parent) {
+            return NextResponse.json({ error: "PARENT_NOT_FOUND" }, { status: 422 });
+          }
+          // NULL species on either side = legacy/unknown, allow with TODO.
+          if (child?.species && parent.species && child.species !== parent.species) {
+            throw new CrossSpeciesBlockedError(child.species, parent.species);
+          }
         }
-        // NULL species on either side = legacy/unknown, allow with TODO.
-        if (child?.species && parent.species && child.species !== parent.species) {
-          throw new CrossSpeciesBlockedError(child.species, parent.species);
-        }
+      } catch (err) {
+        const mapped = mapApiDomainError(err);
+        if (mapped) return mapped;
+        throw err;
       }
-    } catch (err) {
-      const mapped = mapApiDomainError(err);
-      if (mapped) return mapped;
-      throw err;
+    }
+
+    // Camp-guard runs only when the child species is known. Legacy rows with
+    // species=null are allowed through, mirroring the parent-guard lenience.
+    // TODO(#28): tighten once species backfill is verified across all tenants.
+    if (hasCampMove && child?.species) {
+      const result = await requireSpeciesScopedCamp(prisma, {
+        species: child.species as SpeciesId,
+        farmSlug: slug,
+        campId: body.currentCamp as string,
+      });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.reason }, { status: 422 });
+      }
     }
   }
 

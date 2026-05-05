@@ -116,23 +116,66 @@ The JSON must have these exact keys: summary, bullRecommendations, calvingAlerts
 - breedingWindowSuggestion: string (1-2 sentences about optimal breeding timing)
 - riskFlags: array of strings (empty array if no concerns)`;
 
-  const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(herdData) },
-      ],
-      max_tokens: 800,
-      temperature: 0.4,
-    }),
-  });
+  // Soft timeout for the OpenAI call. Without this, an upstream hang
+  // (rate-limit, slow GPU pool, network blip) holds the Vercel fn open until
+  // the platform's 60s hard kill — competing for memory with co-tenant
+  // requests on the same instance and surfacing as a generic 504. 12s gives
+  // gpt-4o a comfortable budget for an 800-token completion while still
+  // leaving headroom under the 60s platform cap.
+  const OPENAI_TIMEOUT_MS = 12_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+  let openaiRes: Response;
+  try {
+    openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: JSON.stringify(herdData) },
+        ],
+        max_tokens: 800,
+        temperature: 0.4,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    const isAbort =
+      err instanceof Error &&
+      (err.name === "AbortError" || err.message.includes("aborted"));
+    if (isAbort) {
+      logger.error('[breeding/analyze] OpenAI timeout', {
+        timeoutMs: OPENAI_TIMEOUT_MS,
+      });
+      return NextResponse.json(
+        {
+          error: "UPSTREAM_TIMEOUT",
+          message: `OpenAI did not respond within ${OPENAI_TIMEOUT_MS}ms. Try again shortly.`,
+        },
+        { status: 504 },
+      );
+    }
+    // Don't swallow non-timeout errors — they're real bugs (DNS, TLS, etc.).
+    logger.error('[breeding/analyze] OpenAI fetch failed', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      {
+        error: "UPSTREAM_ERROR",
+        message: err instanceof Error ? err.message : "OpenAI fetch failed",
+      },
+      { status: 502 },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text();

@@ -56,6 +56,11 @@ const CSP_REPORT_GROUP = "csp-endpoint";
  * ────────────────
  *  • Mapbox  — `api.mapbox.com`, `events.mapbox.com`, `*.tiles.mapbox.com`
  *              browser-side tile + telemetry traffic from `mapbox-gl`.
+ *  • Open-Meteo — `api.open-meteo.com` browser-side forecast XHR from
+ *              `components/dashboard/WeatherWidget.tsx` (a "use client"
+ *              component). The historical archive endpoint
+ *              `archive-api.open-meteo.com` is server-only
+ *              (`lib/server/open-meteo.ts`) and stays out of CSP.
  *  • Google Fonts — `fonts.googleapis.com` (CSS) + `fonts.gstatic.com`
  *              (woff2). Loaded by `next/font/google` in app/layout.tsx.
  *  • Vercel Blob — `*.public.blob.vercel-storage.com` for uploaded
@@ -73,6 +78,7 @@ export const CSP_SOURCES = {
     "https://events.mapbox.com",
     "https://*.tiles.mapbox.com",
   ],
+  openMeteo: ["https://api.open-meteo.com"],
   googleFonts: {
     style: ["https://fonts.googleapis.com"],
     font: ["https://fonts.gstatic.com"],
@@ -91,9 +97,10 @@ export const CSP_SOURCES = {
  *    approach is the long-term fix — captured in TODO below.
  *  • style-src includes `'unsafe-inline'` because Tailwind + next/font
  *    inject inline <style> tags and a CSS-in-JS swap is out of scope.
- *  • connect-src includes mapbox endpoints for tile + telemetry XHRs and
- *    `'self'` for our own /api/** routes. Vercel Blob is image-only — no
- *    fetch traffic — so it stays out of connect-src.
+ *  • connect-src includes mapbox endpoints for tile + telemetry XHRs,
+ *    `'self'` for our own /api/** routes, and Open-Meteo for the dashboard
+ *    weather widget's browser-side forecast fetch. Vercel Blob is
+ *    image-only — no fetch traffic — so it stays out of connect-src.
  *  • img-src adds `data:` and `blob:` for in-app photo previews
  *    (compression pipeline → canvas → blob URL → <img>).
  *  • frame-ancestors 'none' is the actual clickjacking control. The
@@ -129,7 +136,11 @@ export function buildCsp(): string {
       ...CSP_SOURCES.vercelBlob,
     ],
     "font-src": ["'self'", "data:", ...CSP_SOURCES.googleFonts.font],
-    "connect-src": ["'self'", ...CSP_SOURCES.mapbox],
+    "connect-src": [
+      "'self'",
+      ...CSP_SOURCES.mapbox,
+      ...CSP_SOURCES.openMeteo,
+    ],
     "worker-src": ["'self'", "blob:"],
     "manifest-src": ["'self'"],
     "frame-ancestors": ["'none'"],

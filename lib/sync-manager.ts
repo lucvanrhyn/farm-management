@@ -347,22 +347,32 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
         const formData = new FormData();
         formData.append('file', reading.photo_blob, `cover-${reading.local_id}.jpg`);
         const uploadRes = await fetch('/api/photos/upload', { method: 'POST', body: formData });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          const patchRes = await fetch(
-            `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover/${serverId}/attachment`,
-            {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ attachmentUrl: url }),
-            },
+        if (!uploadRes.ok) {
+          // Photo upload failed — DO NOT mark the reading synced (that would
+          // silently drop the photo from the queue). Mark failed so the next
+          // sync cycle retries; the reading row is already persisted server-side
+          // via `markCoverReadingPosted`, so the retry only re-uploads the photo.
+          console.error(
+            `[sync] cover photo upload failed (status ${uploadRes.status}) for reading ${reading.local_id}`,
           );
-          if (!patchRes.ok) {
-            // Leave as failed — reading row exists, next cycle retries photo only.
-            await markCoverReadingFailed(reading.local_id!);
-            failed++;
-            continue;
-          }
+          await markCoverReadingFailed(reading.local_id!);
+          failed++;
+          continue;
+        }
+        const { url } = await uploadRes.json();
+        const patchRes = await fetch(
+          `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover/${serverId}/attachment`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachmentUrl: url }),
+          },
+        );
+        if (!patchRes.ok) {
+          // Leave as failed — reading row exists, next cycle retries photo only.
+          await markCoverReadingFailed(reading.local_id!);
+          failed++;
+          continue;
         }
       }
 
