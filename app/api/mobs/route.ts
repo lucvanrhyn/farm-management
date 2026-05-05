@@ -3,7 +3,8 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateMobWrite } from "@/lib/server/revalidate";
 import { isValidSpecies } from "@/lib/species/registry";
-import { CROSS_SPECIES_BLOCKED } from "@/lib/server/mob-move";
+import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
+import type { SpeciesId } from "@/lib/species/types";
 
 export async function GET(req: NextRequest) {
   const ctx = await getFarmContext(req);
@@ -70,20 +71,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Cross-species hard-block at create time. Mirrors the PATCH guard inside
-  // performMobMove so the W4 A10 error-mapper helper sees one consistent
-  // contract regardless of entry point. campId is per-species scoped, so a
-  // species-aware findFirst returns the matching row when the camp belongs
-  // to this species. If no row matches but a different-species row exists
-  // for the same campId, we surface 422 — the spec
-  // (memory/multi-species-spec-2026-04-27.md) treats that as a cross-species
-  // attempt.
-  const destCamp = await prisma.camp.findFirst({
-    where: { campId: currentCamp },
-    select: { species: true },
+  // #97 — Hard-block orphan + cross-species moves at create time.
+  //
+  // The previous `findFirst({ where: { campId } })` had two defects:
+  //   1. Non-deterministic across duplicate campIds (Phase A of #28 made
+  //      campId per-species-scoped, so the same string can exist for both
+  //      cattle and sheep — without `orderBy` the picked row was a coin flip).
+  //   2. Orphan camps passed through silently (a null result short-circuited
+  //      the cross-species check, allowing mobs to be created against a
+  //      campId that doesn't exist anywhere).
+  //
+  // `requireSpeciesScopedCamp` (PR #123) uses the composite-unique key
+  // `(species, campId)` for a deterministic primary lookup and falls back to
+  // distinguish NOT_FOUND from WRONG_SPECIES — matching the multi-species
+  // hard-block spec (memory/multi-species-spec-2026-04-27.md).
+  const campCheck = await requireSpeciesScopedCamp(prisma, {
+    species: species as SpeciesId,
+    farmSlug: slug,
+    campId: currentCamp,
   });
-  if (destCamp && destCamp.species !== species) {
-    return NextResponse.json({ error: CROSS_SPECIES_BLOCKED }, { status: 422 });
+  if (!campCheck.ok) {
+    // campCheck.reason: 'NOT_FOUND' (orphan) | 'WRONG_SPECIES' (cross-species,
+    // including legacy rows where camp.species is null).
+    return NextResponse.json({ error: campCheck.reason }, { status: 422 });
   }
 
   const mob = await prisma.mob.create({
