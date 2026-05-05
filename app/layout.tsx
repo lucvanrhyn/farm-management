@@ -95,13 +95,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // TODO(i18n): switch to a per-user locale once we add a translation
-    // workstream. Until then af-ZA is the right default — every current
-    // tenant uses Afrikaans as their primary working language and the
-    // English UI copy is intelligible to them. English-only users still
-    // see English strings; only screen readers and browser translation
-    // hints change.
-    <html lang="af-ZA">
+    // Visual audit P1 (2026-05-04): every rendered string in the UI is
+    // English ("Sign In", "Create Your Account", "Email or Username",
+    // …). Declaring `lang="af-ZA"` made screen readers pronounce English
+    // copy with Afrikaans phonemes and broke search-engine signals.
+    // `en-ZA` matches the rendered copy and still picks up SA-flavoured
+    // locale conventions (date format, currency hints).
+    //
+    // TODO(i18n): when a real Afrikaans translation lands, drive this
+    // attribute from a per-user / per-route locale instead of a literal.
+    <html lang="en-ZA">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
       >
@@ -125,7 +128,7 @@ export default function RootLayout({
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[1000] focus:rounded focus:bg-[var(--farm-text)] focus:px-4 focus:py-2 focus:text-white focus:outline-none focus:ring-2 focus:ring-[var(--farm-amber)]"
         >
-          Spring na inhoud
+          Skip to content
         </a>
         <div id="main" tabIndex={-1}>
           {children}
