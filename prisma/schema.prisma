@@ -760,14 +760,20 @@ model PushSubscription {
 // reject stale (out-of-order) events from PayFast's retry queue before
 // they overwrite newer subscription state. Migration: 0013.
 model PayfastEvent {
-  id            String   @id @default(cuid())
-  pfPaymentId   String   @unique(map: "payfast_events_pf_payment_id_idx")
+  id            String    @id @default(cuid())
+  pfPaymentId   String    @unique(map: "payfast_events_pf_payment_id_idx")
   eventTime     DateTime
   paymentStatus String
   payloadHash   String
-  processedAt   DateTime @default(now())
+  processedAt   DateTime  @default(now())
+  /// Set to the wall-clock time at which updateFarmSubscription completed
+  /// successfully. NULL means the row was inserted but the subscription
+  /// mutation has not yet committed (e.g. the function threw after the INSERT).
+  /// The retry path checks this column: NULL → re-apply; non-NULL → dedup.
+  appliedAt     DateTime?
 
   @@index([eventTime], map: "payfast_events_event_time_idx")
+  @@index([appliedAt], map: "payfast_events_applied_at_idx")
 }
 
 // ── Rotation Plans ───────────────────────────────────────────────────────────
