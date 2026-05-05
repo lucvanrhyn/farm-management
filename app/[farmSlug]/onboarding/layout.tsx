@@ -170,19 +170,6 @@ function InfoCard({
   );
 }
 
-function UnauthenticatedPanel() {
-  return (
-    <ShellFrame>
-      <InfoCard
-        title="Check your email"
-        message="Verify your email and sign in to pick up the onboarding wizard right where we left it. Your species choice and any uploaded file stay on this device until you commit."
-        linkHref="/login"
-        linkLabel="Go to sign in"
-      />
-    </ShellFrame>
-  );
-}
-
 function NotAdminPanel({ farmSlug }: { farmSlug: string }) {
   return (
     <ShellFrame>
@@ -209,10 +196,11 @@ export default async function OnboardingLayout({
 }) {
   const { farmSlug } = await params;
 
-  // 1. Auth check.
+  // 1. Auth check — redirect unauthenticated visitors to login, preserving
+  //    the return URL so they land back here after sign-in (#103).
   const session = await getServerSession(authOptions);
   if (!session) {
-    return <UnauthenticatedPanel />;
+    redirect(`/login?next=${encodeURIComponent(`/${farmSlug}/onboarding`)}`);
   }
 
   // 2. Tenant + role check.
