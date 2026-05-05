@@ -31,14 +31,21 @@ import { NextRequest } from "next/server";
 // vi.mock factories hoist above top-level const declarations, so any state the
 // factories need must come from vi.hoisted (per
 // memory/feedback-vi-hoisted-shared-mocks.md).
-const { campFindFirstMock, mobCreateMock, prismaMock } = vi.hoisted(() => {
+//
+// Wave 2 / #97 update: the route now consumes `requireSpeciesScopedCamp`
+// (PR #123), which uses `prisma.camp.findUnique({ Camp_species_campId_key })`
+// for the deterministic primary lookup and falls back to `findFirst` only when
+// the composite-unique lookup misses. The mock surface mirrors that.
+const { campFindUniqueMock, campFindFirstMock, mobCreateMock, prismaMock } = vi.hoisted(() => {
+  const campFindUnique = vi.fn();
   const campFindFirst = vi.fn();
   const mobCreate = vi.fn();
   const prisma = {
-    camp: { findFirst: campFindFirst },
+    camp: { findUnique: campFindUnique, findFirst: campFindFirst },
     mob: { create: mobCreate },
   };
   return {
+    campFindUniqueMock: campFindUnique,
     campFindFirstMock: campFindFirst,
     mobCreateMock: mobCreate,
     prismaMock: prisma,
@@ -75,6 +82,7 @@ function postReq(body: Record<string, unknown>): NextRequest {
 
 describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
   beforeEach(() => {
+    campFindUniqueMock.mockReset();
     campFindFirstMock.mockReset();
     mobCreateMock.mockReset();
   });
@@ -101,20 +109,24 @@ describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
     expect(mobCreateMock).not.toHaveBeenCalled();
   });
 
-  it("returns 422 + CROSS_SPECIES_BLOCKED when species mismatches camp.species", async () => {
-    campFindFirstMock.mockResolvedValue({ species: "cattle" });
+  it("returns 422 + WRONG_SPECIES when species mismatches camp.species (#97 contract update)", async () => {
+    // Composite-unique lookup misses for `(sheep, NORTH-01)`…
+    campFindUniqueMock.mockResolvedValue(null);
+    // …but the campId exists under cattle.
+    campFindFirstMock.mockResolvedValue({ id: "camp-uuid", species: "cattle" });
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01", species: "sheep" }),
     );
 
     expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ error: "CROSS_SPECIES_BLOCKED" });
+    expect(await res.json()).toEqual({ error: "WRONG_SPECIES" });
     expect(mobCreateMock).not.toHaveBeenCalled();
   });
 
   it("creates the mob with the supplied species and returns 201 (happy path)", async () => {
-    campFindFirstMock.mockResolvedValue({ species: "sheep" });
+    // Composite-unique lookup hits — the camp exists for the requested species.
+    campFindUniqueMock.mockResolvedValue({ id: "camp-uuid", species: "sheep" });
     mobCreateMock.mockResolvedValue({
       id: "mob-1",
       name: "Mob A",
