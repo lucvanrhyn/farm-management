@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { createClient } from '@libsql/client';
 import type { Client } from '@libsql/client';
 import type { TursoCli } from '@/lib/ops/turso-cli';
-import { realTursoCli } from '@/lib/ops/turso-cli';
+import { realTursoCli, TursoCliError } from '@/lib/ops/turso-cli';
 import { getMetaClient, getAllFarmSlugs, getFarmCreds } from '@/lib/meta-db';
 import type { FarmCreds } from '@/lib/meta-db';
 import { loadMigrations, runMigrations } from '@/lib/migrator';
@@ -136,15 +136,36 @@ export async function cloneBranch(
   const tursoDbName = slugifyBranchName(branchName, cliPrefix);
 
   // ── 3. Invoke turso CLI (three steps, abort on any failure) ──────────────
-  //    a. Create the clone
-  await cli.run([
-    'db',
-    'create',
-    tursoDbName,
-    '--from-db',
-    sourceDbName,
-    ...(groupName ? ['--group', groupName] : []),
-  ]);
+  //    a. Create the clone — or adopt an orphan from a prior failed gate run.
+  //
+  //    Bug pattern (rare but blocking when it strikes): a prior cloneBranch
+  //    call created the Turso DB but failed before persisting the meta-DB
+  //    row (e.g. the subsequent `db show` or `db tokens` step threw, or the
+  //    process was killed). The Turso DB then exists with no meta record,
+  //    and every subsequent gate run on the same branch fails with
+  //    "already exists" until an operator manually destroys the orphan.
+  //
+  //    Adoption: when `db create` returns "already exists", treat it as a
+  //    successful provision and continue to step 3b/3c, which retrieve the
+  //    URL and mint a fresh non-expiring token. Step 4 then writes the
+  //    meta record, self-healing the orphan on the next gate run.
+  let alreadyExisted = false;
+  try {
+    await cli.run([
+      'db',
+      'create',
+      tursoDbName,
+      '--from-db',
+      sourceDbName,
+      ...(groupName ? ['--group', groupName] : []),
+    ]);
+  } catch (err) {
+    if (err instanceof TursoCliError && /already exists/i.test(err.stderr)) {
+      alreadyExisted = true;
+    } else {
+      throw err;
+    }
+  }
 
   //    b. Retrieve the libsql URL
   const tursoDbUrl = await cli.run(['db', 'show', tursoDbName, '--url']);
@@ -178,7 +199,7 @@ export async function cloneBranch(
     tursoDbName,
     tursoDbUrl,
     tursoAuthToken,
-    alreadyExisted: false,
+    alreadyExisted,
   };
 }
 

@@ -357,9 +357,13 @@ describe('cloneBranch — mid-flight failure', () => {
     expect(row).toBeNull();
   });
 
-  it('does NOT write to meta-DB when db create fails', async () => {
+  it('does NOT write to meta-DB when db create fails with a non-orphan error', async () => {
+    // "already exists" is now the orphan-adoption signal (see orphan-adoption
+    // suite below). Use a different error stderr to exercise the genuine-
+    // failure path, where the function must still throw and leave meta-DB
+    // untouched.
     const cli = makeFakeCli({
-      'db:create': new TursoCliError(['db', 'create', 'ft-clone-wave-x'], 1, 'already exists'),
+      'db:create': new TursoCliError(['db', 'create', 'ft-clone-wave-x'], 1, 'permission denied'),
     });
     const cloneBranch = await getCloneBranch();
     const { getBranchClone } = await import('@/lib/meta-db');
@@ -375,6 +379,115 @@ describe('cloneBranch — mid-flight failure', () => {
 
     const row = await getBranchClone('wave/x-create-fail');
     expect(row).toBeNull();
+  });
+});
+
+describe('cloneBranch — orphan clone adoption', () => {
+  // Bug pattern: a prior gate run successfully created the Turso DB but
+  // failed before persisting the meta-DB record (e.g. `db show` or `db tokens`
+  // throwing). The orphan Turso DB then blocks every subsequent gate run on
+  // the same branch — `db create` returns "already exists", and without
+  // adoption logic the gate workflow can never recover without manual
+  // operator cleanup. This suite locks in the self-healing behavior.
+
+  it('adopts the orphan clone when db create returns "already exists"', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'could not create database ft-clone-wave-x: database with name ft-clone-wave-x already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    const result = await cloneBranch({
+      branchName: 'wave/x-orphaned',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.alreadyExisted).toBe(true);
+    expect(result.tursoDbUrl).toBe(CANNED_URL);
+    expect(result.tursoAuthToken).toBe(CANNED_TOKEN);
+  });
+
+  it('writes a meta-DB row when adopting an orphan clone', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'database with name ft-clone-wave-x already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await cloneBranch({
+      branchName: 'wave/x-orphan-persist',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    const row = await getBranchClone('wave/x-orphan-persist');
+    expect(row).not.toBeNull();
+    expect(row!.tursoDbUrl).toBe(CANNED_URL);
+    expect(row!.tursoAuthToken).toBe(CANNED_TOKEN);
+    expect(row!.sourceDbName).toBe('basson-boerdery');
+  });
+
+  it('still calls db show + db tokens after adopting (3 CLI calls total)', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    await cloneBranch({
+      branchName: 'wave/x-orphan-calls',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(cli.calls).toHaveLength(3);
+    expect(cli.calls[0].args.slice(0, 2)).toEqual(['db', 'create']);
+    expect(cli.calls[1].args.slice(0, 2)).toEqual(['db', 'show']);
+    expect(cli.calls[2].args.slice(0, 2)).toEqual(['db', 'tokens']);
+  });
+
+  it('matches the "already exists" signal case-insensitively', async () => {
+    // Defensive: turso CLI casing varies across versions ("Already Exists",
+    // "ALREADY EXISTS", etc). The detector must not be brittle.
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'database ALREADY EXISTS',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    const result = await cloneBranch({
+      branchName: 'wave/x-orphan-case',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.alreadyExisted).toBe(true);
   });
 });
 
