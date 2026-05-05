@@ -6,8 +6,11 @@
  * Phase D — layout polish.
  *
  * Covers three accessibility / i18n bugs in the root layout:
- *   D1. <html lang> must be the SA Afrikaans locale (af-ZA) — primary
- *       user language per project memory.
+ *   D1. <html lang> must be en-ZA — every rendered string in the UI is
+ *       English ("Sign In", "Create Your Account", …). Declaring af-ZA
+ *       made screen readers pronounce English copy with Afrikaans
+ *       phonemes (visual audit P1, 2026-05-04). A future per-user
+ *       locale system will revisit this once real Afrikaans copy ships.
  *   D2. Layout must render a "skip to content" link as the first
  *       focusable child of <body>, targeting #main.
  *   D3. Skip-link target wrapper must exist and be programmatically
@@ -57,9 +60,9 @@ function renderLayout(): Document {
 }
 
 describe("RootLayout — D1 lang attribute", () => {
-  it("sets <html lang> to af-ZA (SA Afrikaans)", () => {
+  it("sets <html lang> to en-ZA (matches the rendered English UI copy)", () => {
     const doc = renderLayout();
-    expect(doc.documentElement.getAttribute("lang")).toBe("af-ZA");
+    expect(doc.documentElement.getAttribute("lang")).toBe("en-ZA");
   });
 });
 
