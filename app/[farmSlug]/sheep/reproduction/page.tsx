@@ -1,8 +1,10 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AlertTriangle, Baby, Droplets, Scissors } from "lucide-react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
+import { getCachedFarmSpeciesSettings } from "@/lib/server/cached";
 import { sheepModule } from "@/lib/species/sheep/index";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import UpcomingLambingsTable from "@/components/sheep/UpcomingLambingsTable";
@@ -118,6 +120,33 @@ export default async function SheepReproductionPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
+
+  // Hard-block cattle-only (or otherwise sheep-disabled) tenants.
+  // Without this guard, the downstream sheep aggregators below
+  // (`sheepModule.getReproStats` / `getDashboardData`) and the
+  // `dashData.speciesSpecific as { ewesActive, ramsActive, lambsActive }`
+  // cast assume sheep data exists — on a cattle-only farm like
+  // acme-cattle this either throws or renders garbage.
+  // Convention: same `notFound()` short-circuit used by tools/veld,
+  // tools/feed-on-offer, tools/drought, admin/animals/[id], etc.
+  try {
+    const { enabledSpecies } = await getCachedFarmSpeciesSettings(farmSlug);
+    if (!enabledSpecies.includes("sheep")) notFound();
+  } catch (err) {
+    // `notFound()` throws a NEXT_NOT_FOUND digest — re-throw so the
+    // framework surfaces the 404 instead of swallowing it as a generic
+    // settings-fetch failure.
+    if (
+      err instanceof Error &&
+      "digest" in err &&
+      typeof (err as { digest?: string }).digest === "string" &&
+      (err as { digest: string }).digest.startsWith("NEXT_NOT_FOUND")
+    ) {
+      throw err;
+    }
+    // Fail-open: if species settings are unreachable, fall through and
+    // let the tier check + downstream queries run (existing behaviour).
+  }
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
