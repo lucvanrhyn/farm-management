@@ -56,7 +56,17 @@ export async function proxy(req: NextRequest) {
     // (e.g. server components calling `getSession`) still redirect on their
     // own, so this is safe by default.
     if (isProtectedPath(pathname)) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      // Visual audit P1 (2026-05-04): preserve the requested path in
+      // `?next=` so the login page can return the user to the deep
+      // link they tried to open. The bare `/` is the universal entry
+      // point — no `next=` needed (a loop-safety + UX choice; the
+      // post-login destination for `/` is already the universal
+      // /farms hub).
+      const loginUrl = new URL("/login", req.url);
+      if (pathname !== "/") {
+        loginUrl.searchParams.set("next", pathname + req.nextUrl.search);
+      }
+      return NextResponse.redirect(loginUrl);
     }
     return NextResponse.next();
   }

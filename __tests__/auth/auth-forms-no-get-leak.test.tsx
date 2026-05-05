@@ -20,6 +20,16 @@ vi.mock("next-auth/react", () => ({
   signIn: vi.fn(),
 }));
 
+// Visual audit P1 (2026-05-04): login page reads `?next=` via
+// useSearchParams(). Stub it so the form renders outside a Next runtime.
+vi.mock("next/navigation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/navigation")>();
+  return {
+    ...actual,
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
+
 afterEach(() => cleanup());
 
 describe("login form — never leaks credentials in URL", () => {

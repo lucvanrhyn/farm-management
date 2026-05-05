@@ -27,6 +27,18 @@ vi.mock("next-auth/react", () => ({
   signIn: (...args: unknown[]) => signInMock(...args),
 }));
 
+// Visual audit P1 (2026-05-04): login page now reads `?next=` via
+// useSearchParams() (sanitised via getSafeNext()). Stub the hook so the
+// page renders outside a Next runtime; with no `next` param the safe
+// fallback is `/farms`, matching the assertion below.
+vi.mock("next/navigation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/navigation")>();
+  return {
+    ...actual,
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
+
 beforeEach(() => {
   signInMock.mockReset();
   fetchMock.mockReset();

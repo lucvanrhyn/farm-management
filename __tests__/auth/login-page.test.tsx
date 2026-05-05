@@ -16,6 +16,20 @@ vi.mock('next-auth/react', () => ({
   signIn: (...args: unknown[]) => signInMock(...args),
 }));
 
+// Visual audit P1 (2026-05-04): the login page now reads `?next=` via
+// useSearchParams() and sanitises it through getSafeNext() so deep-link
+// users land back on the page they tried to open. Outside a real Next.js
+// runtime the hook returns null, so we stub it here with an empty
+// URLSearchParams — the form's safeNext fallback (`/farms`) then matches
+// the legacy assertion `assignMock.toHaveBeenCalledWith('/farms')`.
+vi.mock('next/navigation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/navigation')>();
+  return {
+    ...actual,
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
+
 const fetchMock = vi.fn();
 const assignMock = vi.fn();
 
