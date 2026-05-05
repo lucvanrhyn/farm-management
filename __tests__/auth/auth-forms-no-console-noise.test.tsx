@@ -29,6 +29,19 @@ vi.mock("next-auth/react", () => ({
   signIn: (...args: unknown[]) => signInMock(...args),
 }));
 
+// Visual audit P1 (2026-05-04): the login page now reads `?next=` via
+// useSearchParams() and sanitises through getSafeNext(). Outside a real
+// Next runtime the hook returns null, so stub a default URLSearchParams.
+// The verify-email block below uses vi.doMock to override per-test, which
+// composes correctly with this top-level vi.mock baseline.
+vi.mock("next/navigation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/navigation")>();
+  return {
+    ...actual,
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
+
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
 
