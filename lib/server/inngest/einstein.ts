@@ -40,6 +40,7 @@
 //   - Per-tenant rateLimit on the worker prevents runaway reindex when many
 //     fast-path events queue up in a short window.
 
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { inngest } from "./client";
 import { getAllFarmSlugs } from "@/lib/meta-db";
@@ -60,6 +61,25 @@ const ENTITY_EVENT_REINDEX = "einstein/reindex.entity";
 /** Concurrency cap — Inngest free-plan ceiling. DO NOT RAISE without upgrading
  *  the plan first. Phase K (`dd83312`) burned a deploy chain on this. */
 const FREE_PLAN_CONCURRENCY_LIMIT = 5;
+
+/**
+ * Bump this string whenever the chunker text renderer changes in a way that
+ * produces different output for the same source row (e.g. a new field is
+ * included, a template sentence changes). Old chunks with a different
+ * `chunkerVersion` will be treated as stale and re-embedded on the next
+ * reindex run, even if the source row's `updatedAt` hasn't changed.
+ *
+ * Format: `"<YYYY-MM-DD>.<sequence>"` — date of the rendering change + a
+ * monotone counter for same-day bumps.
+ */
+export const CURRENT_CHUNKER_VERSION = "2026-05-04.1";
+
+/** SHA-256 hex digest of a chunk's rendered text. Used to detect renderer
+ *  changes that weren't accompanied by a CURRENT_CHUNKER_VERSION bump and to
+ *  catch rows whose content changed without an updatedAt signal. */
+function sha256Hex(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
 
 /** The 7 entity types Einstein embeds. Order matches the corpus spec in
  *  research-phase-l-farm-einstein.md. Kept in a const array so a missing
@@ -291,7 +311,11 @@ export async function findStaleEntities(
     }
     case "camp": {
       const rows = await prisma.camp.findMany({});
-      sourceRows = rows.map((r) => ({ id: r.id, updatedAt: r.createdAt, row: r }));
+      // Use updatedAt now that 0014_einstein_chunker_version migration added the
+      // column. Falls back to createdAt for rows that pre-date the migration
+      // (they'll have updatedAt === createdAt via the DEFAULT CURRENT_TIMESTAMP
+      // backfill, so no spurious re-embeds).
+      sourceRows = rows.map((r) => ({ id: r.id, updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt, row: r }));
       break;
     }
     case "animal": {
@@ -304,14 +328,17 @@ export async function findStaleEntities(
       const campById = new Map(camps.map((c) => [c.campId, c.campName]));
       sourceRows = rows.map((r) => ({
         id: r.id,
-        updatedAt: r.createdAt,
+        // Use updatedAt (added by migration 0014). Falls back to createdAt for
+        // pre-migration rows that were backfilled with DEFAULT CURRENT_TIMESTAMP.
+        updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt,
         row: { ...r, currentCampName: campById.get(r.currentCamp) ?? undefined },
       }));
       break;
     }
     case "task": {
       const rows = await prisma.task.findMany({});
-      sourceRows = rows.map((r) => ({ id: r.id, updatedAt: r.createdAt, row: r }));
+      // Use updatedAt (added by migration 0014). Falls back to createdAt.
+      sourceRows = rows.map((r) => ({ id: r.id, updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt, row: r }));
       break;
     }
     case "task_template": {
@@ -339,25 +366,72 @@ export async function findStaleEntities(
   // update. If the chunker returns both en+af and only `en` is older, we
   // still re-embed (cheap); the upsert on (entityType, entityId, langTag)
   // scopes writes correctly.
+  //
+  // Issue #99: also fetch chunkerVersion + contentHash for the three-way
+  // stale check (timestamp OR version OR hash mismatch → re-embed).
   const existingChunks = await prisma.einsteinChunk.findMany({
     where: {
       entityType,
       entityId: { in: sourceRows.map((r) => r.id) },
     },
-    select: { entityId: true, sourceUpdatedAt: true },
+    select: { entityId: true, sourceUpdatedAt: true, chunkerVersion: true, contentHash: true },
   });
-  const minChunkAtByEntity = new Map<string, Date>();
+
+  // Per entity: keep the "most-stale" chunk signal across langTags.
+  // A chunk is stale if ANY langTag is stale (we re-embed all langTags for
+  // that entity when any one fires).
+  interface ChunkSignal {
+    sourceUpdatedAt: Date;
+    chunkerVersion: string;
+    contentHash: string;
+  }
+  const chunkSignalByEntity = new Map<string, ChunkSignal>();
   for (const chunk of existingChunks) {
-    const prev = minChunkAtByEntity.get(chunk.entityId);
-    if (!prev || chunk.sourceUpdatedAt.getTime() < prev.getTime()) {
-      minChunkAtByEntity.set(chunk.entityId, chunk.sourceUpdatedAt);
+    const prev = chunkSignalByEntity.get(chunk.entityId);
+    // Keep the oldest sourceUpdatedAt (most conservative — triggers re-embed
+    // if the source has moved past ANY existing chunk timestamp).
+    if (!prev || chunk.sourceUpdatedAt.getTime() < prev.sourceUpdatedAt.getTime()) {
+      chunkSignalByEntity.set(chunk.entityId, {
+        sourceUpdatedAt: chunk.sourceUpdatedAt,
+        chunkerVersion: (chunk as unknown as { chunkerVersion?: string }).chunkerVersion ?? "0",
+        contentHash: (chunk as unknown as { contentHash?: string }).contentHash ?? "",
+      });
+    }
+  }
+
+  // Render all source rows so we can compute the current content hash for
+  // Trigger C. We only render rows that have a chunk (no-chunk rows are
+  // immediately stale via the missing-chunk path and don't need a hash check).
+  const renderedByEntityId = new Map<string, string>();
+  for (const { id, row } of sourceRows) {
+    if (!chunkSignalByEntity.has(id)) continue; // no existing chunk — will be marked stale below
+    const rendered = toEmbeddingText({ entityType, entityId: id, row });
+    if (Array.isArray(rendered) && rendered.length > 0) {
+      // Use the first rendered chunk (en) for hash — all langTags come from
+      // the same source row so a single representative hash is sufficient.
+      renderedByEntityId.set(id, rendered[0].text);
     }
   }
 
   return sourceRows.filter((r) => {
-    const chunkAt = minChunkAtByEntity.get(r.id);
-    if (!chunkAt) return true; // no chunk → embed
-    return r.updatedAt.getTime() > chunkAt.getTime(); // source newer → re-embed
+    const signal = chunkSignalByEntity.get(r.id);
+    if (!signal) return true; // no chunk at all → embed
+
+    // Trigger A: source row was updated after the chunk was written.
+    if (r.updatedAt.getTime() > signal.sourceUpdatedAt.getTime()) return true;
+
+    // Trigger B: chunker code changed since this chunk was written.
+    if (signal.chunkerVersion !== CURRENT_CHUNKER_VERSION) return true;
+
+    // Trigger C: rendered text has changed (hash mismatch). Catches renderer
+    // bugs or field additions that don't bump CURRENT_CHUNKER_VERSION.
+    const currentText = renderedByEntityId.get(r.id);
+    if (currentText !== undefined) {
+      const currentHash = sha256Hex(currentText);
+      if (signal.contentHash !== currentHash) return true;
+    }
+
+    return false;
   });
 }
 
@@ -398,6 +472,7 @@ async function upsertChunk(
   modelId: string,
 ): Promise<void> {
   const bytes = embeddingToBytes(vector);
+  const contentHash = sha256Hex(chunk.text);
   try {
     await prisma.einsteinChunk.upsert({
       where: {
@@ -416,6 +491,8 @@ async function upsertChunk(
         tokensUsed: tokensUsedForChunk,
         modelId,
         sourceUpdatedAt: chunk.sourceUpdatedAt,
+        chunkerVersion: CURRENT_CHUNKER_VERSION,
+        contentHash,
       },
       update: {
         text: chunk.text,
@@ -423,6 +500,8 @@ async function upsertChunk(
         tokensUsed: tokensUsedForChunk,
         modelId,
         sourceUpdatedAt: chunk.sourceUpdatedAt,
+        chunkerVersion: CURRENT_CHUNKER_VERSION,
+        contentHash,
       },
     });
   } catch (err) {
@@ -446,6 +525,8 @@ async function upsertChunk(
         tokensUsed: tokensUsedForChunk,
         modelId,
         sourceUpdatedAt: chunk.sourceUpdatedAt,
+        chunkerVersion: CURRENT_CHUNKER_VERSION,
+        contentHash,
       },
     });
   }
@@ -563,7 +644,7 @@ export async function reindexForEntity(
     }
     case "camp": {
       const r = await prisma.camp.findUnique({ where: { id: entityId } });
-      if (r) sourceRow = { id: r.id, updatedAt: r.createdAt, row: r };
+      if (r) sourceRow = { id: r.id, updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt, row: r };
       break;
     }
     case "animal": {
@@ -575,13 +656,13 @@ export async function reindexForEntity(
           select: { campName: true },
         });
         const enriched = { ...r, currentCampName: camp?.campName ?? undefined };
-        sourceRow = { id: r.id, updatedAt: r.createdAt, row: enriched };
+        sourceRow = { id: r.id, updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt, row: enriched };
       }
       break;
     }
     case "task": {
       const r = await prisma.task.findUnique({ where: { id: entityId } });
-      if (r) sourceRow = { id: r.id, updatedAt: r.createdAt, row: r };
+      if (r) sourceRow = { id: r.id, updatedAt: (r as unknown as { updatedAt?: Date }).updatedAt ?? r.createdAt, row: r };
       break;
     }
     case "task_template": {
