@@ -31,7 +31,9 @@ async function createMemClient(): Promise<Client> {
       source_db_name     TEXT NOT NULL,
       created_at         TEXT NOT NULL,
       last_promoted_at   TEXT,
-      prod_migration_at  TEXT
+      prod_migration_at  TEXT,
+      head_sha           TEXT,
+      soak_started_at    TEXT
     )
   `);
   await client.execute(`
@@ -355,9 +357,13 @@ describe('cloneBranch — mid-flight failure', () => {
     expect(row).toBeNull();
   });
 
-  it('does NOT write to meta-DB when db create fails', async () => {
+  it('does NOT write to meta-DB when db create fails with a non-orphan error', async () => {
+    // "already exists" is now the orphan-adoption signal (see orphan-adoption
+    // suite below). Use a different error stderr to exercise the genuine-
+    // failure path, where the function must still throw and leave meta-DB
+    // untouched.
     const cli = makeFakeCli({
-      'db:create': new TursoCliError(['db', 'create', 'ft-clone-wave-x'], 1, 'already exists'),
+      'db:create': new TursoCliError(['db', 'create', 'ft-clone-wave-x'], 1, 'permission denied'),
     });
     const cloneBranch = await getCloneBranch();
     const { getBranchClone } = await import('@/lib/meta-db');
@@ -373,6 +379,115 @@ describe('cloneBranch — mid-flight failure', () => {
 
     const row = await getBranchClone('wave/x-create-fail');
     expect(row).toBeNull();
+  });
+});
+
+describe('cloneBranch — orphan clone adoption', () => {
+  // Bug pattern: a prior gate run successfully created the Turso DB but
+  // failed before persisting the meta-DB record (e.g. `db show` or `db tokens`
+  // throwing). The orphan Turso DB then blocks every subsequent gate run on
+  // the same branch — `db create` returns "already exists", and without
+  // adoption logic the gate workflow can never recover without manual
+  // operator cleanup. This suite locks in the self-healing behavior.
+
+  it('adopts the orphan clone when db create returns "already exists"', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'could not create database ft-clone-wave-x: database with name ft-clone-wave-x already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    const result = await cloneBranch({
+      branchName: 'wave/x-orphaned',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.alreadyExisted).toBe(true);
+    expect(result.tursoDbUrl).toBe(CANNED_URL);
+    expect(result.tursoAuthToken).toBe(CANNED_TOKEN);
+  });
+
+  it('writes a meta-DB row when adopting an orphan clone', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'database with name ft-clone-wave-x already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await cloneBranch({
+      branchName: 'wave/x-orphan-persist',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    const row = await getBranchClone('wave/x-orphan-persist');
+    expect(row).not.toBeNull();
+    expect(row!.tursoDbUrl).toBe(CANNED_URL);
+    expect(row!.tursoAuthToken).toBe(CANNED_TOKEN);
+    expect(row!.sourceDbName).toBe('basson-boerdery');
+  });
+
+  it('still calls db show + db tokens after adopting (3 CLI calls total)', async () => {
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'already exists',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    await cloneBranch({
+      branchName: 'wave/x-orphan-calls',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(cli.calls).toHaveLength(3);
+    expect(cli.calls[0].args.slice(0, 2)).toEqual(['db', 'create']);
+    expect(cli.calls[1].args.slice(0, 2)).toEqual(['db', 'show']);
+    expect(cli.calls[2].args.slice(0, 2)).toEqual(['db', 'tokens']);
+  });
+
+  it('matches the "already exists" signal case-insensitively', async () => {
+    // Defensive: turso CLI casing varies across versions ("Already Exists",
+    // "ALREADY EXISTS", etc). The detector must not be brittle.
+    const cli = makeFakeCli({
+      'db:create': new TursoCliError(
+        ['db', 'create', 'ft-clone-wave-x'],
+        1,
+        'database ALREADY EXISTS',
+      ),
+      'db:show': CANNED_URL,
+      'db:tokens': CANNED_TOKEN,
+    });
+    const cloneBranch = await getCloneBranch();
+
+    const result = await cloneBranch({
+      branchName: 'wave/x-orphan-case',
+      sourceDbName: 'basson-boerdery',
+      cli,
+      metaClient: memClient,
+    });
+
+    expect(result.alreadyExisted).toBe(true);
   });
 });
 
@@ -596,13 +711,16 @@ async function insertCloneRow(
     branchName: string;
     tursoDbName: string;
     createdAt: string;
+    headSha?: string | null;
+    soakStartedAt?: string | null;
   },
 ): Promise<void> {
   await client.execute({
     sql: `INSERT OR REPLACE INTO branch_db_clones
             (branch_name, turso_db_name, turso_db_url, turso_auth_token,
-             source_db_name, created_at, last_promoted_at, prod_migration_at)
-          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+             source_db_name, created_at, last_promoted_at, prod_migration_at,
+             head_sha, soak_started_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
     args: [
       opts.branchName,
       opts.tursoDbName,
@@ -610,6 +728,8 @@ async function insertCloneRow(
       'tok-test',
       'basson-boerdery',
       opts.createdAt,
+      opts.headSha ?? null,
+      opts.soakStartedAt ?? null,
     ],
   });
 }
@@ -1190,5 +1310,275 @@ describe('promoteToProd integrates with all-tenant runner (Wave 4 A1)', () => {
     expect(runForTenant).toHaveBeenCalledTimes(2);
     expect(result.prodMigrationAppliedFiles).toContain('tenant-alpha:tenant-alpha-0001.sql');
     expect(result.prodMigrationAppliedFiles).toContain('tenant-beta:tenant-beta-0001.sql');
+  });
+});
+
+// ── Issue #101: Commit-SHA soak gate ─────────────────────────────────────────
+//
+// Bug: promoteToProd measured soak from `created_at` (branch clone creation
+// time). A force-push or re-push to a long-lived branch left `created_at`
+// unchanged, so a brand-new commit would pass the gate immediately.
+//
+// Fix: add `head_sha` + `soak_started_at` to `branch_db_clones`. A new helper
+// `recordCiPassForCommit` stamps these fields when CI finishes for a given SHA.
+// `promoteToProd` now receives the PR head SHA and:
+//   1. If `head_sha` in the row doesn't match, throws SoakNotMetError
+//      (telemetry counter: 'soak_sha_mismatch').
+//   2. Measures elapsed from `soak_started_at` (not `created_at`).
+//
+// RED tests (these must FAIL before implementation):
+
+async function getRecordCiPassForCommit() {
+  const mod = await import('@/lib/ops/branch-clone');
+  return mod.recordCiPassForCommit;
+}
+
+describe('recordCiPassForCommit — stamps head_sha + soak_started_at', () => {
+  it('sets head_sha and soak_started_at on an existing clone row', async () => {
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/ci-pass-test',
+      tursoDbName: 'ft-clone-ci-pass-abc111',
+      createdAt: new Date('2026-05-01T10:00:00.000Z').toISOString(),
+    });
+
+    const fixedNow = new Date('2026-05-01T11:00:00.000Z');
+    await recordCiPassForCommit({
+      branchName: 'wave/ci-pass-test',
+      commitSha: 'abc123def456',
+      metaClient: memClient,
+      now: () => fixedNow,
+    });
+
+    const result = await memClient.execute({
+      sql: `SELECT head_sha, soak_started_at FROM branch_db_clones WHERE branch_name = ?`,
+      args: ['wave/ci-pass-test'],
+    });
+    expect(result.rows[0].head_sha).toBe('abc123def456');
+    expect(result.rows[0].soak_started_at).toBe('2026-05-01T11:00:00.000Z');
+  });
+
+  it('overwrites an existing head_sha when CI passes again for a new commit', async () => {
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/ci-overwrite',
+      tursoDbName: 'ft-clone-overwrite-abc112',
+      createdAt: new Date().toISOString(),
+      headSha: 'old-sha-999',
+      soakStartedAt: new Date('2026-05-01T08:00:00.000Z').toISOString(),
+    });
+
+    const newNow = new Date('2026-05-02T09:00:00.000Z');
+    await recordCiPassForCommit({
+      branchName: 'wave/ci-overwrite',
+      commitSha: 'new-sha-888',
+      metaClient: memClient,
+      now: () => newNow,
+    });
+
+    const result = await memClient.execute({
+      sql: `SELECT head_sha, soak_started_at FROM branch_db_clones WHERE branch_name = ?`,
+      args: ['wave/ci-overwrite'],
+    });
+    expect(result.rows[0].head_sha).toBe('new-sha-888');
+    expect(result.rows[0].soak_started_at).toBe('2026-05-02T09:00:00.000Z');
+  });
+});
+
+describe('promoteToProd — commit-SHA soak gate (issue #101)', () => {
+  it('throws SoakNotMetError when branch was created 2h ago but commit was pushed 5min ago', async () => {
+    // This is the core regression test for issue #101:
+    // The branch clone exists (created 2h ago), so the OLD gate would pass.
+    // But CI only finished for this SHA 5 minutes ago — the NEW gate must reject.
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    const twoHoursAgo = new Date('2026-05-01T10:00:00.000Z');
+    const fiveMinutesAgo = new Date('2026-05-01T11:55:00.000Z');
+    const nowTime = new Date('2026-05-01T12:00:00.000Z');
+
+    // Branch clone created 2h ago (old gate would pass minSoakHours=1)
+    await insertCloneRow(memClient, {
+      branchName: 'wave/101-regression',
+      tursoDbName: 'ft-clone-101-abc200',
+      createdAt: twoHoursAgo.toISOString(),
+    });
+
+    // CI just passed for a brand-new commit 5min ago
+    await recordCiPassForCommit({
+      branchName: 'wave/101-regression',
+      commitSha: 'fresh-sha-001',
+      metaClient: memClient,
+      now: () => fiveMinutesAgo,
+    });
+
+    let migrationCalled = false;
+    await expect(
+      promoteToProd({
+        branchName: 'wave/101-regression',
+        headSha: 'fresh-sha-001',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => nowTime,
+        runProdMigration: async () => {
+          migrationCalled = true;
+          return { applied: [], skipped: [] };
+        },
+      }),
+    ).rejects.toBeInstanceOf(SoakNotMetError);
+
+    expect(migrationCalled).toBe(false);
+  });
+
+  it('passes soak gate when headSha CI finished 2h ago', async () => {
+    const promoteToProd = await getPromoteToProd();
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    const twoHoursAgo = new Date('2026-05-01T10:00:00.000Z');
+    const nowTime = new Date('2026-05-01T12:00:00.000Z');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/101-pass',
+      tursoDbName: 'ft-clone-101-abc201',
+      createdAt: twoHoursAgo.toISOString(),
+    });
+
+    // CI passed for this SHA 2h ago
+    await recordCiPassForCommit({
+      branchName: 'wave/101-pass',
+      commitSha: 'soaked-sha-002',
+      metaClient: memClient,
+      now: () => twoHoursAgo,
+    });
+
+    const result = await promoteToProd({
+      branchName: 'wave/101-pass',
+      headSha: 'soaked-sha-002',
+      minSoakHours: 1,
+      metaClient: memClient,
+      now: () => nowTime,
+      runProdMigration: async () => ({ applied: ['0013_payfast.sql'], skipped: [] }),
+    });
+
+    expect(result.branchName).toBe('wave/101-pass');
+    expect(result.prodMigrationAppliedFiles).toContain('0013_payfast.sql');
+  });
+
+  it('throws SoakNotMetError with shaMismatch=true when headSha does not match stored sha', async () => {
+    // A branch that has soaked for 2h but a DIFFERENT sha than what is being promoted
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    const twoHoursAgo = new Date('2026-05-01T10:00:00.000Z');
+    const nowTime = new Date('2026-05-01T12:00:00.000Z');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/101-mismatch',
+      tursoDbName: 'ft-clone-101-abc202',
+      createdAt: twoHoursAgo.toISOString(),
+    });
+
+    // Old commit soaked for 2h
+    await recordCiPassForCommit({
+      branchName: 'wave/101-mismatch',
+      commitSha: 'old-soaked-sha',
+      metaClient: memClient,
+      now: () => twoHoursAgo,
+    });
+
+    // But now we're trying to promote a DIFFERENT sha that was just pushed
+    let caughtError: unknown;
+    try {
+      await promoteToProd({
+        branchName: 'wave/101-mismatch',
+        headSha: 'new-unsoaked-sha',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => nowTime,
+        runProdMigration: async () => ({ applied: [], skipped: [] }),
+      });
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(SoakNotMetError);
+    const soakErr = caughtError as InstanceType<typeof SoakNotMetError>;
+    expect(soakErr.shaMismatch).toBe(true);
+    expect(soakErr.branchName).toBe('wave/101-mismatch');
+  });
+
+  it('falls back to createdAt-based soak when no headSha is provided (backward compat)', async () => {
+    // If promoteToProd is called without headSha, the old createdAt behaviour
+    // must still work (graceful upgrade path).
+    const promoteToProd = await getPromoteToProd();
+
+    const twoHoursAgo = new Date('2026-05-01T10:00:00.000Z');
+    const nowTime = new Date('2026-05-01T12:00:00.000Z');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/101-compat',
+      tursoDbName: 'ft-clone-101-abc203',
+      createdAt: twoHoursAgo.toISOString(),
+      // no headSha/soakStartedAt
+    });
+
+    // Should pass using createdAt (2h > 1h requirement)
+    const result = await promoteToProd({
+      branchName: 'wave/101-compat',
+      // no headSha — backward compat path
+      minSoakHours: 1,
+      metaClient: memClient,
+      now: () => nowTime,
+      runProdMigration: async () => ({ applied: [], skipped: [] }),
+    });
+
+    expect(result.branchName).toBe('wave/101-compat');
+  });
+
+  it('SoakNotMetError.soakHoursElapsed reflects time from soak_started_at (not created_at)', async () => {
+    const { SoakNotMetError } = await import('@/lib/ops/branch-clone');
+    const promoteToProd = await getPromoteToProd();
+    const recordCiPassForCommit = await getRecordCiPassForCommit();
+
+    // Branch created 5h ago, but CI only passed 30min ago for the current sha
+    const fiveHoursAgo = new Date('2026-05-01T07:00:00.000Z');
+    const thirtyMinsAgo = new Date('2026-05-01T11:30:00.000Z');
+    const nowTime = new Date('2026-05-01T12:00:00.000Z');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/101-elapsed',
+      tursoDbName: 'ft-clone-101-abc204',
+      createdAt: fiveHoursAgo.toISOString(),
+    });
+
+    await recordCiPassForCommit({
+      branchName: 'wave/101-elapsed',
+      commitSha: 'sha-recent-ci',
+      metaClient: memClient,
+      now: () => thirtyMinsAgo,
+    });
+
+    let caughtError: unknown;
+    try {
+      await promoteToProd({
+        branchName: 'wave/101-elapsed',
+        headSha: 'sha-recent-ci',
+        minSoakHours: 1,
+        metaClient: memClient,
+        now: () => nowTime,
+        runProdMigration: async () => ({ applied: [], skipped: [] }),
+      });
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(SoakNotMetError);
+    const soakErr = caughtError as InstanceType<typeof SoakNotMetError>;
+    // elapsed should be ~0.5h (from soak_started_at), NOT 5h (from created_at)
+    expect(soakErr.soakHoursElapsed).toBeCloseTo(0.5, 1);
   });
 });

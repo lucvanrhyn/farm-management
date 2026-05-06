@@ -20,6 +20,7 @@ import {
   cloneBranch,
   destroyBranchDb,
   promoteToProd,
+  recordCiPassForCommit,
   SoakNotMetError,
   BranchCloneNotFoundError,
 } from '@/lib/ops/branch-clone';
@@ -34,6 +35,8 @@ export interface CliDeps {
   destroyBranchDbImpl?: typeof destroyBranchDb;
   /** Injectable impl — defaults to the real promoteToProd. */
   promoteToProdImpl?: typeof promoteToProd;
+  /** Injectable impl — defaults to the real recordCiPassForCommit. */
+  recordCiPassForCommitImpl?: typeof recordCiPassForCommit;
   /** Output sink for stdout lines. Defaults to console.log. */
   stdout?: (s: string) => void;
   /** Output sink for stderr lines. Defaults to console.error. */
@@ -60,10 +63,19 @@ Commands:
       Options:
         --skip-turso      Skip the turso CLI destroy step (meta row only)
 
-  promote <branchName> [--min-soak-hours <n>] [--force-skip-soak]
+  ci-pass <branchName> --sha <commitSha>
+      Record that CI passed for a specific commit SHA. Stamps head_sha and
+      soak_started_at on the clone row, starting the per-commit soak clock.
+      Call this from the CI workflow after all checks pass (issue #101 fix).
+      Options:
+        --sha <sha>   Commit SHA that passed CI (required)
+
+  promote <branchName> [--sha <headSha>] [--min-soak-hours <n>] [--force-skip-soak]
       Promote a branch clone to prod by running prod migrations.
       Options:
-        --min-soak-hours <n>  Minimum soak hours since clone creation (default: 1)
+        --sha <sha>           PR head commit SHA being promoted (strongly recommended;
+                              required for commit-SHA soak gate, issue #101 fix)
+        --min-soak-hours <n>  Minimum soak hours (default: 1)
         --force-skip-soak     Bypass soak gate (emergency use only)
 
 Options:
@@ -71,8 +83,9 @@ Options:
 
 Examples:
   branch-clone clone wave/19-option-c --source basson-boerdery
+  branch-clone ci-pass wave/19-option-c --sha abc123def456
   branch-clone destroy wave/19-option-c
-  branch-clone promote wave/19-option-c --min-soak-hours 2
+  branch-clone promote wave/19-option-c --sha abc123def456 --min-soak-hours 2
 `.trim();
 
 // ── Argv parser ───────────────────────────────────────────────────────────────
@@ -197,6 +210,34 @@ async function handleDestroy(
   }
 }
 
+async function handleCiPass(
+  positionals: string[],
+  flags: Record<string, string | true>,
+  deps: Required<CliDeps>,
+): Promise<number> {
+  // positionals[0] is 'ci-pass', positionals[1] is branchName
+  const branchName = positionals[1];
+  const commitSha = typeof flags['sha'] === 'string' ? flags['sha'] : undefined;
+
+  if (!branchName) {
+    deps.stderr('Error: branch name is required.\n\n' + USAGE);
+    return 1;
+  }
+  if (!commitSha) {
+    deps.stderr('Error: --sha <commitSha> is required.\n\n' + USAGE);
+    return 1;
+  }
+
+  try {
+    await deps.recordCiPassForCommitImpl({ branchName, commitSha });
+    deps.stdout(JSON.stringify({ branchName, commitSha, soakStarted: true }));
+    return 0;
+  } catch (err) {
+    deps.stderr(`Unexpected error during ci-pass: ${err instanceof Error ? err.message : String(err)}`);
+    return 2;
+  }
+}
+
 async function handlePromote(
   positionals: string[],
   flags: Record<string, string | true>,
@@ -214,10 +255,14 @@ async function handlePromote(
   const minSoakHoursRaw = flags['min-soak-hours'];
   const minSoakHours =
     typeof minSoakHoursRaw === 'string' ? Number(minSoakHoursRaw) : undefined;
+  // Issue #101: --sha is strongly recommended so the gate keys on the commit
+  // being promoted, not on the branch clone creation time.
+  const headSha = typeof flags['sha'] === 'string' ? flags['sha'] : undefined;
 
   try {
     const result = await deps.promoteToProdImpl({
       branchName,
+      headSha,
       forceSkipSoak,
       ...(minSoakHours !== undefined ? { minSoakHours } : {}),
     });
@@ -231,11 +276,12 @@ async function handlePromote(
     return 0;
   } catch (err) {
     if (err instanceof SoakNotMetError) {
-      deps.stderr(
-        `Soak gate not met for branch '${err.branchName}': ` +
-        `${err.soakHoursElapsed.toFixed(2)}h elapsed of ${err.minSoakHours}h required. ` +
-        `Wait or re-run with --force-skip-soak.`,
-      );
+      const msg = err.shaMismatch
+        ? `Soak SHA mismatch for branch '${err.branchName}': a new commit was pushed after soak started. Re-soak required.`
+        : `Soak gate not met for branch '${err.branchName}': ` +
+          `${err.soakHoursElapsed.toFixed(2)}h elapsed of ${err.minSoakHours}h required. ` +
+          `Wait or re-run with --force-skip-soak.`;
+      deps.stderr(msg);
       return 1;
     }
     if (err instanceof BranchCloneNotFoundError) {
@@ -262,6 +308,7 @@ export async function runCli(
     cloneBranchImpl: deps?.cloneBranchImpl ?? cloneBranch,
     destroyBranchDbImpl: deps?.destroyBranchDbImpl ?? destroyBranchDb,
     promoteToProdImpl: deps?.promoteToProdImpl ?? promoteToProd,
+    recordCiPassForCommitImpl: deps?.recordCiPassForCommitImpl ?? recordCiPassForCommit,
     stdout: deps?.stdout ?? ((s) => console.log(s)),
     stderr: deps?.stderr ?? ((s) => console.error(s)),
     exit: deps?.exit ?? ((code) => process.exit(code)),
@@ -281,6 +328,8 @@ export async function runCli(
       return handleClone(positionals, flags, resolvedDeps);
     case 'destroy':
       return handleDestroy(positionals, flags, resolvedDeps);
+    case 'ci-pass':
+      return handleCiPass(positionals, flags, resolvedDeps);
     case 'promote':
       return handlePromote(positionals, flags, resolvedDeps);
     default:
