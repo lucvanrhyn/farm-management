@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { createClient } from '@libsql/client';
 import type { Client } from '@libsql/client';
 import type { TursoCli } from '@/lib/ops/turso-cli';
-import { realTursoCli } from '@/lib/ops/turso-cli';
+import { realTursoCli, TursoCliError } from '@/lib/ops/turso-cli';
 import { getMetaClient, getAllFarmSlugs, getFarmCreds } from '@/lib/meta-db';
 import type { FarmCreds } from '@/lib/meta-db';
 import { loadMigrations, runMigrations } from '@/lib/migrator';
@@ -136,15 +136,36 @@ export async function cloneBranch(
   const tursoDbName = slugifyBranchName(branchName, cliPrefix);
 
   // ── 3. Invoke turso CLI (three steps, abort on any failure) ──────────────
-  //    a. Create the clone
-  await cli.run([
-    'db',
-    'create',
-    tursoDbName,
-    '--from-db',
-    sourceDbName,
-    ...(groupName ? ['--group', groupName] : []),
-  ]);
+  //    a. Create the clone — or adopt an orphan from a prior failed gate run.
+  //
+  //    Bug pattern (rare but blocking when it strikes): a prior cloneBranch
+  //    call created the Turso DB but failed before persisting the meta-DB
+  //    row (e.g. the subsequent `db show` or `db tokens` step threw, or the
+  //    process was killed). The Turso DB then exists with no meta record,
+  //    and every subsequent gate run on the same branch fails with
+  //    "already exists" until an operator manually destroys the orphan.
+  //
+  //    Adoption: when `db create` returns "already exists", treat it as a
+  //    successful provision and continue to step 3b/3c, which retrieve the
+  //    URL and mint a fresh non-expiring token. Step 4 then writes the
+  //    meta record, self-healing the orphan on the next gate run.
+  let alreadyExisted = false;
+  try {
+    await cli.run([
+      'db',
+      'create',
+      tursoDbName,
+      '--from-db',
+      sourceDbName,
+      ...(groupName ? ['--group', groupName] : []),
+    ]);
+  } catch (err) {
+    if (err instanceof TursoCliError && /already exists/i.test(err.stderr)) {
+      alreadyExisted = true;
+    } else {
+      throw err;
+    }
+  }
 
   //    b. Retrieve the libsql URL
   const tursoDbUrl = await cli.run(['db', 'show', tursoDbName, '--url']);
@@ -178,7 +199,7 @@ export async function cloneBranch(
     tursoDbName,
     tursoDbUrl,
     tursoAuthToken,
-    alreadyExisted: false,
+    alreadyExisted,
   };
 }
 
@@ -208,7 +229,20 @@ export interface DestroyBranchDbResult {
 export interface PromoteToProdInput {
   branchName: string;
   /**
-   * Minimum hours between clone creation and promote.
+   * The PR head commit SHA being promoted.
+   *
+   * When provided, the soak gate verifies that THIS sha is the one that soaked
+   * (stored as `head_sha` in the meta row) and measures elapsed time from
+   * `soak_started_at`. If the stored sha differs, the gate throws
+   * {@link SoakNotMetError} with `shaMismatch=true` even if the branch was
+   * created hours ago — preventing the re-push bypass (issue #101).
+   *
+   * When omitted, the gate falls back to `created_at` (backward-compat for
+   * callers that have not yet migrated to the SHA-based flow).
+   */
+  headSha?: string;
+  /**
+   * Minimum hours between soak start and promote.
    * Defaults to 1 hour.
    */
   minSoakHours?: number;
@@ -233,6 +267,44 @@ export interface PromoteToProdInput {
   runProdMigration?: () => Promise<{ applied: string[]; skipped: string[] }>;
 }
 
+// ── Issue #101: Per-commit soak bookkeeping ───────────────────────────────────
+
+export interface RecordCiPassInput {
+  /** Git branch name, e.g. 'wave/101-soak-gate-commit'. */
+  branchName: string;
+  /** The full or short commit SHA that just passed CI. */
+  commitSha: string;
+  /** Injectable meta-DB client. Defaults to the production singleton. */
+  metaClient?: Client;
+  /** Injectable clock. Defaults to () => new Date(). */
+  now?: () => Date;
+}
+
+/**
+ * Stamp the meta row for a branch with the commit SHA that just passed CI and
+ * the timestamp when CI finished (`soak_started_at`).
+ *
+ * Called by the CI workflow after all checks pass. Resets the soak clock to
+ * NOW whenever a new commit's CI completes, so a re-push to an aged branch
+ * does not inherit the old soak window (issue #101 fix).
+ *
+ * Idempotent for the same SHA; overwrites for a new SHA (new push → new soak).
+ */
+export async function recordCiPassForCommit(
+  input: RecordCiPassInput,
+): Promise<void> {
+  const { branchName, commitSha, now = () => new Date() } = input;
+  const metaClient: Client = input.metaClient ?? getMetaClient();
+
+  const soakStartedAt = now().toISOString();
+  await metaClient.execute({
+    sql: `UPDATE branch_db_clones
+          SET head_sha = ?, soak_started_at = ?
+          WHERE branch_name = ?`,
+    args: [commitSha, soakStartedAt, branchName],
+  });
+}
+
 export interface PromoteToProdResult {
   branchName: string;
   prodMigrationAppliedFiles: string[];
@@ -246,9 +318,13 @@ export class SoakNotMetError extends Error {
     readonly branchName: string,
     readonly soakHoursElapsed: number,
     readonly minSoakHours: number,
+    /** true when the promote headSha differs from the stored head_sha (re-push bypass) */
+    readonly shaMismatch: boolean = false,
   ) {
     super(
-      `Branch '${branchName}' has only soaked ${soakHoursElapsed.toFixed(2)}h of the required ${minSoakHours}h before promote.`,
+      shaMismatch
+        ? `Branch '${branchName}' head SHA mismatch — a new commit was pushed after soak started. Re-soak required.`
+        : `Branch '${branchName}' has only soaked ${soakHoursElapsed.toFixed(2)}h of the required ${minSoakHours}h before promote.`,
     );
     this.name = 'SoakNotMetError';
   }
@@ -438,6 +514,7 @@ export async function promoteToProd(
 ): Promise<PromoteToProdResult> {
   const {
     branchName,
+    headSha,
     minSoakHours = 1,
     forceSkipSoak = false,
     now = () => new Date(),
@@ -453,12 +530,41 @@ export async function promoteToProd(
   }
 
   // 2. Soak gate.
+  //
+  // Issue #101 fix: when headSha is provided, the gate keys on the per-commit
+  // `soak_started_at` timestamp (set by recordCiPassForCommit) rather than the
+  // branch-level `created_at`. This prevents the re-push bypass where an aged
+  // branch satisfies the gate even though a brand-new commit was just pushed.
+  //
+  // If headSha is not provided, fall back to created_at (backward-compat path
+  // for callers that have not yet migrated to the SHA-based CI workflow).
   if (!forceSkipSoak) {
     const nowMs = now().getTime();
-    const createdAtMs = new Date(row.createdAt).getTime();
-    const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
-    if (elapsedHours < minSoakHours) {
-      throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+
+    if (headSha !== undefined) {
+      // SHA-based gate (issue #101 fix)
+      if (row.headSha !== headSha) {
+        // Telemetry: soak SHA mismatch — new commit pushed after soak started
+        console.warn(
+          `[promote] [soak_sha_mismatch] branch=${branchName} stored=${row.headSha ?? 'none'} requested=${headSha}`,
+        );
+        throw new SoakNotMetError(branchName, 0, minSoakHours, /* shaMismatch */ true);
+      }
+      // SHA matches — measure elapsed from soak_started_at
+      const soakStartMs = row.soakStartedAt
+        ? new Date(row.soakStartedAt).getTime()
+        : new Date(row.createdAt).getTime();
+      const elapsedHours = (nowMs - soakStartMs) / (1000 * 60 * 60);
+      if (elapsedHours < minSoakHours) {
+        throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+      }
+    } else {
+      // Backward-compat: no headSha provided → use created_at
+      const createdAtMs = new Date(row.createdAt).getTime();
+      const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
+      if (elapsedHours < minSoakHours) {
+        throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+      }
     }
   }
 
@@ -522,8 +628,9 @@ async function _recordBranchCloneViaClient(
   await client.execute({
     sql: `INSERT OR REPLACE INTO branch_db_clones
             (branch_name, turso_db_name, turso_db_url, turso_auth_token,
-             source_db_name, created_at, last_promoted_at, prod_migration_at)
-          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+             source_db_name, created_at, last_promoted_at, prod_migration_at,
+             head_sha, soak_started_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
     args: [
       record.branchName,
       record.tursoDbName,
@@ -547,10 +654,15 @@ async function _getBranchCloneFullViaClient(
   createdAt: string;
   lastPromotedAt: string | null;
   prodMigrationAt: string | null;
+  /** Commit SHA that last passed CI and started the soak window (issue #101). */
+  headSha: string | null;
+  /** ISO timestamp when CI passed for headSha — start of the soak window (issue #101). */
+  soakStartedAt: string | null;
 } | null> {
   const result = await client.execute({
     sql: `SELECT branch_name, turso_db_name, turso_db_url, turso_auth_token,
-                 source_db_name, created_at, last_promoted_at, prod_migration_at
+                 source_db_name, created_at, last_promoted_at, prod_migration_at,
+                 head_sha, soak_started_at
           FROM branch_db_clones
           WHERE branch_name = ?
           LIMIT 1`,
@@ -567,6 +679,8 @@ async function _getBranchCloneFullViaClient(
     createdAt: row.created_at as string,
     lastPromotedAt: (row.last_promoted_at as string) ?? null,
     prodMigrationAt: (row.prod_migration_at as string) ?? null,
+    headSha: (row.head_sha as string) ?? null,
+    soakStartedAt: (row.soak_started_at as string) ?? null,
   };
 }
 

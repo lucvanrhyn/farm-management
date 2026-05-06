@@ -91,6 +91,7 @@ function makeDeps(overrides?: Partial<CliDeps>): CliDeps & {
     cloneBranchImpl: vi.fn(),
     destroyBranchDbImpl: vi.fn(),
     promoteToProdImpl: vi.fn(),
+    recordCiPassForCommitImpl: vi.fn(),
     stdout: (s: string) => stdoutLines.push(s),
     stderr: (s: string) => stderrLines.push(s),
     exit: (code: number) => { exitCode = code; },
@@ -429,5 +430,120 @@ describe('runCli meta', () => {
     expect(code).toBe(1);
     const errText = deps.stderrLines.join('\n');
     expect(errText).toMatch(/frobnicate|unknown|--help/i);
+  });
+});
+
+// ── ci-pass (issue #101) ──────────────────────────────────────────────────────
+
+describe('runCli ci-pass', () => {
+  it('happy path: parses argv, calls recordCiPassForCommitImpl, emits JSON, exits 0', async () => {
+    const deps = makeDeps({
+      recordCiPassForCommitImpl: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const code = await runCli(
+      ['ci-pass', 'wave/101-soak', '--sha', 'abc123def456'],
+      deps,
+    );
+
+    expect(code).toBe(0);
+    expect(deps.recordCiPassForCommitImpl).toHaveBeenCalledOnce();
+    expect(deps.recordCiPassForCommitImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ branchName: 'wave/101-soak', commitSha: 'abc123def456' }),
+    );
+
+    expect(deps.stdoutLines).toHaveLength(1);
+    const output = JSON.parse(deps.stdoutLines[0]);
+    expect(output.branchName).toBe('wave/101-soak');
+    expect(output.commitSha).toBe('abc123def456');
+    expect(output.soakStarted).toBe(true);
+    expect(deps.stderrLines).toHaveLength(0);
+  });
+
+  it('missing --sha: stderr contains usage, exit 1, impl not called', async () => {
+    const deps = makeDeps();
+
+    const code = await runCli(['ci-pass', 'wave/101-soak'], deps);
+
+    expect(code).toBe(1);
+    expect(deps.recordCiPassForCommitImpl).not.toHaveBeenCalled();
+    const errText = deps.stderrLines.join('\n');
+    expect(errText).toMatch(/--sha/i);
+  });
+
+  it('missing branch name: stderr contains usage, exit 1', async () => {
+    const deps = makeDeps();
+
+    const code = await runCli(['ci-pass', '--sha', 'abc123'], deps);
+
+    expect(code).toBe(1);
+    expect(deps.recordCiPassForCommitImpl).not.toHaveBeenCalled();
+  });
+
+  it('unexpected error: stderr message, exit 2', async () => {
+    const deps = makeDeps({
+      recordCiPassForCommitImpl: vi.fn().mockRejectedValue(new Error('DB connection failed')),
+    });
+
+    const code = await runCli(
+      ['ci-pass', 'wave/101-soak', '--sha', 'abc123'],
+      deps,
+    );
+
+    expect(code).toBe(2);
+    const errText = deps.stderrLines.join('\n');
+    expect(errText).toMatch(/DB connection failed/);
+  });
+});
+
+// ── promote --sha (issue #101) ────────────────────────────────────────────────
+
+describe('runCli promote --sha', () => {
+  it('passes headSha to promoteToProdImpl when --sha is provided', async () => {
+    const promoteResult = makePromoteResult();
+    const deps = makeDeps({
+      promoteToProdImpl: vi.fn().mockResolvedValue(promoteResult),
+    });
+
+    const code = await runCli(
+      ['promote', 'wave/101-soak', '--sha', 'abc123def456'],
+      deps,
+    );
+
+    expect(code).toBe(0);
+    const callArg = (deps.promoteToProdImpl as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0] as PromoteToProdInput;
+    expect(callArg.headSha).toBe('abc123def456');
+  });
+
+  it('does not set headSha when --sha is omitted (backward compat)', async () => {
+    const promoteResult = makePromoteResult();
+    const deps = makeDeps({
+      promoteToProdImpl: vi.fn().mockResolvedValue(promoteResult),
+    });
+
+    const code = await runCli(['promote', 'wave/101-soak'], deps);
+
+    expect(code).toBe(0);
+    const callArg = (deps.promoteToProdImpl as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0] as PromoteToProdInput;
+    expect(callArg.headSha).toBeUndefined();
+  });
+
+  it('SoakNotMetError with shaMismatch: stderr contains mismatch message, exit 1', async () => {
+    const deps = makeDeps({
+      promoteToProdImpl: vi.fn().mockRejectedValue(
+        new SoakNotMetError('wave/101-soak', 0, 1, /* shaMismatch */ true),
+      ),
+    });
+
+    const code = await runCli(
+      ['promote', 'wave/101-soak', '--sha', 'new-sha'],
+      deps,
+    );
+
+    expect(code).toBe(1);
+    const errText = deps.stderrLines.join('\n');
+    expect(errText).toMatch(/mismatch|re-soak/i);
   });
 });

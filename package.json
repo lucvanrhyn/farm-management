@@ -30,6 +30,7 @@
     "diff-farm-cutover": "tsx scripts/diff-farm-cutover.ts",
     "ops:clone-branch": "tsx scripts/branch-clone.ts clone",
     "ops:destroy-branch": "tsx scripts/branch-clone.ts destroy",
+    "ops:ci-pass-branch": "tsx scripts/branch-clone.ts ci-pass",
     "ops:promote-branch": "tsx scripts/branch-clone.ts promote",
     "ops:daily-summary": "tsx scripts/ops-daily-summary.ts",
     "test": "vitest run",
