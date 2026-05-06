@@ -28,12 +28,18 @@ import { NextRequest } from "next/server";
 
 // ── Hoisted mocks (per feedback-vi-hoisted-shared-mocks.md) ──────────────
 const mocks = vi.hoisted(() => {
+  type EventRow = {
+    pfPaymentId: string;
+    paymentStatus: string;
+    eventTime: Date;
+    processedAt: Date;
+    /** NULL until the subscription mutation completes (Issue #95 fix). */
+    appliedAt: Date | null;
+  };
+
   const mockState = {
     // Tracks rows in the per-tenant payfast_events table, keyed by pfPaymentId.
-    eventsByPaymentId: new Map<
-      string,
-      { pfPaymentId: string; eventTime: Date; processedAt: Date }
-    >(),
+    eventsByPaymentId: new Map<string, EventRow>(),
   };
 
   return {
@@ -66,7 +72,7 @@ const mocks = vi.hoisted(() => {
     computeFarmLsu: vi.fn(async () => 100),
     payfastEventCreate: vi.fn(
       async (args: {
-        data: { pfPaymentId: string; eventTime: Date };
+        data: { pfPaymentId: string; paymentStatus: string; eventTime: Date };
       }) => {
         // Emulate UNIQUE constraint on pfPaymentId.
         if (mockState.eventsByPaymentId.has(args.data.pfPaymentId)) {
@@ -76,10 +82,12 @@ const mocks = vi.hoisted(() => {
           err.code = "P2002";
           throw err;
         }
-        const row = {
+        const row: EventRow = {
           pfPaymentId: args.data.pfPaymentId,
+          paymentStatus: args.data.paymentStatus ?? '',
           eventTime: args.data.eventTime,
           processedAt: new Date(),
+          appliedAt: null,
         };
         mockState.eventsByPaymentId.set(args.data.pfPaymentId, row);
         return row;
@@ -91,6 +99,26 @@ const mocks = vi.hoisted(() => {
         if (rows.length === 0) return null;
         rows.sort((a, b) => b.eventTime.getTime() - a.eventTime.getTime());
         return rows[0];
+      },
+    ),
+    /** Issue #95: route inspects the existing row on P2002 to decide whether
+     * to re-apply (appliedAt IS NULL) or skip (appliedAt IS NOT NULL). */
+    payfastEventFindUnique: vi.fn(
+      async (args: { where: { pfPaymentId: string } }) => {
+        return mockState.eventsByPaymentId.get(args.where.pfPaymentId) ?? null;
+      },
+    ),
+    /** Issue #95: route stamps appliedAt after a successful mutation and also
+     * uses update for status-upgrade rows. */
+    payfastEventUpdate: vi.fn(
+      async (args: {
+        where: { pfPaymentId: string };
+        data: Partial<EventRow>;
+      }) => {
+        const row = mockState.eventsByPaymentId.get(args.where.pfPaymentId);
+        if (!row) throw new Error(`Row not found: ${args.where.pfPaymentId}`);
+        Object.assign(row, args.data);
+        return row;
       },
     ),
   };
@@ -119,6 +147,8 @@ vi.mock("@/lib/farm-prisma", () => ({
       payfastEvent: {
         create: mocks.payfastEventCreate,
         findFirst: mocks.payfastEventFindFirst,
+        findUnique: mocks.payfastEventFindUnique,
+        update: mocks.payfastEventUpdate,
       },
     }),
   ),
@@ -177,6 +207,8 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
     mocks.computeFarmLsu.mockImplementation(async () => 100);
     mocks.payfastEventCreate.mockClear();
     mocks.payfastEventFindFirst.mockClear();
+    mocks.payfastEventFindUnique.mockClear();
+    mocks.payfastEventUpdate.mockClear();
   });
 
   afterEach(() => {
