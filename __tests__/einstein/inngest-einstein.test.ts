@@ -73,6 +73,7 @@ import {
   findStaleEntities,
   renderChunksForType,
   ENTITY_TYPES,
+  CURRENT_CHUNKER_VERSION,
 } from "@/lib/server/inngest/einstein";
 import type { EntityType, RenderedChunk } from "@/lib/einstein/chunker";
 import { toEmbeddingText } from "@/lib/einstein/chunker";
@@ -263,14 +264,23 @@ describe("findStaleEntities — stale-detection SQL filter", () => {
     const obs2 = { id: "obs-2", createdAt: new Date("2026-04-05T00:00:00Z"), editedAt: null }; // equal → skip
     const obs3 = { id: "obs-3", createdAt: new Date("2026-04-01T00:00:00Z"), editedAt: null }; // no chunk
 
+    // For this test we want ONLY the timestamp trigger to fire.
+    // Supply chunkerVersion + contentHash that match the current state so
+    // Trigger B and Trigger C stay silent. The observation chunker renders
+    // a fixed text for these fixtures; we use a placeholder hash that equals
+    // what sha256(text) would produce for the empty/default renderer output.
+    // Because toEmbeddingText is mocked to return [] at module level, the hash
+    // check falls through (no rendered text → no hash comparison → skip hash
+    // trigger), so passing any non-empty contentHash keeps Trigger C quiet.
+    const freshChunkBase = { chunkerVersion: CURRENT_CHUNKER_VERSION, contentHash: "fresh-hash-obs" };
     const prisma = makeEinsteinPrisma({
       observation: {
         findMany: vi.fn().mockResolvedValue([obs1, obs2, obs3]),
       },
       einsteinChunk: {
         findMany: vi.fn().mockResolvedValue([
-          { entityId: "obs-1", sourceUpdatedAt: new Date("2026-04-05T00:00:00Z") },
-          { entityId: "obs-2", sourceUpdatedAt: new Date("2026-04-05T00:00:00Z") },
+          { entityId: "obs-1", sourceUpdatedAt: new Date("2026-04-05T00:00:00Z"), ...freshChunkBase },
+          { entityId: "obs-2", sourceUpdatedAt: new Date("2026-04-05T00:00:00Z"), ...freshChunkBase },
         ]),
       },
     });
@@ -684,6 +694,139 @@ describe("ENTITY_TYPES export (keeps entity coverage aligned with Wave 1 schema)
       "notification",
       "it3_snapshot",
     ]);
+  });
+});
+
+// ── Issue #99: Three-way invalidation (timestamp · chunker version · hash) ───
+
+describe("findStaleEntities — three-way invalidation (issue #99)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Trigger A: camp/animal/task rows use updatedAt (not createdAt) for stale detection", async () => {
+    // A camp was created 2026-04-01 but updated 2026-04-20 (after the chunk was
+    // written on 2026-04-10). createdAt-based detection would miss this; only
+    // updatedAt-based detection catches it.
+    const campCreatedAt = new Date("2026-04-01T00:00:00Z"); // old — would NOT trigger if we used createdAt
+    const campUpdatedAt = new Date("2026-04-20T00:00:00Z"); // newer than chunk — SHOULD trigger
+    const chunkSourceAt  = new Date("2026-04-10T00:00:00Z"); // existing chunk was written here
+
+    const prisma = makeEinsteinPrisma({
+      camp: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "camp-1", createdAt: campCreatedAt, updatedAt: campUpdatedAt },
+        ]),
+      },
+      einsteinChunk: {
+        findMany: vi.fn().mockResolvedValue([
+          { entityId: "camp-1", sourceUpdatedAt: chunkSourceAt, chunkerVersion: CURRENT_CHUNKER_VERSION, contentHash: "" },
+        ]),
+      },
+    });
+
+    const stale = await findStaleEntities(prisma, "camp");
+    expect(stale.map((s) => s.id)).toContain("camp-1");
+  });
+
+  it("Trigger B: chunker version mismatch forces re-index regardless of timestamps", async () => {
+    // The source row has NOT changed (updatedAt === chunk.sourceUpdatedAt), but
+    // the chunker was bumped to a newer version — stale chunk must be replaced.
+    const sharedDate = new Date("2026-04-10T00:00:00Z");
+
+    const prisma = makeEinsteinPrisma({
+      animal: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "animal-1", updatedAt: sharedDate },
+        ]),
+      },
+      camp: { findMany: vi.fn().mockResolvedValue([]) },
+      einsteinChunk: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            entityId: "animal-1",
+            sourceUpdatedAt: sharedDate,           // same — timestamp NOT stale
+            chunkerVersion: "old-version",          // MISMATCH vs CURRENT_CHUNKER_VERSION
+            contentHash: "",
+          },
+        ]),
+      },
+    });
+
+    const stale = await findStaleEntities(prisma, "animal");
+    expect(stale.map((s) => s.id)).toContain("animal-1");
+  });
+
+  it("Trigger C: content hash mismatch forces re-index even when timestamps and version match", async () => {
+    // All metadata matches, but the stored hash doesn't match sha256(chunk.text).
+    // This covers hash-function changes and renderer bugs that produce different
+    // text without bumping the chunker version.
+    const sharedDate = new Date("2026-04-10T00:00:00Z");
+    const chunkText   = "task title: fix fence";
+    // Compute what the correct hash *would* be for this text.
+    const { createHash } = await import("node:crypto");
+    const correctHash = createHash("sha256").update(chunkText, "utf8").digest("hex");
+    const wrongHash   = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    expect(wrongHash).not.toBe(correctHash); // sanity
+
+    const prisma = makeEinsteinPrisma({
+      task: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "task-1", updatedAt: sharedDate },
+        ]),
+      },
+      einsteinChunk: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            entityId: "task-1",
+            sourceUpdatedAt: sharedDate,             // same — timestamp NOT stale
+            chunkerVersion: CURRENT_CHUNKER_VERSION, // same — version NOT stale
+            contentHash: wrongHash,                  // MISMATCH → MUST re-embed
+          },
+        ]),
+      },
+    });
+
+    // Mock chunker to return the known text so we can compute the expected hash.
+    (toEmbeddingText as unknown as ReturnType<typeof vi.fn>).mockReturnValue([
+      makeRenderedChunk("task", "task-1", chunkText, sharedDate),
+    ]);
+
+    const stale = await findStaleEntities(prisma, "task");
+    expect(stale.map((s) => s.id)).toContain("task-1");
+  });
+
+  it("skips rows that are fresh across all three triggers (timestamp + version + hash all match)", async () => {
+    const sharedDate  = new Date("2026-04-10T00:00:00Z");
+    const chunkText   = "notification: rain alert";
+    const { createHash } = await import("node:crypto");
+    const correctHash = createHash("sha256").update(chunkText, "utf8").digest("hex");
+
+    const prisma = makeEinsteinPrisma({
+      notification: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "notif-1", updatedAt: sharedDate },
+        ]),
+      },
+      einsteinChunk: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            entityId: "notif-1",
+            sourceUpdatedAt: sharedDate,             // same — timestamp fresh
+            chunkerVersion: CURRENT_CHUNKER_VERSION, // same — version fresh
+            contentHash: correctHash,                // same — hash fresh
+          },
+        ]),
+      },
+    });
+
+    (toEmbeddingText as unknown as ReturnType<typeof vi.fn>).mockReturnValue([
+      makeRenderedChunk("notification", "notif-1", chunkText, sharedDate),
+    ]);
+
+    const stale = await findStaleEntities(prisma, "notification");
+    expect(stale).toHaveLength(0);
   });
 });
 

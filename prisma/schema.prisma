@@ -62,6 +62,7 @@ model Animal {
   dateAdded          String
   deceasedAt         String?
   createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
   // Multi-species support
   species            String   @default("cattle")
   speciesData        String?
@@ -212,6 +213,7 @@ model Camp {
   geojson                String?
   color                  String?
   createdAt              DateTime @default(now())
+  updatedAt              DateTime @default(now()) @updatedAt
   // Phase A of #28 multi-species refactor: `species` is NOT NULL with a
   // `'cattle'` default, so existing rows backfill on ALTER TABLE ADD COLUMN.
   // Treat this as immutable at the API layer — Phase B's PATCH handler
@@ -280,6 +282,7 @@ model Task {
   blockedByIds           String? // JSON-stringified array
   completedObservationId String?
   recurrenceSource       String? // audit trail: rule that expanded this occurrence
+  updatedAt              DateTime @default(now()) @updatedAt
 
   occurrences TaskOccurrence[]
 
@@ -876,6 +879,8 @@ model EinsteinChunk {
   tokensUsed      Int
   modelId         String // "text-embedding-3-small"
   sourceUpdatedAt DateTime // source row's updatedAt/editedAt at embed time — drives stale detection
+  chunkerVersion  String   @default("0") // bumped when chunker text rendering changes
+  contentHash     String   @default("") // sha256(chunk.text) — detects hash-function or rendering changes
   createdAt       DateTime @default(now())
 
   @@unique([entityType, entityId, langTag], name: "einstein_chunk_entity_lang")
