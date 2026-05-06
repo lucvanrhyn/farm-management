@@ -701,7 +701,13 @@ async function getDestroyBranchDb() {
 
 async function getPromoteToProd() {
   const mod = await import('@/lib/ops/branch-clone');
-  return mod.promoteToProd;
+  // PRD #128: existing tests don't exercise the parity verifier (they pre-date
+  // it). Default `parityVerifyEnabled: false` here so the historical happy/sad
+  // paths still pass; new parity-specific tests live in their own describe
+  // block and explicitly enable it. Callers can override the option to opt
+  // back in.
+  return (input: Parameters<typeof mod.promoteToProd>[0]) =>
+    mod.promoteToProd({ parityVerifyEnabled: false, ...input });
 }
 
 /** Insert a row directly into the in-memory client for test setup. */
