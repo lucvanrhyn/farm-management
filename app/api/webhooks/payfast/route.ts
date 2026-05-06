@@ -20,7 +20,8 @@ import { logger } from '@/lib/logger';
  *   3. Server-side validate via PayFast's validate endpoint.
  *   4. Token must match the farm's currently-stored payfast_token (or the
  *      farm has none yet — first activation).
- *   5. pf_payment_id has not been processed before (idempotency).
+ *   5. pf_payment_id has not been fully applied before (idempotency).
+ *      "Fully applied" means the ledger row has appliedAt IS NOT NULL.
  *   6. Event timestamp is not older than the newest event already processed
  *      for this farm (clock-skew + retry-queue defence).
  *
@@ -31,6 +32,20 @@ import { logger } from '@/lib/logger';
  * event could clobber a newer COMPLETE state. A leaked rotated token could
  * replay an old subscription back into the live record. All four bugs are
  * addressed here.
+ *
+ * Issue #95 (2026-05-04): two additional bugs:
+ *   A. Insert-before-mutate: the dedup ledger row was inserted BEFORE
+ *      updateFarmSubscription ran. If the mutation threw, the row was already
+ *      committed — PayFast retries were 200'd as "already processed" and the
+ *      tenant never went active (silent revenue loss).
+ *   B. PENDING blocks COMPLETE: PayFast sends PENDING then COMPLETE with the
+ *      same pf_payment_id. The PENDING insert claimed the unique index so the
+ *      later COMPLETE was deduped without ever activating the subscription.
+ *
+ * Fix: the `appliedAt` column on PayfastEvent tracks whether the subscription
+ * mutation completed. NULL = inserted but not yet applied. Non-NULL = fully
+ * applied. On P2002 the handler inspects the existing row before deciding
+ * whether to treat the retry as a no-op.
  */
 
 /** Mask format used in logs. Keeps a 4-char prefix so support can correlate
@@ -70,6 +85,19 @@ function parseEventTime(raw: string | undefined): Date {
   if (!raw) return new Date();
   const t = Date.parse(raw);
   return Number.isFinite(t) ? new Date(t) : new Date();
+}
+
+/** Status upgrade precedence. Higher number = higher priority.
+ * Used to decide whether an incoming event can overwrite an existing row. */
+const STATUS_RANK: Record<string, number> = {
+  PENDING: 0,
+  FAILED: 1,
+  CANCELLED: 1,
+  COMPLETE: 2,
+};
+
+function isStatusUpgrade(incoming: string, existing: string): boolean {
+  return (STATUS_RANK[incoming] ?? 0) > (STATUS_RANK[existing] ?? 0);
 }
 
 export async function POST(req: NextRequest) {
@@ -180,9 +208,22 @@ export async function POST(req: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // Dedup insert. P2002 on the unique pfPaymentId index = already
-    // processed. Inserting BEFORE the mutation closes the race where two
-    // concurrent retries both pass an existence check.
+    // Dedup insert with appliedAt = null (Issue #95 fix — Facets A & B).
+    //
+    // Insert FIRST to claim the unique slot and prevent concurrent retries
+    // from both passing an existence check (the race guard). appliedAt starts
+    // as null — it is set AFTER the subscription mutation succeeds.
+    //
+    // On P2002 (duplicate pfPaymentId) we inspect the existing row:
+    //   • appliedAt IS NOT NULL → fully applied, safe no-op.
+    //   • appliedAt IS NULL     → prior attempt started but the mutation did
+    //                             not complete (DB blip, function timeout, etc).
+    //                             Re-run the mutation so the tenant goes active.
+    //   • Status upgrade        → incoming COMPLETE supersedes a stored PENDING.
+    //                             Re-run the mutation regardless of appliedAt.
+    let isRetryAfterFailure = false;
+    let isStatusUpgradeCase = false;
+
     try {
       await db.payfastEvent.create({
         data: {
@@ -190,21 +231,77 @@ export async function POST(req: NextRequest) {
           eventTime,
           paymentStatus: paymentStatus ?? '',
           payloadHash: hashPayload(paramsWithoutSig),
+          // appliedAt is omitted → defaults to null (not yet applied).
         },
       });
     } catch (err) {
       const code = (err as { code?: string }).code;
-      if (code === 'P2002') {
-        logger.info('[payfast-itn] Duplicate pf_payment_id — already processed, skipping', {
+      if (code !== 'P2002') {
+        throw err;
+      }
+
+      // Duplicate pfPaymentId — inspect the existing row.
+      const existing = await db.payfastEvent.findUnique({
+        where: { pfPaymentId },
+      });
+
+      if (!existing) {
+        // Extremely unlikely (row was deleted between the failed insert and
+        // this lookup). Treat as fully-applied to avoid infinite loops.
+        logger.warn('[payfast-itn] Duplicate but existing row not found — treating as applied', {
           farmSlug,
           pfPaymentId,
         });
         return new NextResponse(null, { status: 200 });
       }
-      throw err;
+
+      // Check whether incoming status is a promotion of the stored status.
+      const upgrade = isStatusUpgrade(paymentStatus ?? '', existing.paymentStatus);
+
+      if (existing.appliedAt !== null && !upgrade) {
+        // Already fully applied and no status upgrade — safe no-op.
+        logger.info('[payfast-itn] Duplicate pf_payment_id — already applied, skipping', {
+          farmSlug,
+          pfPaymentId,
+          existingStatus: existing.paymentStatus,
+          incomingStatus: paymentStatus,
+        });
+        return new NextResponse(null, { status: 200 });
+      }
+
+      if (upgrade) {
+        // Status upgrade (e.g. PENDING → COMPLETE). Update stored status and
+        // reset appliedAt to null so the mutation block below runs.
+        isStatusUpgradeCase = true;
+        logger.warn('[payfast-itn] Status upgrade — re-applying with new status', {
+          farmSlug,
+          pfPaymentId,
+          fromStatus: existing.paymentStatus,
+          toStatus: paymentStatus,
+        });
+        await db.payfastEvent.update({
+          where: { pfPaymentId },
+          data: {
+            paymentStatus: paymentStatus ?? '',
+            payloadHash: hashPayload(paramsWithoutSig),
+            eventTime,
+            appliedAt: null, // reset; will be set after successful mutation
+          },
+        });
+      } else {
+        // appliedAt IS NULL and no upgrade — prior attempt's mutation failed.
+        // Retry the mutation.
+        isRetryAfterFailure = true;
+        logger.warn('[payfast-itn] Incomplete-apply detected — retry after failed mutation', {
+          farmSlug,
+          pfPaymentId,
+          paymentStatus,
+        });
+      }
     }
 
     // 8. Process the event.
+    // Runs when: (a) fresh insert, (b) retry-after-failure, (c) status upgrade.
     if (paymentStatus === 'COMPLETE') {
       const tier = (rawParams.custom_str2 ?? '') as 'basic' | 'advanced' | '';
       const frequency = (rawParams.custom_str3 ?? '') as 'monthly' | 'annual' | '';
@@ -235,6 +332,8 @@ export async function POST(req: NextRequest) {
         nextRenewalAt = d.toISOString();
       }
 
+      // Mutation — if this throws the ledger row retains appliedAt = null so
+      // PayFast retries will re-enter the retry-after-failure branch above.
       await updateFarmSubscription(farmSlug, 'active', {
         payfastToken: incomingToken || undefined,
         startedAt: now.toISOString(),
@@ -247,6 +346,12 @@ export async function POST(req: NextRequest) {
         ...(nextRenewalAt !== undefined ? { nextRenewalAt } : {}),
       });
 
+      // Stamp appliedAt now that the mutation committed.
+      await db.payfastEvent.update({
+        where: { pfPaymentId },
+        data: { appliedAt: now },
+      });
+
       logger.info('[payfast-itn] Subscription activated', {
         farmSlug,
         tier: tier || 'unknown',
@@ -254,16 +359,27 @@ export async function POST(req: NextRequest) {
         billingAmountZar,
         lockedLsu,
         payfastTokenMask: maskToken(incomingToken),
+        isRetryAfterFailure,
+        isStatusUpgradeCase,
       });
     } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
       await updateFarmSubscription(farmSlug, 'inactive');
+
+      await db.payfastEvent.update({
+        where: { pfPaymentId },
+        data: { appliedAt: new Date() },
+      });
+
       logger.info('[payfast-itn] Subscription set to inactive', {
         farmSlug,
         paymentStatus,
         payfastTokenMask: maskToken(incomingToken),
+        isRetryAfterFailure,
       });
     }
-    // PENDING status: no action — wait for COMPLETE or FAILED.
+    // PENDING status: no action on the subscription — wait for COMPLETE or FAILED.
+    // We do NOT set appliedAt on PENDING so a subsequent COMPLETE for the same
+    // pf_payment_id will enter the status-upgrade path and activate the sub.
 
     // PayFast expects a 200 OK with no body.
     return new NextResponse(null, { status: 200 });
