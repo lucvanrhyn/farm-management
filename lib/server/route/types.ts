@@ -59,11 +59,15 @@ export interface RouteContext<TParams extends RouteParams = RouteParams> {
  * route handler with a single argument (no `params` promise). The adapter
  * defaults `params` to `{}` when `ctx` is omitted, matching the framework
  * runtime contract for routes without dynamic segments.
+ *
+ * Return type is `Response | NextResponse` so streaming handlers (e.g.
+ * SSE-driven import progress) can return a plain `Response` whose body is
+ * a `ReadableStream` while the typical handler returns `NextResponse`.
  */
 export type RouteHandler<TParams extends RouteParams = RouteParams> = (
   req: NextRequest,
   ctx?: RouteContext<TParams>,
-) => Promise<NextResponse>;
+) => Promise<Response>;
 
 /**
  * Body-validation contract — duck-compatible with `zod`'s `ZodType<T>` so
@@ -95,13 +99,13 @@ export class RouteValidationError extends Error {
 
 /**
  * The inner work of an `tenantRead` adapter. Receives the resolved
- * `FarmContext` (auth + tenant-scoped Prisma) and produces a `NextResponse`.
+ * `FarmContext` (auth + tenant-scoped Prisma) and produces a `Response`.
  */
 export type TenantReadHandle<TParams extends RouteParams = RouteParams> = (
   ctx: FarmContext,
   req: NextRequest,
   params: TParams,
-) => Promise<NextResponse>;
+) => Promise<Response>;
 
 /**
  * The inner work of a write adapter (`adminWrite` / `tenantWrite`). The
@@ -115,7 +119,7 @@ export type WriteHandle<
   body: TBody,
   req: NextRequest,
   params: TParams,
-) => Promise<NextResponse>;
+) => Promise<Response>;
 
 /**
  * The inner work of a `publicHandler` adapter. No auth, no body parse —
@@ -124,7 +128,7 @@ export type WriteHandle<
 export type PublicHandle<TParams extends RouteParams = RouteParams> = (
   req: NextRequest,
   params: TParams,
-) => Promise<NextResponse>;
+) => Promise<Response>;
 
 /**
  * Revalidation hook accepted by the write adapters. Wave A keeps this a

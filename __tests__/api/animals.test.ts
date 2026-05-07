@@ -54,8 +54,12 @@ describe("GET /api/animals — tenant scope", () => {
     const req = new NextRequest("http://localhost/api/animals?search=C001");
     const res = await GET(req);
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe("Unauthorized");
+    // Wave A (#148): the typed-error envelope replaced the free-form
+    // `{ error: "Unauthorized" }` with the SCREAMING_SNAKE code +
+    // human-readable `message` per ADR-0001.
+    const body = (await res.json()) as { error?: string; message?: string };
+    expect(body.error).toBe("AUTH_REQUIRED");
+    expect(body.message).toBe("Unauthorized");
   });
 
   it("returns 401 when the request tries to spoof a farmSlug query param without auth", async () => {

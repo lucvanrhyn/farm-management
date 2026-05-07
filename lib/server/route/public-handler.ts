@@ -13,7 +13,7 @@
  * authentication seam so it does not collide with framework-managed
  * auth flows.
  */
-import type { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 import { mapApiDomainError } from "@/lib/server/api-errors";
 import { withServerTiming } from "@/lib/server/server-timing";
@@ -37,7 +37,7 @@ export function publicHandler<TParams extends RouteParams = RouteParams>(
         return await opts.handle(req, params);
       } catch (err) {
         const mapped = mapApiDomainError(err);
-        if (mapped) return mapped as NextResponse;
+        if (mapped) return mapped;
         const message = err instanceof Error ? err.message : String(err);
         logger.error("[route] publicHandler handler threw", { error: err });
         return routeError("DB_QUERY_FAILED", message, 500);

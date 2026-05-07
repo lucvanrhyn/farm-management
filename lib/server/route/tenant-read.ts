@@ -17,7 +17,7 @@
  *     },
  *   });
  */
-import type { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 import { getFarmContext } from "@/lib/server/farm-context";
 import { mapApiDomainError } from "@/lib/server/api-errors";
@@ -53,7 +53,7 @@ export function tenantRead<TParams extends RouteParams = RouteParams>(
         return await opts.handle(farmCtx, req, params);
       } catch (err) {
         const mapped = mapApiDomainError(err);
-        if (mapped) return mapped as NextResponse;
+        if (mapped) return mapped;
         const message = err instanceof Error ? err.message : String(err);
         logger.error("[route] tenantRead handler threw", { error: err });
         return routeError("DB_QUERY_FAILED", message, 500);

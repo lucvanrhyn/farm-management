@@ -59,14 +59,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "admin/reset/route.ts",
   "subscription/status/route.ts",
 
-  // ── Wave A in-flight: removed entry-by-entry as each route migrates. ──
-  // (camps + animals trees are the wave's proof migration; once all 8 land
-  // these entries disappear from the EXEMPT set.)
-  "animals/[id]/route.ts",
-  "animals/import/route.ts",
-  "animals/reset/route.ts",
-  "animals/route.ts",
-
   // ── Wave B+ migration — see ADR-0001. ──
   // [farmSlug]/** routes (Wave B-G).
   "[farmSlug]/breeding/analyze/route.ts",

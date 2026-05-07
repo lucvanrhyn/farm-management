@@ -41,14 +41,20 @@ function extractDetails(err: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Parse JSON body. Empty/missing body is allowed and surfaces as `{}` so
- * DELETE handlers (which typically carry no body) are not rejected. A
- * non-empty payload that fails JSON parsing returns INVALID_BODY. See
- * `admin-write.ts` for the same contract.
+ * Parse JSON body. See `admin-write.ts` for the full contract — multipart
+ * / form-data is skipped (handler reads `req.formData()`); empty body is
+ * `{}`; malformed JSON returns INVALID_BODY.
  */
 async function parseBody(
   req: NextRequest,
 ): Promise<{ ok: true; body: unknown } | { ok: false; res: NextResponse }> {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (
+    contentType.includes("multipart/form-data") ||
+    contentType.includes("application/x-www-form-urlencoded")
+  ) {
+    return { ok: true, body: undefined };
+  }
   let raw: string;
   try {
     raw = await req.text();
@@ -95,12 +101,12 @@ export function tenantWrite<
 
       const params: TParams = ctx?.params ? await ctx.params : ({} as TParams);
 
-      let response: NextResponse;
+      let response: Response;
       try {
         response = await opts.handle(farmCtx, body, req, params);
       } catch (err) {
         const mapped = mapApiDomainError(err);
-        if (mapped) return mapped as NextResponse;
+        if (mapped) return mapped;
         const message = err instanceof Error ? err.message : String(err);
         logger.error("[route] tenantWrite handler threw", { error: err });
         return routeError("DB_QUERY_FAILED", message, 500);

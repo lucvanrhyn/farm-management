@@ -57,6 +57,12 @@ function extractDetails(err: unknown): Record<string, unknown> | undefined {
  * DELETE handlers (which typically carry no body) are not rejected. A
  * non-empty payload that fails JSON parsing returns INVALID_BODY.
  *
+ * Multipart / form-data / non-JSON content types skip the JSON parse
+ * altogether — the inner handler reads `req.formData()` (or similar)
+ * directly. The handler receives `undefined` as the parsed body in
+ * that case; routes with a `schema` should not be used with multipart
+ * payloads (use a hand-rolled parse inside the handler instead).
+ *
  * The schema layer (when present) is responsible for asserting required
  * fields — a `{}` body that violates the schema yields VALIDATION_FAILED,
  * not INVALID_BODY.
@@ -64,6 +70,16 @@ function extractDetails(err: unknown): Record<string, unknown> | undefined {
 async function parseBody(
   req: NextRequest,
 ): Promise<{ ok: true; body: unknown } | { ok: false; res: NextResponse }> {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (
+    contentType.includes("multipart/form-data") ||
+    contentType.includes("application/x-www-form-urlencoded")
+  ) {
+    // Non-JSON request body: hand-roll-parse inside the handler. We do not
+    // consume the body here so `req.formData()` later still has bytes.
+    return { ok: true, body: undefined };
+  }
+
   // `req.text()` returns "" when the request has no body. Try-parse from
   // the text representation so we can distinguish empty from malformed.
   let raw: string;
@@ -126,12 +142,12 @@ export function adminWrite<
 
       const params: TParams = ctx?.params ? await ctx.params : ({} as TParams);
 
-      let response: NextResponse;
+      let response: Response;
       try {
         response = await opts.handle(farmCtx, body, req, params);
       } catch (err) {
         const mapped = mapApiDomainError(err);
-        if (mapped) return mapped as NextResponse;
+        if (mapped) return mapped;
         const message = err instanceof Error ? err.message : String(err);
         logger.error("[route] adminWrite handler threw", { error: err });
         return routeError("DB_QUERY_FAILED", message, 500);
