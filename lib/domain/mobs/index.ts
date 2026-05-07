@@ -32,3 +32,11 @@ export {
   NOT_FOUND,
   MOB_HAS_ANIMALS,
 } from "./errors";
+export {
+  performMobMove,
+  MobNotFoundError,
+  CrossSpeciesBlockedError,
+  CROSS_SPECIES_BLOCKED,
+  type PerformMobMoveArgs,
+  type PerformMobMoveResult,
+} from "./move-mob";

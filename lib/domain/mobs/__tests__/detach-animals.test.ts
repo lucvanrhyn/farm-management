@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 
 import { detachAnimalsFromMob } from "../detach-animals";
-import { MobNotFoundError } from "@/lib/server/mob-move";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import { RouteValidationError } from "@/lib/server/route";
 
 describe("detachAnimalsFromMob(prisma, input)", () => {

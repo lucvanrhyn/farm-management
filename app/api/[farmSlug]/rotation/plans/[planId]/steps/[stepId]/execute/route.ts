@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
-import { performMobMove, MobNotFoundError } from "@/lib/server/mob-move";
+import { performMobMove, MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import { revalidateRotationWrite } from "@/lib/server/revalidate";
 export const dynamic = "force-dynamic";
 

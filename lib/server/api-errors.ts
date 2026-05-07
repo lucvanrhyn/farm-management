@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { CrossSpeciesBlockedError, MobNotFoundError } from "@/lib/server/mob-move";
+import {
+  CrossSpeciesBlockedError,
+  MobNotFoundError,
+} from "@/lib/domain/mobs/move-mob";
 import {
   MobHasAnimalsError,
   NotFoundError,

@@ -23,7 +23,7 @@ import { describe, it, expect } from "vitest";
 import {
   CrossSpeciesBlockedError,
   MobNotFoundError,
-} from "@/lib/server/mob-move";
+} from "@/lib/domain/mobs/move-mob";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 
 async function readBody(res: Response): Promise<unknown> {
