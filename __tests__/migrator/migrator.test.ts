@@ -479,3 +479,114 @@ describe('wave/130 — 0016/0017 Animal.species pre-stamp against the live migra
     ]);
   });
 });
+
+describe('wave/132 — 0014_einstein_chunker_version constant-default rewrite', () => {
+  // Background: the original 0014 used `DEFAULT CURRENT_TIMESTAMP` on three
+  // ALTER TABLE ADD COLUMN statements (Camp.updatedAt, Animal.updatedAt,
+  // Task.updatedAt). Turso/libSQL rejects this — `CURRENT_TIMESTAMP` is a
+  // non-constant default and SQLite's ADD COLUMN parser only accepts
+  // constant expressions. The migration silently failed on trio-b and
+  // basson during Wave 0 stress testing — the migrator threw, the
+  // `_migrations` row was never written, and every Prisma `findMany()`
+  // SELECTing `updatedAt` crashed with `no such column`. That's the
+  // C1/C3 root cause from the 2026-05-06 stress test report.
+  //
+  // The fix: ADD COLUMN with a constant literal default
+  // ('1970-01-01 00:00:00'), then immediately UPDATE every row to
+  // CURRENT_TIMESTAMP — same value Prisma's `@updatedAt` writes on insert.
+  //
+  // These tests guard the contract:
+  //   1. A fresh tenant gets all four columns + the chunker columns +
+  //      backfilled CURRENT_TIMESTAMP timestamps (not the sentinel).
+  //   2. Replaying 0014 on a tenant that already applied it is a no-op
+  //      (the migrator's `_migrations` row check skips the file).
+  let db: Client;
+
+  beforeEach(async () => {
+    db = await openMemoryDb();
+  });
+
+  it('a fresh tenant gets all 0014 columns with backfilled timestamps (not the sentinel)', async () => {
+    // Seed the four tables 0014 ALTERs, with a row in each so the UPDATE
+    // backfill has something to touch. Schemas are stubbed to the minimum
+    // ALTER targets — only the columns 0014 adds matter here.
+    await db.execute(`CREATE TABLE "EinsteinChunk" ( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Camp"  ( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Animal"( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Task"  ( id TEXT PRIMARY KEY )`);
+    await db.execute(`INSERT INTO "Camp"   (id) VALUES ('camp-1')`);
+    await db.execute(`INSERT INTO "Animal" (id) VALUES ('animal-1')`);
+    await db.execute(`INSERT INTO "Task"   (id) VALUES ('task-1')`);
+
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const only = all.filter((m) => m.name === '0014_einstein_chunker_version.sql');
+    expect(only).toHaveLength(1);
+
+    const result = await runMigrations(db, only);
+
+    expect(result.applied).toEqual(['0014_einstein_chunker_version.sql']);
+    expect(result.skipped).toEqual([]);
+
+    // All five new columns landed across the four tables.
+    const chunkerCols = await db.execute(`PRAGMA table_info("EinsteinChunk")`);
+    expect(chunkerCols.rows.map((r) => r.name as string).sort()).toEqual(
+      ['chunkerVersion', 'contentHash', 'id'],
+    );
+    const campCols = await db.execute(`PRAGMA table_info("Camp")`);
+    expect(campCols.rows.map((r) => r.name as string).sort()).toEqual(['id', 'updatedAt']);
+    const animalCols = await db.execute(`PRAGMA table_info("Animal")`);
+    expect(animalCols.rows.map((r) => r.name as string).sort()).toEqual(['id', 'updatedAt']);
+    const taskCols = await db.execute(`PRAGMA table_info("Task")`);
+    expect(taskCols.rows.map((r) => r.name as string).sort()).toEqual(['id', 'updatedAt']);
+
+    // The UPDATE backfill replaced the sentinel with CURRENT_TIMESTAMP for
+    // existing rows — so the seeded row's updatedAt is NOT '1970-01-01...'.
+    // (This is what proves the rewrite actually backfills, not just adds
+    // the column with a useless sentinel value.)
+    const camp = await db.execute(`SELECT updatedAt FROM "Camp" WHERE id = 'camp-1'`);
+    expect(camp.rows[0].updatedAt).not.toBe('1970-01-01 00:00:00');
+    expect(camp.rows[0].updatedAt).not.toBeNull();
+    const animal = await db.execute(`SELECT updatedAt FROM "Animal" WHERE id = 'animal-1'`);
+    expect(animal.rows[0].updatedAt).not.toBe('1970-01-01 00:00:00');
+    expect(animal.rows[0].updatedAt).not.toBeNull();
+    const task = await db.execute(`SELECT updatedAt FROM "Task" WHERE id = 'task-1'`);
+    expect(task.rows[0].updatedAt).not.toBe('1970-01-01 00:00:00');
+    expect(task.rows[0].updatedAt).not.toBeNull();
+  });
+
+  it('replaying 0014 on an already-migrated tenant is a no-op', async () => {
+    await db.execute(`CREATE TABLE "EinsteinChunk" ( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Camp"  ( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Animal"( id TEXT PRIMARY KEY )`);
+    await db.execute(`CREATE TABLE "Task"  ( id TEXT PRIMARY KEY )`);
+
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const only = all.filter((m) => m.name === '0014_einstein_chunker_version.sql');
+
+    await runMigrations(db, only);
+    const second = await runMigrations(db, only);
+
+    expect(second.applied).toEqual([]);
+    expect(second.skipped).toEqual(['0014_einstein_chunker_version.sql']);
+  });
+
+  it('rejects the legacy non-constant-default form (regression guard)', async () => {
+    // This test pins the rule that 0014 must NOT use `DEFAULT CURRENT_TIMESTAMP`
+    // on ALTER TABLE ADD COLUMN. Reading the actual file, asserting it does
+    // NOT contain the rejected pattern. If a future contributor reverts the
+    // rewrite, this fires.
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const only = all.find((m) => m.name === '0014_einstein_chunker_version.sql');
+    expect(only).toBeDefined();
+    // The rejected pattern: any `ADD COLUMN ... DEFAULT CURRENT_TIMESTAMP`.
+    expect(only!.sql).not.toMatch(/ADD COLUMN[^;]+DEFAULT\s+CURRENT_TIMESTAMP/i);
+    // The fix shape: at least one UPDATE...CURRENT_TIMESTAMP backfill.
+    expect(only!.sql).toMatch(/UPDATE\s+"[^"]+"\s+SET\s+"updatedAt"\s+=\s+CURRENT_TIMESTAMP/i);
+  });
+});
