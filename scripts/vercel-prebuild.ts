@@ -18,8 +18,12 @@
  * function can be unit-tested without real Turso calls, real env vars, or real
  * file I/O.
  */
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import { promisify } from 'node:util';
 import { cloneBranch } from '@/lib/ops/branch-clone';
+
+const execFileAsync = promisify(execFile);
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -36,6 +40,21 @@ export interface PrebuildDeps {
   writeEnvLine?: (line: string) => void;
   /** Injectable logger. Defaults to console.log. */
   log?: (line: string) => void;
+  /**
+   * Probe for the `turso` binary. Returns the resolved path, or `null` if it
+   * isn't on PATH / TURSO_BINARY isn't set. Default reads the env first then
+   * shells out to `which turso`. Tests inject a fake.
+   *
+   * Issue #150: the Vercel build runner does NOT ship the turso CLI, so the
+   * default probe must return null there, triggering the installer.
+   */
+  tursoBinaryProbe?: () => string | null;
+  /**
+   * Install the turso CLI and return the absolute path to the installed
+   * binary. Default mirrors `.github/workflows/governance-gate.yml:37`:
+   * `curl -sSfL https://get.tur.so/install.sh | bash`. Tests inject a fake.
+   */
+  installTursoCli?: () => Promise<string>;
 }
 
 // ── Core function ─────────────────────────────────────────────────────────────
@@ -59,6 +78,41 @@ export async function runPrebuild(deps?: PrebuildDeps): Promise<number> {
       console.log(line);
     }
   });
+
+  // Default turso-binary probe: prefer TURSO_BINARY env var (already used by
+  // lib/ops/turso-cli.ts:41), then `which turso`. Returns null when neither
+  // resolves — the trigger for the installer.
+  const tursoBinaryProbe =
+    deps?.tursoBinaryProbe ??
+    (() => {
+      const explicit = env.TURSO_BINARY;
+      if (explicit && explicit.length > 0) return explicit;
+      try {
+        // execFileSync isn't injectable here; use the sync `which` via
+        // Node's `child_process` only on the default path. Tests always
+        // inject this probe so this branch is unreachable from tests.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
+        const out = execFileSync('which', ['turso'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        return out.length > 0 ? out : null;
+      } catch {
+        return null;
+      }
+    });
+
+  // Default installer: mirrors .github/workflows/governance-gate.yml:37 — runs
+  // the official curl install script, then returns the absolute path the
+  // installer drops the binary at. Tests always inject this so the real curl
+  // never runs from a unit test.
+  const installTursoCli =
+    deps?.installTursoCli ??
+    (async (): Promise<string> => {
+      await execFileAsync('bash', ['-c', 'curl -sSfL https://get.tur.so/install.sh | bash'], {
+        env: process.env,
+      });
+      const home = process.env.HOME ?? '/root';
+      return `${home}/.turso/turso`;
+    });
 
   const vercelEnv = env.VERCEL_ENV;
 
@@ -106,6 +160,24 @@ export async function runPrebuild(deps?: PrebuildDeps): Promise<number> {
         'vercel-prebuild ERROR: BRANCH_CLONE_SOURCE_DB is not set — set it in Vercel project env vars to the source Turso DB name.',
       );
       return 1;
+    }
+
+    // Issue #150: Vercel build runner ships without the `turso` CLI, so
+    // cloneBranch's execFile('turso', …) crashes with ENOENT. Probe first;
+    // if missing, install via the official curl script (matches the GHA
+    // gate at .github/workflows/governance-gate.yml:37) and write
+    // TURSO_BINARY so lib/ops/turso-cli.ts:41 picks up the installed path.
+    if (!tursoBinaryProbe()) {
+      let installedAt: string;
+      try {
+        installedAt = await installTursoCli();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`vercel-prebuild ERROR: turso CLI install failed — ${message}`);
+        return 1;
+      }
+      env.TURSO_BINARY = installedAt;
+      log(`vercel-prebuild: turso CLI installed at ${installedAt}`);
     }
 
     let result;
