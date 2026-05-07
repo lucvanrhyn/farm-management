@@ -21,6 +21,11 @@ import { getMetaClient, getAllFarmSlugs, getFarmCreds } from '@/lib/meta-db';
 import type { FarmCreds } from '@/lib/meta-db';
 import { loadMigrations, runMigrations } from '@/lib/migrator';
 import type { MigrationResult } from '@/lib/migrator';
+import {
+  checkSchemaParityAcrossTenants,
+  formatParityResults,
+} from '@/lib/ops/schema-parity';
+import type { TenantParityResult } from '@/lib/ops/schema-parity';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -265,6 +270,26 @@ export interface PromoteToProdInput {
    * for the Codex CRITICAL "all-tenant migration gap"). In tests, inject a fake.
    */
   runProdMigration?: () => Promise<{ applied: string[]; skipped: string[] }>;
+  /**
+   * Post-migration parity verifier injected for tests. Defaults to a real
+   * cross-tenant check via {@link checkSchemaParityAcrossTenants} that opens
+   * a libSQL client for every tenant and asserts every expected migration
+   * file is present in `_migrations`.
+   *
+   * Established by PRD #128 (2026-05-06): the `runProdMigration` step throws
+   * if it caught a tenant-level error, but does NOT detect the case where a
+   * tenant is missing a migration the runner thought it applied (Turso ack
+   * lying, or a tenant that wasn't enumerated). The verifier is the second
+   * line of defence — promote will not mark the meta row promoted unless
+   * every tenant reports parity.
+   */
+  verifyAllTenantsParity?: () => Promise<TenantParityResult[]>;
+  /**
+   * Whether to run the parity verifier. Defaults to `true`. Test callers
+   * that don't want to set up the verifier can opt out with `false` — at
+   * the cost of bypassing the PRD #128 guarantee, so use sparingly.
+   */
+  parityVerifyEnabled?: boolean;
 }
 
 // ── Issue #101: Per-commit soak bookkeeping ───────────────────────────────────
@@ -311,6 +336,26 @@ export interface PromoteToProdResult {
   prodMigrationSkippedFiles: string[];
   /** ISO timestamp of the promotion moment */
   promotedAt: string;
+  /**
+   * Per-tenant parity report from the post-migration verify step (PRD #128).
+   * Empty array when verify was disabled via `parityVerifyEnabled:false`.
+   */
+  parityResults: TenantParityResult[];
+}
+
+/**
+ * Thrown when the post-migration parity verifier finds any tenant missing
+ * any expected migration. Carries the human-readable formatted report so
+ * the post-merge-promote workflow can paste it directly into the incident.
+ */
+export class TenantParityFailedError extends Error {
+  constructor(
+    readonly results: TenantParityResult[],
+    readonly formatted: string,
+  ) {
+    super(`Tenant parity verification failed after prod migration:\n${formatted}`);
+    this.name = 'TenantParityFailedError';
+  }
 }
 
 export class SoakNotMetError extends Error {
@@ -501,6 +546,60 @@ async function _defaultRunProdMigration(): Promise<{ applied: string[]; skipped:
 }
 
 /**
+ * Default tenant-parity verifier injected into {@link promoteToProd}.
+ *
+ * Established by PRD #128 (2026-05-06). Iterates every farm slug from the
+ * meta-DB, opens a libSQL client to that tenant, and asserts every
+ * migration file in `migrations/` is present in `_migrations`. The
+ * `expected` list is the file names; allowExtra defaults to true so
+ * tenants that experimentally ran an extra migration don't fail parity.
+ *
+ * Closes each tenant client in `finally` so we don't leak file handles
+ * even if one tenant errors mid-loop.
+ */
+async function _defaultVerifyAllTenantsParity(): Promise<TenantParityResult[]> {
+  const slugs = await getAllFarmSlugs();
+  const tenants: { slug: string; client: Client; close: () => void }[] = [];
+  for (const slug of slugs) {
+    const creds = await getFarmCreds(slug);
+    if (!creds) {
+      tenants.push({
+        slug,
+        // Push a sentinel so the consumer sees a per-tenant error.
+        client: null as unknown as Client,
+        close: () => {},
+      });
+      continue;
+    }
+    const client = createClient({
+      url: creds.tursoUrl,
+      authToken: creds.tursoAuthToken,
+    });
+    tenants.push({ slug, client, close: () => client.close() });
+  }
+
+  const migrationsDir = new URL('../../migrations', import.meta.url).pathname;
+  const expected = (await loadMigrations(migrationsDir)).map((m) => m.name);
+
+  try {
+    return await checkSchemaParityAcrossTenants(
+      tenants
+        .filter((t) => t.client !== null)
+        .map(({ slug, client }) => ({ slug, client })),
+      { expected, allowExtra: true },
+    );
+  } finally {
+    for (const t of tenants) {
+      try {
+        t.close();
+      } catch {
+        // best-effort
+      }
+    }
+  }
+}
+
+/**
  * Promote a branch clone to prod by:
  * 1. Checking the clone exists.
  * 2. Enforcing the soak gate (minSoakHours since clone creation).
@@ -519,6 +618,8 @@ export async function promoteToProd(
     forceSkipSoak = false,
     now = () => new Date(),
     runProdMigration = _defaultRunProdMigration,
+    verifyAllTenantsParity = _defaultVerifyAllTenantsParity,
+    parityVerifyEnabled = true,
   } = input;
 
   const metaClient: Client = input.metaClient ?? getMetaClient();
@@ -571,6 +672,22 @@ export async function promoteToProd(
   // 3. Run prod migration — error bubbles up, leaving meta row untouched.
   const migrationResult = await runProdMigration();
 
+  // 3.5 Verify per-tenant schema parity (PRD #128).
+  //
+  // The migration runner already throws if any per-tenant `runForTenant`
+  // call rejected. This step is the second line of defence: re-query
+  // `_migrations` on every tenant and assert every shipped migration name
+  // is present. Catches Turso ack-lying, unenumerated tenants, and
+  // catastrophic state drift the migration runner cannot see.
+  let parityResults: TenantParityResult[] = [];
+  if (parityVerifyEnabled) {
+    parityResults = await verifyAllTenantsParity();
+    const drift = parityResults.filter((r) => r.error || (r.report && !r.report.ok));
+    if (drift.length > 0) {
+      throw new TenantParityFailedError(parityResults, formatParityResults(parityResults));
+    }
+  }
+
   // 4. Mark promoted in meta-DB.
   const promotedAt = now().toISOString();
   await _markBranchClonePromotedViaClient(metaClient, branchName, promotedAt);
@@ -580,6 +697,7 @@ export async function promoteToProd(
     prodMigrationAppliedFiles: migrationResult.applied,
     prodMigrationSkippedFiles: migrationResult.skipped,
     promotedAt,
+    parityResults,
   };
 }
 

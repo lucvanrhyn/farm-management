@@ -74,6 +74,7 @@ function makePromoteResult(overrides?: Partial<PromoteToProdResult>): PromoteToP
     prodMigrationAppliedFiles: ['0001_init.sql'],
     prodMigrationSkippedFiles: [],
     promotedAt: '2026-04-28T10:00:00.000Z',
+    parityResults: [],
     ...overrides,
   };
 }

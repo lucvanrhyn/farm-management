@@ -1,0 +1,105 @@
+name: Prod synthetic monitor
+# PRD #128 (2026-05-06): authenticated journey runs against the live prod
+# deploy every 30 minutes. Catches drift introduced between deploys (a tenant
+# added by a sales action, a manual Turso ALTER, a Vercel env-var revert).
+#
+# On second consecutive failure, opens an incident issue and pings Resend so
+# Luc gets an SMS within the half-hour. On first failure (single retry after
+# 60s) the run is allowed to be flaky without paging.
+on:
+  schedule:
+    # Every 30 minutes. Adjust if cost balloons.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      tenant_slug:
+        description: 'Tenant slug to probe (defaults to repo var SYNTHETIC_TENANT_SLUG)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      E2E_BASE_URL: ${{ vars.SYNTHETIC_BASE_URL || 'https://farm-management-lilac.vercel.app' }}
+      E2E_TENANT_SLUG: ${{ inputs.tenant_slug || vars.SYNTHETIC_TENANT_SLUG || 'acme-cattle' }}
+      E2E_IDENTIFIER: ${{ secrets.SYNTHETIC_USER_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.SYNTHETIC_USER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright (chromium only)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated journey (attempt 1)
+        id: attempt1
+        continue-on-error: true
+        run: pnpm exec playwright test e2e/admin-journey.spec.ts --project=chromium --reporter=list
+
+      - name: Wait + retry once
+        if: steps.attempt1.outcome == 'failure'
+        run: sleep 60
+
+      - name: Run authenticated journey (attempt 2)
+        id: attempt2
+        if: steps.attempt1.outcome == 'failure'
+        run: pnpm exec playwright test e2e/admin-journey.spec.ts --project=chromium --reporter=list
+
+      - name: Open incident issue on persistent failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `Prod synthetic failed for ${process.env.E2E_TENANT_SLUG} (${today})`;
+            // Back-off: only open a new issue if no open incident with this title-prefix exists.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'incident,prod-smoke-failed',
+              per_page: 20,
+            });
+            const dup = existing.data.find((i) => i.title.startsWith(`Prod synthetic failed for ${process.env.E2E_TENANT_SLUG}`));
+            if (dup) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: dup.number,
+                body: `Another failure — run: ${runUrl}`,
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: `Synthetic monitor saw the authenticated admin journey fail twice in a row against \`${process.env.E2E_BASE_URL}\` on tenant \`${process.env.E2E_TENANT_SLUG}\`.\n\nRun: ${runUrl}\n\nFirst step to investigate: pull Vercel runtime logs for the route the journey failed on. PRD: #128.`,
+              labels: ['incident', 'prod-smoke-failed', 'needs-triage'],
+            });
+
+      - name: Upload Playwright artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
