@@ -1,10 +1,25 @@
 name: audit-pagination
 
-# Gate every PR to main on the `prisma.<model>.findMany` static check. Adding
-# a new unbounded `findMany` without either `take:`, a unique-column where,
-# or an explicit `// audit-allow-findmany:` pragma will fail this job.
+# Gate every PR to main on two complementary static checks against
+# `prisma.<model>.findMany` call-sites:
 #
-# Related: tasks/perf-root-cause-2026-04-23.md entry #4.
+#   1. `audit-findmany-no-take`   — row-bound enforcement. Every findMany
+#      must either `take:` or filter by a unique column. Prevents the perf-
+#      regression class where unbounded reads materialise the whole table.
+#      Related: tasks/perf-root-cause-2026-04-23.md entry #4.
+#
+#   2. `audit-findmany-no-select` — column-bound enforcement. Every findMany
+#      must `select:` or `omit:`. Prevents the schema-drift crash class
+#      (basson `Animal.species`, 2026-05-06) where an unprojected findMany
+#      SELECT *s a column declared in `prisma/schema.prisma` but missing
+#      from the live tenant DB and 500s with `no such column`.
+#      Related: PRD #128 §14, issue #131 (live-DB column parity).
+#
+# Both audits run independently. A findMany that's compliant with one but
+# not the other still fails the job — they cover different bug classes.
+# Each has its own grandfather baseline file:
+#   .audit-findmany-baseline.json
+#   .audit-findmany-no-select-baseline.json
 
 on:
   pull_request:
@@ -31,5 +46,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit prisma.findMany call-sites
+      - name: Audit prisma.findMany call-sites — row bounds (take / unique where)
         run: pnpm tsx scripts/audit-findmany-no-take.ts
+
+      - name: Audit prisma.findMany call-sites — column bounds (select / omit)
+        run: pnpm tsx scripts/audit-findmany-no-select.ts
