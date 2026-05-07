@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { tenantRead, tenantWrite, routeError } from "@/lib/server/route";
-import { CrossSpeciesBlockedError } from "@/lib/server/mob-move";
+import { CrossSpeciesBlockedError } from "@/lib/domain/mobs/move-mob";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
 import type { SpeciesId } from "@/lib/species/types";

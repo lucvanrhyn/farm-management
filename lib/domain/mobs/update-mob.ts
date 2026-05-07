@@ -18,7 +18,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   performMobMove,
   MobNotFoundError,
-} from "@/lib/server/mob-move";
+} from "./move-mob";
 
 export interface UpdateMobInput {
   mobId: string;

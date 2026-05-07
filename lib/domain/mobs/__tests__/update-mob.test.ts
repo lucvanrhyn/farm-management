@@ -16,9 +16,9 @@ const { performMobMoveMock } = vi.hoisted(() => ({
   performMobMoveMock: vi.fn(),
 }));
 
-vi.mock("@/lib/server/mob-move", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/server/mob-move")>(
-    "@/lib/server/mob-move",
+vi.mock("@/lib/domain/mobs/move-mob", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domain/mobs/move-mob")>(
+    "@/lib/domain/mobs/move-mob",
   );
   return {
     ...actual,
@@ -30,7 +30,7 @@ import { updateMob } from "../update-mob";
 import {
   CrossSpeciesBlockedError,
   MobNotFoundError,
-} from "@/lib/server/mob-move";
+} from "@/lib/domain/mobs/move-mob";
 
 describe("updateMob(prisma, input)", () => {
   const mobFindUnique = vi.fn();

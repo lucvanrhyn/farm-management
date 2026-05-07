@@ -62,7 +62,7 @@ import {
   performMobMove,
   CrossSpeciesBlockedError,
   CROSS_SPECIES_BLOCKED,
-} from "@/lib/server/mob-move";
+} from "@/lib/domain/mobs/move-mob";
 import type { PrismaClient } from "@prisma/client";
 
 const mob = (overrides: Partial<{ id: string; name: string; currentCamp: string; species: string }> = {}) => ({

@@ -57,9 +57,9 @@ vi.mock("@/lib/server/revalidate", () => ({
 // Replace performMobMove so the test can throw the typed error without
 // exercising the underlying Prisma transaction — the unit test for that lives
 // in __tests__/server/mob-move-cross-species.test.ts.
-vi.mock("@/lib/server/mob-move", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/server/mob-move")>(
-    "@/lib/server/mob-move",
+vi.mock("@/lib/domain/mobs/move-mob", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domain/mobs/move-mob")>(
+    "@/lib/domain/mobs/move-mob",
   );
   return {
     ...actual,
@@ -68,7 +68,7 @@ vi.mock("@/lib/server/mob-move", async () => {
 });
 
 import { PATCH } from "@/app/api/mobs/[mobId]/route";
-import { CrossSpeciesBlockedError, MobNotFoundError } from "@/lib/server/mob-move";
+import { CrossSpeciesBlockedError, MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 
 function patchReq(mobId: string, body: Record<string, unknown>): NextRequest {
   return new NextRequest(`http://localhost/api/mobs/${mobId}`, {

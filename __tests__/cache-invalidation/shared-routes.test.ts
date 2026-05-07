@@ -189,7 +189,7 @@ describe("POST /api/observations", () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect([200, 201]).toContain(res.status);
 
     assertTagFired(farmTag(SLUG, "observations"));
