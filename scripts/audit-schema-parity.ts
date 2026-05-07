@@ -19,14 +19,21 @@
  *   1 — drift detected with --fail-on-drift
  *   2 — config / connectivity error
  */
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
 import { getAllFarmSlugs, getFarmCreds } from '../lib/meta-db';
 import { loadMigrations } from '../lib/migrator';
 import {
   checkSchemaParityAcrossTenants,
+  checkPrismaColumnParityAcrossTenants,
   formatParityResults,
+  formatColumnParityResults,
 } from '../lib/ops/schema-parity';
+import {
+  parsePrismaSchema,
+  expectedColumnsByTable,
+} from '../lib/ops/parse-prisma-schema';
 
 interface CliFlags {
   json: boolean;
@@ -89,18 +96,40 @@ async function main(argv: readonly string[]): Promise<number> {
   const migrationsDir = fileURLToPath(new URL('../migrations', import.meta.url));
   const expected = (await loadMigrations(migrationsDir)).map((m) => m.name);
 
+  // Parse `prisma/schema.prisma` so we can also run the column-parity
+  // audit (wave/131, issue #131). This catches the basson-style drift
+  // where a column is declared in the schema but never written into a
+  // migration file — invisible to the migration-row check above.
+  const schemaPath = fileURLToPath(new URL('../prisma/schema.prisma', import.meta.url));
+  const prismaSchemaSrc = await readFile(schemaPath, 'utf-8');
+  const expectedColumns = expectedColumnsByTable(parsePrismaSchema(prismaSchemaSrc));
+
   let driftDetected = false;
   try {
     const results = await checkSchemaParityAcrossTenants(
       tenants.map(({ slug, client }) => ({ slug, client })),
       { expected, allowExtra: true },
     );
-    driftDetected = results.some((r) => r.error || (r.report && !r.report.ok));
+    const columnResults = await checkPrismaColumnParityAcrossTenants(
+      tenants.map(({ slug, client }) => ({ slug, client })),
+      { expectedColumns },
+    );
+    driftDetected =
+      results.some((r) => r.error || (r.report && !r.report.ok)) ||
+      columnResults.some((r) => r.error || (r.report && !r.report.ok));
 
     if (flags.json) {
-      console.log(JSON.stringify({ expected, results }, null, 2));
+      console.log(
+        JSON.stringify(
+          { expected, expectedColumns: Object.fromEntries(expectedColumns), results, columnResults },
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(formatParityResults(results));
+      console.log('');
+      console.log(formatColumnParityResults(columnResults));
     }
   } finally {
     for (const t of tenants) {
