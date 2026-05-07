@@ -407,6 +407,11 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
       if (full.endsWith("/audit-findmany-no-take.ts")) continue;
       if (full.endsWith("/audit-findmany-no-take.test.ts")) continue;
       if (full.endsWith("/audit-findmany-rekey.test.ts")) continue;
+      // Sibling audit (column-projection, PR #140 / wave/138) — its source
+      // and unit-test fixtures contain literal `prisma.<m>.findMany(...)`
+      // strings that would otherwise self-trigger this row-bound check.
+      if (full.endsWith("/audit-findmany-no-select.ts")) continue;
+      if (full.endsWith("/audit-findmany-no-select.test.ts")) continue;
       out.push(full);
     }
   }
