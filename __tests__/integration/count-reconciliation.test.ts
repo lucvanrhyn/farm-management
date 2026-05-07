@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { reconcileFromArrays } from '../../lib/reconcile/counts';
 
 /**
  * PRD #128 (2026-05-06): the home screen reported `874 animals / 19 camps`
@@ -6,11 +7,17 @@ import { describe, it, expect } from 'vitest';
  * tenant in the same session. That divergence shipped past 2,297 unit tests
  * because nothing asserted the two count sources agreed.
  *
- * This test fixes that for the future: it pins the invariant
+ * This test pins the invariant
  *   farm.animalCount === sum(camps.animal_count)
  *   farm.campCount   === camps.length
  * as a unit-level table assertion. If the home / admin / camps endpoints
  * ever drift apart, the assertion fires at PR time, not on prod.
+ *
+ * Wave/142 (2026-05-07): the inline `reconcile()` shim that used to live in
+ * this file has been extracted to `lib/reconcile/counts.ts` so the same
+ * arithmetic is reusable from runtime probes (synthetic-probe, post-promote
+ * gates). This file now exercises the integration shape — real PRD numbers,
+ * real bug repros — while the unit-level contract lives next to the module.
  */
 
 interface FarmSummary {
@@ -22,12 +29,19 @@ interface CampRow {
   animal_count: number;
 }
 
+/**
+ * Wrap the shared module to keep the test's assertion shape readable
+ * (`animalsAgree`, `campsAgree`). The module returns the canonical
+ * `{ farmCount, summedCount, divergence, ok, campCount }` shape; we
+ * project that into the older boolean-flag form here for clarity.
+ */
 function reconcile(farm: FarmSummary, camps: readonly CampRow[]) {
-  const summed = camps.reduce((acc, c) => acc + (c.animal_count ?? 0), 0);
+  const animalArr = new Array(farm.animalCount).fill({});
+  const r = reconcileFromArrays(animalArr, camps);
   return {
-    animalsAgree: farm.animalCount === summed,
+    animalsAgree: r.ok,
     campsAgree: farm.campCount === camps.length,
-    summed,
+    summed: r.summedCount,
   };
 }
 
