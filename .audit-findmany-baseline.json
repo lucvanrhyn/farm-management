@@ -49,7 +49,7 @@
     "app/api/animals/import/route.ts::camp::0",
     "app/api/animals/route.ts::animal::0",
     "app/api/farm/species-settings/route.ts::farmSpeciesSettings::0",
-    "app/api/mobs/route.ts::mob::0",
+    "lib/domain/mobs/list-mobs.ts::mob::0",
     "app/api/onboarding/map-columns/route.ts::camp::0",
     "app/api/task-occurrences/route.ts::taskOccurrence::0",
     "app/api/tasks/route.ts::task::0",
