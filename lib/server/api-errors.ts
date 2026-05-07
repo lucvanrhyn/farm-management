@@ -8,6 +8,12 @@ import {
   NotFoundError,
   WrongSpeciesError,
 } from "@/lib/domain/mobs/errors";
+import {
+  CampNotFoundError,
+  InvalidTimestampError,
+  InvalidTypeError,
+  ObservationNotFoundError,
+} from "@/lib/domain/observations/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -49,6 +55,19 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     // Wire shape preserves the count-bearing message (legacy clients display
     // the `error` field as a sentence — not yet migrated to a typed code).
     return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  // Wave C (#156) — observations domain typed errors.
+  if (err instanceof ObservationNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof CampNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof InvalidTypeError) {
+    return NextResponse.json({ error: err.code }, { status: 422 });
+  }
+  if (err instanceof InvalidTimestampError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
   }
   return null;
 }
