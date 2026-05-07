@@ -352,3 +352,130 @@ describe('wave/56 — 0008_record_legacy_renames.sql against the live migrations
     ]);
   });
 });
+
+describe('wave/130 — 0016/0017 Animal.species pre-stamp against the live migrations dir', () => {
+  // Background: pre-rule-tightening tenants got `Animal.species` and
+  // `Animal.speciesData` via legacy `prisma db push`. After CLAUDE.md banned
+  // hand-rolled migrations / `prisma db push` (2026-04-28), `acme-cattle`
+  // was provisioned and never received those columns — every Prisma query
+  // projecting `species` (notably the dashboard helper) crashed 500.
+  //
+  // Fix: 0016 pre-stamps 0017 as applied for tenants that already have the
+  // `species` column. 0017 ALTERs the table for tenants missing it. These
+  // tests guard the contract:
+  //   - tenants WITH the column → 0016 marks 0017 applied; 0017 is skipped
+  //   - tenants WITHOUT the column → 0016 inserts nothing; 0017 runs ALTER
+  let db: Client;
+
+  beforeEach(async () => {
+    db = await openMemoryDb();
+  });
+
+  it('a tenant that already has Animal.species skips 0017 and the ALTER never runs', async () => {
+    // Seed an Animal table that ALREADY has species + speciesData — the
+    // pre-rule-tightening cohort. Other Animal columns are stubbed; only the
+    // species columns matter for the pragma_table_info probe.
+    await db.execute(`
+      CREATE TABLE "Animal" (
+        id TEXT PRIMARY KEY,
+        species TEXT NOT NULL DEFAULT 'cattle',
+        speciesData TEXT
+      )
+    `);
+
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const pair = all.filter((m) =>
+      [
+        '0016_pre_stamp_animal_species_columns.sql',
+        '0017_animal_species_columns.sql',
+      ].includes(m.name),
+    );
+    expect(pair).toHaveLength(2);
+
+    const result = await runMigrations(db, pair);
+
+    // 0016 itself is applied (the bookkeeping migration always runs); 0017
+    // is skipped because 0016 stamped it.
+    expect(result.applied).toEqual(['0016_pre_stamp_animal_species_columns.sql']);
+    expect(result.skipped).toEqual(['0017_animal_species_columns.sql']);
+
+    // Both names land in `_migrations`.
+    const recorded = await db.execute(
+      `SELECT name FROM "_migrations" ORDER BY name`,
+    );
+    expect(recorded.rows.map((r) => r.name)).toEqual([
+      '0016_pre_stamp_animal_species_columns.sql',
+      '0017_animal_species_columns.sql',
+    ]);
+
+    // The ALTER did not re-fire — column count unchanged. (If 0017 had run,
+    // the ALTER would have failed on "duplicate column" and the whole batch
+    // would have rolled back, so this assertion is belt-and-braces.)
+    const cols = await db.execute(`PRAGMA table_info("Animal")`);
+    const names = cols.rows.map((r) => r.name as string).sort();
+    expect(names).toEqual(['id', 'species', 'speciesData']);
+  });
+
+  it('a fresh tenant missing Animal.species applies 0017 and the columns are added', async () => {
+    // Seed an Animal table WITHOUT species — the basson cohort.
+    await db.execute(`CREATE TABLE "Animal" ( id TEXT PRIMARY KEY )`);
+
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const pair = all.filter((m) =>
+      [
+        '0016_pre_stamp_animal_species_columns.sql',
+        '0017_animal_species_columns.sql',
+      ].includes(m.name),
+    );
+
+    const result = await runMigrations(db, pair);
+
+    // Both files apply: 0016 inserts nothing (WHERE EXISTS is false) and
+    // 0017 actually ALTERs the table.
+    expect(result.applied).toEqual([
+      '0016_pre_stamp_animal_species_columns.sql',
+      '0017_animal_species_columns.sql',
+    ]);
+    expect(result.skipped).toEqual([]);
+
+    // Both columns landed.
+    const cols = await db.execute(`PRAGMA table_info("Animal")`);
+    const names = cols.rows.map((r) => r.name as string).sort();
+    expect(names).toEqual(['id', 'species', 'speciesData']);
+
+    // Default for `species` is the literal 'cattle' — match Prisma's default.
+    await db.execute(`INSERT INTO "Animal" (id) VALUES ('A1')`);
+    const sample = await db.execute(`SELECT species, speciesData FROM "Animal"`);
+    expect(sample.rows[0].species).toBe('cattle');
+    expect(sample.rows[0].speciesData).toBeNull();
+  });
+
+  it('replaying 0016/0017 on an already-migrated tenant is a no-op', async () => {
+    // Idempotency check: after the first run leaves both rows in _migrations,
+    // a second runMigrations call must produce 0 applied + 2 skipped.
+    await db.execute(`CREATE TABLE "Animal" ( id TEXT PRIMARY KEY )`);
+
+    const repoRoot = join(__dirname, '..', '..');
+    const realDir = join(repoRoot, 'migrations');
+    const all = await loadMigrations(realDir);
+    const pair = all.filter((m) =>
+      [
+        '0016_pre_stamp_animal_species_columns.sql',
+        '0017_animal_species_columns.sql',
+      ].includes(m.name),
+    );
+
+    await runMigrations(db, pair);
+    const second = await runMigrations(db, pair);
+
+    expect(second.applied).toEqual([]);
+    expect(second.skipped.sort()).toEqual([
+      '0016_pre_stamp_animal_species_columns.sql',
+      '0017_animal_species_columns.sql',
+    ]);
+  });
+});
