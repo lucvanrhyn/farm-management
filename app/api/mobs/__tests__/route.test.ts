@@ -105,6 +105,7 @@ describe("POST /api/mobs — orphan + cross-species camp guard (#97)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01", species: "cattle" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(201);
@@ -129,6 +130,7 @@ describe("POST /api/mobs — orphan + cross-species camp guard (#97)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "SHARED-01", species: "cattle" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(422);
@@ -144,6 +146,7 @@ describe("POST /api/mobs — orphan + cross-species camp guard (#97)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "GHOST-99", species: "cattle" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(422);
@@ -177,6 +180,7 @@ describe("POST /api/mobs — orphan + cross-species camp guard (#97)", () => {
 
     const res = await POST(
       postReq({ name: "Cattle Mob", currentCamp: "DUP-01", species: "cattle" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(201);
@@ -197,6 +201,7 @@ describe("POST /api/mobs — orphan + cross-species camp guard (#97)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "LEGACY-01", species: "cattle" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(422);
