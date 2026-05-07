@@ -1,6 +1,6 @@
 # Route handler architecture: named transport adapters over a route factory
 
-**Status:** proposed (2026-05-07)
+**Status:** accepted (2026-05-07)
 
 ## Context
 
