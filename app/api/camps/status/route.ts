@@ -1,24 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
+import { NextResponse } from "next/server";
+import { tenantRead } from "@/lib/server/route";
 import { getCachedCampConditions } from "@/lib/server/cached";
-import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
-import { logger } from "@/lib/logger";
+import { timeAsync } from "@/lib/server/server-timing";
 
-export async function GET(req: NextRequest) {
-  return withServerTiming(async () => {
-    const ctx = await timeAsync("session", () => getFarmContext(req));
-    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    try {
-      const conditions = await timeAsync("query", () => getCachedCampConditions(ctx.slug));
-      const result: Record<string, unknown> = {};
-      for (const [campId, status] of conditions.entries()) {
-        result[campId] = status;
-      }
-      return NextResponse.json(result);
-    } catch (err) {
-      logger.error('[camps/status] DB error', err);
-      return NextResponse.json({ error: "Failed to load camp conditions" }, { status: 500 });
+export const GET = tenantRead({
+  handle: async (ctx) => {
+    // Throws on DB failure → adapter emits the typed DB_QUERY_FAILED envelope
+    // (replaces the per-route try/catch the old hand-rolled handler carried).
+    const conditions = await timeAsync("query", () =>
+      getCachedCampConditions(ctx.slug),
+    );
+    const result: Record<string, unknown> = {};
+    for (const [campId, status] of conditions.entries()) {
+      result[campId] = status;
     }
-  });
-}
+    return NextResponse.json(result);
+  },
+});

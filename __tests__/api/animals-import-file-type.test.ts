@@ -85,7 +85,7 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
     const csv = new File(["animal_id,sex\nA001,Male\n"], "animals.csv", {
       type: "text/csv",
     });
-    const res = await POST(makeFormDataReq(csv));
+    const res = await POST(makeFormDataReq(csv), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -100,7 +100,7 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
     const xls = new File(["legacy bytes"], "old-book.xls", {
       type: "application/vnd.ms-excel",
     });
-    const res = await POST(makeFormDataReq(xls));
+    const res = await POST(makeFormDataReq(xls), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -116,7 +116,7 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
     const fakeXlsx = new File(["animal_id,sex\nA001,Male\n"], "data.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const res = await POST(makeFormDataReq(fakeXlsx));
+    const res = await POST(makeFormDataReq(fakeXlsx), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     const body = await res.json();

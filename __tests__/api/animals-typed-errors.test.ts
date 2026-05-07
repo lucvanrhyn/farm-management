@@ -84,7 +84,7 @@ describe("GET /api/animals — happy path returns JSON array (production sanity)
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals?limit=1000");
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -97,7 +97,7 @@ describe("GET /api/animals — happy path returns JSON array (production sanity)
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals");
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -117,7 +117,7 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals");
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(500);
     // Body MUST be valid JSON, not empty. The whole point of this hotfix is
@@ -137,7 +137,7 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals?limit=500");
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(500);
     const text = await res.text();
@@ -155,7 +155,7 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals");
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(401);
   });
