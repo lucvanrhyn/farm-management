@@ -138,7 +138,7 @@ describe("POST /api/animals", () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(201);
 
     assertTagFired(farmTag(SLUG, "animals"));
@@ -157,7 +157,7 @@ describe("POST /api/camps", () => {
       body: JSON.stringify({ campId: "C1", campName: "Test Camp" }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(201);
 
     assertTagFired(farmTag(SLUG, "camps"));

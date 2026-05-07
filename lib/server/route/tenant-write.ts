@@ -79,7 +79,7 @@ export function tenantWrite<
   TBody = unknown,
   TParams extends RouteParams = RouteParams,
 >(opts: TenantWriteOpts<TBody, TParams>): RouteHandler<TParams> {
-  return async (req: NextRequest, ctx?: RouteContext<TParams>) => {
+  return async (req: NextRequest, ctx: RouteContext<TParams>) => {
     return withServerTiming(async () => {
       const farmCtx = await timeAsync("session", () => getFarmContext(req));
       if (!farmCtx) {

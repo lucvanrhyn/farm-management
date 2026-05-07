@@ -106,7 +106,7 @@ export function adminWrite<
   TBody = unknown,
   TParams extends RouteParams = RouteParams,
 >(opts: AdminWriteOpts<TBody, TParams>): RouteHandler<TParams> {
-  return async (req: NextRequest, ctx?: RouteContext<TParams>) => {
+  return async (req: NextRequest, ctx: RouteContext<TParams>) => {
     return withServerTiming(async () => {
       const farmCtx = await timeAsync("session", () => getFarmContext(req));
       if (!farmCtx) {

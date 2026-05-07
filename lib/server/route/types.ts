@@ -12,7 +12,7 @@
  * any heavyweight runtime — it must stay safe to import from tests and
  * static analysers.
  */
-import type { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import type { FarmContext } from "@/lib/server/farm-context";
 
 /**
@@ -55,18 +55,19 @@ export interface RouteContext<TParams extends RouteParams = RouteParams> {
  * The wrapped function returned by every adapter. Same shape as a vanilla
  * Next.js route handler — drop-in compatible with `export const GET = ...`.
  *
- * `ctx` is optional at the type level because legacy unit tests invoke the
- * route handler with a single argument (no `params` promise). The adapter
- * defaults `params` to `{}` when `ctx` is omitted, matching the framework
- * runtime contract for routes without dynamic segments.
+ * Both arguments are required at the type level so Next.js 16's
+ * auto-generated route-handler validator (`.next/types/app/api/<route>/route.ts`)
+ * accepts the export. The adapter handles a runtime `params` that resolves
+ * to `{}` defensively (no dynamic segments → framework still passes a real
+ * ctx with empty params).
  *
- * Return type is `Response | NextResponse` so streaming handlers (e.g.
- * SSE-driven import progress) can return a plain `Response` whose body is
- * a `ReadableStream` while the typical handler returns `NextResponse`.
+ * Return type is `Promise<Response>` — `NextResponse` is a subtype of
+ * `Response` so all adapters and handlers that return `NextResponse` satisfy
+ * this contract without widening.
  */
 export type RouteHandler<TParams extends RouteParams = RouteParams> = (
   req: NextRequest,
-  ctx?: RouteContext<TParams>,
+  ctx: RouteContext<TParams>,
 ) => Promise<Response>;
 
 /**

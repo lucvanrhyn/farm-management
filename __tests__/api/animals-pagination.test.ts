@@ -59,7 +59,7 @@ describe('GET /api/animals — backward-compatible unpaginated mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -79,7 +79,7 @@ describe('GET /api/animals — backward-compatible unpaginated mode', () => {
     const req = new NextRequest(
       'http://localhost/api/animals?camp=A&category=Cow&species=cattle&status=all',
     );
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     expect(mockFindMany).toHaveBeenCalledWith({
       where: {
@@ -102,7 +102,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=500');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -124,7 +124,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=2');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(data.items).toHaveLength(2);
@@ -138,7 +138,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=10&cursor=C');
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     expect(mockFindMany).toHaveBeenCalledWith({
       where: { status: 'Active', animalId: { gt: 'C' } },
@@ -152,7 +152,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=99999');
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 2001 }),
@@ -163,7 +163,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=abc');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(res.status).toBe(400);
@@ -175,7 +175,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=0');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     expect(mockFindMany).not.toHaveBeenCalled();
@@ -186,7 +186,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?cursor=W');
-    const res = await GET(req);
+    const res = await GET(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     // Paginated response shape, not an array.

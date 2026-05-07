@@ -35,7 +35,7 @@ import type {
 export function tenantRead<TParams extends RouteParams = RouteParams>(
   opts: TenantReadOpts<TParams>,
 ): RouteHandler<TParams> {
-  return async (req: NextRequest, ctx?: RouteContext<TParams>) => {
+  return async (req: NextRequest, ctx: RouteContext<TParams>) => {
     return withServerTiming(async () => {
       const farmCtx = await timeAsync("session", () => getFarmContext(req));
       if (!farmCtx) {
