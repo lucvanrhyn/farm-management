@@ -71,18 +71,34 @@ describe("tenantWrite — auth", () => {
 });
 
 describe("tenantWrite — body parse and revalidate", () => {
-  it("returns 400 INVALID_BODY when no body is provided", async () => {
+  it("returns 400 INVALID_BODY when body is non-empty and not valid JSON", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(loggerCtx);
     const handle = vi.fn();
     const route = tenantWrite({ handle });
 
-    const res = await route(
-      new NextRequest("http://localhost/api/test", { method: "POST" }),
-      { params: Promise.resolve({}) },
-    );
+    const req = new NextRequest("http://localhost/api/test", {
+      method: "POST",
+      body: "not json{",
+      headers: { "content-type": "application/json" },
+    });
+    const res = await route(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "INVALID_BODY" });
+  });
+
+  it("treats an empty body as `{}` so DELETE handlers (no body) are admitted", async () => {
+    hoisted.getFarmContext.mockResolvedValueOnce(loggerCtx);
+    const handle = vi.fn().mockResolvedValue(NextResponse.json({ ok: true }));
+    const route = tenantWrite({ handle });
+
+    const res = await route(
+      new NextRequest("http://localhost/api/test", { method: "DELETE" }),
+      { params: Promise.resolve({}) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(handle.mock.calls[0][1]).toEqual({});
   });
 
   it("returns 400 VALIDATION_FAILED when schema.parse throws", async () => {

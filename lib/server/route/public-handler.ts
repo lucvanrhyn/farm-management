@@ -30,7 +30,7 @@ import type {
 export function publicHandler<TParams extends RouteParams = RouteParams>(
   opts: PublicHandlerOpts<TParams>,
 ): RouteHandler<TParams> {
-  return async (req: NextRequest, ctx: RouteContext<TParams>) => {
+  return async (req: NextRequest, ctx?: RouteContext<TParams>) => {
     return withServerTiming(async () => {
       const params: TParams = ctx?.params ? await ctx.params : ({} as TParams);
       try {

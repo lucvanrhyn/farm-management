@@ -66,10 +66,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "animals/import/route.ts",
   "animals/reset/route.ts",
   "animals/route.ts",
-  "camps/[campId]/route.ts",
-  "camps/reset/route.ts",
-  "camps/route.ts",
-  "camps/status/route.ts",
 
   // ── Wave B+ migration — see ADR-0001. ──
   // [farmSlug]/** routes (Wave B-G).

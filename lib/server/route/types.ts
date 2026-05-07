@@ -54,10 +54,15 @@ export interface RouteContext<TParams extends RouteParams = RouteParams> {
 /**
  * The wrapped function returned by every adapter. Same shape as a vanilla
  * Next.js route handler — drop-in compatible with `export const GET = ...`.
+ *
+ * `ctx` is optional at the type level because legacy unit tests invoke the
+ * route handler with a single argument (no `params` promise). The adapter
+ * defaults `params` to `{}` when `ctx` is omitted, matching the framework
+ * runtime contract for routes without dynamic segments.
  */
 export type RouteHandler<TParams extends RouteParams = RouteParams> = (
   req: NextRequest,
-  ctx: RouteContext<TParams>,
+  ctx?: RouteContext<TParams>,
 ) => Promise<NextResponse>;
 
 /**

@@ -119,7 +119,7 @@ describe("adminWrite — auth + role gates", () => {
 });
 
 describe("adminWrite — body parse", () => {
-  it("returns 400 INVALID_BODY when body is missing on a method that expects JSON", async () => {
+  it("returns 400 INVALID_BODY when body is non-empty and not valid JSON", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(adminCtx);
     const handle = vi.fn();
     const route = adminWrite({
@@ -127,14 +127,30 @@ describe("adminWrite — body parse", () => {
       handle,
     });
 
-    const res = await route(
-      new NextRequest("http://localhost/api/test", { method: "POST" }),
-      { params: Promise.resolve({}) },
-    );
+    const req = new NextRequest("http://localhost/api/test", {
+      method: "POST",
+      body: "not json{",
+      headers: { "content-type": "application/json" },
+    });
+    const res = await route(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "INVALID_BODY" });
     expect(handle).not.toHaveBeenCalled();
+  });
+
+  it("treats an empty body as `{}` so DELETE handlers (no body) are admitted", async () => {
+    hoisted.getFarmContext.mockResolvedValueOnce(adminCtx);
+    const handle = vi.fn().mockResolvedValue(NextResponse.json({ ok: true }));
+    const route = adminWrite({ handle });
+
+    const res = await route(
+      new NextRequest("http://localhost/api/test", { method: "DELETE" }),
+      { params: Promise.resolve({}) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(handle.mock.calls[0][1]).toEqual({});
   });
 
   it("returns 400 VALIDATION_FAILED with details when schema.parse throws RouteValidationError", async () => {
@@ -187,11 +203,12 @@ describe("adminWrite — body parse", () => {
   it("forwards a parsed body to handle when schema validates", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(adminCtx);
     const handle = vi.fn().mockResolvedValue(NextResponse.json({ ok: true }));
-    const schema = { parse: (x: unknown) => ({ ...(x as object), normalised: true }) };
-    const route = adminWrite<{ campId: string; normalised: boolean }>({
-      schema,
-      handle,
-    });
+    type Body = { campId: string; normalised: boolean };
+    const schema = {
+      parse: (x: unknown) =>
+        ({ ...(x as object), normalised: true }) as unknown as Body,
+    };
+    const route = adminWrite<Body>({ schema, handle });
 
     await route(makeReq({ body: { campId: "C1" } }), {
       params: Promise.resolve({}),

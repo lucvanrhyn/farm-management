@@ -190,19 +190,45 @@ function walk(dir: string): string[] {
 /**
  * Extract the source range of each exported handler. Returns an array of
  * `{ method, body }` where `body` is the substring between the function
- * opening and the matching closing brace.
+ * opening and the matching closing brace, OR — for ADR-0001 adapter
+ * exports (`export const GET = tenantRead({...})`) — the entire call
+ * expression so the adapter-pattern recognisers below can see the
+ * adapter callee.
  *
- * We deliberately do NOT parse with TypeScript — a regex find of
- * `export async function <METHOD>(` + manual brace-balance is enough for a
- * lint-level check and stays dep-free. Handlers in this codebase do not nest
- * `export async function ...` inside one another.
+ * We deliberately do NOT parse with TypeScript — a regex find of the
+ * declaration + manual brace-balance is enough for a lint-level check
+ * and stays dep-free.
  */
 function handlerBodies(source: string): Map<Method, string> {
   const out = new Map<Method, string>();
   for (const method of METHODS) {
+    // Pattern 1: legacy `export async function GET(...)` form — body is the
+    // function body braces.
     const declRe = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`, 'g');
     const match = declRe.exec(source);
-    if (!match) continue;
+    if (!match) {
+      // Pattern 2: ADR-0001 `export const GET = tenantRead({...})` form —
+      // capture from the `=` through the balanced parens of the adapter call.
+      const constRe = new RegExp(
+        `export\\s+const\\s+${method}\\s*(?::[^=]+)?=\\s*`,
+        'g',
+      );
+      const cmatch = constRe.exec(source);
+      if (!cmatch) continue;
+      // Find the first `(` after the match — that's the adapter call open.
+      const exprStart = cmatch.index + cmatch[0].length;
+      const parenIdx = source.indexOf('(', exprStart);
+      if (parenIdx === -1) continue;
+      let p = 1;
+      let j = parenIdx + 1;
+      for (; j < source.length && p > 0; j++) {
+        const c = source[j];
+        if (c === '(') p++;
+        else if (c === ')') p--;
+      }
+      out.set(method, source.slice(cmatch.index, j));
+      continue;
+    }
     // Skip past the argument list — the handler signature can include
     // destructured params (`{ params }`) whose braces would otherwise fool a
     // naïve left-to-right brace balancer. Walk from the opening `(` of the
@@ -253,6 +279,12 @@ function handlerBodies(source: string): Map<Method, string> {
  */
 function callsVerifyFreshAdmin(body: string, fileSource: string): boolean {
   if (body.includes('verifyFreshAdminRole')) return true;
+  // ADR-0001: `adminWrite(...)` from `@/lib/server/route` enforces the
+  // fresh-admin gate inside the adapter. A handler exported as
+  // `export const POST = adminWrite({...})` is structurally guaranteed
+  // to call `verifyFreshAdminRole` even though that string never appears
+  // in the route file.
+  if (/\badminWrite\s*[<(]/.test(body)) return true;
   // Delegated admin-authorize helpers (e.g. budgets + rainfall) call
   // verifyFreshAdminRole inside a module-scope `authorize(..., true)` helper.
   // If the handler invokes `authorize(` with `true` as any argument and the
@@ -286,11 +318,15 @@ function collectHandlers(): HandlerRecord[] {
     // consolidated helpers (`getFarmContext(` / `getFarmContextForSlug(`).
     // Migrated admin-write handlers still need `verifyFreshAdminRole` — the
     // helper name changed but the H.2 invariant did not.
+    // ADR-0001: migrated routes import the adapter contract from
+    // `@/lib/server/route` — that import counts as "uses helper" because
+    // every adapter wraps `getFarmContext` + role gates internally.
     const uses =
       src.includes('getPrismaForSlugWithAuth(') ||
       src.includes('getPrismaWithAuth(') ||
       src.includes('getFarmContext(') ||
-      src.includes('getFarmContextForSlug(');
+      src.includes('getFarmContextForSlug(') ||
+      src.includes('@/lib/server/route');
     if (!uses) continue;
     const bodies = handlerBodies(src);
     for (const [method, body] of bodies) {
@@ -306,7 +342,11 @@ function collectHandlers(): HandlerRecord[] {
           // authorize() helper pattern — body calls authorize() which internally
           // calls one of the helpers. Count as uses-helper so the coverage rule
           // applies.
-          /authorize\s*\(/.test(body),
+          /authorize\s*\(/.test(body) ||
+          // ADR-0001 adapter exports: the body slice covers the adapter call
+          // expression, e.g. `tenantRead({...})`. Each adapter wraps
+          // getFarmContext internally, so this counts as uses-helper.
+          /\b(?:tenantRead|adminWrite|tenantWrite|publicHandler)\s*[<(]/.test(body),
         hasFreshAdmin: callsVerifyFreshAdmin(body, src),
         body,
       });

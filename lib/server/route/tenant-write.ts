@@ -40,12 +40,27 @@ function extractDetails(err: unknown): Record<string, unknown> | undefined {
   return undefined;
 }
 
+/**
+ * Parse JSON body. Empty/missing body is allowed and surfaces as `{}` so
+ * DELETE handlers (which typically carry no body) are not rejected. A
+ * non-empty payload that fails JSON parsing returns INVALID_BODY. See
+ * `admin-write.ts` for the same contract.
+ */
 async function parseBody(
   req: NextRequest,
 ): Promise<{ ok: true; body: unknown } | { ok: false; res: NextResponse }> {
+  let raw: string;
   try {
-    const body = await req.json();
-    return { ok: true, body };
+    raw = await req.text();
+  } catch {
+    return {
+      ok: false,
+      res: routeError("INVALID_BODY", "Could not read request body", 400),
+    };
+  }
+  if (raw.length === 0) return { ok: true, body: {} };
+  try {
+    return { ok: true, body: JSON.parse(raw) };
   } catch {
     return {
       ok: false,
@@ -58,7 +73,7 @@ export function tenantWrite<
   TBody = unknown,
   TParams extends RouteParams = RouteParams,
 >(opts: TenantWriteOpts<TBody, TParams>): RouteHandler<TParams> {
-  return async (req: NextRequest, ctx: RouteContext<TParams>) => {
+  return async (req: NextRequest, ctx?: RouteContext<TParams>) => {
     return withServerTiming(async () => {
       const farmCtx = await timeAsync("session", () => getFarmContext(req));
       if (!farmCtx) {
