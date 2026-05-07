@@ -115,6 +115,186 @@ export async function checkSchemaParityAcrossTenants(
   return results;
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Prisma-schema vs live-DB column parity (issue #131, wave/131)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// `checkSchemaParity` above catches drift between migration files and the
+// `_migrations` table. It cannot catch a column declared in
+// `prisma/schema.prisma` but never written into a migration file — exactly
+// the basson `Animal.species` incident from Wave 0. This second checker
+// closes that gap.
+//
+// Parsing the schema is the caller's job (use `parsePrismaSchema` +
+// `expectedColumnsByTable` from `./parse-prisma-schema.ts`). This module
+// stays I/O-free — it only knows about `Client` and the expected column
+// map. The CLI driver and the post-promote verify both call this.
+
+export interface MissingColumn {
+  table: string;
+  column: string;
+}
+
+export interface PrismaColumnParityReport {
+  /** Tables that exist in `expected` AND in the live DB. */
+  checkedTables: string[];
+  /** Tables in `expected` but missing from the live DB entirely. */
+  missingTables: string[];
+  /** Per-table columns declared in Prisma but absent from the live DB. */
+  missing: MissingColumn[];
+  /** Always true if `missing` and `missingTables` are both empty. */
+  ok: boolean;
+}
+
+export interface CheckPrismaColumnParityOpts {
+  /**
+   * Map of resolved-table-name → expected column names. Build via
+   * `expectedColumnsByTable(parsePrismaSchema(source))`.
+   *
+   * Tables passed here that don't exist in the live DB land in
+   * `missingTables` rather than throwing — a tenant can legitimately
+   * have a model that hasn't been migrated yet (e.g. wave-in-flight).
+   */
+  expectedColumns: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Optional table allow-list. If provided, only these tables are
+   * checked. Useful when running against a tenant known to lag a
+   * specific model behind during a multi-wave deploy. Default: all
+   * tables in `expectedColumns`.
+   */
+  onlyTables?: readonly string[];
+}
+
+const SELECT_TABLE_NAMES = `SELECT name FROM sqlite_master WHERE type='table'`;
+
+/**
+ * Read each table's actual column set from `pragma_table_info` and diff
+ * against the Prisma-declared expected set. Returns a structured report
+ * — caller decides how to surface (CLI / PR comment / SARIF).
+ */
+export async function checkPrismaColumnParity(
+  db: Client,
+  opts: CheckPrismaColumnParityOpts,
+): Promise<PrismaColumnParityReport> {
+  const want = opts.onlyTables
+    ? opts.onlyTables.filter((t) => opts.expectedColumns.has(t))
+    : [...opts.expectedColumns.keys()];
+
+  // Get the live table list once so we can correctly distinguish
+  // "table absent" from "column absent".
+  const tablesRes = await db.execute(SELECT_TABLE_NAMES);
+  const liveTables = new Set(
+    tablesRes.rows
+      .map((r) => r.name)
+      .filter((n): n is string => typeof n === 'string'),
+  );
+
+  const checkedTables: string[] = [];
+  const missingTables: string[] = [];
+  const missing: MissingColumn[] = [];
+
+  for (const table of want) {
+    if (!liveTables.has(table)) {
+      missingTables.push(table);
+      continue;
+    }
+    checkedTables.push(table);
+
+    // pragma_table_info returns one row per column. Use the function-form
+    // (`pragma_table_info(?)`) so the table name binds as a parameter,
+    // not as a SQL-injectable string concat.
+    const colRes = await db.execute({
+      sql: `SELECT name FROM pragma_table_info(?)`,
+      args: [table],
+    });
+    const liveCols = new Set(
+      colRes.rows
+        .map((r) => r.name)
+        .filter((n): n is string => typeof n === 'string'),
+    );
+
+    const expected = opts.expectedColumns.get(table) ?? [];
+    for (const col of expected) {
+      if (!liveCols.has(col)) missing.push({ table, column: col });
+    }
+  }
+
+  return {
+    checkedTables: checkedTables.sort(),
+    missingTables: missingTables.sort(),
+    missing: missing.sort((a, b) =>
+      a.table === b.table ? a.column.localeCompare(b.column) : a.table.localeCompare(b.table),
+    ),
+    ok: missing.length === 0 && missingTables.length === 0,
+  };
+}
+
+export interface TenantColumnParityResult {
+  slug: string;
+  report?: PrismaColumnParityReport;
+  error?: string;
+}
+
+/** Convenience: run column parity across many tenants. */
+export async function checkPrismaColumnParityAcrossTenants(
+  tenants: ReadonlyArray<{ slug: string; client: Client }>,
+  opts: CheckPrismaColumnParityOpts,
+): Promise<TenantColumnParityResult[]> {
+  const results: TenantColumnParityResult[] = [];
+  for (const { slug, client } of tenants) {
+    try {
+      const report = await checkPrismaColumnParity(client, opts);
+      results.push({ slug, report });
+    } catch (err) {
+      results.push({ slug, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return results;
+}
+
+/** Format column-parity results for human eyes (CLI / PR comments). */
+export function formatColumnParityResults(
+  results: readonly TenantColumnParityResult[],
+): string {
+  const lines: string[] = [];
+  let allOk = true;
+  for (const { slug, report, error } of results) {
+    if (error) {
+      allOk = false;
+      lines.push(`❌ ${slug} — ERROR: ${error}`);
+      continue;
+    }
+    if (!report) continue;
+    if (report.ok) {
+      lines.push(`✅ ${slug} — ${report.checkedTables.length} tables at column parity`);
+      continue;
+    }
+    allOk = false;
+    const parts: string[] = [];
+    if (report.missingTables.length) {
+      parts.push(`missing tables: ${report.missingTables.join(', ')}`);
+    }
+    if (report.missing.length) {
+      const grouped = new Map<string, string[]>();
+      for (const m of report.missing) {
+        if (!grouped.has(m.table)) grouped.set(m.table, []);
+        grouped.get(m.table)!.push(m.column);
+      }
+      const cols = [...grouped.entries()]
+        .map(([t, c]) => `${t}.{${c.join(',')}}`)
+        .join('; ');
+      parts.push(`missing columns: ${cols}`);
+    }
+    lines.push(`❌ ${slug} — ${parts.join(' | ')}`);
+  }
+  lines.unshift(
+    allOk
+      ? '## Prisma column parity: ALL TENANTS GREEN'
+      : '## Prisma column parity: DRIFT DETECTED',
+  );
+  return lines.join('\n');
+}
+
 /**
  * Format a parity-results array for human eyes. Used by the CLI driver and
  * by the post-promote workflow's PR comment.
