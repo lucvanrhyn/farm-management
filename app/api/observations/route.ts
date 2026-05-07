@@ -1,136 +1,94 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
+/**
+ * GET  /api/observations — list observations (filterable, paginated).
+ * POST /api/observations — log an observation (any authenticated tenant role).
+ *
+ * Wave C (#156) — adapter-only wiring. The hand-rolled handler shape is
+ * gone; auth, body parse, typed-error envelope, and revalidate are owned
+ * by the `tenantRead` / `tenantWrite` adapters from `lib/server/route/`.
+ * The business logic lives in `lib/domain/observations/*`.
+ *
+ * Wire shapes:
+ *   - GET  200 → `Observation[]` (raw Prisma rows)
+ *   - POST 200 → `{ success: true, id: string }`
+ *   - POST 422 → `{ error: "INVALID_TYPE" | "WRONG_SPECIES" | ... }`
+ *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }`
+ *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`
+ *   - POST 429 → `{ error: "Too many requests" }` (rate-limit, transport-only)
+ */
+import { NextResponse } from "next/server";
+
+import { tenantRead, tenantWrite, RouteValidationError } from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
+import {
+  createObservation,
+  listObservations,
+  type CreateObservationInput,
+} from "@/lib/domain/observations";
 
-// Allowlist of valid observation type strings to prevent arbitrary type injection
-const VALID_OBSERVATION_TYPES = new Set([
-  "camp_condition",
-  "camp_check",
-  "calving",
-  "pregnancy_scan",
-  "weighing",
-  "treatment",
-  "heat_detection",
-  "insemination",
-  "drying_off",
-  "weaning",
-  "death",
-  "mob_movement",
-  "general",
-  "dosing",
-  "shearing",
-  "lambing",
-  "game_census",
-  "game_sighting",
-]);
-
-export async function GET(request: NextRequest) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma } = ctx;
-
-  const { searchParams } = new URL(request.url);
-  const camp = searchParams.get("camp");
-  const type = searchParams.get("type");
-  const animalId = searchParams.get("animalId");
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200);
-  const offset = parseInt(searchParams.get("offset") ?? "0");
-
-  const where: Record<string, unknown> = {};
-  if (camp) where.campId = camp;
-  if (type) where.type = type;
-  if (animalId) where.animalId = animalId;
-
-  try {
-    const observations = await prisma.observation.findMany({
-      where,
-      orderBy: { observedAt: "desc" },
-      take: limit,
-      skip: offset,
-    });
-    return NextResponse.json(observations);
-  } catch (err) {
-    logger.error('[observations GET] DB error', err);
-    return NextResponse.json({ error: "Failed to fetch observations" }, { status: 500 });
-  }
+interface CreateObservationBody {
+  type: string;
+  camp_id: string;
+  animal_id?: string | null;
+  details?: string | null;
+  created_at?: string | null;
 }
 
-export async function POST(request: NextRequest) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, session, slug } = ctx;
+const createObservationSchema = {
+  parse(input: unknown): CreateObservationBody {
+    const body = (input ?? {}) as Record<string, unknown>;
+    const errors: Record<string, string> = {};
+    if (typeof body.type !== "string" || !body.type) {
+      errors.type = "type is required";
+    }
+    if (typeof body.camp_id !== "string" || !body.camp_id) {
+      errors.camp_id = "camp_id is required";
+    }
+    if (Object.keys(errors).length > 0) {
+      throw new RouteValidationError(
+        Object.values(errors)[0] ?? "Invalid body",
+        { fieldErrors: errors },
+      );
+    }
+    return body as unknown as CreateObservationBody;
+  },
+};
 
-  // Rate limit: 100 observations per minute per user (offline sync can burst, but cap runaway clients)
-  const userId = session.user?.email ?? "unknown";
-  const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
-  if (!rl.allowed) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-  }
-
-  const body = await request.json();
-  const { type, camp_id, animal_id, details, created_at } = body;
-
-  if (!type || !camp_id) {
-    return NextResponse.json(
-      { error: "Missing required fields: type and camp_id" },
-      { status: 400 }
-    );
-  }
-
-  // Validate type against allowlist to prevent arbitrary type injection
-  if (!VALID_OBSERVATION_TYPES.has(type)) {
-    return NextResponse.json(
-      { error: `Invalid observation type: ${type}` },
-      { status: 400 }
-    );
-  }
-
-  // Verify camp_id belongs to this farm's DB (prevents writing to arbitrary camps).
-  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-  // species+campId). findFirst is single-species-safe; Phase B will scope.
-  const campExists = await prisma.camp.findFirst({ where: { campId: camp_id }, select: { campId: true } });
-  if (!campExists) {
-    return NextResponse.json({ error: "Camp not found" }, { status: 404 });
-  }
-
-  const observedAt = created_at ? new Date(created_at) : new Date();
-  if (isNaN(observedAt.getTime())) {
-    return NextResponse.json(
-      { error: "Invalid created_at timestamp" },
-      { status: 400 }
-    );
-  }
-
-  // Phase I.3 — denormalise species onto Observation at write time so
-  // /admin/reproduction can filter `species: mode` directly (no animalId-IN
-  // prefetch). Nullable: orphan/camp-only observations simply have no species.
-  let species: string | null = null;
-  if (animal_id) {
-    const animal = await prisma.animal.findUnique({
-      where: { animalId: animal_id },
-      select: { species: true },
+export const GET = tenantRead({
+  handle: async (ctx, req) => {
+    const { searchParams } = new URL(req.url);
+    const result = await listObservations(ctx.prisma, {
+      camp: searchParams.get("camp"),
+      type: searchParams.get("type"),
+      animalId: searchParams.get("animalId"),
+      limit: parseInt(searchParams.get("limit") ?? "50", 10),
+      offset: parseInt(searchParams.get("offset") ?? "0", 10),
     });
-    species = animal?.species ?? null;
-  }
+    return NextResponse.json(result);
+  },
+});
 
-  try {
-    const record = await prisma.observation.create({
-      data: {
-        type,
-        campId: camp_id,
-        animalId: animal_id ?? null,
-        details: details ?? "",
-        observedAt,
-        loggedBy: session.user?.email ?? null,
-        species,
-      },
-    });
-    revalidateObservationWrite(slug);
-    return NextResponse.json({ success: true, id: record.id });
-  } catch (err) {
-    logger.error('[observations] DB error', err);
-    return NextResponse.json({ error: "Failed to save observation" }, { status: 500 });
-  }
-}
+export const POST = tenantWrite<CreateObservationBody>({
+  schema: createObservationSchema,
+  revalidate: revalidateObservationWrite,
+  handle: async (ctx, body) => {
+    // Rate limit: 100 observations per minute per user. Transport-only —
+    // offline sync can burst, but cap runaway clients.
+    const userId = ctx.session.user?.email ?? "unknown";
+    const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const input: CreateObservationInput = {
+      type: body.type,
+      camp_id: body.camp_id,
+      animal_id: body.animal_id ?? null,
+      details: body.details ?? "",
+      created_at: body.created_at ?? null,
+      loggedBy: ctx.session.user?.email ?? null,
+    };
+    const result = await createObservation(ctx.prisma, input);
+    return NextResponse.json(result);
+  },
+});

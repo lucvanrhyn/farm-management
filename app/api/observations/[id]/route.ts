@@ -1,95 +1,59 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
-import { verifyFreshAdminRole } from "@/lib/auth";
+/**
+ * PATCH  /api/observations/[id] — edit an observation's `details` payload.
+ * DELETE /api/observations/[id] — delete an observation row.
+ *
+ * Wave C (#156) — adapter-only wiring. Both endpoints are ADMIN-gated.
+ * Business logic lives in `lib/domain/observations/{update,delete}-observation.ts`.
+ *
+ * Wire shapes:
+ *   - PATCH 200  → updated `Observation` row
+ *   - PATCH 404  → `{ error: "OBSERVATION_NOT_FOUND" }`
+ *   - PATCH 400  → `{ error: "VALIDATION_FAILED" }` (details must be string)
+ *   - DELETE 200 → `{ success: true }`
+ *   - DELETE 404 → `{ error: "OBSERVATION_NOT_FOUND" }`
+ */
+import { NextResponse } from "next/server";
+
+import { adminWrite, RouteValidationError } from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
-import { logger } from "@/lib/logger";
+import {
+  deleteObservation,
+  updateObservation,
+} from "@/lib/domain/observations";
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, session, slug } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  try {
-    const existing = await prisma.observation.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    await prisma.observation.delete({ where: { id } });
-
-    revalidateObservationWrite(slug);
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    logger.error('[observations DELETE] DB error', err);
-    return NextResponse.json({ error: "Failed to delete observation" }, { status: 500 });
-  }
+interface PatchObservationBody {
+  details: string;
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, session, slug } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-  const body = await request.json();
-  const { details } = body;
-
-  if (typeof details !== "string") {
-    return NextResponse.json({ error: "details must be a JSON string" }, { status: 400 });
-  }
-
-  try {
-    const existing = await prisma.observation.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+const patchObservationSchema = {
+  parse(input: unknown): PatchObservationBody {
+    const body = (input ?? {}) as Record<string, unknown>;
+    if (typeof body.details !== "string") {
+      throw new RouteValidationError("details must be a JSON string", {
+        fieldErrors: { details: "details must be a JSON string" },
+      });
     }
+    return { details: body.details };
+  },
+};
 
-    // Append to audit trail before overwriting — cap at 50 entries to prevent unbounded growth
-    const previousHistory: unknown[] = existing.editHistory
-      ? JSON.parse(existing.editHistory)
-      : [];
-    const rawHistory = [
-      ...previousHistory,
-      {
-        editedBy: session.user?.email ?? "unknown",
-        editedAt: new Date().toISOString(),
-        previousDetails: existing.details,
-      },
-    ];
-    const newHistory = rawHistory.slice(-50);
-
-    const updated = await prisma.observation.update({
-      where: { id },
-      data: {
-        details,
-        editedBy: session.user?.email ?? null,
-        editedAt: new Date(),
-        editHistory: JSON.stringify(newHistory),
-      },
+export const PATCH = adminWrite<PatchObservationBody, { id: string }>({
+  schema: patchObservationSchema,
+  revalidate: revalidateObservationWrite,
+  handle: async (ctx, body, _req, params) => {
+    const updated = await updateObservation(ctx.prisma, {
+      id: params.id,
+      details: body.details,
+      editedBy: ctx.session.user?.email ?? null,
     });
-
-    revalidateObservationWrite(slug);
     return NextResponse.json(updated);
-  } catch (err) {
-    logger.error('[observations PATCH] DB error', err);
-    return NextResponse.json({ error: "Failed to update observation" }, { status: 500 });
-  }
-}
+  },
+});
+
+export const DELETE = adminWrite<unknown, { id: string }>({
+  revalidate: revalidateObservationWrite,
+  handle: async (ctx, _body, _req, params) => {
+    const result = await deleteObservation(ctx.prisma, params.id);
+    return NextResponse.json(result);
+  },
+});

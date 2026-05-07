@@ -42,7 +42,7 @@
     "app/api/animals/route.ts::animal::1",
     "app/api/farm/species-settings/route.ts::farmSpeciesSettings::0",
     "lib/domain/mobs/list-mobs.ts::mob::0",
-    "app/api/observations/route.ts::observation::0",
+    "lib/domain/observations/list-observations.ts::observation::0",
     "app/api/task-occurrences/route.ts::taskOccurrence::0",
     "app/api/tasks/route.ts::task::0",
     "app/api/tasks/route.ts::task::1",

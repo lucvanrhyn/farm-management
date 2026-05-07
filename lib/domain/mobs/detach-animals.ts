@@ -8,7 +8,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
-import { MobNotFoundError } from "@/lib/server/mob-move";
+import { MobNotFoundError } from "./move-mob";
 import { RouteValidationError } from "@/lib/server/route";
 
 export interface DetachAnimalsInput {

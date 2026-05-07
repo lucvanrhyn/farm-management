@@ -1,39 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getFarmContext } from '@/lib/server/farm-context';
+/**
+ * PATCH /api/observations/[id]/attachment — persist an `attachmentUrl`
+ * onto an existing observation row.
+ *
+ * Wave C (#156) — adapter-only wiring under `tenantWrite` (any
+ * authenticated tenant role; uploading a photo is part of the standard
+ * field-logger flow, not an ADMIN-only operation).
+ *
+ * Wire shapes:
+ *   - 200 → `{ success: true, attachmentUrl: string | null }`
+ *   - 404 → `{ error: "OBSERVATION_NOT_FOUND" }`
+ *   - 400 → `{ error: "VALIDATION_FAILED" }` (attachmentUrl invalid)
+ */
+import { NextResponse } from 'next/server';
+
+import { tenantWrite, RouteValidationError } from '@/lib/server/route';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
-import { logger } from '@/lib/logger';
+import { attachObservationPhoto } from '@/lib/domain/observations';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { prisma, slug } = ctx;
-
-  const { id } = await params;
-  const body = await request.json();
-  const { attachmentUrl } = body;
-
-  if (typeof attachmentUrl !== 'string' || !attachmentUrl) {
-    return NextResponse.json({ error: 'attachmentUrl must be a non-empty string' }, { status: 400 });
-  }
-
-  try {
-    const existing = await prisma.observation.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    const updated = await prisma.observation.update({
-      where: { id },
-      data: { attachmentUrl },
-    });
-
-    revalidateObservationWrite(slug);
-    return NextResponse.json({ success: true, attachmentUrl: updated.attachmentUrl });
-  } catch (err) {
-    logger.error('[observations/attachment PATCH] DB error', err);
-    return NextResponse.json({ error: 'Failed to update attachment' }, { status: 500 });
-  }
+interface AttachmentBody {
+  attachmentUrl: string;
 }
+
+const attachmentSchema = {
+  parse(input: unknown): AttachmentBody {
+    const body = (input ?? {}) as Record<string, unknown>;
+    if (typeof body.attachmentUrl !== 'string' || !body.attachmentUrl) {
+      throw new RouteValidationError(
+        'attachmentUrl must be a non-empty string',
+        { fieldErrors: { attachmentUrl: 'attachmentUrl must be a non-empty string' } },
+      );
+    }
+    return { attachmentUrl: body.attachmentUrl };
+  },
+};
+
+export const PATCH = tenantWrite<AttachmentBody, { id: string }>({
+  schema: attachmentSchema,
+  revalidate: revalidateObservationWrite,
+  handle: async (ctx, body, _req, params) => {
+    const result = await attachObservationPhoto(ctx.prisma, {
+      id: params.id,
+      attachmentUrl: body.attachmentUrl,
+    });
+    return NextResponse.json(result);
+  },
+});

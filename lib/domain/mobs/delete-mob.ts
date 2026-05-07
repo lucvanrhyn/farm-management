@@ -7,7 +7,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
-import { MobNotFoundError } from "@/lib/server/mob-move";
+import { MobNotFoundError } from "./move-mob";
 
 import { MobHasAnimalsError } from "./errors";
 

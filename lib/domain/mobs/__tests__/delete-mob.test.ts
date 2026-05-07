@@ -12,7 +12,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { deleteMob } from "../delete-mob";
 import { MobHasAnimalsError } from "../errors";
-import { MobNotFoundError } from "@/lib/server/mob-move";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 
 describe("deleteMob(prisma, mobId)", () => {
   const mobFindUnique = vi.fn();

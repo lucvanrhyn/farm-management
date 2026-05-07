@@ -91,7 +91,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -115,7 +115,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
   });
 
@@ -124,12 +124,35 @@ describe('POST /api/observations', () => {
 
     const req = new NextRequest('http://localhost/api/observations', {
       method: 'POST',
-      body: JSON.stringify({ type: 'health_check', camp_id: 'A', created_at: 'not-a-date' }),
+      // Wave C (#156): use a valid `type` so the timestamp-parse error
+      // is what surfaces. Pre-Wave-C this test passed by coincidence —
+      // `health_check` is not in the allowlist so the old route returned
+      // 400 "Invalid observation type" instead of 400 timestamp.
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: 'not-a-date' }),
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
+  });
+
+  it('returns 422 when observation type is not in the allowlist', async () => {
+    // Wave C (#156): the type allowlist is enforced in the domain op as a
+    // typed business-rule error (`INVALID_TYPE`, 422). Pre-Wave-C this
+    // returned 400 with a free-text message; the typed code lets offline
+    // sync clients react deterministically.
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'not_a_real_type', camp_id: 'A' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'INVALID_TYPE' });
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -140,11 +163,11 @@ describe('POST /api/observations', () => {
 
     const req = new NextRequest('http://localhost/api/observations', {
       method: 'POST',
-      body: JSON.stringify({ type: 'health_check', camp_id: 'A' }),
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A' }),
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
   });
 });
