@@ -90,22 +90,29 @@ describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
   it("returns 400 when species is missing (no silent cattle default)", async () => {
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/species/i);
+    // Wave B (#151) — typed-error envelope `{ error: "VALIDATION_FAILED",
+    // message, details: { fieldErrors } }`. The "species" reason now lives in
+    // `body.message` (the human-readable line) and `body.details.fieldErrors`.
+    expect(body.error).toBe("VALIDATION_FAILED");
+    expect(body.message).toMatch(/species/i);
     expect(mobCreateMock).not.toHaveBeenCalled();
   });
 
   it("returns 400 when species is not in the registry", async () => {
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01", species: "ostrich" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/species/i);
+    expect(body.error).toBe("VALIDATION_FAILED");
+    expect(body.message).toMatch(/species/i);
     expect(mobCreateMock).not.toHaveBeenCalled();
   });
 
@@ -117,6 +124,7 @@ describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01", species: "sheep" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(422);
@@ -136,6 +144,7 @@ describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
 
     const res = await POST(
       postReq({ name: "Mob A", currentCamp: "NORTH-01", species: "sheep" }),
+      { params: Promise.resolve({}) },
     );
 
     expect(res.status).toBe(201);
@@ -152,7 +161,10 @@ describe("POST /api/mobs — species contract (Wave 4 A2, refs #28)", () => {
   });
 
   it("returns 400 when name or currentCamp is missing (existing contract preserved)", async () => {
-    const res = await POST(postReq({ species: "cattle" }));
+    const res = await POST(
+      postReq({ species: "cattle" }),
+      { params: Promise.resolve({}) },
+    );
     expect(res.status).toBe(400);
     expect(mobCreateMock).not.toHaveBeenCalled();
   });

@@ -1,109 +1,80 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
-import { verifyFreshAdminRole } from "@/lib/auth";
+/**
+ * GET  /api/mobs — list mobs with derived animal counts.
+ * POST /api/mobs — create a mob (ADMIN-only) with species-scoped camp guard.
+ *
+ * Wave B (#151) — adapter-only wiring. The hand-rolled handler shape is
+ * gone; auth, role gates, body parse, typed-error envelope, and revalidate
+ * are owned by the `tenantRead` / `adminWrite` adapters from
+ * `lib/server/route/`. The business logic lives in `lib/domain/mobs/*`.
+ *
+ * Wire shapes:
+ *   - GET 200  → `[{ id, name, current_camp, animal_count }]`
+ *   - POST 201 → `{ id, name, current_camp, animal_count }`
+ *   - POST 422 → `{ error: "WRONG_SPECIES" | "NOT_FOUND" }` (typed-error path)
+ *   - POST 400 → `{ error: "VALIDATION_FAILED", message, details }` (validation)
+ */
+import { NextResponse } from "next/server";
+
+import { tenantRead, adminWrite, RouteValidationError } from "@/lib/server/route";
 import { revalidateMobWrite } from "@/lib/server/revalidate";
 import { isValidSpecies } from "@/lib/species/registry";
-import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
 import type { SpeciesId } from "@/lib/species/types";
+import {
+  listMobs,
+  createMob,
+  type CreateMobInput,
+} from "@/lib/domain/mobs";
 
-export async function GET(req: NextRequest) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma } = ctx;
-
-  const [mobs, animalGroups] = await Promise.all([
-    prisma.mob.findMany({ orderBy: { name: "asc" } }),
-    // cross-species by design: mob list aggregates all species mob memberships.
-    prisma.animal.groupBy({
-      by: ["mobId"],
-      where: { status: "Active", mobId: { not: null } },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const countByMob: Record<string, number> = {};
-  for (const g of animalGroups) {
-    if (g.mobId) countByMob[g.mobId] = g._count._all;
-  }
-
-  const result = mobs.map((mob) => ({
-    id: mob.id,
-    name: mob.name,
-    current_camp: mob.currentCamp,
-    animal_count: countByMob[mob.id] ?? 0,
-  }));
-
-  return NextResponse.json(result);
+interface CreateMobBody {
+  name: string;
+  currentCamp: string;
+  species: SpeciesId;
 }
 
-export async function POST(req: NextRequest) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+const createMobSchema = {
+  parse(input: unknown): CreateMobBody {
+    const body = (input ?? {}) as Record<string, unknown>;
+    const errors: Record<string, string> = {};
+    if (typeof body.name !== "string" || !body.name) {
+      errors.name = "name is required";
+    }
+    if (typeof body.currentCamp !== "string" || !body.currentCamp) {
+      errors.currentCamp = "currentCamp is required";
+    }
+    if (
+      typeof body.species !== "string" ||
+      !isValidSpecies(body.species as string)
+    ) {
+      errors.species = "species is required (cattle | sheep | game)";
+    }
+    if (Object.keys(errors).length > 0) {
+      throw new RouteValidationError(
+        Object.values(errors)[0] ?? "Invalid body",
+        { fieldErrors: errors },
+      );
+    }
+    return body as unknown as CreateMobBody;
+  },
+};
 
-  const body = (await req.json()) as {
-    name?: string;
-    currentCamp?: string;
-    species?: string;
-  };
-  const { name, currentCamp, species } = body;
+export const GET = tenantRead({
+  handle: async (ctx) => {
+    const result = await listMobs(ctx.prisma);
+    return NextResponse.json(result);
+  },
+});
 
-  if (!name || !currentCamp) {
-    return NextResponse.json(
-      { error: "name and currentCamp are required" },
-      { status: 400 },
-    );
-  }
-
-  // Wave 4 A2 (Codex HIGH, refs #28): require an explicit species so the
-  // schema's `@default("cattle")` backstop never silently mis-classifies a
-  // sheep/game mob (which would later trip the cross-species hard-block in
-  // PR #60 as a confusing 422 on otherwise valid data).
-  if (!species || !isValidSpecies(species)) {
-    return NextResponse.json(
-      { error: "species is required (cattle | sheep | game)" },
-      { status: 400 },
-    );
-  }
-
-  // #97 — Hard-block orphan + cross-species moves at create time.
-  //
-  // The previous `findFirst({ where: { campId } })` had two defects:
-  //   1. Non-deterministic across duplicate campIds (Phase A of #28 made
-  //      campId per-species-scoped, so the same string can exist for both
-  //      cattle and sheep — without `orderBy` the picked row was a coin flip).
-  //   2. Orphan camps passed through silently (a null result short-circuited
-  //      the cross-species check, allowing mobs to be created against a
-  //      campId that doesn't exist anywhere).
-  //
-  // `requireSpeciesScopedCamp` (PR #123) uses the composite-unique key
-  // `(species, campId)` for a deterministic primary lookup and falls back to
-  // distinguish NOT_FOUND from WRONG_SPECIES — matching the multi-species
-  // hard-block spec (memory/multi-species-spec-2026-04-27.md).
-  const campCheck = await requireSpeciesScopedCamp(prisma, {
-    species: species as SpeciesId,
-    farmSlug: slug,
-    campId: currentCamp,
-  });
-  if (!campCheck.ok) {
-    // campCheck.reason: 'NOT_FOUND' (orphan) | 'WRONG_SPECIES' (cross-species,
-    // including legacy rows where camp.species is null).
-    return NextResponse.json({ error: campCheck.reason }, { status: 422 });
-  }
-
-  const mob = await prisma.mob.create({
-    data: { name, currentCamp, species },
-  });
-
-  revalidateMobWrite(slug);
-
-  return NextResponse.json(
-    { id: mob.id, name: mob.name, current_camp: mob.currentCamp, animal_count: 0 },
-    { status: 201 },
-  );
-}
+export const POST = adminWrite<CreateMobBody>({
+  schema: createMobSchema,
+  revalidate: revalidateMobWrite,
+  handle: async (ctx, body) => {
+    const input: CreateMobInput = {
+      name: body.name,
+      currentCamp: body.currentCamp,
+      species: body.species,
+      farmSlug: ctx.slug,
+    };
+    const result = await createMob(ctx.prisma, input);
+    return NextResponse.json(result, { status: 201 });
+  },
+});
