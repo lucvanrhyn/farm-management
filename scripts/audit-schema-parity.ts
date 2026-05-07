@@ -19,6 +19,7 @@
  *   1 — drift detected with --fail-on-drift
  *   2 — config / connectivity error
  */
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@libsql/client';
 import { getAllFarmSlugs, getFarmCreds } from '../lib/meta-db';
 import { loadMigrations } from '../lib/migrator';
@@ -83,7 +84,9 @@ async function main(argv: readonly string[]): Promise<number> {
   }
 
   // The expected list is every migration file shipped on this checkout.
-  const migrationsDir = new URL('../migrations', import.meta.url).pathname;
+  // Use fileURLToPath so paths containing spaces (e.g. dev "Obsidian Vault")
+  // are decoded correctly — `.pathname` leaves %20 escapes that readdir rejects.
+  const migrationsDir = fileURLToPath(new URL('../migrations', import.meta.url));
   const expected = (await loadMigrations(migrationsDir)).map((m) => m.name);
 
   let driftDetected = false;
