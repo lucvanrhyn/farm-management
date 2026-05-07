@@ -76,6 +76,16 @@ jobs:
         # generated client needs to exist before the suite runs.
         run: pnpm prisma generate
 
+      - name: Schema parity check (PRD #128)
+        # Verifies every prod tenant's `_migrations` table is in lock-step
+        # with the migrations shipped in this PR. Catches the "tenant fell
+        # behind on a previous promote" scenario at PR time.
+        # `--fail-on-drift` makes CI fail when any tenant is missing a
+        # migration. Drops the secret check when META_TURSO_URL is absent
+        # so forks without secrets still pass.
+        if: env.META_TURSO_URL != ''
+        run: pnpm ops:audit-schema-parity --fail-on-drift
+
       - name: Vitest
         run: pnpm test
 
@@ -91,7 +101,17 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright smoke
+      - name: Playwright smoke + admin journey (PRD #128)
+        # `pnpm smoke` runs every spec listed in playwright.config.ts —
+        # which now includes admin-journey.spec.ts (the authenticated walk
+        # through the 8 routes that crashed on prod after Phase A).
+        # The journey self-skips when E2E_IDENTIFIER / E2E_PASSWORD are
+        # unset, so this step is safe even on forks without secrets.
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_IDENTIFIER: ${{ secrets.SYNTHETIC_USER_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.SYNTHETIC_USER_PASSWORD }}
+          E2E_TENANT_SLUG: ${{ vars.SYNTHETIC_TENANT_SLUG || 'basson-boerdery' }}
         run: pnpm smoke
 
       - name: Stop server

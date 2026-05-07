@@ -20,6 +20,7 @@ import {
   cloneBranch,
   destroyBranchDb,
   promoteToProd,
+  TenantParityFailedError,
   recordCiPassForCommit,
   SoakNotMetError,
   BranchCloneNotFoundError,
@@ -287,6 +288,15 @@ async function handlePromote(
     if (err instanceof BranchCloneNotFoundError) {
       deps.stderr(`Branch clone not found: '${err.branchName}'. Run 'clone' first.`);
       return 1;
+    }
+    if (err instanceof TenantParityFailedError) {
+      // PRD #128: post-migration parity verifier detected drift. The meta
+      // row was NOT marked promoted, so the operator can investigate, fix
+      // the failing tenant(s), and re-run the promote. Surface the full
+      // formatted report on stderr so the post-merge-promote workflow can
+      // paste it into the incident issue.
+      deps.stderr(err.formatted);
+      return 3;
     }
     if (err instanceof TursoCliError) {
       deps.stderr(`TursoCliError: ${err.message}`);
