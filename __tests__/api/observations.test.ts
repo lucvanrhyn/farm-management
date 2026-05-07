@@ -91,7 +91,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -115,7 +115,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
   });
 
@@ -132,7 +132,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
   });
 
@@ -149,7 +149,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body).toEqual({ error: 'INVALID_TYPE' });
@@ -167,7 +167,7 @@ describe('POST /api/observations', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const res = await POST(req);
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
   });
 });
