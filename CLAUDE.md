@@ -28,8 +28,31 @@ The full rationale, module breakdown, and 13-issue rollout sequence live in [tas
 - Every implementation task — bug fix, refactor, new feature, doc update — happens on a sub-branch off `main`.
 - Every sub-branch deploys to its own Vercel preview against its own Turso DB clone (Option C, GitHub issue #19). Preview never reads or writes prod.
 - Migrations run on the clone first and **soak ≥1h** before any prod migration is even considered. Running a migration against prod without prior soak on a clone is forbidden.
-- A PR can only merge into `main` when (a) build green, (b) Vitest green, (c) Playwright smoke green against the branch clone, (d) Luc has applied the `promote` label. The CI governance gate (issue #21) enforces this physically.
+- A PR can only merge into `main` when (a) build green, (b) Vitest green, (c) Playwright smoke green against the branch clone, (d) the `promote` label has been applied (by Luc, or by Claude under §promote-delegation below), (e) the `require` workflow's soak gate has cleared (≥1h since the merge-target SHA was pushed). The CI governance gate (issue #21) enforces this physically.
 - On merge, the post-merge job invokes `promote-to-prod <branch>` which runs the prod migration. No manual prod migrations.
+
+### Promote delegation (issue #133)
+
+The `promote` label gates merge into `main`. Luc may always apply it. Claude may apply it when ALL of the following are true:
+
+1. PR is on a `wave/*` branch (never direct-to-main work).
+2. All required CI checks are green: `gate`, `require`, `audit-bundle`, `lhci-cold`, `audit-pagination`. Vercel preview deploys are informational and may be FAILURE without blocking (see memory: `feedback-vercel-preview-turso-cli.md`).
+3. The `require` workflow has returned **SUCCESS** for the latest commit SHA — `require=SUCCESS` is precisely the soak-gate clearing signal. A `require=IN_PROGRESS` is a wait, not a green light.
+4. The PR's scope was explicitly approved by Luc in conversation OR the PR is a routine wave dispatched from a documented PRD/issue (e.g. wave/130 against PRD #128).
+5. The PR does NOT touch security-critical surface area without per-diff Luc approval:
+   - `lib/auth-options.ts`, `lib/auth-*.ts`, any file under `app/api/auth/**`
+   - `proxy.ts`
+   - `app/api/webhooks/**`, anything under `lib/payfast/**`
+   - `migrations/**` files that touch `User`, `_migrations`, or that DROP/RENAME columns/tables
+6. The PR is not labeled `incident` or `hotfix` (those flow through Luc-eyes).
+
+### What stays Luc-only
+
+- Direct merges that bypass the soak gate (e.g. admin-merging while `require=IN_PROGRESS`).
+- Production migrations against tenants outside the wave's branch clone.
+- Auth and payment surface diffs.
+- Hotfix flow.
+- Reverts on `main`.
 
 ### Worktree convention
 
@@ -46,7 +69,7 @@ Each issue in the rollout corresponds to one wave dispatched as one TDD-agent ru
 2. **File allow-list** is provided in the agent's initial prompt. The agent may not edit files outside the allow-list. This makes scope creep structurally impossible.
 3. **Target branch is named in the initial prompt** — the agent works inside the worktree, on the wave's branch, never touching `main`.
 4. **TDD red-green-refactor** for any code change: failing test first, minimal implementation, refactor green. For pure docs/governance changes (like this issue), the equivalent is: define a verifiable acceptance check (e.g., a grep) before writing, write the change, run the check.
-5. **8-gate demo-ready bar** before merge: build green, Vitest green, Playwright green, deep-audit green, telemetry typed, beta soak ≥24h on the preview, cold demo dry-run, Luc-typed `promote`.
+5. **8-gate demo-ready bar** before merge: build green, Vitest green, Playwright green, deep-audit green, telemetry typed, beta soak ≥24h on the preview, cold demo dry-run, `promote` label applied (Luc or Claude per §promote-delegation).
 
 ### Verify-before-promote (replaces the old "commit to main" workflow)
 
@@ -55,7 +78,7 @@ After implementing any change on a sub-branch, before requesting promote:
 1. **Verify root cause, not symptom.** Re-read the diff and ask: does this address *why* the bug happened, or just mask what the user noticed? Symptom-patches go back in the queue.
 2. **Prove it works.** Run the relevant layer — `npx tsc --noEmit` for type changes, `pnpm vitest run <path>` for logic, `pnpm lint` for style. For UI start the preview deploy and click through the feature in a browser.
 3. **Re-audit the diff.** Look for collateral damage, dead code, unresolved TODOs, missing tests.
-4. **Push the branch + open a PR.** Reference the issue number. Wait for the CI gate. Wait for Luc's `promote` label. Never push to `main` directly.
+4. **Push the branch + open a PR.** Reference the issue number. Wait for the CI gate. Wait for the `promote` label (Luc, or Claude per §promote-delegation). Never push to `main` directly.
 
 If verification fails, fix the underlying issue and re-verify on the preview before opening the PR.
 
