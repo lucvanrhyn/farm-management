@@ -44,7 +44,7 @@ describe("GET /api/animals — search filter (phase I.2)", () => {
     const req = new NextRequest(
       "http://localhost/api/animals?limit=50&search=C001",
     );
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     expect(mockFindMany).toHaveBeenCalledTimes(1);
     const args = mockFindMany.mock.calls[0][0] as {
@@ -68,7 +68,7 @@ describe("GET /api/animals — search filter (phase I.2)", () => {
     const req = new NextRequest(
       "http://localhost/api/animals?limit=50&search=",
     );
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     const args = mockFindMany.mock.calls[0][0] as {
       where: Record<string, unknown>;
@@ -82,7 +82,7 @@ describe("GET /api/animals — search filter (phase I.2)", () => {
     const req = new NextRequest(
       "http://localhost/api/animals?limit=50&search=Belle&unassigned=1",
     );
-    await GET(req);
+    await GET(req, { params: Promise.resolve({}) });
 
     const args = mockFindMany.mock.calls[0][0] as {
       where: Record<string, unknown>;

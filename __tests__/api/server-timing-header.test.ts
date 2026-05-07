@@ -70,19 +70,19 @@ describe("Server-Timing header on instrumented routes", () => {
 
   it("GET /api/camps emits Server-Timing", async () => {
     const { GET } = await import("@/app/api/camps/route");
-    const res = await GET(new NextRequest("http://localhost/api/camps"));
+    const res = await GET(new NextRequest("http://localhost/api/camps"), { params: Promise.resolve({}) });
     expect(res.headers.get("Server-Timing") ?? "").toMatch(/total;dur=/);
   });
 
   it("GET /api/camps/status emits Server-Timing", async () => {
     const { GET } = await import("@/app/api/camps/status/route");
-    const res = await GET(new NextRequest("http://localhost/api/camps/status"));
+    const res = await GET(new NextRequest("http://localhost/api/camps/status"), { params: Promise.resolve({}) });
     expect(res.headers.get("Server-Timing") ?? "").toMatch(/total;dur=/);
   });
 
   it("GET /api/animals emits Server-Timing", async () => {
     const { GET } = await import("@/app/api/animals/route");
-    const res = await GET(new NextRequest("http://localhost/api/animals"));
+    const res = await GET(new NextRequest("http://localhost/api/animals"), { params: Promise.resolve({}) });
     expect(res.headers.get("Server-Timing") ?? "").toMatch(/query;dur=/);
   });
 
