@@ -1,327 +1,196 @@
 /**
- * GET  /api/tasks  — list tasks for the active tenant
- * POST /api/tasks  — create a task (ADMIN only)
+ * GET  /api/tasks  — list tasks for the active tenant.
+ * POST /api/tasks  — create a task (ADMIN only — fresh-admin re-verify).
  *
- * GET query params:
- *   assignee  - filter by assignedTo (exact)
- *   status    - comma-separated statuses
- *   date      - filter by dueDate (exact string)
- *   campId    - filter by campId
- *   taskType  - filter by taskType (exact)
- *   lat, lng, radiusKm - bounding-box filter (small-angle approximation)
- *   as=occurrences     - return TaskOccurrence[] for a time window instead
- *   from, to           - ISO datetime range for as=occurrences
+ * Wave E (#161) — adapter-only wiring. Auth, body parse, typed-error
+ * envelope, and revalidate are owned by `tenantRead` / `adminWrite`.
+ * Business logic lives in `lib/domain/tasks/*`.
  *
- * POST body fields (new for Phase K):
+ * GET has 3 modes (preserved verbatim from pre-Wave-E):
+ *   - `as=occurrences&from&to` → TaskOccurrence[] (with `task` included)
+ *   - `?limit=N` / `?cursor=X` → `{ tasks, nextCursor, hasMore }`
+ *   - default                  → `Task[]` (unbounded — back-compat for
+ *     IndexedDB sync + logger fetch)
+ *
+ * POST body fields (Phase K):
  *   taskType, lat, lng, recurrenceRule, reminderOffset, assigneeIds (array),
  *   templateId, blockedByIds (array)
  *
- * Error codes:
- *   INVALID_RECURRENCE_RULE — recurrenceRule is syntactically invalid
- *   TEMPLATE_NOT_FOUND      — templateId provided but template does not exist
+ * Wire shapes:
+ *   - 200 GET unbounded → `Task[]` (parsed assigneeIds + blockedByIds)
+ *   - 200 GET paginated → `{ tasks, nextCursor, hasMore }`
+ *   - 200 GET occurrences → `TaskOccurrence[]`
+ *   - 400 → `{ error: "INVALID_LIMIT" | "INVALID_CURSOR" | "INVALID_RECURRENCE_RULE" | "TEMPLATE_NOT_FOUND" | "VALIDATION_FAILED" }`
+ *   - 201 POST → `Task` (parsed)
+ *   - 401 / 403 — adapter-emitted (incl. stale-ADMIN re-verify on POST).
  */
+import { NextResponse } from "next/server";
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
-import { verifyFreshAdminRole } from "@/lib/auth";
-import { expandRule } from "@/lib/tasks/recurrence";
+import { adminWrite, RouteValidationError, tenantRead } from "@/lib/server/route";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
-import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
+import { timeAsync } from "@/lib/server/server-timing";
 import {
-  decodeTaskCursor,
-  encodeTaskCursor,
-  TASK_CURSOR_ORDER_BY,
-  tupleGtWhere,
-} from "@/lib/tasks/cursor";
+  createTask,
+  listTaskOccurrences,
+  listTasksPaginated,
+  listTasksUnbounded,
+  type CreateTaskInput,
+} from "@/lib/domain/tasks";
 
-// Pagination tunables. Default 50/request matches the admin/tasks SSR page
-// size. Max 500 caps the worst-case single-request cost when a mis-coded
-// client asks for "all at once".
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 500;
 
-// ── GET ───────────────────────────────────────────────────────────────────────
+// ── GET ──────────────────────────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
-  return withServerTiming(async () => {
-    const ctx = await timeAsync("session", () => getFarmContext(req));
-    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const { prisma } = ctx;
-
+export const GET = tenantRead({
+  handle: async (ctx, req) => {
     const { searchParams } = new URL(req.url);
-    const assignee = searchParams.get("assignee");
-    const status = searchParams.get("status");
-    const date = searchParams.get("date");
-    const campId = searchParams.get("campId");
-    const taskType = searchParams.get("taskType");
     const asParam = searchParams.get("as");
-    const fromParam = searchParams.get("from");
-    const toParam = searchParams.get("to");
-
-    // Geo-filter params
-    const latParam = searchParams.get("lat");
-    const lngParam = searchParams.get("lng");
-    const radiusKmParam = searchParams.get("radiusKm");
-
-    // Pagination is opt-in: when neither `limit` nor `cursor` is present, the
-    // handler returns the legacy unbounded array shape so existing callers
-    // (IndexedDB sync, logger fetch) keep working. The admin/tasks SSR page
-    // and "Load more" control pass `?limit=` to receive the streaming
-    // `{ tasks, nextCursor, hasMore }` shape.
-    const limitParam = searchParams.get("limit");
-    const cursorParam = searchParams.get("cursor");
-    const paginated = limitParam !== null || cursorParam !== null;
 
     // ── Occurrences mode ──
     if (asParam === "occurrences") {
       const now = new Date();
-      const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const todayStart = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
       const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
+      const fromParam = searchParams.get("from");
+      const toParam = searchParams.get("to");
       const from = fromParam ? new Date(fromParam) : todayStart;
       const to = toParam ? new Date(toParam) : todayEnd;
 
       const occurrences = await timeAsync("query", () =>
-        prisma.taskOccurrence.findMany({
-          where: {
-            occurrenceAt: { gte: from, lte: to },
-          },
-          include: { task: true },
-          orderBy: { occurrenceAt: "asc" },
-        }),
+        listTaskOccurrences(ctx.prisma, { from, to }),
       );
       return NextResponse.json(occurrences);
     }
 
-    // ── Standard task list mode ──
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: Record<string, any> = {};
+    // ── Filters (shared between unbounded + paginated) ──
+    const filters = {
+      assignee: searchParams.get("assignee"),
+      status: searchParams.get("status"),
+      date: searchParams.get("date"),
+      campId: searchParams.get("campId"),
+      taskType: searchParams.get("taskType"),
+      geo: parseGeo(searchParams),
+    };
 
-    if (assignee) where.assignedTo = assignee;
-
-    if (status) {
-      const statuses = status
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
-    }
-
-    if (date) where.dueDate = date;
-    if (campId) where.campId = campId;
-    if (taskType) where.taskType = taskType;
-
-    // Bounding-box geo filter — small-angle approximation
-    // 1 degree latitude ≈ 111 km; longitude varies by cos(lat) but we use lat
-    // as an approximation (acceptable error < 5% within SA at ~30°S).
-    if (latParam && lngParam && radiusKmParam) {
-      const lat = parseFloat(latParam);
-      const lng = parseFloat(lngParam);
-      const radiusKm = parseFloat(radiusKmParam);
-      if (!isNaN(lat) && !isNaN(lng) && !isNaN(radiusKm) && radiusKm > 0) {
-        const deltaLat = radiusKm / 111;
-        const deltaLng = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
-        where.lat = { gte: lat - deltaLat, lte: lat + deltaLat };
-        where.lng = { gte: lng - deltaLng, lte: lng + deltaLng };
-      }
-    }
+    // Pagination is opt-in: when neither `limit` nor `cursor` is present, the
+    // handler returns the legacy unbounded array shape so existing callers
+    // (IndexedDB sync, logger fetch) keep working.
+    const limitParam = searchParams.get("limit");
+    const cursorParam = searchParams.get("cursor");
+    const paginated = limitParam !== null || cursorParam !== null;
 
     if (!paginated) {
       const tasks = await timeAsync("query", () =>
-        prisma.task.findMany({
-          where,
-          orderBy: [{ dueDate: "asc" }, { priority: "asc" }, { createdAt: "asc" }],
-        }),
+        listTasksUnbounded(ctx.prisma, filters),
       );
-
-      // Parse JSON-stringified arrays before returning
-      const parsed = tasks.map(parseTaskArrayFields);
-
-      return NextResponse.json(parsed);
+      return NextResponse.json(tasks);
     }
 
     const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
-    if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
-      return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
-    }
-    const limit = Math.min(rawLimit, MAX_LIMIT);
-
-    let cursorWhere: Record<string, unknown> | null = null;
-    if (cursorParam) {
-      const decoded = decodeTaskCursor(cursorParam);
-      if (!decoded) {
-        return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
-      }
-      cursorWhere = tupleGtWhere(decoded);
-    }
-
-    // Fetch `limit + 1` rows to detect "has more" without a COUNT round-trip.
-    // Order by the stable composite [dueDate, createdAt, id] so ties at a
-    // shared dueDate don't drop rows across page boundaries.
-    const items = await timeAsync("query", () =>
-      prisma.task.findMany({
-        where: { ...where, ...(cursorWhere ?? {}) },
-        orderBy: TASK_CURSOR_ORDER_BY,
-        take: limit + 1,
+    const result = await timeAsync("query", () =>
+      listTasksPaginated(ctx.prisma, {
+        filters,
+        limit: rawLimit,
+        cursor: cursorParam,
       }),
     );
+    return NextResponse.json(result);
+  },
+});
 
-    const hasMore = items.length > limit;
-    const trimmed = hasMore ? items.slice(0, limit) : items;
-    const last = trimmed[trimmed.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? encodeTaskCursor({
-            dueDate: last.dueDate,
-            createdAt: last.createdAt.toISOString(),
-            id: last.id,
-          })
-        : null;
-
-    return NextResponse.json({
-      tasks: trimmed.map(parseTaskArrayFields),
-      nextCursor,
-      hasMore,
-    });
-  });
+function parseGeo(
+  searchParams: URLSearchParams,
+): { lat: number; lng: number; radiusKm: number } | null {
+  const latParam = searchParams.get("lat");
+  const lngParam = searchParams.get("lng");
+  const radiusKmParam = searchParams.get("radiusKm");
+  if (!latParam || !lngParam || !radiusKmParam) return null;
+  const lat = parseFloat(latParam);
+  const lng = parseFloat(lngParam);
+  const radiusKm = parseFloat(radiusKmParam);
+  if (!isFinite(lat) || !isFinite(lng) || !isFinite(radiusKm) || radiusKm <= 0) {
+    return null;
+  }
+  return { lat, lng, radiusKm };
 }
 
-// ── POST ──────────────────────────────────────────────────────────────────────
+// ── POST ─────────────────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+interface CreateTaskBody {
+  title: string;
+  dueDate: string;
+  assignedTo: string;
+  description?: string | null;
+  status?: string;
+  priority?: string;
+  campId?: string | null;
+  animalId?: string | null;
+  taskType?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  recurrenceRule?: string | null;
+  reminderOffset?: number | null;
+  assigneeIds?: string[] | null;
+  templateId?: string | null;
+  blockedByIds?: string[] | null;
+  recurrenceSource?: string | null;
+}
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const data = body as Record<string, unknown>;
-
-  // ── Validate recurrenceRule early (before DB write) ──
-  if (typeof data.recurrenceRule === "string" && data.recurrenceRule.trim() !== "") {
-    try {
-      // Dry-run validation: expand with an empty context, 1-day horizon.
-      // This will throw UNKNOWN_RECURRENCE_RULE for malformed rules.
-      expandRule(data.recurrenceRule, new Date(), 1, { events: [], seasonWindows: {} });
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid recurrence rule", code: "INVALID_RECURRENCE_RULE" },
-        { status: 400 },
+const createTaskSchema = {
+  parse(input: unknown): CreateTaskBody {
+    const body = (input ?? {}) as Record<string, unknown>;
+    const fieldErrors: Record<string, string> = {};
+    if (
+      typeof body.title !== "string" ||
+      !body.title ||
+      body.title.trim() === ""
+    ) {
+      fieldErrors.title = "title is required";
+    }
+    if (typeof body.dueDate !== "string" || !body.dueDate) {
+      fieldErrors.dueDate = "dueDate is required";
+    }
+    if (typeof body.assignedTo !== "string" || !body.assignedTo) {
+      fieldErrors.assignedTo = "assignedTo is required";
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      throw new RouteValidationError(
+        "title, dueDate, assignedTo required",
+        { fieldErrors },
       );
     }
-  }
+    return body as unknown as CreateTaskBody;
+  },
+};
 
-  // ── Load template if provided ──
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let templateDefaults: Record<string, any> = {};
-  if (typeof data.templateId === "string" && data.templateId) {
-    const tmpl = await prisma.taskTemplate.findUnique({ where: { id: data.templateId } });
-    if (!tmpl) {
-      return NextResponse.json(
-        { error: "Template not found", code: "TEMPLATE_NOT_FOUND" },
-        { status: 400 },
-      );
-    }
-    templateDefaults = {
-      taskType: tmpl.taskType,
-      recurrenceRule: tmpl.recurrenceRule,
-      reminderOffset: tmpl.reminderOffset,
+export const POST = adminWrite<CreateTaskBody>({
+  schema: createTaskSchema,
+  revalidate: revalidateTaskWrite,
+  handle: async (ctx, body) => {
+    const input: CreateTaskInput = {
+      title: body.title,
+      dueDate: body.dueDate,
+      assignedTo: body.assignedTo,
+      createdBy: ctx.session.user?.email ?? ctx.session.user?.name ?? "unknown",
+      description: body.description ?? null,
+      status: body.status,
+      priority: body.priority,
+      campId: body.campId ?? null,
+      animalId: body.animalId ?? null,
+      taskType: body.taskType ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
+      recurrenceRule: body.recurrenceRule ?? null,
+      reminderOffset: body.reminderOffset ?? null,
+      assigneeIds: body.assigneeIds ?? null,
+      templateId: body.templateId ?? null,
+      blockedByIds: body.blockedByIds ?? null,
+      recurrenceSource: body.recurrenceSource ?? null,
     };
-  }
-
-  // ── Required field validation ──
-  if (!data.title || typeof data.title !== "string" || data.title.trim() === "") {
-    return NextResponse.json({ error: "title is required" }, { status: 400 });
-  }
-  if (!data.dueDate || typeof data.dueDate !== "string") {
-    return NextResponse.json({ error: "dueDate is required" }, { status: 400 });
-  }
-  if (!data.assignedTo || typeof data.assignedTo !== "string") {
-    return NextResponse.json({ error: "assignedTo is required" }, { status: 400 });
-  }
-
-  // ── Merge: explicit fields override template defaults ──
-  const resolvedTaskType =
-    typeof data.taskType === "string" ? data.taskType : templateDefaults.taskType ?? null;
-  const resolvedRecurrenceRule =
-    typeof data.recurrenceRule === "string" && data.recurrenceRule.trim()
-      ? data.recurrenceRule
-      : templateDefaults.recurrenceRule ?? null;
-  const resolvedReminderOffset =
-    typeof data.reminderOffset === "number"
-      ? data.reminderOffset
-      : templateDefaults.reminderOffset ?? null;
-
-  // Serialize array fields for SQLite storage
-  const assigneeIds =
-    Array.isArray(data.assigneeIds) ? JSON.stringify(data.assigneeIds) : null;
-  const blockedByIds =
-    Array.isArray(data.blockedByIds) ? JSON.stringify(data.blockedByIds) : null;
-
-  const task = await prisma.task.create({
-    data: {
-      title: data.title.trim(),
-      description: typeof data.description === "string" ? data.description : null,
-      dueDate: data.dueDate,
-      assignedTo: data.assignedTo,
-      createdBy: session.user?.email ?? session.user?.name ?? "unknown",
-      status: typeof data.status === "string" ? data.status : "pending",
-      priority: typeof data.priority === "string" ? data.priority : "normal",
-      campId: typeof data.campId === "string" && data.campId ? data.campId : null,
-      animalId: typeof data.animalId === "string" && data.animalId ? data.animalId : null,
-      // Phase K new fields
-      taskType: resolvedTaskType,
-      lat: typeof data.lat === "number" ? data.lat : null,
-      lng: typeof data.lng === "number" ? data.lng : null,
-      recurrenceRule: resolvedRecurrenceRule,
-      reminderOffset: resolvedReminderOffset,
-      assigneeIds,
-      templateId: typeof data.templateId === "string" && data.templateId ? data.templateId : null,
-      blockedByIds,
-      completedObservationId: null,
-      recurrenceSource: typeof data.recurrenceSource === "string" ? data.recurrenceSource : null,
-    },
-  });
-
-  revalidateTaskWrite(slug);
-  return NextResponse.json(parseTaskArrayFields(task), { status: 201 });
-}
-
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-/**
- * Parse assigneeIds and blockedByIds from JSON strings to arrays before
- * returning to the client, so the API contract returns proper arrays.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseTaskArrayFields(task: Record<string, any>): Record<string, any> {
-  return {
-    ...task,
-    assigneeIds: safeParseArray(task.assigneeIds),
-    blockedByIds: safeParseArray(task.blockedByIds),
-  };
-}
-
-function safeParseArray(value: unknown): unknown[] | null {
-  if (value === null || value === undefined) return null;
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+    const task = await createTask(ctx.prisma, input);
+    return NextResponse.json(task, { status: 201 });
+  },
+});

@@ -128,6 +128,10 @@ function makeReq(url: string, options?: Record<string, any>): NextRequest {
   return new NextRequest(url, options as any);
 }
 
+// Wave E (#161) — adapter-wrapped POST takes a Next.js 16 RouteContext
+// as the second arg. /api/tasks has no dynamic segments → empty params.
+const EMPTY_CTX = { params: Promise.resolve({}) };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 1: POST /api/task-templates/install
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,7 +251,7 @@ describe("Step 2 — POST /api/tasks (create weighing task)", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.id).toBe("task-weighing-1");
@@ -267,7 +271,7 @@ describe("Step 2 — POST /api/tasks (create weighing task)", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    await POST(req);
+    await POST(req, EMPTY_CTX);
     expect(mockTaskCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ taskType: "weighing", animalId: "animal-1" }),
