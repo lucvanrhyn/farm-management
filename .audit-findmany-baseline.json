@@ -55,7 +55,7 @@
     "app/api/tasks/route.ts::task::0",
     "app/api/tasks/route.ts::taskOccurrence::0",
     "app/api/transaction-categories/route.ts::transactionCategory::0",
-    "app/api/transactions/route.ts::transaction::0",
+    "lib/domain/transactions/list-transactions.ts::transaction::0",
     "components/admin/BudgetVsActualSection.tsx::transactionCategory::0",
     "components/admin/CampsTable.tsx::camp::0",
     "components/admin/PerformanceSection.tsx::camp::0",

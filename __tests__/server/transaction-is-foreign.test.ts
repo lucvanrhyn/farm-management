@@ -77,6 +77,11 @@ function patchReq(id: string, body: Record<string, unknown>): NextRequest {
   });
 }
 
+// Wave D (#159) — adapter-wrapped handlers take a Next.js 16 RouteContext
+// as the second arg (`{ params: Promise<...> }`). The POST route has no
+// dynamic segments, so an empty params promise is sufficient.
+const POST_CTX = { params: Promise.resolve({}) };
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("POST /api/transactions — isForeign field (wave/26e)", () => {
@@ -97,6 +102,7 @@ describe("POST /api/transactions — isForeign field (wave/26e)", () => {
         date: "2025-07-15",
         isForeign: true,
       }),
+      POST_CTX,
     );
     expect(res.status).toBe(201);
     expect(createMock).toHaveBeenCalledTimes(1);
@@ -111,6 +117,7 @@ describe("POST /api/transactions — isForeign field (wave/26e)", () => {
         amount: 200,
         date: "2025-06-01",
       }),
+      POST_CTX,
     );
     expect(res.status).toBe(201);
     expect(createMock).toHaveBeenCalledTimes(1);
@@ -126,6 +133,7 @@ describe("POST /api/transactions — isForeign field (wave/26e)", () => {
         date: "2025-06-01",
         isForeign: false,
       }),
+      POST_CTX,
     );
     expect(res.status).toBe(201);
     expect(createMock.mock.calls[0][0].data.isForeign).toBe(false);

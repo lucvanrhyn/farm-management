@@ -126,9 +126,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "tasks/route.ts",
   "transaction-categories/[id]/route.ts",
   "transaction-categories/route.ts",
-  "transactions/[id]/route.ts",
-  "transactions/reset/route.ts",
-  "transactions/route.ts",
 ]);
 
 const ADAPTER_NAMES = ["tenantRead", "adminWrite", "tenantWrite", "publicHandler"] as const;
