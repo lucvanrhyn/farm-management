@@ -14,6 +14,11 @@ import {
   InvalidTypeError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
+import {
+  InvalidDateFormatError,
+  InvalidSaleTypeError,
+  TransactionNotFoundError,
+} from "@/lib/domain/transactions/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -68,6 +73,19 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidTimestampError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  // Wave D (#159) — transactions domain typed errors.
+  if (err instanceof TransactionNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof InvalidSaleTypeError) {
+    return NextResponse.json({ error: err.code }, { status: 422 });
+  }
+  if (err instanceof InvalidDateFormatError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 400 },
+    );
   }
   return null;
 }

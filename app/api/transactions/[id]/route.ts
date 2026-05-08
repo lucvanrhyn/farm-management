@@ -1,84 +1,42 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
-import { verifyFreshAdminRole } from "@/lib/auth";
+/**
+ * PATCH  /api/transactions/[id] — partial-update a transaction (ADMIN only).
+ * DELETE /api/transactions/[id] — delete a transaction (ADMIN only).
+ *
+ * Wave D (#159) — adapter-only wiring. Both endpoints are ADMIN-gated
+ * with stale-ADMIN re-verify owned by the adapter. Business logic lives
+ * in `lib/domain/transactions/{update,delete}-transaction.ts`.
+ *
+ * Wire shapes (preserved verbatim):
+ *   - PATCH  200 → updated `Transaction` row
+ *   - PATCH  404 → `{ error: "TRANSACTION_NOT_FOUND" }`
+ *   - PATCH  422 → `{ error: "INVALID_SALE_TYPE" }`
+ *   - DELETE 200 → `{ ok: true }`
+ *   - DELETE 404 → `{ error: "TRANSACTION_NOT_FOUND" }`
+ */
+import { NextResponse } from "next/server";
+
+import { adminWrite } from "@/lib/server/route";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
+import {
+  deleteTransaction,
+  updateTransaction,
+  type UpdateTransactionInput,
+} from "@/lib/domain/transactions";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+type PatchTransactionBody = UpdateTransactionInput;
 
-  const { id } = await params;
-  const body = await request.json();
-  const {
-    type, category, amount, date, description, animalId, campId, reference,
-    saleType, counterparty, quantity, avgMassKg, fees, transportCost, animalIds,
-    isForeign,
-  } = body;
+export const PATCH = adminWrite<PatchTransactionBody, { id: string }>({
+  revalidate: revalidateTransactionWrite,
+  handle: async (ctx, body, _req, params) => {
+    const updated = await updateTransaction(ctx.prisma, params.id, body);
+    return NextResponse.json(updated);
+  },
+});
 
-  if (saleType != null && saleType !== "auction" && saleType !== "private") {
-    return NextResponse.json(
-      { error: "saleType must be 'auction' or 'private'" },
-      { status: 400 }
-    );
-  }
-
-  const data: Record<string, unknown> = {};
-  if (type !== undefined) data.type = type;
-  if (category !== undefined) data.category = category;
-  if (amount !== undefined) data.amount = parseFloat(amount);
-  if (date !== undefined) data.date = date;
-  if (description !== undefined) data.description = description;
-  if (animalId !== undefined) data.animalId = animalId;
-  if (campId !== undefined) data.campId = campId;
-  if (reference !== undefined) data.reference = reference;
-  if (saleType !== undefined) data.saleType = saleType ?? null;
-  if (counterparty !== undefined) data.counterparty = counterparty ?? null;
-  if (quantity !== undefined) data.quantity = quantity != null ? parseInt(quantity, 10) : null;
-  if (avgMassKg !== undefined) data.avgMassKg = avgMassKg != null ? parseFloat(avgMassKg) : null;
-  if (fees !== undefined) data.fees = fees != null ? parseFloat(fees) : null;
-  if (transportCost !== undefined) data.transportCost = transportCost != null ? parseFloat(transportCost) : null;
-  if (animalIds !== undefined) data.animalIds = animalIds ?? null;
-  if (isForeign !== undefined) data.isForeign = isForeign === true;
-
-  const transaction = await prisma.transaction.update({
-    where: { id },
-    data,
-  });
-
-  revalidateTransactionWrite(slug);
-  return NextResponse.json(transaction);
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  const existing = await prisma.transaction.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-  }
-
-  await prisma.transaction.delete({ where: { id } });
-  revalidateTransactionWrite(slug);
-  return NextResponse.json({ ok: true });
-}
+export const DELETE = adminWrite<unknown, { id: string }>({
+  revalidate: revalidateTransactionWrite,
+  handle: async (ctx, _body, _req, params) => {
+    const result = await deleteTransaction(ctx.prisma, params.id);
+    return NextResponse.json(result);
+  },
+});
