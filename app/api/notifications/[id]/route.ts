@@ -1,27 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
+/**
+ * Wave F (#163) — `/api/notifications/[id]` PATCH migrated onto
+ * `tenantWrite`. Marks a single notification by id as read; uses
+ * `updateMany` so a missing id is a silent no-op (admin UI tolerates this).
+ *
+ * The Notification model has no `userEmail` column (single-user-per-farm
+ * design), so per-farm invalidation is sufficient.
+ */
+import { NextResponse } from "next/server";
+
+import { tenantWrite } from "@/lib/server/route";
+import { markNotificationRead } from "@/lib/domain/notifications";
 import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, slug } = ctx;
-
-  const { id } = await params;
-
-  await prisma.notification.updateMany({
-    where: { id },
-    data: { isRead: true },
-  });
-
-  // Invalidate the cached /api/notifications response so the bell reflects
-  // the new isRead state without waiting out the 30s server TTL. Notification
-  // model has no userEmail column (single-user-per-farm), so farm-scoped
-  // invalidation is sufficient.
-  revalidateNotificationWrite(slug);
-
-  return NextResponse.json({ success: true });
-}
+export const PATCH = tenantWrite<unknown, { id: string }>({
+  revalidate: revalidateNotificationWrite,
+  handle: async (ctx, _body, _req, params) => {
+    await markNotificationRead(ctx.prisma, params.id);
+    return NextResponse.json({ success: true });
+  },
+});
