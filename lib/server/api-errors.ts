@@ -44,6 +44,19 @@ import {
   NvdAlreadyVoidedError,
   NvdNotFoundError,
 } from "@/lib/domain/nvd/errors";
+import {
+  BlankNameError,
+  InvalidDateError as RotationInvalidDateError,
+  InvalidOrderError,
+  InvalidPlannedDaysError,
+  InvalidStatusError,
+  MissingFieldError as RotationMissingFieldError,
+  MissingMobIdError,
+  MobAlreadyInCampError,
+  PlanNotFoundError,
+  StepAlreadyExecutedError,
+  StepNotFoundError,
+} from "@/lib/domain/rotation/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -174,6 +187,55 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidAnimalIdsError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  // Wave G2 (#166) — rotation domain typed errors.
+  if (err instanceof PlanNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof StepNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof StepAlreadyExecutedError) {
+    return NextResponse.json(
+      { error: err.code, details: { currentStatus: err.currentStatus } },
+      { status: 409 },
+    );
+  }
+  if (err instanceof InvalidStatusError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field, allowed: err.allowed } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof BlankNameError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof RotationInvalidDateError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof RotationMissingFieldError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof InvalidPlannedDaysError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof InvalidOrderError) {
+    return NextResponse.json(
+      { error: err.code, details: { expected: err.expected, actual: err.actual } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof MissingMobIdError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof MobAlreadyInCampError) {
+    return NextResponse.json({ error: err.code }, { status: 409 });
   }
   return null;
 }
