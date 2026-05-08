@@ -76,14 +76,10 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "[farmSlug]/map/task-pins/route.ts",
   "[farmSlug]/map/water-points/route.ts",
   // Wave G1 (#165) — NVD slice (5 routes) migrated onto slug-aware adapters.
+  // Wave G2 (#166) — rotation slice (5 routes) migrated onto slug-aware adapters.
   "[farmSlug]/performance/route.ts",
   "[farmSlug]/profitability-by-animal/route.ts",
   "[farmSlug]/rainfall/route.ts",
-  "[farmSlug]/rotation/plans/[planId]/route.ts",
-  "[farmSlug]/rotation/plans/[planId]/steps/[stepId]/execute/route.ts",
-  "[farmSlug]/rotation/plans/[planId]/steps/route.ts",
-  "[farmSlug]/rotation/plans/route.ts",
-  "[farmSlug]/rotation/route.ts",
   "[farmSlug]/settings/alerts/route.ts",
   "[farmSlug]/tax/it3/[id]/pdf/route.ts",
   "[farmSlug]/tax/it3/[id]/route.ts",
