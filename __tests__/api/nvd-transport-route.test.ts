@@ -70,9 +70,31 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 const mockIssueNvd = vi.fn();
-vi.mock("@/lib/server/nvd", () => ({
-  issueNvd: (...args: unknown[]) => mockIssueNvd(...args),
-}));
+
+// Wave G1 (#165) — mock the domain barrel that the route now imports from.
+// `lib/server/nvd.ts` is a re-export shim, so we still mock both paths to
+// keep any indirect importers covered. Critically, the route imports the
+// real `InvalidTransportError` / `MissingRequiredFieldError` symbols from
+// `@/lib/domain/nvd` for `instanceof` checks inside `mapApiDomainError`,
+// so we re-export the actual modules and only spy `issueNvd`.
+vi.mock("@/lib/domain/nvd", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domain/nvd")>(
+    "@/lib/domain/nvd",
+  );
+  return {
+    ...actual,
+    issueNvd: (...args: unknown[]) => mockIssueNvd(...args),
+  };
+});
+vi.mock("@/lib/server/nvd", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/server/nvd")>(
+    "@/lib/server/nvd",
+  );
+  return {
+    ...actual,
+    issueNvd: (...args: unknown[]) => mockIssueNvd(...args),
+  };
+});
 
 const mockRevalidateObservationWrite = vi.fn();
 vi.mock("@/lib/server/revalidate", () => ({
