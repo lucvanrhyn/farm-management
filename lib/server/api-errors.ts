@@ -37,6 +37,13 @@ import {
   InvalidSubscriptionError,
   MissingEndpointError,
 } from "@/lib/domain/push/errors";
+import {
+  InvalidAnimalIdsError,
+  InvalidTransportError,
+  MissingRequiredFieldError,
+  NvdAlreadyVoidedError,
+  NvdNotFoundError,
+} from "@/lib/domain/nvd/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -144,6 +151,28 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     return NextResponse.json({ error: err.code }, { status: 400 });
   }
   if (err instanceof MissingEndpointError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  // Wave G1 (#165) — NVD domain typed errors.
+  if (err instanceof NvdNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof NvdAlreadyVoidedError) {
+    return NextResponse.json({ error: err.code }, { status: 409 });
+  }
+  if (err instanceof InvalidTransportError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof MissingRequiredFieldError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 400 },
+    );
+  }
+  if (err instanceof InvalidAnimalIdsError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
   }
   return null;
