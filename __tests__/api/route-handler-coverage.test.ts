@@ -62,7 +62,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   // ── Wave B+ migration — see ADR-0001. ──
   // [farmSlug]/** routes (Wave B-G).
   "[farmSlug]/breeding/analyze/route.ts",
-  "[farmSlug]/budgets/route.ts",
   "[farmSlug]/camps/[campId]/cover/[readingId]/attachment/route.ts",
   "[farmSlug]/camps/[campId]/cover/route.ts",
   "[farmSlug]/camps/[campId]/stats/route.ts",
@@ -75,14 +74,13 @@ const EXEMPT: ReadonlySet<string> = new Set([
   // Wave G4 (#168) — analytics-read slice (5 routes) migrated onto slug-aware adapters:
   //   feed-on-offer, financial-analytics, performance, profitability-by-animal,
   //   veld-score/summary.
-  "[farmSlug]/rainfall/route.ts",
-  "[farmSlug]/settings/alerts/route.ts",
+  // Wave G5 (#169) — mixed-CRUD slice (4 routes) migrated onto slug-aware adapters:
+  //   transactions, budgets, rainfall, settings/alerts (split-gate).
   "[farmSlug]/tax/it3/[id]/pdf/route.ts",
   "[farmSlug]/tax/it3/[id]/route.ts",
   "[farmSlug]/tax/it3/[id]/void/route.ts",
   "[farmSlug]/tax/it3/preview/route.ts",
   "[farmSlug]/tax/it3/route.ts",
-  "[farmSlug]/transactions/route.ts",
   "[farmSlug]/veld-assessments/[id]/route.ts",
   "[farmSlug]/veld-assessments/route.ts",
 
