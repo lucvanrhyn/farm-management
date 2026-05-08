@@ -1,59 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
+/**
+ * Wave F (#163) — `/api/push/subscribe` POST + DELETE migrated onto
+ * `tenantWrite`.
+ *
+ * POST has a unique constraint: it requires `userEmail` to be present (not
+ * just authenticated). `tenantWrite` only checks for `ctx`, not
+ * `userEmail`, so the route handler still emits its own 401 when email is
+ * missing. This stays in the route layer rather than the op so the op's
+ * signature stays simple.
+ *
+ * DELETE scopes deletion by `userEmail` — when the session somehow has no
+ * email (unusual but possible after token rotation), pass through an empty
+ * string so the where-clause cannot match any subscription, preserving the
+ * pre-Wave-F semantic.
+ */
+import { NextResponse } from "next/server";
 
-interface PushSubscriptionBody {
+import { tenantWrite } from "@/lib/server/route";
+import { subscribePush, unsubscribePush } from "@/lib/domain/push";
+import type { SubscribePushInput } from "@/lib/domain/push";
+
+interface UnsubscribeBody {
   endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
 }
 
-export async function POST(req: NextRequest) {
-  const ctx = await getFarmContext(req);
-  const userEmail = ctx?.session.user?.email;
-  if (!ctx || !userEmail) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { prisma } = ctx;
+export const POST = tenantWrite<SubscribePushInput>({
+  handle: async (ctx, body) => {
+    const userEmail = ctx.session.user?.email;
+    if (!userEmail) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    await subscribePush(ctx.prisma, userEmail, body);
+    return NextResponse.json({ success: true });
+  },
+});
 
-  const body = await req.json() as PushSubscriptionBody;
-  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
-    return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
-  }
-
-  await prisma.pushSubscription.upsert({
-    where: { endpoint: body.endpoint },
-    create: {
-      endpoint: body.endpoint,
-      p256dh: body.keys.p256dh,
-      auth: body.keys.auth,
-      userEmail,
-    },
-    update: {
-      p256dh: body.keys.p256dh,
-      auth: body.keys.auth,
-      userEmail,
-    },
-  });
-
-  return NextResponse.json({ success: true });
-}
-
-export async function DELETE(req: NextRequest) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, session } = ctx;
-
-  const body = await req.json() as { endpoint: string };
-  if (!body.endpoint) {
-    return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
-  }
-
-  // Scope to the requesting user's email so no one can unsubscribe another user
-  await prisma.pushSubscription.deleteMany({
-    where: { endpoint: body.endpoint, userEmail: session.user?.email ?? "" },
-  });
-
-  return NextResponse.json({ success: true });
-}
+export const DELETE = tenantWrite<UnsubscribeBody>({
+  handle: async (ctx, body) => {
+    const userEmail = ctx.session.user?.email ?? "";
+    await unsubscribePush(ctx.prisma, userEmail, body.endpoint);
+    return NextResponse.json({ success: true });
+  },
+});
