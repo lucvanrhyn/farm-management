@@ -26,6 +26,17 @@ import {
   TaskNotFoundError,
   TemplateNotFoundError,
 } from "@/lib/domain/tasks/errors";
+import {
+  BlobNotConfiguredError,
+  BlobUploadFailedError,
+  FileTooLargeError,
+  InvalidFileTypeError,
+  MissingFileError,
+} from "@/lib/domain/photos/errors";
+import {
+  InvalidSubscriptionError,
+  MissingEndpointError,
+} from "@/lib/domain/push/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -110,6 +121,29 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     return NextResponse.json({ error: err.code }, { status: 400 });
   }
   if (err instanceof InvalidCursorError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  // Wave F (#163) — photos domain typed errors.
+  if (err instanceof BlobNotConfiguredError) {
+    return NextResponse.json({ error: err.code }, { status: 503 });
+  }
+  if (err instanceof MissingFileError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof FileTooLargeError) {
+    return NextResponse.json({ error: err.code }, { status: 413 });
+  }
+  if (err instanceof InvalidFileTypeError) {
+    return NextResponse.json({ error: err.code }, { status: 415 });
+  }
+  if (err instanceof BlobUploadFailedError) {
+    return NextResponse.json({ error: err.code }, { status: 500 });
+  }
+  // Wave F (#163) — push domain typed errors.
+  if (err instanceof InvalidSubscriptionError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof MissingEndpointError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
   }
   return null;

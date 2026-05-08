@@ -13,6 +13,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+
+// Wave F (#163) — adapter-wrapped GET takes a Next.js 16 RouteContext as the
+// second arg. /api/notifications has no dynamic segments → empty params.
+const EMPTY_CTX = { params: Promise.resolve({}) };
+function makeReq() {
+  return new NextRequest("http://localhost/api/notifications");
+}
 
 // ── next-auth session + auth-options stubs ──────────────────────────────────
 
@@ -59,7 +67,7 @@ beforeEach(() => {
 describe("GET /api/notifications", () => {
   it("sends Cache-Control: private, max-age=15, stale-while-revalidate=45", async () => {
     const { GET } = await import("@/app/api/notifications/route");
-    const res = await GET();
+    const res = await GET(makeReq(), EMPTY_CTX);
 
     const header = res.headers.get("cache-control");
     expect(header).toMatch(/private/);
@@ -69,7 +77,7 @@ describe("GET /api/notifications", () => {
 
   it("delegates to getCachedNotifications with (slug, userEmail)", async () => {
     const { GET } = await import("@/app/api/notifications/route");
-    await GET();
+    await GET(makeReq(), EMPTY_CTX);
 
     expect(mockGetCachedNotifications).toHaveBeenCalledWith(
       "trio-b",
@@ -79,7 +87,7 @@ describe("GET /api/notifications", () => {
 
   it("emits a Server-Timing header", async () => {
     const { GET } = await import("@/app/api/notifications/route");
-    const res = await GET();
+    const res = await GET(makeReq(), EMPTY_CTX);
 
     const header = res.headers.get("server-timing");
     expect(header).toBeTruthy();
@@ -91,7 +99,7 @@ describe("GET /api/notifications", () => {
     const nextAuth = await import("next-auth");
     vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce(null);
     const { GET } = await import("@/app/api/notifications/route");
-    const res = await GET();
+    const res = await GET(makeReq(), EMPTY_CTX);
     expect(res.status).toBe(401);
   });
 });
