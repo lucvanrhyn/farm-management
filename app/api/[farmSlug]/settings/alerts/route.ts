@@ -13,16 +13,27 @@
  *            can't mutate farm-wide notification policy during the JWT TTL
  *            window (see lib/auth.ts::verifyFreshAdminRole).
  *
- * Phase G (P6.5): migrated to `getFarmContextForSlug`. The helper collapses
- * 401/403/404 into a single null return — typed error codes restored via
- * `classifyFarmContextFailure` on the error path only.
+ * Wave G5 (#169) — migrated onto `tenantReadSlug` / `tenantWriteSlug`.
  *
- * Response shape follows memory/patterns.md API envelope:
- *   { success, prefs: [...], farmSettings: { quietHoursStart, ... } }
+ * Wire-shape preservation (hybrid per ADR-0001 / Wave G5 spec):
+ *   - 200 success shape unchanged ({ success, prefs, farmSettings }).
+ *   - 401 envelope migrates from the route-minted
+ *     `{ success: false, error: "AUTH_REQUIRED", message }` to the adapter's
+ *     canonical `{ error: "AUTH_REQUIRED", message }` — `body.error` keeps the
+ *     same SCREAMING_SNAKE code that existing test/clients key on. The
+ *     legacy 403 `FARM_ACCESS_DENIED` collapses into the adapter's 401
+ *     `AUTH_REQUIRED` (same `getFarmContextForSlug` null path the adapter
+ *     already centralises).
+ *   - 400 INVALID_BODY on malformed JSON now flows through the adapter
+ *     (same envelope shape, same code).
+ *   - Bespoke validation/auth codes (INVALID_PREF_FIELD,
+ *     INVALID_QUIET_HOURS, INVALID_TIMEZONE,
+ *     ADMIN_REQUIRED_FOR_FARM_SETTINGS) keep their existing
+ *     `{ success: false, error, message }` shape — these are bespoke handler
+ *     concerns. The split-gate `verifyFreshAdminRole` check stays inline.
  *
  * Error codes are specific (per memory/silent-failure-pattern.md):
- *   AUTH_REQUIRED                 — 401, no session
- *   FARM_ACCESS_DENIED            — 403, session user doesn't belong to farm
+ *   AUTH_REQUIRED                 — 401, no session (adapter)
  *   ADMIN_REQUIRED_FOR_FARM_SETTINGS — 403, non-admin tried to write quiet-hours/tz/thresholds
  *   INVALID_BODY                  — 400, non-JSON or wrong shape
  *   INVALID_PREF_FIELD            — 400, a pref row failed validation
@@ -30,9 +41,9 @@
  *   INVALID_TIMEZONE              — 400, empty / non-string tz
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
-import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
+import { NextResponse } from "next/server";
+
+import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
 
@@ -81,48 +92,6 @@ function asErr(code: string, message: string, status: number) {
     { success: false, error: code, message },
     { status },
   );
-}
-
-async function contextFailureResponse(req: NextRequest) {
-  const { code, status } = await classifyFarmContextFailure(req);
-  const message = code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden";
-  const mappedCode = code === "CROSS_TENANT_FORBIDDEN" ? "FARM_ACCESS_DENIED" : code;
-  return asErr(mappedCode, message, status);
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return contextFailureResponse(req);
-
-  const [prefs, settings] = await Promise.all([
-    ctx.prisma.alertPreference.findMany({
-      where: { userId: ctx.session.user.id },
-      orderBy: [{ category: "asc" }, { channel: "asc" }],
-    }),
-    ctx.prisma.farmSettings.findFirst({
-      select: {
-        quietHoursStart: true,
-        quietHoursEnd: true,
-        timezone: true,
-        speciesAlertThresholds: true,
-      },
-    }),
-  ]);
-
-  return NextResponse.json({
-    success: true,
-    prefs,
-    farmSettings: {
-      quietHoursStart: settings?.quietHoursStart ?? "20:00",
-      quietHoursEnd: settings?.quietHoursEnd ?? "06:00",
-      timezone: settings?.timezone ?? "Africa/Johannesburg",
-      speciesAlertThresholds: settings?.speciesAlertThresholds ?? null,
-    },
-  });
 }
 
 function validatePref(raw: unknown, idx: number): PrefInput | string {
@@ -182,199 +151,225 @@ function validatePref(raw: unknown, idx: number): PrefInput | string {
   };
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return contextFailureResponse(req);
+export const GET = tenantReadSlug<{ farmSlug: string }>({
+  handle: async (ctx) => {
+    const [prefs, settings] = await Promise.all([
+      ctx.prisma.alertPreference.findMany({
+        where: { userId: ctx.session.user.id },
+        orderBy: [{ category: "asc" }, { channel: "asc" }],
+      }),
+      ctx.prisma.farmSettings.findFirst({
+        select: {
+          quietHoursStart: true,
+          quietHoursEnd: true,
+          timezone: true,
+          speciesAlertThresholds: true,
+        },
+      }),
+    ]);
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return asErr("INVALID_BODY", "Body must be valid JSON", 400);
-  }
+    return NextResponse.json({
+      success: true,
+      prefs,
+      farmSettings: {
+        quietHoursStart: settings?.quietHoursStart ?? "20:00",
+        quietHoursEnd: settings?.quietHoursEnd ?? "06:00",
+        timezone: settings?.timezone ?? "Africa/Johannesburg",
+        speciesAlertThresholds: settings?.speciesAlertThresholds ?? null,
+      },
+    });
+  },
+});
 
-  const userId = ctx.session.user.id;
-
-  // ── Validate prefs[] if present ────────────────────────────────────────
-  let validatedPrefs: PrefInput[] | null = null;
-  if ("prefs" in body) {
-    if (!Array.isArray(body.prefs)) {
-      return asErr("INVALID_BODY", "prefs must be an array", 400);
+export const PATCH = tenantWriteSlug<unknown, { farmSlug: string }>({
+  revalidate: revalidateSettingsWrite,
+  handle: async (ctx, parsedBody, _req, params) => {
+    // Body has already been parsed as JSON by the adapter (malformed JSON
+    // returns INVALID_BODY before this handler runs). We still need to verify
+    // it's an object before we destructure it.
+    if (!parsedBody || typeof parsedBody !== "object") {
+      return asErr("INVALID_BODY", "Body must be valid JSON object", 400);
     }
-    validatedPrefs = [];
-    for (let i = 0; i < body.prefs.length; i += 1) {
-      const result = validatePref(body.prefs[i], i);
-      if (typeof result === "string") {
-        return asErr("INVALID_PREF_FIELD", result, 400);
+    const body = parsedBody as Record<string, unknown>;
+
+    const userId = ctx.session.user.id;
+
+    // ── Validate prefs[] if present ────────────────────────────────────────
+    let validatedPrefs: PrefInput[] | null = null;
+    if ("prefs" in body) {
+      if (!Array.isArray(body.prefs)) {
+        return asErr("INVALID_BODY", "prefs must be an array", 400);
       }
-      validatedPrefs.push(result);
+      validatedPrefs = [];
+      for (let i = 0; i < body.prefs.length; i += 1) {
+        const result = validatePref(body.prefs[i], i);
+        if (typeof result === "string") {
+          return asErr("INVALID_PREF_FIELD", result, 400);
+        }
+        validatedPrefs.push(result);
+      }
     }
-  }
 
-  // ── Detect tenant-wide field writes ────────────────────────────────────
-  const farmLevelKeys = ["quietHoursStart", "quietHoursEnd", "timezone", "speciesAlertThresholds"] as const;
-  const writesFarmFields = farmLevelKeys.some((k) => k in body);
+    // ── Detect tenant-wide field writes (split-gate) ───────────────────────
+    const farmLevelKeys = ["quietHoursStart", "quietHoursEnd", "timezone", "speciesAlertThresholds"] as const;
+    const writesFarmFields = farmLevelKeys.some((k) => k in body);
 
-  if (writesFarmFields) {
-    // Any farm-level write requires a freshly-verified ADMIN. This closes
-    // the 60s JWT TTL window where a revoked admin could still mutate
-    // tenant-wide notification policy.
-    if (ctx.role !== "ADMIN") {
-      return asErr(
-        "ADMIN_REQUIRED_FOR_FARM_SETTINGS",
-        "Only farm admins can change quiet hours, timezone or species thresholds",
-        403,
-      );
+    if (writesFarmFields) {
+      // Phase H.2 / split-gate: any farm-level write requires a freshly-verified
+      // ADMIN. This closes the 60s JWT TTL window where a revoked admin could
+      // still mutate tenant-wide notification policy. User-prefs writes (the
+      // `prefs[]` path) DO NOT need this gate — kept verbatim from pre-Wave G5.
+      if (ctx.role !== "ADMIN") {
+        return asErr(
+          "ADMIN_REQUIRED_FOR_FARM_SETTINGS",
+          "Only farm admins can change quiet hours, timezone or species thresholds",
+          403,
+        );
+      }
+      const fresh = await verifyFreshAdminRole(userId, params.farmSlug);
+      if (!fresh) {
+        return asErr(
+          "ADMIN_REQUIRED_FOR_FARM_SETTINGS",
+          "Admin access has been revoked — reload and sign in again",
+          403,
+        );
+      }
     }
-    const fresh = await verifyFreshAdminRole(userId, farmSlug);
-    if (!fresh) {
-      return asErr(
-        "ADMIN_REQUIRED_FOR_FARM_SETTINGS",
-        "Admin access has been revoked — reload and sign in again",
-        403,
-      );
-    }
-  }
 
-  // ── Validate quietHours / timezone shape ───────────────────────────────
-  const farmUpdate: {
-    quietHoursStart?: string;
-    quietHoursEnd?: string;
-    timezone?: string;
-    speciesAlertThresholds?: string | null;
-  } = {};
+    // ── Validate quietHours / timezone shape ───────────────────────────────
+    const farmUpdate: {
+      quietHoursStart?: string;
+      quietHoursEnd?: string;
+      timezone?: string;
+      speciesAlertThresholds?: string | null;
+    } = {};
 
-  if ("quietHoursStart" in body) {
-    if (typeof body.quietHoursStart !== "string" || !HH_MM_RE.test(body.quietHoursStart)) {
-      return asErr("INVALID_QUIET_HOURS", "quietHoursStart must be HH:mm", 400);
+    if ("quietHoursStart" in body) {
+      if (typeof body.quietHoursStart !== "string" || !HH_MM_RE.test(body.quietHoursStart)) {
+        return asErr("INVALID_QUIET_HOURS", "quietHoursStart must be HH:mm", 400);
+      }
+      farmUpdate.quietHoursStart = body.quietHoursStart;
     }
-    farmUpdate.quietHoursStart = body.quietHoursStart;
-  }
-  if ("quietHoursEnd" in body) {
-    if (typeof body.quietHoursEnd !== "string" || !HH_MM_RE.test(body.quietHoursEnd)) {
-      return asErr("INVALID_QUIET_HOURS", "quietHoursEnd must be HH:mm", 400);
+    if ("quietHoursEnd" in body) {
+      if (typeof body.quietHoursEnd !== "string" || !HH_MM_RE.test(body.quietHoursEnd)) {
+        return asErr("INVALID_QUIET_HOURS", "quietHoursEnd must be HH:mm", 400);
+      }
+      farmUpdate.quietHoursEnd = body.quietHoursEnd;
     }
-    farmUpdate.quietHoursEnd = body.quietHoursEnd;
-  }
-  if ("timezone" in body) {
-    if (typeof body.timezone !== "string" || !body.timezone.trim()) {
-      return asErr("INVALID_TIMEZONE", "timezone must be a non-empty string", 400);
-    }
-    // Validate with Intl — throws RangeError on unknown zones.
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: body.timezone });
-    } catch {
-      return asErr("INVALID_TIMEZONE", `timezone "${body.timezone}" is not a valid IANA zone`, 400);
-    }
-    farmUpdate.timezone = body.timezone.trim();
-  }
-  if ("speciesAlertThresholds" in body) {
-    if (body.speciesAlertThresholds === null) {
-      farmUpdate.speciesAlertThresholds = null;
-    } else if (typeof body.speciesAlertThresholds === "string") {
-      // Require valid JSON — prevents garbage from ever hitting consumers.
+    if ("timezone" in body) {
+      if (typeof body.timezone !== "string" || !body.timezone.trim()) {
+        return asErr("INVALID_TIMEZONE", "timezone must be a non-empty string", 400);
+      }
+      // Validate with Intl — throws RangeError on unknown zones.
       try {
-        JSON.parse(body.speciesAlertThresholds);
+        new Intl.DateTimeFormat("en-US", { timeZone: body.timezone });
       } catch {
+        return asErr("INVALID_TIMEZONE", `timezone "${body.timezone}" is not a valid IANA zone`, 400);
+      }
+      farmUpdate.timezone = body.timezone.trim();
+    }
+    if ("speciesAlertThresholds" in body) {
+      if (body.speciesAlertThresholds === null) {
+        farmUpdate.speciesAlertThresholds = null;
+      } else if (typeof body.speciesAlertThresholds === "string") {
+        // Require valid JSON — prevents garbage from ever hitting consumers.
+        try {
+          JSON.parse(body.speciesAlertThresholds);
+        } catch {
+          return asErr(
+            "INVALID_BODY",
+            "speciesAlertThresholds must be a JSON string or null",
+            400,
+          );
+        }
+        farmUpdate.speciesAlertThresholds = body.speciesAlertThresholds;
+      } else if (typeof body.speciesAlertThresholds === "object") {
+        // Allow the client to send an object — we stringify on the way in.
+        farmUpdate.speciesAlertThresholds = JSON.stringify(body.speciesAlertThresholds);
+      } else {
         return asErr(
           "INVALID_BODY",
-          "speciesAlertThresholds must be a JSON string or null",
+          "speciesAlertThresholds must be a JSON string, object, or null",
           400,
         );
       }
-      farmUpdate.speciesAlertThresholds = body.speciesAlertThresholds;
-    } else if (typeof body.speciesAlertThresholds === "object") {
-      // Allow the client to send an object — we stringify on the way in.
-      farmUpdate.speciesAlertThresholds = JSON.stringify(body.speciesAlertThresholds);
-    } else {
-      return asErr(
-        "INVALID_BODY",
-        "speciesAlertThresholds must be a JSON string, object, or null",
-        400,
-      );
     }
-  }
 
-  // ── Apply writes ───────────────────────────────────────────────────────
-  if (validatedPrefs) {
-    // Upsert by the model's composite unique key. Prisma's `upsert` maps to
-    // INSERT … ON CONFLICT which is safe under concurrent callers.
-    // Run sequentially rather than in a single transaction because Turso's
-    // libSQL driver batches serverless calls efficiently, and sequential
-    // upserts keep the error surface row-local.
-    for (const p of validatedPrefs) {
-      await ctx.prisma.alertPreference.upsert({
-        where: {
-          unique_user_pref: {
+    // ── Apply writes ───────────────────────────────────────────────────────
+    if (validatedPrefs) {
+      // Upsert by the model's composite unique key. Prisma's `upsert` maps to
+      // INSERT … ON CONFLICT which is safe under concurrent callers.
+      // Run sequentially rather than in a single transaction because Turso's
+      // libSQL driver batches serverless calls efficiently, and sequential
+      // upserts keep the error surface row-local.
+      for (const p of validatedPrefs) {
+        await ctx.prisma.alertPreference.upsert({
+          where: {
+            unique_user_pref: {
+              userId,
+              category: p.category,
+              // Prisma represents the composite unique on nullable columns as
+              // the full tuple — pass nulls literally.
+              alertType: p.alertType as string,
+              channel: p.channel,
+              speciesOverride: p.speciesOverride as string,
+            },
+          },
+          update: {
+            enabled: p.enabled,
+            digestMode: p.digestMode,
+          },
+          create: {
             userId,
             category: p.category,
-            // Prisma represents the composite unique on nullable columns as
-            // the full tuple — pass nulls literally.
-            alertType: p.alertType as string,
+            alertType: p.alertType,
             channel: p.channel,
-            speciesOverride: p.speciesOverride as string,
+            enabled: p.enabled,
+            digestMode: p.digestMode,
+            speciesOverride: p.speciesOverride,
           },
-        },
-        update: {
-          enabled: p.enabled,
-          digestMode: p.digestMode,
-        },
+        });
+      }
+    }
+
+    if (Object.keys(farmUpdate).length > 0) {
+      // Upsert so brand-new tenants without a FarmSettings row still succeed.
+      await ctx.prisma.farmSettings.upsert({
+        where: { id: "singleton" },
+        update: farmUpdate,
         create: {
-          userId,
-          category: p.category,
-          alertType: p.alertType,
-          channel: p.channel,
-          enabled: p.enabled,
-          digestMode: p.digestMode,
-          speciesOverride: p.speciesOverride,
+          id: "singleton",
+          farmName: "My Farm",
+          breed: "Mixed",
+          ...farmUpdate,
         },
       });
     }
-  }
 
-  if (Object.keys(farmUpdate).length > 0) {
-    // Upsert so brand-new tenants without a FarmSettings row still succeed.
-    await ctx.prisma.farmSettings.upsert({
-      where: { id: "singleton" },
-      update: farmUpdate,
-      create: {
-        id: "singleton",
-        farmName: "My Farm",
-        breed: "Mixed",
-        ...farmUpdate,
+    const [prefs, settings] = await Promise.all([
+      ctx.prisma.alertPreference.findMany({
+        where: { userId },
+        orderBy: [{ category: "asc" }, { channel: "asc" }],
+      }),
+      ctx.prisma.farmSettings.findFirst({
+        select: {
+          quietHoursStart: true,
+          quietHoursEnd: true,
+          timezone: true,
+          speciesAlertThresholds: true,
+        },
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      prefs,
+      farmSettings: {
+        quietHoursStart: settings?.quietHoursStart ?? "20:00",
+        quietHoursEnd: settings?.quietHoursEnd ?? "06:00",
+        timezone: settings?.timezone ?? "Africa/Johannesburg",
+        speciesAlertThresholds: settings?.speciesAlertThresholds ?? null,
       },
     });
-  }
-
-  revalidateSettingsWrite(farmSlug);
-
-  const [prefs, settings] = await Promise.all([
-    ctx.prisma.alertPreference.findMany({
-      where: { userId },
-      orderBy: [{ category: "asc" }, { channel: "asc" }],
-    }),
-    ctx.prisma.farmSettings.findFirst({
-      select: {
-        quietHoursStart: true,
-        quietHoursEnd: true,
-        timezone: true,
-        speciesAlertThresholds: true,
-      },
-    }),
-  ]);
-
-  return NextResponse.json({
-    success: true,
-    prefs,
-    farmSettings: {
-      quietHoursStart: settings?.quietHoursStart ?? "20:00",
-      quietHoursEnd: settings?.quietHoursEnd ?? "06:00",
-      timezone: settings?.timezone ?? "Africa/Johannesburg",
-      speciesAlertThresholds: settings?.speciesAlertThresholds ?? null,
-    },
-  });
-}
+  },
+});
