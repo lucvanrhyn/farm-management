@@ -220,7 +220,9 @@ describe("POST /api/tasks", () => {
       }),
     });
 
-    const res = await POST(req);
+    // Wave E (#161): tasks POST is now adapter-wrapped; pass an empty
+    // RouteContext to satisfy the Next.js 16 handler signature.
+    const res = await POST(req, { params: Promise.resolve({}) });
     expect([200, 201]).toContain(res.status);
 
     assertTagFired(farmTag(SLUG, "tasks"));

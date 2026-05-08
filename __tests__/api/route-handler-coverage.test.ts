@@ -122,8 +122,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "task-occurrences/route.ts",
   "task-templates/[id]/route.ts",
   "task-templates/install/route.ts",
-  "tasks/[id]/route.ts",
-  "tasks/route.ts",
   "transaction-categories/[id]/route.ts",
   "transaction-categories/route.ts",
 ]);

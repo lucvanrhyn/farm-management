@@ -19,6 +19,13 @@ import {
   InvalidSaleTypeError,
   TransactionNotFoundError,
 } from "@/lib/domain/transactions/errors";
+import {
+  InvalidCursorError,
+  InvalidLimitError,
+  InvalidRecurrenceRuleError,
+  TaskNotFoundError,
+  TemplateNotFoundError,
+} from "@/lib/domain/tasks/errors";
 
 /**
  * Maps a thrown domain error onto the canonical HTTP response for that
@@ -86,6 +93,24 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
       { error: err.code, details: { field: err.field } },
       { status: 400 },
     );
+  }
+  // Wave E (#161) — tasks domain typed errors.
+  if (err instanceof TaskNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  if (err instanceof InvalidRecurrenceRuleError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof TemplateNotFoundError) {
+    // 400 (NOT 404) — matches pre-Wave-E wire shape; offline clients code
+    // against 400. See lib/domain/tasks/errors.ts module docstring.
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof InvalidLimitError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof InvalidCursorError) {
+    return NextResponse.json({ error: err.code }, { status: 400 });
   }
   return null;
 }

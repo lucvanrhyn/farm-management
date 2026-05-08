@@ -121,6 +121,11 @@ function makeReq(url: string, options?: Record<string, any>): NextRequest {
   return new NextRequest(url, options as any);
 }
 
+// Wave E (#161) — adapter-wrapped handlers take a Next.js 16 RouteContext
+// as the second arg. The non-dynamic /api/tasks routes have no params, so
+// an empty params promise is sufficient.
+const EMPTY_CTX = { params: Promise.resolve({}) };
+
 const TASK_ROW = {
   id: "task-1",
   title: "Weigh cattle",
@@ -157,7 +162,7 @@ describe("GET /api/tasks", () => {
   it("returns 200 with tasks array", async () => {
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -167,14 +172,14 @@ describe("GET /api/tasks", () => {
     mockGetServerSession.mockResolvedValueOnce(null);
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     expect(res.status).toBe(401);
   });
 
   it("passes taskType filter to prisma query", async () => {
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks?taskType=weighing");
-    await GET(req);
+    await GET(req, EMPTY_CTX);
     expect(mockTaskFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ taskType: "weighing" }),
@@ -185,7 +190,7 @@ describe("GET /api/tasks", () => {
   it("passes campId filter to prisma query", async () => {
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks?campId=camp-A");
-    await GET(req);
+    await GET(req, EMPTY_CTX);
     expect(mockTaskFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ campId: "camp-A" }),
@@ -206,7 +211,7 @@ describe("GET /api/tasks", () => {
     const req = makeReq(
       "http://localhost/api/tasks?as=occurrences&from=2026-04-20T00:00:00Z&to=2026-04-21T00:00:00Z",
     );
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -238,7 +243,7 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(201);
   });
 
@@ -255,7 +260,7 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(201);
     expect(mockTaskCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -276,10 +281,12 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.code).toBe("INVALID_RECURRENCE_RULE");
+    // Wave E (#161): wire migrated from `code` → `error` per ADR-0001
+    // typed-error envelope. Drops the human prefix; preserves the code.
+    expect(data.error).toBe("INVALID_RECURRENCE_RULE");
   });
 
   it("returns 403 when non-admin tries to create a task", async () => {
@@ -294,7 +301,7 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(403);
   });
 
@@ -305,7 +312,7 @@ describe("POST /api/tasks", () => {
       body: JSON.stringify({ dueDate: "2026-04-20", assignedTo: "x@y.com" }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(400);
   });
 
@@ -321,7 +328,7 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(201);
     expect(mockTaskCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -344,10 +351,11 @@ describe("POST /api/tasks", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const res = await POST(req);
+    const res = await POST(req, EMPTY_CTX);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.code).toBe("INVALID_RECURRENCE_RULE");
+    // Wave E (#161): wire migrated from `code` → `error`. See above.
+    expect(data.error).toBe("INVALID_RECURRENCE_RULE");
   });
 });
 

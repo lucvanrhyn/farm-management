@@ -1,192 +1,58 @@
 /**
- * PATCH /api/tasks/[id] — update a task (ADMIN only)
- * DELETE /api/tasks/[id] — delete a task (ADMIN only)
+ * PATCH  /api/tasks/[id] — partial-update a task (ADMIN only).
+ * DELETE /api/tasks/[id] — delete a task (ADMIN only).
  *
- * PATCH Phase K additions:
- *   completionPayload — when status → "completed", runs observationFromTaskCompletion.
- *   If the mapping returns non-null, both the task update and observation create
- *   are executed inside a prisma.$transaction. Response includes:
- *     { ...task, observationCreated: boolean, observationId?: string }
+ * Wave E (#161) — adapter-only wiring. Both endpoints are ADMIN-gated
+ * with stale-ADMIN re-verify owned by the adapter. Business logic
+ * lives in `lib/domain/tasks/{update,delete}-task.ts`.
  *
- * If the payload is present but incomplete, the PATCH still succeeds with
- *   observationCreated: false (no error — silent null is intentional).
+ * PATCH preserves the Phase K observation-on-completion contract:
+ *   - On status:completed transition with valid completionPayload, the
+ *     domain op runs `prisma.$transaction` to create the Observation
+ *     and link it via `completedObservationId`.
+ *   - Response shape always includes `observationCreated: boolean`;
+ *     `observationId` is present only on the truthy branch.
+ *
+ * Wire shapes (preserved verbatim):
+ *   - PATCH  200 → updated `Task` row + `{ observationCreated, observationId? }`
+ *   - PATCH  404 → `{ error: "TASK_NOT_FOUND" }`
+ *   - DELETE 200 → `{ success: true }`
+ *   - DELETE 404 → `{ error: "TASK_NOT_FOUND" }`
+ *   - 401 / 403 — adapter-emitted (incl. stale-ADMIN re-verify).
  */
+import { NextResponse } from "next/server";
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContext } from "@/lib/server/farm-context";
-import { verifyFreshAdminRole } from "@/lib/auth";
-import { observationFromTaskCompletion } from "@/lib/tasks/observation-mapping";
-import type { TaskCompletionPayload } from "@/lib/tasks/observation-mapping";
+import { adminWrite } from "@/lib/server/route";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
+import {
+  deleteTask,
+  updateTask,
+  type UpdateTaskInput,
+} from "@/lib/domain/tasks";
+import type { TaskCompletionPayload } from "@/lib/tasks/observation-mapping";
 
-// ── PATCH ─────────────────────────────────────────────────────────────────────
+interface PatchTaskBody extends UpdateTaskInput {
+  completionPayload?: TaskCompletionPayload;
+}
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  const existing = await prisma.task.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Task not found" }, { status: 404 });
-  }
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const data = body as Record<string, unknown>;
-
-  // Build update payload from allowed fields only
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const update: Record<string, any> = {};
-
-  if (typeof data.title === "string" && data.title.trim()) update.title = data.title.trim();
-  if (typeof data.description === "string") update.description = data.description;
-  if (typeof data.dueDate === "string") update.dueDate = data.dueDate;
-  if (typeof data.assignedTo === "string") update.assignedTo = data.assignedTo;
-
-  const VALID_STATUSES = new Set(["pending", "in_progress", "completed"]);
-  const VALID_PRIORITIES = new Set(["low", "normal", "high"]);
-
-  if (typeof data.status === "string" && VALID_STATUSES.has(data.status))
-    update.status = data.status;
-  if (typeof data.priority === "string" && VALID_PRIORITIES.has(data.priority))
-    update.priority = data.priority;
-  if (typeof data.campId === "string") update.campId = data.campId || null;
-  if (typeof data.animalId === "string") update.animalId = data.animalId || null;
-  if (typeof data.completedAt === "string") update.completedAt = data.completedAt;
-
-  // Auto-set completedAt when status transitions to completed
-  if (update.status === "completed" && !update.completedAt && !existing.completedAt) {
-    update.completedAt = new Date().toISOString();
-  }
-  // Clear completedAt if re-opened
-  if (update.status && update.status !== "completed") {
-    update.completedAt = null;
-  }
-
-  // ── Phase K: observation creation on completion ──
-  const isCompletionTransition =
-    update.status === "completed" && existing.status !== "completed";
-  const completionPayload = data.completionPayload as TaskCompletionPayload | undefined;
-
-  let observationCreated = false;
-  let observationId: string | undefined;
-
-  if (isCompletionTransition && completionPayload && typeof completionPayload === "object") {
-    // Build the observation payload from the task + completion data
-    const obsPayload = observationFromTaskCompletion(
-      {
-        id: existing.id,
-        taskType: existing.taskType ?? null,
-        animalId: existing.animalId ?? null,
-        campId: existing.campId ?? null,
-        lat: existing.lat ?? null,
-        lng: existing.lng ?? null,
-        assignedTo: existing.assignedTo,
-      },
+export const PATCH = adminWrite<PatchTaskBody, { id: string }>({
+  revalidate: revalidateTaskWrite,
+  handle: async (ctx, body, _req, params) => {
+    const { completionPayload, ...input } = body ?? {};
+    const result = await updateTask(
+      ctx.prisma,
+      params.id,
+      input,
       completionPayload,
     );
+    return NextResponse.json(result);
+  },
+});
 
-    if (obsPayload !== null) {
-      // Execute task update + observation create atomically.
-      // Prisma's interactive transaction callback receives an Omit<PrismaClient, ...>
-      // not the full PrismaClient — use Parameters<> to derive the correct type.
-      type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
-      const [updatedTask, createdObs] = await prisma.$transaction(
-        async (tx: TxClient) => {
-          // Phase I.3 — denormalise species onto Observation at write time
-          // so species-scoped repro queries hit the composite index.
-          let species: string | null = null;
-          if (obsPayload.animalId) {
-            const animal = await tx.animal.findUnique({
-              where: { animalId: obsPayload.animalId },
-              select: { species: true },
-            });
-            species = animal?.species ?? null;
-          }
-          // Create observation first so we have its ID
-          const obs = await tx.observation.create({
-            data: {
-              type: obsPayload.type,
-              details: obsPayload.details,
-              campId: obsPayload.campId ?? existing.campId ?? "unknown",
-              animalId: obsPayload.animalId ?? null,
-              observedAt: new Date(),
-              loggedBy: obsPayload.loggedBy,
-              species,
-            },
-          });
-
-          const task = await tx.task.update({
-            where: { id },
-            data: { ...update, completedObservationId: obs.id },
-          });
-
-          return [task, obs] as const;
-        },
-      );
-
-      observationCreated = true;
-      observationId = createdObs.id;
-
-      revalidateTaskWrite(slug);
-      return NextResponse.json({
-        ...updatedTask,
-        observationCreated,
-        observationId,
-      });
-    }
-  }
-
-  // ── Standard update (no observation) ──
-  const task = await prisma.task.update({ where: { id }, data: update });
-
-  revalidateTaskWrite(slug);
-  return NextResponse.json({
-    ...task,
-    observationCreated: false,
-  });
-}
-
-// ── DELETE ────────────────────────────────────────────────────────────────────
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
-  if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  const existing = await prisma.task.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Task not found" }, { status: 404 });
-  }
-
-  await prisma.task.delete({ where: { id } });
-
-  revalidateTaskWrite(slug);
-  return NextResponse.json({ success: true });
-}
+export const DELETE = adminWrite<unknown, { id: string }>({
+  revalidate: revalidateTaskWrite,
+  handle: async (ctx, _body, _req, params) => {
+    const result = await deleteTask(ctx.prisma, params.id);
+    return NextResponse.json(result);
+  },
+});

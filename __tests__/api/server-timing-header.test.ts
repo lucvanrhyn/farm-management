@@ -88,7 +88,12 @@ describe("Server-Timing header on instrumented routes", () => {
 
   it("GET /api/tasks emits Server-Timing", async () => {
     const { GET } = await import("@/app/api/tasks/route");
-    const res = await GET(new NextRequest("http://localhost/api/tasks"));
+    // Wave E (#161): tasks GET is now adapter-wrapped; pass an empty
+    // RouteContext to satisfy the Next.js 16 handler signature.
+    const res = await GET(
+      new NextRequest("http://localhost/api/tasks"),
+      { params: Promise.resolve({}) },
+    );
     expect(res.headers.get("Server-Timing") ?? "").toMatch(/query;dur=/);
   });
 
