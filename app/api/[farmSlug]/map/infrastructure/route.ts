@@ -1,81 +1,27 @@
 /**
- * Phase K — Wave 2C — Tenant map layer: infrastructure.
+ * GET /api/[farmSlug]/map/infrastructure — GeoJSON FeatureCollection of
+ * GameInfrastructure rows (Point features).
  *
- * GET /api/[farmSlug]/map/infrastructure
- *   → GeoJSON FeatureCollection of GameInfrastructure rows.
+ * Wave G3 (#167) — migrated onto `tenantReadSlug`.
  *
- * The schema currently models infrastructure as Points only (gpsLat/gpsLon —
- * no `geojson` field). If a future migration adds a `geojson` column for
- * LineString fences / paths, extend this route to parse + forward it as the
- * feature geometry. For now, only Point features are emitted.
- *
- * Phase G (P6.5): migrated to `getFarmContextForSlug`.
- *
- * Error codes:
- *   AUTH_REQUIRED              — 401, no session
- *   CROSS_TENANT_FORBIDDEN     — 403, session.farms doesn't include farmSlug
+ * Wire-shape preservation:
+ *   - 200 GeoJSON FeatureCollection unchanged (delegates to
+ *     `listInfrastructure` from the map domain barrel).
+ *   - 401 / 403 envelopes migrate from the per-route hand-rolled
+ *     `{ success: false, error: CODE, message }` to the adapter's
+ *     canonical `{ error: "AUTH_REQUIRED" | ..., message }` — same
+ *     SCREAMING_SNAKE codes, same HTTP statuses.
  */
+import { NextResponse } from "next/server";
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
-import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
+import { tenantReadSlug } from "@/lib/server/route";
+import { listInfrastructure } from "@/lib/domain/map";
 
 export const dynamic = "force-dynamic";
 
-function asErr(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { success: false, error: code, message },
-    { status },
-  );
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) {
-    const { code, status } = await classifyFarmContextFailure(req);
-    return asErr(code, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
-  }
-
-  const rows = await ctx.prisma.gameInfrastructure.findMany({
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      condition: true,
-      gpsLat: true,
-      gpsLon: true,
-      lengthKm: true,
-      capacityAnimals: true,
-    },
-  });
-
-  const features = rows
-    .filter(
-      (r): r is typeof r & { gpsLat: number; gpsLon: number } =>
-        typeof r.gpsLat === "number" && typeof r.gpsLon === "number",
-    )
-    .map((r) => ({
-      type: "Feature" as const,
-      geometry: {
-        type: "Point" as const,
-        coordinates: [r.gpsLon, r.gpsLat],
-      },
-      properties: {
-        id: r.id,
-        name: r.name,
-        infrastructureType: r.type,
-        condition: r.condition,
-        lengthKm: r.lengthKm,
-        capacityAnimals: r.capacityAnimals,
-      },
-    }));
-
-  return NextResponse.json({
-    type: "FeatureCollection",
-    features,
-  });
-}
+export const GET = tenantReadSlug<{ farmSlug: string }>({
+  handle: async (ctx) => {
+    const payload = await listInfrastructure(ctx.prisma);
+    return NextResponse.json(payload);
+  },
+});

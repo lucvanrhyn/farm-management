@@ -14,7 +14,11 @@
  *
  * Contract:
  *   - Tenant endpoints: valid GeoJSON FeatureCollection; reject cross-tenant
- *     with CROSS_TENANT_FORBIDDEN (403).
+ *     with AUTH_REQUIRED (401). Wave G3 (#167) — the slug-aware adapter
+ *     `tenantReadSlug` collapses both no-session and cross-tenant failure
+ *     into a single 401 AUTH_REQUIRED envelope (since
+ *     `getFarmContextForSlug` returns `null` for both branches without
+ *     classifying). This matches the canonical Wave A-G2 pattern.
  *   - GIS proxies on upstream failure: HTTP 200 with `_stale: true` + `_error`.
  *   - Eskom without token: returns stale envelope, NOT 500.
  */
@@ -190,7 +194,7 @@ describe("GET /api/[farmSlug]/map/water-points", () => {
     expect((await res.json()).error).toBe("AUTH_REQUIRED");
   });
 
-  it("rejects cross-tenant with CROSS_TENANT_FORBIDDEN 403", async () => {
+  it("rejects cross-tenant with AUTH_REQUIRED 401 (adapter collapses both branches)", async () => {
     sessionForFarms(["other-farm"]);
     dbForbids();
     const { GET } = await import(
@@ -199,8 +203,8 @@ describe("GET /api/[farmSlug]/map/water-points", () => {
     const res = await GET(new NextRequest("http://localhost/x"), {
       params: params("trio-b-boerdery"),
     });
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("CROSS_TENANT_FORBIDDEN");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("AUTH_REQUIRED");
   });
 });
 
@@ -241,7 +245,7 @@ describe("GET /api/[farmSlug]/map/infrastructure", () => {
     });
   });
 
-  it("cross-tenant rejection", async () => {
+  it("cross-tenant rejection — AUTH_REQUIRED 401 (adapter collapses both branches)", async () => {
     dbForbids();
     const { GET } = await import(
       "@/app/api/[farmSlug]/map/infrastructure/route"
@@ -249,8 +253,8 @@ describe("GET /api/[farmSlug]/map/infrastructure", () => {
     const res = await GET(new NextRequest("http://localhost/x"), {
       params: params("trio-b-boerdery"),
     });
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("CROSS_TENANT_FORBIDDEN");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("AUTH_REQUIRED");
   });
 });
 
@@ -301,7 +305,7 @@ describe("GET /api/[farmSlug]/map/rainfall-gauges", () => {
     expect(gaugeA.properties.mm24h).toBe(5);
   });
 
-  it("cross-tenant rejection", async () => {
+  it("cross-tenant rejection — AUTH_REQUIRED 401 (adapter collapses both branches)", async () => {
     dbForbids();
     const { GET } = await import(
       "@/app/api/[farmSlug]/map/rainfall-gauges/route"
@@ -309,8 +313,8 @@ describe("GET /api/[farmSlug]/map/rainfall-gauges", () => {
     const res = await GET(new NextRequest("http://localhost/x"), {
       params: params("trio-b-boerdery"),
     });
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("CROSS_TENANT_FORBIDDEN");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("AUTH_REQUIRED");
   });
 });
 
@@ -445,14 +449,14 @@ describe("GET /api/[farmSlug]/map/task-pins", () => {
     expect((await res.json()).error).toBe("INVALID_STATUS_FILTER");
   });
 
-  it("cross-tenant rejection", async () => {
+  it("cross-tenant rejection — AUTH_REQUIRED 401 (adapter collapses both branches)", async () => {
     dbForbids();
     const { GET } = await import("@/app/api/[farmSlug]/map/task-pins/route");
     const res = await GET(new NextRequest("http://localhost/x"), {
       params: params("trio-b-boerdery"),
     });
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("CROSS_TENANT_FORBIDDEN");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("AUTH_REQUIRED");
   });
 });
 
