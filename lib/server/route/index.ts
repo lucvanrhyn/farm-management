@@ -15,6 +15,10 @@ export { tenantRead } from "./tenant-read";
 export { adminWrite } from "./admin-write";
 export { tenantWrite } from "./tenant-write";
 export { publicHandler } from "./public-handler";
+// Wave G1 (#165) — slug-aware variants for `[farmSlug]/**` routes.
+export { tenantReadSlug } from "./tenant-read-slug";
+export { tenantWriteSlug } from "./tenant-write-slug";
+export { adminWriteSlug } from "./admin-write-slug";
 export { routeError } from "./envelope";
 export {
   RouteValidationError,
