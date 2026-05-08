@@ -69,13 +69,12 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "[farmSlug]/export/route.ts",
   "[farmSlug]/farm-settings/ai/route.ts",
   "[farmSlug]/farm-settings/methodology/route.ts",
-  "[farmSlug]/feed-on-offer/route.ts",
-  "[farmSlug]/financial-analytics/route.ts",
   // Wave G1 (#165) — NVD slice (5 routes) migrated onto slug-aware adapters.
   // Wave G2 (#166) — rotation slice (5 routes) migrated onto slug-aware adapters.
   // Wave G3 (#167) — map slice (4 routes) migrated onto slug-aware adapters.
-  "[farmSlug]/performance/route.ts",
-  "[farmSlug]/profitability-by-animal/route.ts",
+  // Wave G4 (#168) — analytics-read slice (5 routes) migrated onto slug-aware adapters:
+  //   feed-on-offer, financial-analytics, performance, profitability-by-animal,
+  //   veld-score/summary.
   "[farmSlug]/rainfall/route.ts",
   "[farmSlug]/settings/alerts/route.ts",
   "[farmSlug]/tax/it3/[id]/pdf/route.ts",
@@ -86,7 +85,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "[farmSlug]/transactions/route.ts",
   "[farmSlug]/veld-assessments/[id]/route.ts",
   "[farmSlug]/veld-assessments/route.ts",
-  "[farmSlug]/veld-score/summary/route.ts",
 
   // Other shared routes — Wave B+ migration in dependency order.
   "farm-settings/map/route.ts",
