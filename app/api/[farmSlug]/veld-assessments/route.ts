@@ -1,5 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getFarmContextForSlug } from '@/lib/server/farm-context-slug';
+/**
+ * GET  /api/[farmSlug]/veld-assessments — list veld assessments (optional `?campId=` filter).
+ * POST /api/[farmSlug]/veld-assessments — create a veld assessment (ADMIN-or-MANAGER, NO fresh-admin gate).
+ *
+ * Wave G6 (#170) — migrated onto `tenantReadSlug` / `tenantWriteSlug`.
+ *
+ * Wire-shape preservation (hybrid per ADR-0001 / Wave G6 spec):
+ *   - 200/201 success shapes unchanged.
+ *   - 401 envelope migrates to the adapter's canonical
+ *     `{ error: "AUTH_REQUIRED", message: "..." }`.
+ *   - 403 (non-admin/manager), 400 (validation, 8 distinct branches),
+ *     404 (camp not found) keep their bare-string `{ error: "<sentence>" }`
+ *     envelopes — these are bespoke handler concerns.
+ *
+ * NOTE: POST allows BOTH `ADMIN` and `MANAGER` and intentionally DOES NOT
+ * call `verifyFreshAdminRole` — the fresh-admin defence-in-depth check is
+ * scoped to admin-only mutations elsewhere in this slice. Preserve verbatim.
+ */
+import { NextResponse } from 'next/server';
+
+import { tenantReadSlug, tenantWriteSlug } from '@/lib/server/route';
 import { calcVeldScore, calcGrazingCapacity, type BiomeType } from '@/lib/calculators/veld-score';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
@@ -22,108 +41,96 @@ function isValidLevel(n: unknown): n is 0 | 1 | 2 {
   return n === 0 || n === 1 || n === 2;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = tenantReadSlug<{ farmSlug: string }>({
+  handle: async (ctx, req) => {
+    const url = new URL(req.url);
+    const campId = url.searchParams.get('campId');
+    const rows = await ctx.prisma.veldAssessment.findMany({
+      where: campId ? { campId } : undefined,
+      orderBy: { assessmentDate: 'desc' },
+      take: 500,
+    });
+    return NextResponse.json({ assessments: rows });
+  },
+});
 
-  const url = new URL(req.url);
-  const campId = url.searchParams.get('campId');
-  const rows = await ctx.prisma.veldAssessment.findMany({
-    where: campId ? { campId } : undefined,
-    orderBy: { assessmentDate: 'desc' },
-    take: 500,
-  });
-  return NextResponse.json({ assessments: rows });
-}
+export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
+  revalidate: revalidateObservationWrite,
+  handle: async (ctx, body) => {
+    if (ctx.role !== 'ADMIN' && ctx.role !== 'MANAGER') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { prisma, role, session } = ctx;
-  if (role !== 'ADMIN' && role !== 'MANAGER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+    const input = (body ?? {}) as Partial<PostBody>;
 
-  let body: PostBody;
-  try {
-    body = (await req.json()) as PostBody;
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+    if (!input.campId || typeof input.campId !== 'string') {
+      return NextResponse.json({ error: 'campId required' }, { status: 400 });
+    }
+    if (typeof input.assessmentDate !== 'string' || !isValidDate(input.assessmentDate)) {
+      return NextResponse.json({ error: 'assessmentDate must be YYYY-MM-DD' }, { status: 400 });
+    }
+    if (!input.assessor || typeof input.assessor !== 'string') {
+      return NextResponse.json({ error: 'assessor required' }, { status: 400 });
+    }
+    if (
+      typeof input.palatableSpeciesPct !== 'number' ||
+      input.palatableSpeciesPct < 0 ||
+      input.palatableSpeciesPct > 100
+    ) {
+      return NextResponse.json({ error: 'palatableSpeciesPct must be 0..100' }, { status: 400 });
+    }
+    if (
+      typeof input.bareGroundPct !== 'number' ||
+      input.bareGroundPct < 0 ||
+      input.bareGroundPct > 100
+    ) {
+      return NextResponse.json({ error: 'bareGroundPct must be 0..100' }, { status: 400 });
+    }
+    if (!isValidLevel(input.erosionLevel)) {
+      return NextResponse.json({ error: 'erosionLevel must be 0|1|2' }, { status: 400 });
+    }
+    if (!isValidLevel(input.bushEncroachmentLevel)) {
+      return NextResponse.json({ error: 'bushEncroachmentLevel must be 0|1|2' }, { status: 400 });
+    }
 
-  if (!body.campId || typeof body.campId !== 'string') {
-    return NextResponse.json({ error: 'campId required' }, { status: 400 });
-  }
-  if (!isValidDate(body.assessmentDate)) {
-    return NextResponse.json({ error: 'assessmentDate must be YYYY-MM-DD' }, { status: 400 });
-  }
-  if (!body.assessor || typeof body.assessor !== 'string') {
-    return NextResponse.json({ error: 'assessor required' }, { status: 400 });
-  }
-  if (
-    typeof body.palatableSpeciesPct !== 'number' ||
-    body.palatableSpeciesPct < 0 ||
-    body.palatableSpeciesPct > 100
-  ) {
-    return NextResponse.json({ error: 'palatableSpeciesPct must be 0..100' }, { status: 400 });
-  }
-  if (
-    typeof body.bareGroundPct !== 'number' ||
-    body.bareGroundPct < 0 ||
-    body.bareGroundPct > 100
-  ) {
-    return NextResponse.json({ error: 'bareGroundPct must be 0..100' }, { status: 400 });
-  }
-  if (!isValidLevel(body.erosionLevel)) {
-    return NextResponse.json({ error: 'erosionLevel must be 0|1|2' }, { status: 400 });
-  }
-  if (!isValidLevel(body.bushEncroachmentLevel)) {
-    return NextResponse.json({ error: 'bushEncroachmentLevel must be 0|1|2' }, { status: 400 });
-  }
+    // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+    // species+campId). findFirst is single-species-safe; Phase B will scope by species.
+    const camp = await ctx.prisma.camp.findFirst({
+      where: { campId: input.campId },
+      select: { campId: true },
+    });
+    if (!camp) return NextResponse.json({ error: 'Camp not found' }, { status: 404 });
 
-  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-  // species+campId). findFirst is single-species-safe; Phase B will scope by species.
-  const camp = await prisma.camp.findFirst({ where: { campId: body.campId }, select: { campId: true } });
-  if (!camp) return NextResponse.json({ error: 'Camp not found' }, { status: 404 });
+    const settings = await ctx.prisma.farmSettings.findUnique({
+      where: { id: 'singleton' },
+      select: { biomeType: true },
+    });
+    const biome = (settings?.biomeType ?? 'mixedveld') as BiomeType;
 
-  const settings = await prisma.farmSettings.findUnique({
-    where: { id: 'singleton' },
-    select: { biomeType: true },
-  });
-  const biome = (settings?.biomeType ?? 'mixedveld') as BiomeType;
+    const veldScore = calcVeldScore({
+      palatableSpeciesPct: input.palatableSpeciesPct,
+      bareGroundPct: input.bareGroundPct,
+      erosionLevel: input.erosionLevel,
+      bushEncroachmentLevel: input.bushEncroachmentLevel,
+    });
+    const { haPerLsu } = calcGrazingCapacity(biome, veldScore);
 
-  const veldScore = calcVeldScore({
-    palatableSpeciesPct: body.palatableSpeciesPct,
-    bareGroundPct: body.bareGroundPct,
-    erosionLevel: body.erosionLevel,
-    bushEncroachmentLevel: body.bushEncroachmentLevel,
-  });
-  const { haPerLsu } = calcGrazingCapacity(biome, veldScore);
-
-  const created = await prisma.veldAssessment.create({
-    data: {
-      campId: body.campId,
-      assessmentDate: body.assessmentDate,
-      assessor: body.assessor.slice(0, 100),
-      palatableSpeciesPct: body.palatableSpeciesPct,
-      bareGroundPct: body.bareGroundPct,
-      erosionLevel: body.erosionLevel,
-      bushEncroachmentLevel: body.bushEncroachmentLevel,
-      veldScore,
-      biomeAtAssessment: biome,
-      haPerLsu,
-      notes: body.notes?.slice(0, 2000),
-      createdBy: session.user?.email ?? null,
-    },
-  });
-  revalidateObservationWrite(farmSlug);
-  return NextResponse.json({ assessment: created }, { status: 201 });
-}
+    const created = await ctx.prisma.veldAssessment.create({
+      data: {
+        campId: input.campId,
+        assessmentDate: input.assessmentDate,
+        assessor: input.assessor.slice(0, 100),
+        palatableSpeciesPct: input.palatableSpeciesPct,
+        bareGroundPct: input.bareGroundPct,
+        erosionLevel: input.erosionLevel,
+        bushEncroachmentLevel: input.bushEncroachmentLevel,
+        veldScore,
+        biomeAtAssessment: biome,
+        haPerLsu,
+        notes: input.notes?.slice(0, 2000),
+        createdBy: ctx.session.user?.email ?? null,
+      },
+    });
+    return NextResponse.json({ assessment: created }, { status: 201 });
+  },
+});
