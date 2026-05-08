@@ -69,6 +69,10 @@ function makeReq(url: string, options?: Record<string, any>): NextRequest {
   return new NextRequest(url, options as any);
 }
 
+// Wave E (#161) — adapter-wrapped GET takes a Next.js 16 RouteContext
+// as the second arg. /api/tasks has no dynamic segments → empty params.
+const EMPTY_CTX = { params: Promise.resolve({}) };
+
 function makeTasks(
   rows: Array<{ id: string; dueDate: string; createdAt: string }>,
 ) {
@@ -119,7 +123,7 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
     );
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks?limit=5");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -151,7 +155,7 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
     );
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks?limit=5");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -177,7 +181,7 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
     const req = makeReq(
       `http://localhost/api/tasks?limit=5&cursor=${cursor}`,
     );
-    await GET(req);
+    await GET(req, EMPTY_CTX);
 
     // The handler must translate the opaque cursor into a tuple-strict-gt
     // filter: (dueDate > d) OR (dueDate = d AND createdAt > c) OR
@@ -207,11 +211,12 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
   it("rejects a non-numeric limit with 400", async () => {
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks?limit=abc");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toMatch(/invalid limit/i);
+    // Wave E (#161): wire migrated free-text "Invalid limit" → typed code.
+    expect(data.error).toBe("INVALID_LIMIT");
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 
@@ -220,11 +225,12 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
     const req = makeReq(
       "http://localhost/api/tasks?limit=5&cursor=%21%21not-base64%21%21",
     );
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toMatch(/invalid cursor/i);
+    // Wave E (#161): wire migrated free-text "Invalid cursor" → typed code.
+    expect(data.error).toBe("INVALID_CURSOR");
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 
@@ -236,7 +242,7 @@ describe("GET /api/tasks — cursor pagination (opt-in)", () => {
     );
     const { GET } = await import("@/app/api/tasks/route");
     const req = makeReq("http://localhost/api/tasks");
-    const res = await GET(req);
+    const res = await GET(req, EMPTY_CTX);
     const data = await res.json();
 
     expect(res.status).toBe(200);
