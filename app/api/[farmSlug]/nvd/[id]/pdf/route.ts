@@ -1,49 +1,29 @@
 /**
  * GET /api/[farmSlug]/nvd/[id]/pdf — re-render PDF from stored snapshot
+ *
+ * Wave G1 (#165) — migrated onto `tenantReadSlug`. The handler returns a
+ * raw `Response` carrying `Content-Type: application/pdf` plus the
+ * canonical `Content-Disposition` filename; `tenantReadSlug` passes the
+ * binary `Response` through unchanged (NEVER wraps in a JSON envelope).
+ *
+ * Not-found path wires into `mapApiDomainError` via `renderNvdPdf` →
+ * `NvdNotFoundError` → 404 `{ error: "NVD_NOT_FOUND" }`.
  */
-import { NextRequest } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
-import { buildNvdPdf } from "@/lib/server/nvd-pdf";
+import { tenantReadSlug } from "@/lib/server/route";
+import { renderNvdPdf } from "@/lib/domain/nvd";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string; id: string }> }
-) {
-  const { farmSlug, id } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-  }
+export const GET = tenantReadSlug<{ farmSlug: string; id: string }>({
+  handle: async (ctx, _req, params) => {
+    const { pdf, filename } = await renderNvdPdf(ctx.prisma, params.id);
 
-  const record = await ctx.prisma.nvdRecord.findUnique({ where: { id } });
-  if (!record) {
-    return new Response(JSON.stringify({ error: "NVD not found" }), { status: 404 });
-  }
-
-  const pdf = buildNvdPdf({
-    nvdNumber: record.nvdNumber,
-    issuedAt: record.issuedAt,
-    saleDate: record.saleDate,
-    buyerName: record.buyerName,
-    buyerAddress: record.buyerAddress,
-    buyerContact: record.buyerContact,
-    destinationAddress: record.destinationAddress,
-    sellerSnapshot: record.sellerSnapshot,
-    animalSnapshot: record.animalSnapshot,
-    declarationsJson: record.declarationsJson,
-    generatedBy: record.generatedBy,
-    pdfHash: record.pdfHash,
-  });
-
-  const filename = `${record.nvdNumber}.pdf`;
-
-  return new Response(pdf, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
-}
+    return new Response(pdf, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  },
+});

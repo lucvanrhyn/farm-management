@@ -17,8 +17,9 @@ import { getNvdByIdOrThrow } from "./get";
 import type { PrismaClient } from "@prisma/client";
 
 export interface RenderedNvdPdf {
-  /** Raw PDF bytes — the jsPDF builder returns Buffer/Uint8Array. */
-  pdf: Buffer;
+  /** Raw PDF bytes. `buildNvdPdf` returns the jsPDF `arraybuffer` output;
+   * `Response` accepts `ArrayBuffer` directly via the `BodyInit` union. */
+  pdf: ArrayBuffer;
   filename: string;
 }
 

@@ -1,21 +1,20 @@
 /**
  * GET /api/[farmSlug]/nvd/[id] — return a single NVD's full snapshot data
+ *
+ * Wave G1 (#165) — migrated onto `tenantReadSlug`. The not-found path is
+ * wired into `mapApiDomainError` via `getNvdByIdOrThrow` →
+ * `NvdNotFoundError` → 404 `{ error: "NVD_NOT_FOUND" }`.
  */
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
+import { NextResponse } from "next/server";
+
+import { tenantReadSlug } from "@/lib/server/route";
+import { getNvdByIdOrThrow } from "@/lib/domain/nvd";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string; id: string }> }
-) {
-  const { farmSlug, id } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const record = await ctx.prisma.nvdRecord.findUnique({ where: { id } });
-  if (!record) return NextResponse.json({ error: "NVD not found" }, { status: 404 });
-
-  return NextResponse.json(record);
-}
+export const GET = tenantReadSlug<{ farmSlug: string; id: string }>({
+  handle: async (ctx, _req, params) => {
+    const record = await getNvdByIdOrThrow(ctx.prisma, params.id);
+    return NextResponse.json(record);
+  },
+});

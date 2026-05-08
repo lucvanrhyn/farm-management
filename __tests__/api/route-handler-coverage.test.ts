@@ -4,10 +4,10 @@
  * Wave A — route-handler architectural invariant.
  *
  * After Wave A, every migrated `app/api/**\/route.ts` must export its
- * handler from one of the four named adapters in `lib/server/route/`:
- *   - `tenantRead`
- *   - `adminWrite`
- *   - `tenantWrite`
+ * handler from one of the named adapters in `lib/server/route/`:
+ *   - `tenantRead` / `tenantReadSlug`   (Wave G1+)
+ *   - `adminWrite` / `adminWriteSlug`   (Wave G1+)
+ *   - `tenantWrite` / `tenantWriteSlug` (Wave G1+)
  *   - `publicHandler`
  *
  * That structural rule means "I forgot try/catch on this one route" is
@@ -75,11 +75,7 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "[farmSlug]/map/rainfall-gauges/route.ts",
   "[farmSlug]/map/task-pins/route.ts",
   "[farmSlug]/map/water-points/route.ts",
-  "[farmSlug]/nvd/[id]/pdf/route.ts",
-  "[farmSlug]/nvd/[id]/route.ts",
-  "[farmSlug]/nvd/[id]/void/route.ts",
-  "[farmSlug]/nvd/route.ts",
-  "[farmSlug]/nvd/validate/route.ts",
+  // Wave G1 (#165) — NVD slice (5 routes) migrated onto slug-aware adapters.
   "[farmSlug]/performance/route.ts",
   "[farmSlug]/profitability-by-animal/route.ts",
   "[farmSlug]/rainfall/route.ts",
@@ -121,7 +117,16 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "transaction-categories/route.ts",
 ]);
 
-const ADAPTER_NAMES = ["tenantRead", "adminWrite", "tenantWrite", "publicHandler"] as const;
+const ADAPTER_NAMES = [
+  "tenantRead",
+  "adminWrite",
+  "tenantWrite",
+  "publicHandler",
+  // Wave G1 (#165) — slug-aware variants for `[farmSlug]/**` routes.
+  "tenantReadSlug",
+  "adminWriteSlug",
+  "tenantWriteSlug",
+] as const;
 const HANDLER_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;
 
 function walk(dir: string): string[] {
@@ -203,7 +208,7 @@ describe("route-handler architectural coverage", () => {
         ...offenders,
         "",
         "Wrap each export with one of:",
-        "  tenantRead | adminWrite | tenantWrite | publicHandler",
+        "  tenantRead | tenantReadSlug | adminWrite | adminWriteSlug | tenantWrite | tenantWriteSlug | publicHandler",
         "from `@/lib/server/route` per ADR-0001.",
         "",
         "If the route is intentionally outside the four-adapter contract, add",
