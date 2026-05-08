@@ -62,8 +62,6 @@ const EXEMPT: ReadonlySet<string> = new Set([
   // ── Wave B+ migration — see ADR-0001. ──
   // [farmSlug]/** routes (Wave B-G).
   "[farmSlug]/breeding/analyze/route.ts",
-  "[farmSlug]/camps/[campId]/cover/[readingId]/attachment/route.ts",
-  "[farmSlug]/camps/[campId]/cover/route.ts",
   "[farmSlug]/camps/[campId]/stats/route.ts",
   "[farmSlug]/export/route.ts",
   "[farmSlug]/farm-settings/ai/route.ts",
@@ -76,13 +74,15 @@ const EXEMPT: ReadonlySet<string> = new Set([
   //   veld-score/summary.
   // Wave G5 (#169) — mixed-CRUD slice (4 routes) migrated onto slug-aware adapters:
   //   transactions, budgets, rainfall, settings/alerts (split-gate).
+  // Wave G6 (#170) — veld-camps slice (4 routes) migrated onto slug-aware adapters:
+  //   veld-assessments (GET/POST), veld-assessments/[id] (DELETE),
+  //   camps/[campId]/cover (GET/POST/DELETE),
+  //   camps/[campId]/cover/[readingId]/attachment (PATCH).
   "[farmSlug]/tax/it3/[id]/pdf/route.ts",
   "[farmSlug]/tax/it3/[id]/route.ts",
   "[farmSlug]/tax/it3/[id]/void/route.ts",
   "[farmSlug]/tax/it3/preview/route.ts",
   "[farmSlug]/tax/it3/route.ts",
-  "[farmSlug]/veld-assessments/[id]/route.ts",
-  "[farmSlug]/veld-assessments/route.ts",
 
   // Other shared routes — Wave B+ migration in dependency order.
   "farm-settings/map/route.ts",
