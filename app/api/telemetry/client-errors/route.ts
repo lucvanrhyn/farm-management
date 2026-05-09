@@ -27,6 +27,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
+import { publicHandler } from "@/lib/server/route";
 
 type Level = "debug" | "info" | "warn" | "error";
 
@@ -44,96 +45,98 @@ interface ClientErrorBody {
   userAgent?: string;
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  // ── 1. Parse JSON ──────────────────────────────────────────────────────────
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json(
-      { error: "invalid json", code: "invalid_json" },
-      { status: 400 },
-    );
-  }
+export const POST = publicHandler({
+  handle: async (req: NextRequest) => {
+    // ── 1. Parse JSON ──────────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "invalid json", code: "invalid_json" },
+        { status: 400 },
+      );
+    }
 
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return NextResponse.json(
-      { error: "body must be a JSON object", code: "invalid_body" },
-      { status: 400 },
-    );
-  }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "body must be a JSON object", code: "invalid_body" },
+        { status: 400 },
+      );
+    }
 
-  const raw = body as Record<string, unknown>;
+    const raw = body as Record<string, unknown>;
 
-  // ── 2. Validate level ──────────────────────────────────────────────────────
-  if (!VALID_LEVELS.has(raw.level as Level)) {
-    return NextResponse.json(
-      {
-        error: `level must be one of: ${[...VALID_LEVELS].join(", ")}`,
-        code: "invalid_level",
-      },
-      { status: 400 },
-    );
-  }
+    // ── 2. Validate level ──────────────────────────────────────────────────────
+    if (!VALID_LEVELS.has(raw.level as Level)) {
+      return NextResponse.json(
+        {
+          error: `level must be one of: ${[...VALID_LEVELS].join(", ")}`,
+          code: "invalid_level",
+        },
+        { status: 400 },
+      );
+    }
 
-  // ── 3. Validate message ────────────────────────────────────────────────────
-  if (typeof raw.message !== "string" || raw.message.trim().length === 0) {
-    return NextResponse.json(
-      { error: "message must be a non-empty string", code: "invalid_message" },
-      { status: 400 },
-    );
-  }
+    // ── 3. Validate message ────────────────────────────────────────────────────
+    if (typeof raw.message !== "string" || raw.message.trim().length === 0) {
+      return NextResponse.json(
+        { error: "message must be a non-empty string", code: "invalid_message" },
+        { status: 400 },
+      );
+    }
 
-  // ── 4. Validate ts ─────────────────────────────────────────────────────────
-  if (typeof raw.ts !== "number" || !Number.isFinite(raw.ts)) {
-    return NextResponse.json(
-      { error: "ts must be a finite number (Unix ms)", code: "invalid_ts" },
-      { status: 400 },
-    );
-  }
+    // ── 4. Validate ts ─────────────────────────────────────────────────────────
+    if (typeof raw.ts !== "number" || !Number.isFinite(raw.ts)) {
+      return NextResponse.json(
+        { error: "ts must be a finite number (Unix ms)", code: "invalid_ts" },
+        { status: 400 },
+      );
+    }
 
-  // ── 5. Build validated payload ─────────────────────────────────────────────
-  const validated: ClientErrorBody = {
-    level: raw.level as Level,
-    message: (raw.message as string).slice(0, MAX_MESSAGE_LEN),
-    ts: raw.ts,
-  };
+    // ── 5. Build validated payload ─────────────────────────────────────────────
+    const validated: ClientErrorBody = {
+      level: raw.level as Level,
+      message: (raw.message as string).slice(0, MAX_MESSAGE_LEN),
+      ts: raw.ts,
+    };
 
-  if (
-    raw.payload !== null &&
-    raw.payload !== undefined &&
-    typeof raw.payload === "object" &&
-    !Array.isArray(raw.payload)
-  ) {
-    validated.payload = raw.payload as Record<string, unknown>;
-  }
+    if (
+      raw.payload !== null &&
+      raw.payload !== undefined &&
+      typeof raw.payload === "object" &&
+      !Array.isArray(raw.payload)
+    ) {
+      validated.payload = raw.payload as Record<string, unknown>;
+    }
 
-  if (typeof raw.url === "string") {
-    validated.url = raw.url.slice(0, MAX_URL_LEN);
-  }
+    if (typeof raw.url === "string") {
+      validated.url = raw.url.slice(0, MAX_URL_LEN);
+    }
 
-  const ua = req.headers.get("user-agent");
-  validated.userAgent =
-    typeof raw.userAgent === "string"
-      ? raw.userAgent.slice(0, MAX_UA_LEN)
-      : (ua ?? "").slice(0, MAX_UA_LEN);
+    const ua = req.headers.get("user-agent");
+    validated.userAgent =
+      typeof raw.userAgent === "string"
+        ? raw.userAgent.slice(0, MAX_UA_LEN)
+        : (ua ?? "").slice(0, MAX_UA_LEN);
 
-  // ── 6. Forward to server logger ────────────────────────────────────────────
-  // The recursive Error normaliser in lib/logger.ts handles any nested Error
-  // fields in validated.payload correctly.
-  const { level, ...rest } = validated;
-  const logFn = logger[level];
+    // ── 6. Forward to server logger ────────────────────────────────────────────
+    // The recursive Error normaliser in lib/logger.ts handles any nested Error
+    // fields in validated.payload correctly.
+    const { level, ...rest } = validated;
+    const logFn = logger[level];
 
-  try {
-    logFn("[client]", rest);
-  } catch (err) {
-    // DO NOT swallow — logger.X should never throw but if it does we surface it.
-    logger.error("[telemetry/client-errors] forward failed", err as Error);
-    return NextResponse.json(
-      { error: "logger forwarding failed", code: "forward_failed" },
-      { status: 500 },
-    );
-  }
+    try {
+      logFn("[client]", rest);
+    } catch (err) {
+      // DO NOT swallow — logger.X should never throw but if it does we surface it.
+      logger.error("[telemetry/client-errors] forward failed", err as Error);
+      return NextResponse.json(
+        { error: "logger forwarding failed", code: "forward_failed" },
+        { status: 500 },
+      );
+    }
 
-  return NextResponse.json({ ok: true }, { status: 202 });
-}
+    return NextResponse.json({ ok: true }, { status: 202 });
+  },
+});

@@ -14,6 +14,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
+// Wave H1 (#173) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 // ── Logger spy — must be set up before the route module is imported ───────────
 // We spy on the server logger to verify the route forwards client errors to it.
 vi.mock("@/lib/logger", () => ({
@@ -68,7 +73,7 @@ describe("POST /api/telemetry/client-errors", () => {
       userAgent: "Mozilla/5.0",
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(202);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -85,7 +90,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(202);
   });
 
@@ -101,7 +106,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: 1714000000000,
     });
 
-    await POST(req);
+    await POST(req, CTX);
 
     // loggerMock.warn is the vi.fn() from the module-level vi.mock
     expect(loggerMock.warn).toHaveBeenCalled();
@@ -127,7 +132,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    await POST(req);
+    await POST(req, CTX);
 
     expect(loggerMock.error).toHaveBeenCalled();
     const calls = loggerMock.error.mock.calls;
@@ -147,7 +152,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBeDefined();
@@ -165,7 +170,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe("invalid_level");
@@ -181,7 +186,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe("invalid_message");
@@ -198,7 +203,7 @@ describe("POST /api/telemetry/client-errors", () => {
       ts: Date.now(),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe("invalid_message");
@@ -215,7 +220,7 @@ describe("POST /api/telemetry/client-errors", () => {
       body: "not json {{{",
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe("invalid_json");
@@ -231,7 +236,7 @@ describe("POST /api/telemetry/client-errors", () => {
       message: "hello",
     });
 
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.code).toBe("invalid_ts");
