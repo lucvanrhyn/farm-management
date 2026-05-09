@@ -183,6 +183,12 @@ function makeRequest(body: string): NextRequest {
   });
 }
 
+// Wave H5 (#177) — webhooks/payfast is now wrapped in `publicHandler`, so
+// the export is `RouteHandler` shape (req, ctx) instead of the legacy bare
+// `POST(req)`. Tests call `POST(makeRequest(...), CTX)`; the route has no
+// dynamic params so `params` resolves to an empty object.
+const CTX = { params: Promise.resolve({}) };
+
 describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
   beforeEach(() => {
     mocks.state.eventsByPaymentId.clear();
@@ -219,7 +225,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
   describe("event-id dedup (pf_payment_id)", () => {
     it("processes the first POST for a given pf_payment_id", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
-      const res = await POST(makeRequest(buildBody()));
+      const res = await POST(makeRequest(buildBody()), CTX);
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
     });
@@ -228,19 +234,19 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
 
       // First POST — processed.
-      await POST(makeRequest(buildBody()));
+      await POST(makeRequest(buildBody()), CTX);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
 
       // Second POST with identical pf_payment_id — must be a no-op.
-      const res2 = await POST(makeRequest(buildBody()));
+      const res2 = await POST(makeRequest(buildBody()), CTX);
       expect(res2.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
     });
 
     it("returns 200 (not 4xx) on a duplicate so PayFast stops retrying", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
-      await POST(makeRequest(buildBody()));
-      const res = await POST(makeRequest(buildBody()));
+      await POST(makeRequest(buildBody()), CTX);
+      const res = await POST(makeRequest(buildBody()), CTX);
       expect(res.status).toBe(200);
     });
   });
@@ -258,6 +264,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
             timestamp: "2026-05-03T10:00:00Z",
           }),
         ),
+        CTX,
       );
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
 
@@ -272,6 +279,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
             timestamp: "2026-05-03T09:00:00Z",
           }),
         ),
+        CTX,
       );
       expect(res.status).toBe(200);
       // Subscription state must NOT have been mutated by the stale event.
@@ -288,6 +296,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
             timestamp: "2026-05-03T10:00:00Z",
           }),
         ),
+        CTX,
       );
       await POST(
         makeRequest(
@@ -297,6 +306,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
             timestamp: "2026-05-03T11:00:00Z",
           }),
         ),
+        CTX,
       );
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(2);
     });
@@ -314,6 +324,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
 
       const res = await POST(
         makeRequest(buildBody({ token: "stale-rotated-token" })),
+        CTX,
       );
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).not.toHaveBeenCalled();
@@ -324,6 +335,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
 
       const res = await POST(
         makeRequest(buildBody({ token: "current-token" })),
+        CTX,
       );
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
@@ -341,6 +353,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
 
       const res = await POST(
         makeRequest(buildBody({ token: "fresh-token" })),
+        CTX,
       );
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
@@ -351,7 +364,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
   describe("token logging hygiene", () => {
     it("never logs the full payfastToken value at any log level", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
-      await POST(makeRequest(buildBody({ token: "supersecrettoken123456" })));
+      await POST(makeRequest(buildBody({ token: "supersecrettoken123456" })), CTX);
 
       const allCalls = [
         ...mocks.logger.debug.mock.calls,
@@ -365,7 +378,7 @@ describe("POST /api/webhooks/payfast — idempotency (Wave 4c A11)", () => {
 
     it("emits a masked token form (prefix + ***) so support can correlate without leaking the secret", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
-      await POST(makeRequest(buildBody({ token: "supersecrettoken123456" })));
+      await POST(makeRequest(buildBody({ token: "supersecrettoken123456" })), CTX);
 
       const infoCalls = mocks.logger.info.mock.calls;
       const serialized = JSON.stringify(infoCalls);

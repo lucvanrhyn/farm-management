@@ -46,9 +46,10 @@ const EXEMPT: ReadonlySet<string> = new Set([
   //   ADR-0001 8/8 part 3.
   // Wave H4 (#177) — wrapped in `publicHandler`: auth/[...nextauth] (NextAuth
   //   catch-all), inngest. ADR-0001 8/8 part 4 (framework-managed flows).
-  // Wave H5 (#176) — remaining proxy-matcher exclusion (webhooks/payfast) to
-  //   be wrapped in the final sub-wave.
-  "webhooks/payfast/route.ts",
+  // Wave H5 (#176) — wrapped in `publicHandler`: webhooks/payfast (PayFast ITN).
+  //   ADR-0001 8/8 part 5 — FINAL. Closes the proxy-matcher exclusion group;
+  //   only platform-admin / cross-farm + the not-yet-migrated `[farmSlug]/**`
+  //   shared routes remain in EXEMPT.
 
   // ── platform-admin / cross-farm: not under per-farm context. ──
   "admin/consulting/[id]/route.ts",
