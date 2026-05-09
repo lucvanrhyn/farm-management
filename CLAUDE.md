@@ -37,7 +37,9 @@ The `promote` label gates merge into `main`. Luc may always apply it. Claude may
 
 1. PR is on a `wave/*` branch (never direct-to-main work).
 2. All required CI checks are green: `gate`, `require`, `audit-bundle`, `lhci-cold`, `audit-pagination`. Vercel preview deploys are informational and may be FAILURE without blocking (see memory: `feedback-vercel-preview-turso-cli.md`).
-3. The `require` workflow has returned **SUCCESS** for the latest commit SHA — `require=SUCCESS` is precisely the soak-gate clearing signal. A `require=IN_PROGRESS` is a wait, not a green light.
+3. **Conditional soak gate (issue #178).** The promote label may be applied as soon as the four required CI checks (gate, audit-bundle, lhci-cold, audit-pagination) are SUCCESS — UNLESS the PR diff touches `lib/migrator.ts` or `lib/ops/branch-clone.ts`. In that case, wait for ≥30 min after the audit `completedAt` timestamp before applying the label (the soak gate). The `require` workflow only checks for the promote label's presence — it does not enforce soak. The soak floor is also enforced post-merge inside `promoteToProd` as defense-in-depth (throws `SoakNotMetError` and rolls back the meta row if violated).
+
+   Pre-#178 history: a blanket 1h soak applied to every PR. The audit (memory: `wave-history-log.md`, conditional-soak rationale section) showed zero bugs caught across 60 merges; the structural backstops shipped during the PRD #128 cycle (`verifyMigrationApplied` #141, `checkPrismaColumnParity` #137, `audit-findmany-no-select` #140) cover the migration-replay class synchronously at promote time. The 30-min floor is retained only for the two files whose buggy version would invalidate the backstops themselves.
 4. The PR's scope was explicitly approved by Luc in conversation OR the PR is a routine wave dispatched from a documented PRD/issue (e.g. wave/130 against PRD #128).
 5. The PR does NOT touch security-critical surface area without per-diff Luc approval:
    - `lib/auth-options.ts`, `lib/auth-*.ts`, any file under `app/api/auth/**`

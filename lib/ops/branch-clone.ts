@@ -248,7 +248,8 @@ export interface PromoteToProdInput {
   headSha?: string;
   /**
    * Minimum hours between soak start and promote.
-   * Defaults to 1 hour.
+   * Defaults to 0.5 hours (30 min) — the new "escalated" tier introduced in
+   * issue #178. Pre-#178 default was 1 hour.
    */
   minSoakHours?: number;
   /**
@@ -256,6 +257,23 @@ export interface PromoteToProdInput {
    * explicit, not a default).
    */
   forceSkipSoak?: boolean;
+  /**
+   * Issue #178 conditional soak gate.
+   *
+   * When `true`, the PR diff touched at least one file in {@link ESCALATED_PATHS}
+   * (currently: `lib/migrator.ts`, `lib/ops/branch-clone.ts`). Soak gate
+   * enforced with `minSoakHours` floor.
+   *
+   * When `false`, the PR diff touched no ESCALATED_PATHS file. Soak gate
+   * SKIPPED — the structural backstops (`verifyMigrationApplied` #141,
+   * `checkPrismaColumnParity` #137, `audit-findmany-no-select` #140) cover
+   * the migration-replay class synchronously at promote time without need
+   * for temporal observation.
+   *
+   * When `undefined` (back-compat), behave as if `true` — old callers
+   * keep the old soak floor.
+   */
+  escalatedPathsTouched?: boolean;
   /** Injectable CLI runner (unused by promoteToProd, kept for API symmetry). */
   cli?: TursoCli;
   /** Injectable meta-DB client. Defaults to the production singleton. */
@@ -380,6 +398,40 @@ export class BranchCloneNotFoundError extends Error {
     super(`Branch clone record not found for branch: '${branchName}'`);
     this.name = 'BranchCloneNotFoundError';
   }
+}
+
+// ── Issue #178: Conditional soak gate ────────────────────────────────────────
+
+/**
+ * Paths whose modification triggers the soak gate. Kept narrow on purpose:
+ * - `lib/migrator.ts`: the migration runner. If buggy, all migrations affected.
+ * - `lib/ops/branch-clone.ts`: the gate logic itself. Bootstrapping concern —
+ *   if THIS file is buggy, the soak check itself can't be trusted; soak gives
+ *   a window for human inspection before propagation.
+ *
+ * NOT included (covered by structural backstops at promote time):
+ * - `migrations/**` — `verifyMigrationApplied` (#141) catches per-tenant drift
+ * - `prisma/schema.prisma` — `tsc` + `checkPrismaColumnParity` (#137) catch drift
+ *
+ * To re-enable blanket soak: set `effectiveSoakHours = minSoakHours` unconditionally
+ * in `promoteToProd`. One-line revert.
+ */
+export const ESCALATED_PATHS: ReadonlyArray<RegExp> = [
+  /^lib\/migrator\.ts$/,
+  /^lib\/ops\/branch-clone\.ts$/,
+];
+
+/**
+ * Helper: given a list of changed file paths (from `git diff --name-only`),
+ * determine whether the diff touches the ESCALATED set.
+ */
+export function diffTouchesEscalated(changedPaths: ReadonlyArray<string>): boolean {
+  for (const path of changedPaths) {
+    for (const re of ESCALATED_PATHS) {
+      if (re.test(path)) return true;
+    }
+  }
+  return false;
 }
 
 // ── Phase 3 functions ─────────────────────────────────────────────────────────
@@ -614,8 +666,9 @@ export async function promoteToProd(
   const {
     branchName,
     headSha,
-    minSoakHours = 1,
+    minSoakHours = 0.5,
     forceSkipSoak = false,
+    escalatedPathsTouched,
     now = () => new Date(),
     runProdMigration = _defaultRunProdMigration,
     verifyAllTenantsParity = _defaultVerifyAllTenantsParity,
@@ -630,42 +683,58 @@ export async function promoteToProd(
     throw new BranchCloneNotFoundError(branchName);
   }
 
-  // 2. Soak gate.
+  // 2. Soak gate — conditional per #178.
   //
-  // Issue #101 fix: when headSha is provided, the gate keys on the per-commit
-  // `soak_started_at` timestamp (set by recordCiPassForCommit) rather than the
-  // branch-level `created_at`. This prevents the re-push bypass where an aged
-  // branch satisfies the gate even though a brand-new commit was just pushed.
+  // ESCALATED_PATHS rationale: `lib/migrator.ts` and `lib/ops/branch-clone.ts`
+  // are the two files where a bug invalidates the backstop probes. Everywhere
+  // else, the structural backstops shipped in PRD #128 catch the migration-
+  // replay class synchronously — no temporal soak needed.
   //
-  // If headSha is not provided, fall back to created_at (backward-compat path
-  // for callers that have not yet migrated to the SHA-based CI workflow).
+  // back-compat: when `escalatedPathsTouched` is undefined (caller hasn't
+  // been updated), treat as `true` — i.e. enforce soak. This keeps every
+  // existing call site at the old policy until it is explicitly updated.
+  //
+  // Issue #101 fix (preserved): when headSha is provided, the gate keys on the
+  // per-commit `soak_started_at` timestamp rather than the branch-level
+  // `created_at`. If headSha is not provided, fall back to created_at.
   if (!forceSkipSoak) {
-    const nowMs = now().getTime();
+    const isEscalated = escalatedPathsTouched !== false; // undefined -> true
+    if (isEscalated) {
+      const nowMs = now().getTime();
 
-    if (headSha !== undefined) {
-      // SHA-based gate (issue #101 fix)
-      if (row.headSha !== headSha) {
-        // Telemetry: soak SHA mismatch — new commit pushed after soak started
-        console.warn(
-          `[promote] [soak_sha_mismatch] branch=${branchName} stored=${row.headSha ?? 'none'} requested=${headSha}`,
-        );
-        throw new SoakNotMetError(branchName, 0, minSoakHours, /* shaMismatch */ true);
-      }
-      // SHA matches — measure elapsed from soak_started_at
-      const soakStartMs = row.soakStartedAt
-        ? new Date(row.soakStartedAt).getTime()
-        : new Date(row.createdAt).getTime();
-      const elapsedHours = (nowMs - soakStartMs) / (1000 * 60 * 60);
-      if (elapsedHours < minSoakHours) {
-        throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+      if (headSha !== undefined) {
+        // SHA-based gate (issue #101 fix)
+        if (row.headSha !== headSha) {
+          // Telemetry: soak SHA mismatch — new commit pushed after soak started
+          console.warn(
+            `[promote] [soak_sha_mismatch] branch=${branchName} stored=${row.headSha ?? 'none'} requested=${headSha}`,
+          );
+          throw new SoakNotMetError(branchName, 0, minSoakHours, /* shaMismatch */ true);
+        }
+        // SHA matches — measure elapsed from soak_started_at
+        const soakStartMs = row.soakStartedAt
+          ? new Date(row.soakStartedAt).getTime()
+          : new Date(row.createdAt).getTime();
+        const elapsedHours = (nowMs - soakStartMs) / (1000 * 60 * 60);
+        if (elapsedHours < minSoakHours) {
+          throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+        }
+      } else {
+        // Backward-compat: no headSha provided → use created_at
+        const createdAtMs = new Date(row.createdAt).getTime();
+        const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
+        if (elapsedHours < minSoakHours) {
+          throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
+        }
       }
     } else {
-      // Backward-compat: no headSha provided → use created_at
-      const createdAtMs = new Date(row.createdAt).getTime();
-      const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
-      if (elapsedHours < minSoakHours) {
-        throw new SoakNotMetError(branchName, elapsedHours, minSoakHours);
-      }
+      // Pure-transport PR — fast path. Skip soak entirely.
+      // Backstops (#137 parity audit, #140 no-select audit, #141
+      // verifyMigrationApplied) run synchronously below in the migration
+      // step. No temporal observation needed.
+      console.log(
+        `[promote] [soak_skipped_pure_transport] branch=${branchName} sha=${headSha ?? 'unknown'}`,
+      );
     }
   }
 

@@ -71,13 +71,16 @@ Commands:
       Options:
         --sha <sha>   Commit SHA that passed CI (required)
 
-  promote <branchName> [--sha <headSha>] [--min-soak-hours <n>] [--force-skip-soak]
+  promote <branchName> [--sha <headSha>] [--min-soak-hours <n>] [--force-skip-soak] [--escalated-paths-touched <bool>]
       Promote a branch clone to prod by running prod migrations.
       Options:
-        --sha <sha>           PR head commit SHA being promoted (strongly recommended;
-                              required for commit-SHA soak gate, issue #101 fix)
-        --min-soak-hours <n>  Minimum soak hours (default: 1)
-        --force-skip-soak     Bypass soak gate (emergency use only)
+        --sha <sha>                       PR head commit SHA being promoted (strongly recommended;
+                                          required for commit-SHA soak gate, issue #101 fix)
+        --min-soak-hours <n>              Minimum soak hours (default: 0.5 — escalated tier per #178)
+        --force-skip-soak                 Bypass soak gate (emergency use only)
+        --escalated-paths-touched <bool>  Issue #178 conditional soak gate. 'true' enforces the
+                                          minSoakHours floor; 'false' skips soak entirely (pure-
+                                          transport fast path); omitted is back-compat (enforce).
 
 Options:
   --help    Print this usage text and exit
@@ -94,7 +97,7 @@ Examples:
 /**
  * Minimal positional + flag parser. Returns a plain object with:
  *   positionals: string[]   (non-flag tokens)
- *   flags: Record<string, string | true>  (--key value or --key)
+ *   flags: Record<string, string | true>  (--key value, --key=value, or --key)
  */
 function parseArgv(argv: readonly string[]): {
   positionals: string[];
@@ -107,6 +110,17 @@ function parseArgv(argv: readonly string[]): {
   while (i < argv.length) {
     const token = argv[i];
     if (token.startsWith('--')) {
+      // Issue #178: support both `--key value` and `--key=value` forms so
+      // GitHub Actions step-output interpolations (`--flag=${{...}}`) work
+      // without forcing the workflow author to insert a literal space.
+      const eqIdx = token.indexOf('=');
+      if (eqIdx > 2) {
+        const key = token.slice(2, eqIdx);
+        const value = token.slice(eqIdx + 1);
+        flags[key] = value;
+        i += 1;
+        continue;
+      }
       const key = token.slice(2);
       const next = argv[i + 1];
       if (next !== undefined && !next.startsWith('--')) {
@@ -260,12 +274,22 @@ async function handlePromote(
   // being promoted, not on the branch clone creation time.
   const headSha = typeof flags['sha'] === 'string' ? flags['sha'] : undefined;
 
+  // Issue #178: --escalated-paths-touched accepts 'true'/'false' string
+  // (matches GitHub Actions step-output convention). Anything else
+  // (including absent) → undefined → back-compat full soak.
+  const escalatedRaw = flags['escalated-paths-touched'];
+  const escalatedPathsTouched =
+    escalatedRaw === 'true' ? true :
+    escalatedRaw === 'false' ? false :
+    undefined;
+
   try {
     const result = await deps.promoteToProdImpl({
       branchName,
       headSha,
       forceSkipSoak,
       ...(minSoakHours !== undefined ? { minSoakHours } : {}),
+      ...(escalatedPathsTouched !== undefined ? { escalatedPathsTouched } : {}),
     });
 
     deps.stdout(JSON.stringify({
