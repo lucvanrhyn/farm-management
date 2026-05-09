@@ -11,20 +11,26 @@
  * Validation: every methodology field must be a string. Unknown keys are
  * rejected so the blob can't become a dumping ground for future frontends.
  *
+ * Wave G7 (#171) — migrated onto `tenantWriteSlug`.
+ *
+ * Wire-shape preservation (hybrid per ADR-0001 / Wave G7 spec):
+ *   - 401 envelope migrates to the adapter's canonical
+ *     `{ error: "AUTH_REQUIRED", message: "Unauthorized" }`. Legacy
+ *     `FARM_ACCESS_DENIED` 403 collapses into the adapter's 401 — same
+ *     `getFarmContextForSlug` null path the adapter centralises.
+ *   - All other handler-minted typed envelopes preserved verbatim.
+ *
  * Error codes (silent-failure cure pattern):
- *   AUTH_REQUIRED                 — 401
- *   FARM_ACCESS_DENIED            — 403, session user doesn't belong to farm
+ *   AUTH_REQUIRED                 — 401 (adapter)
  *   EINSTEIN_TIER_LOCKED          — 403, paid-tier-only feature
  *   METHODOLOGY_INVALID_SHAPE     — 400, non-object or unknown keys
  *   METHODOLOGY_INVALID_FIELD     — 400, a field is not a string
  *   INVALID_BODY                  — 400, not JSON
- *   FARM_NOT_FOUND                — 404
  *   METHODOLOGY_SAVE_FAILED       — 500, DB write blew up
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
-import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
+import { NextResponse } from "next/server";
+import { tenantWriteSlug } from "@/lib/server/route";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, type FarmTier } from "@/lib/tier";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
@@ -112,83 +118,74 @@ function validateMethodology(
   return { ok: true, value: next as FarmMethodology };
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) {
-    const { code, status } = await classifyFarmContextFailure(req);
-    const mapped = code === "CROSS_TENANT_FORBIDDEN" ? "FARM_ACCESS_DENIED" : code;
-    return asErr(mapped, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
-  }
-
-  // Tier gate — Basic can read-preview but must not write.
-  const creds = await getFarmCreds(farmSlug);
-  const tier: FarmTier = (creds?.tier as FarmTier) ?? "basic";
-  if (!isPaidTier(tier)) {
-    return asErr(
-      "EINSTEIN_TIER_LOCKED",
-      "Farm Methodology editing is available on Advanced and Consulting plans",
-      403,
-    );
-  }
-
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return asErr("INVALID_BODY", "Body must be valid JSON", 400);
-  }
-
-  const validation = validateMethodology(body.methodology);
-  if (!validation.ok) {
-    return asErr(validation.code, validation.message, 400);
-  }
-
-  // Read-modify-write of the whole aiSettings blob. We accept the tiny race
-  // window (two concurrent PUTs can last-write-wins on unrelated keys) —
-  // the methodology editor is admin-only and one-user-at-a-time in practice.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prisma: any = ctx.prisma;
-    const row = await prisma.farmSettings.findFirst({
-      select: { aiSettings: true },
-    });
-    const existing = parseAiSettings(row?.aiSettings);
-    const merged = mergeAiSettings(existing, { methodology: validation.value });
-    const serialised = JSON.stringify(merged);
-
-    if (row) {
-      await prisma.farmSettings.updateMany({
-        data: { aiSettings: serialised },
-      });
-    } else {
-      // Brand-new tenant with no FarmSettings row — upsert the singleton.
-      await prisma.farmSettings.upsert({
-        where: { id: "singleton" },
-        update: { aiSettings: serialised },
-        create: {
-          id: "singleton",
-          farmName: "My Farm",
-          breed: "Mixed",
-          aiSettings: serialised,
-        },
-      });
+export const PUT = tenantWriteSlug<unknown, { farmSlug: string }>({
+  revalidate: revalidateSettingsWrite,
+  handle: async (ctx, parsedBody, _req, { farmSlug }) => {
+    // Tier gate — Basic can read-preview but must not write.
+    const creds = await getFarmCreds(farmSlug);
+    const tier: FarmTier = (creds?.tier as FarmTier) ?? "basic";
+    if (!isPaidTier(tier)) {
+      return asErr(
+        "EINSTEIN_TIER_LOCKED",
+        "Farm Methodology editing is available on Advanced and Consulting plans",
+        403,
+      );
     }
 
-    revalidateSettingsWrite(farmSlug);
-    return NextResponse.json({
-      success: true,
-      methodology: validation.value,
-    });
-  } catch (err) {
-    logger.error('[farm-settings/methodology] save failed', { farmSlug, err });
-    return asErr(
-      "METHODOLOGY_SAVE_FAILED",
-      "Could not save methodology — please try again",
-      500,
-    );
-  }
-}
+    // Adapter has already parsed JSON; verify object shape (rejects arrays,
+    // primitives, null) so we can safely read body.methodology.
+    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+      return asErr("INVALID_BODY", "Body must be valid JSON", 400);
+    }
+    const body = parsedBody as Record<string, unknown>;
+
+    const validation = validateMethodology(body.methodology);
+    if (!validation.ok) {
+      return asErr(validation.code, validation.message, 400);
+    }
+
+    // Read-modify-write of the whole aiSettings blob. We accept the tiny race
+    // window (two concurrent PUTs can last-write-wins on unrelated keys) —
+    // the methodology editor is admin-only and one-user-at-a-time in practice.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prisma: any = ctx.prisma;
+      const row = await prisma.farmSettings.findFirst({
+        select: { aiSettings: true },
+      });
+      const existing = parseAiSettings(row?.aiSettings);
+      const merged = mergeAiSettings(existing, { methodology: validation.value });
+      const serialised = JSON.stringify(merged);
+
+      if (row) {
+        await prisma.farmSettings.updateMany({
+          data: { aiSettings: serialised },
+        });
+      } else {
+        // Brand-new tenant with no FarmSettings row — upsert the singleton.
+        await prisma.farmSettings.upsert({
+          where: { id: "singleton" },
+          update: { aiSettings: serialised },
+          create: {
+            id: "singleton",
+            farmName: "My Farm",
+            breed: "Mixed",
+            aiSettings: serialised,
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        methodology: validation.value,
+      });
+    } catch (err) {
+      logger.error('[farm-settings/methodology] save failed', { farmSlug, err });
+      return asErr(
+        "METHODOLOGY_SAVE_FAILED",
+        "Could not save methodology — please try again",
+        500,
+      );
+    }
+  },
+});
