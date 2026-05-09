@@ -30,6 +30,11 @@ import { compareSync } from 'bcryptjs';
 const { POST } = await import('@/app/api/auth/login-check/route');
 const { AUTH_ERROR_CODES } = await import('@/lib/auth-errors');
 
+// Wave H2 (#174) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 function buildRequest(body: unknown): NextRequest {
   return new Request('http://localhost/api/auth/login-check', {
     method: 'POST',
@@ -60,7 +65,7 @@ describe('POST /api/auth/login-check', () => {
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(true);
 
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
@@ -69,14 +74,14 @@ describe('POST /api/auth/login-check', () => {
     getUserByIdentifierMock.mockResolvedValueOnce({ ...STORED_USER, email: null });
     vi.mocked(compareSync).mockReturnValueOnce(true);
 
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(isEmailVerifiedMock).not.toHaveBeenCalled();
   });
 
   it('returns 200 + {ok:false, reason:"missing_input"} when identifier missing', async () => {
-    const res = await POST(buildRequest({ password: 'x' }));
+    const res = await POST(buildRequest({ password: 'x' }), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -86,7 +91,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 200 + {ok:false, reason:"missing_input"} when password missing', async () => {
-    const res = await POST(buildRequest({ identifier: 'x' }));
+    const res = await POST(buildRequest({ identifier: 'x' }), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -96,7 +101,7 @@ describe('POST /api/auth/login-check', () => {
 
   it('returns 200 + {ok:false, reason:"invalid_credentials"} when user does not exist', async () => {
     getUserByIdentifierMock.mockResolvedValueOnce(null);
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -107,7 +112,7 @@ describe('POST /api/auth/login-check', () => {
   it('returns 200 + {ok:false, reason:"invalid_credentials"} on wrong password', async () => {
     getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
     vi.mocked(compareSync).mockReturnValueOnce(false);
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -117,7 +122,7 @@ describe('POST /api/auth/login-check', () => {
 
   it('returns 200 + {ok:false, reason:"rate_limited"} when rate limited', async () => {
     checkRateLimitMock.mockReturnValueOnce({ allowed: false, retryAfterMs: 30_000 });
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -130,7 +135,7 @@ describe('POST /api/auth/login-check', () => {
     getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(false);
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -143,7 +148,7 @@ describe('POST /api/auth/login-check', () => {
       new Error('META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.'),
     );
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({
       ok: false,
@@ -157,7 +162,7 @@ describe('POST /api/auth/login-check', () => {
       new Error('WebSocket connection failed: ECONNREFUSED'),
     );
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const res = await POST(buildRequest(VALID));
+    const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({
       ok: false,
@@ -167,7 +172,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 200 + invalid_credentials when body is malformed JSON', async () => {
-    const res = await POST(buildRequest('{not json'));
+    const res = await POST(buildRequest('{not json'), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: false,
@@ -177,7 +182,7 @@ describe('POST /api/auth/login-check', () => {
 
   it('keys the rate limiter on the identifier', async () => {
     getUserByIdentifierMock.mockResolvedValueOnce(null);
-    await POST(buildRequest(VALID));
+    await POST(buildRequest(VALID), CTX);
     const [key, max, windowMs] = checkRateLimitMock.mock.calls[0] as [string, number, number];
     expect(key).toBe(`login:${VALID.identifier}`);
     expect(max).toBe(10);

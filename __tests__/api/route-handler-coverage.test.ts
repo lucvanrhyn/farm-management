@@ -40,13 +40,13 @@ const EXEMPT: ReadonlySet<string> = new Set([
   //    `publicHandler` once the adapter contract has soaked. ──
   // Wave H1 (#173) — wrapped in `publicHandler`: csp-report, health,
   //   telemetry/{vitals,client-errors}, farms/[slug]/select. ADR-0001 8/8 part 1.
-  // Wave H2-H5 — remaining proxy-matcher exclusions (auth/*, einstein/*,
-  //   inngest, webhooks/payfast) to be wrapped in subsequent sub-waves.
+  // Wave H2 (#174) — wrapped in `publicHandler`: auth/login-check, auth/register,
+  //   auth/resend-verification, auth/verify-email. ADR-0001 8/8 part 2.
+  //   NextAuth catch-all (`auth/[...nextauth]/route.ts`) stays EXEMPT — to be
+  //   assessed in H4 (wraps `NextAuth(authOptions)`; framework-managed flow).
+  // Wave H3-H5 — remaining proxy-matcher exclusions (einstein/*, inngest,
+  //   webhooks/payfast, NextAuth catch-all) to be wrapped in subsequent sub-waves.
   "auth/[...nextauth]/route.ts",
-  "auth/login-check/route.ts",
-  "auth/register/route.ts",
-  "auth/resend-verification/route.ts",
-  "auth/verify-email/route.ts",
   "einstein/ask/route.ts",
   "einstein/feedback/route.ts",
   "inngest/route.ts",

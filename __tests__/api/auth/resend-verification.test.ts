@@ -31,6 +31,11 @@ vi.mock('@/lib/rate-limit', () => ({
 // Import AFTER mocks are registered.
 const { POST } = await import('@/app/api/auth/resend-verification/route');
 
+// Wave H2 (#174) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 const allow = { allowed: true as const };
 const deny = { allowed: false as const, retryAfterMs: 60_000 };
 
@@ -66,7 +71,7 @@ describe('POST /api/auth/resend-verification', () => {
     });
     isEmailVerifiedMock.mockResolvedValueOnce(false);
 
-    const res = await POST(makeReq({ email: 'luc@example.com' }));
+    const res = await POST(makeReq({ email: 'luc@example.com' }), CTX);
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -85,7 +90,7 @@ describe('POST /api/auth/resend-verification', () => {
   it('returns 200 { ok: true } when user does not exist (no email sent)', async () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
 
-    const res = await POST(makeReq({ email: 'ghost@example.com' }));
+    const res = await POST(makeReq({ email: 'ghost@example.com' }), CTX);
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -103,7 +108,7 @@ describe('POST /api/auth/resend-verification', () => {
     });
     isEmailVerifiedMock.mockResolvedValueOnce(true);
 
-    const res = await POST(makeReq({ email: 'done@example.com' }));
+    const res = await POST(makeReq({ email: 'done@example.com' }), CTX);
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -114,23 +119,23 @@ describe('POST /api/auth/resend-verification', () => {
   // ── Normalization: email is lowercased + trimmed ─────────────────────────────
   it('normalizes email (trim + lowercase) before lookup', async () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
-    await POST(makeReq({ email: '  LUC@Example.COM  ' }));
+    await POST(makeReq({ email: '  LUC@Example.COM  ' }), CTX);
     expect(getUserByEmailMock).toHaveBeenCalledWith('luc@example.com');
   });
 
   // ── Input validation ─────────────────────────────────────────────────────────
   it('returns 400 when email is missing', async () => {
-    const res = await POST(makeReq({}));
+    const res = await POST(makeReq({}), CTX);
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when email is not a valid address', async () => {
-    const res = await POST(makeReq({ email: 'not-an-email' }));
+    const res = await POST(makeReq({ email: 'not-an-email' }), CTX);
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when request body is malformed JSON', async () => {
-    const res = await POST(makeReq('{not json'));
+    const res = await POST(makeReq('{not json'), CTX);
     expect(res.status).toBe(400);
   });
 
@@ -138,7 +143,7 @@ describe('POST /api/auth/resend-verification', () => {
   it('returns 429 when per-IP rate limit is exceeded (keeps legit emails from 5+ drops/hour)', async () => {
     checkRateLimitMock.mockReturnValueOnce(deny); // IP check fires first
 
-    const res = await POST(makeReq({ email: 'luc@example.com' }));
+    const res = await POST(makeReq({ email: 'luc@example.com' }), CTX);
 
     expect(res.status).toBe(429);
     expect(getUserByEmailMock).not.toHaveBeenCalled();
@@ -157,7 +162,7 @@ describe('POST /api/auth/resend-verification', () => {
     // IP limit allows, per-email limit denies
     checkRateLimitMock.mockReturnValueOnce(allow).mockReturnValueOnce(deny);
 
-    const res = await POST(makeReq({ email: 'luc@example.com' }));
+    const res = await POST(makeReq({ email: 'luc@example.com' }), CTX);
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -177,7 +182,7 @@ describe('POST /api/auth/resend-verification', () => {
     getUserByEmailMock.mockRejectedValueOnce(new Error('meta-db offline'));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const res = await POST(makeReq({ email: 'luc@example.com' }));
+    const res = await POST(makeReq({ email: 'luc@example.com' }), CTX);
 
     expect(res.status).toBe(500);
     // Wave 4 G.4: route now logs through @/lib/logger which emits
@@ -208,7 +213,7 @@ describe('POST /api/auth/resend-verification', () => {
     );
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const res = await POST(makeReq({ email: 'luc@example.com' }));
+    const res = await POST(makeReq({ email: 'luc@example.com' }), CTX);
 
     expect(res.status).toBe(500);
     spy.mockRestore();
