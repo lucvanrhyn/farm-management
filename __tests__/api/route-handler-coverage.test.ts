@@ -76,11 +76,9 @@ const EXEMPT: ReadonlySet<string> = new Set([
   // Wave G7 (#171) — mixed-features slice (5 routes) migrated onto slug-aware adapters:
   //   breeding/analyze, camps/[campId]/stats, export,
   //   farm-settings/ai, farm-settings/methodology.
-  "[farmSlug]/tax/it3/[id]/pdf/route.ts",
-  "[farmSlug]/tax/it3/[id]/route.ts",
-  "[farmSlug]/tax/it3/[id]/void/route.ts",
-  "[farmSlug]/tax/it3/preview/route.ts",
-  "[farmSlug]/tax/it3/route.ts",
+  // Wave G8 (#172) — tax/it3 slice (5 routes — FINAL feature wave) migrated onto slug-aware adapters:
+  //   tax/it3 (GET/POST), tax/it3/[id] (GET), tax/it3/[id]/pdf (GET, binary application/pdf body),
+  //   tax/it3/[id]/void (POST, write state machine), tax/it3/preview (GET).
 
   // Other shared routes — Wave B+ migration in dependency order.
   "farm-settings/map/route.ts",
