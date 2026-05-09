@@ -9,6 +9,7 @@ import {
 import { getFarmSubscription, updateFarmSubscription } from '@/lib/meta-db';
 import { withFarmPrisma } from '@/lib/farm-prisma';
 import { logger } from '@/lib/logger';
+import { publicHandler } from '@/lib/server/route';
 
 /**
  * PayFast ITN (Instant Transaction Notification) webhook.
@@ -100,7 +101,8 @@ function isStatusUpgrade(incoming: string, existing: string): boolean {
   return (STATUS_RANK[incoming] ?? 0) > (STATUS_RANK[existing] ?? 0);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = publicHandler({
+  handle: async (req: NextRequest): Promise<Response> => {
   // 1. Source IP allowlist.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
@@ -384,4 +386,5 @@ export async function POST(req: NextRequest) {
     // PayFast expects a 200 OK with no body.
     return new NextResponse(null, { status: 200 });
   });
-}
+  },
+});

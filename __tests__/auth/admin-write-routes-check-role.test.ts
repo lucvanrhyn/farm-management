@@ -193,7 +193,7 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   'auth/resend-verification/route.ts::POST',
   'auth/verify-email/route.ts::GET',
 
-  // Wave H4 (#176) — framework-managed routes wrapped in `publicHandler`.
+  // Wave H4 (#177) — framework-managed routes wrapped in `publicHandler`.
   // publicHandler is the no-auth adapter. NextAuth's catch-all manages its
   // own session/auth state internally (cookies, OAuth, JWT). Inngest's serve
   // handler verifies its own X-Inngest-Signature; cron fallback hits POST
@@ -203,6 +203,13 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   'inngest/route.ts::GET',
   'inngest/route.ts::POST',
   'inngest/route.ts::PUT',
+
+  // Wave H5 (#176) — PayFast ITN webhook wrapped in `publicHandler`.
+  // publicHandler is the no-auth adapter; PayFast posts ITNs server-to-server
+  // without a session. The handler enforces its own 7-step pipeline (IP
+  // allowlist + signature + ITN-validate + token + order + dedup + status
+  // ladder) inside `handle` — admin-role gating does not apply.
+  'webhooks/payfast/route.ts::POST',
 ]);
 
 /** Find every route.ts under app/api recursively. */
