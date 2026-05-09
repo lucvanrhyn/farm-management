@@ -182,6 +182,16 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   'health/route.ts::GET',
   'telemetry/client-errors/route.ts::POST',
   'telemetry/vitals/route.ts::POST',
+
+  // Wave H2 (#174) — auth-flow entry points wrapped in `publicHandler`.
+  // publicHandler is the no-auth adapter; these routes are pre-session entry
+  // points (login pre-check, registration, email verification, resend) that
+  // intentionally have no admin gate. Each route enforces its own validation
+  // + rate limits inside `handle`.
+  'auth/login-check/route.ts::POST',
+  'auth/register/route.ts::POST',
+  'auth/resend-verification/route.ts::POST',
+  'auth/verify-email/route.ts::GET',
 ]);
 
 /** Find every route.ts under app/api recursively. */

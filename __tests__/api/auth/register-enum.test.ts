@@ -32,6 +32,11 @@ vi.mock('bcryptjs', () => ({
 
 const { POST } = await import('@/app/api/auth/register/route');
 
+// Wave H2 (#174) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 function buildRequest(body: Record<string, unknown>): NextRequest {
   // The route only touches `headers`, `json()`, and `.headers.get()` on the
   // request, so a standard Request is structurally compatible with NextRequest
@@ -63,7 +68,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'rietfontein-boerdery' });
 
-    const res = await POST(buildRequest(VALID_BODY));
+    const res = await POST(buildRequest(VALID_BODY), CTX);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true, pending: true });
@@ -77,7 +82,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
       passwordHash: '$2a$12$existinghash',
     });
 
-    const res = await POST(buildRequest(VALID_BODY));
+    const res = await POST(buildRequest(VALID_BODY), CTX);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ success: true, pending: true });
@@ -89,7 +94,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     // NEW
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'x' });
-    const newRes = await POST(buildRequest(VALID_BODY));
+    const newRes = await POST(buildRequest(VALID_BODY), CTX);
     const newText = await newRes.text();
 
     // EXISTING
@@ -99,7 +104,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
       username: 'e',
       passwordHash: '$2a$12$h',
     });
-    const existingRes = await POST(buildRequest(VALID_BODY));
+    const existingRes = await POST(buildRequest(VALID_BODY), CTX);
     const existingText = await existingRes.text();
 
     expect(newRes.status).toBe(existingRes.status);
@@ -110,7 +115,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
     getUserByEmailMock.mockResolvedValueOnce(null);
     provisionFarmMock.mockResolvedValueOnce({ slug: 'secret-slug-do-not-leak' });
 
-    const res = await POST(buildRequest(VALID_BODY));
+    const res = await POST(buildRequest(VALID_BODY), CTX);
     const body = await res.json();
     expect(body.slug).toBeUndefined();
     const raw = JSON.stringify(body);
@@ -120,7 +125,7 @@ describe('POST /api/auth/register — anti-enumeration', () => {
   // Sanity: validation failures still return distinct errors — enumeration is
   // only about "is this email registered", not "is this email shaped correctly".
   it('still returns 400 on invalid email', async () => {
-    const res = await POST(buildRequest({ ...VALID_BODY, email: 'not-an-email' }));
+    const res = await POST(buildRequest({ ...VALID_BODY, email: 'not-an-email' }), CTX);
     expect(res.status).toBe(400);
   });
 });
