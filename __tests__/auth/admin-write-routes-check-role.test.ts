@@ -192,6 +192,17 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   'auth/register/route.ts::POST',
   'auth/resend-verification/route.ts::POST',
   'auth/verify-email/route.ts::GET',
+
+  // Wave H4 (#176) — framework-managed routes wrapped in `publicHandler`.
+  // publicHandler is the no-auth adapter. NextAuth's catch-all manages its
+  // own session/auth state internally (cookies, OAuth, JWT). Inngest's serve
+  // handler verifies its own X-Inngest-Signature; cron fallback hits POST
+  // without a session. Neither has an admin gate by design.
+  'auth/[...nextauth]/route.ts::GET',
+  'auth/[...nextauth]/route.ts::POST',
+  'inngest/route.ts::GET',
+  'inngest/route.ts::POST',
+  'inngest/route.ts::PUT',
 ]);
 
 /** Find every route.ts under app/api recursively. */
