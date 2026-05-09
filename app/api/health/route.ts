@@ -29,9 +29,13 @@
  * when present. Useful for confirming a deploy is the one you think it is.
  * Omitted in environments that do not expose it (local dev) so the response
  * shape stays minimal.
+ *
+ * Wave H1 (#173) — wrapped in `publicHandler` adapter for ADR-0001 8/8.
+ * Adapter only adds try/catch around handle; wire-shape preserved verbatim.
  */
 
 import { NextResponse } from "next/server";
+import { publicHandler } from "@/lib/server/route";
 
 // Force the dynamic Node runtime so each invocation produces a fresh
 // timestamp. Without this Next can statically render the route at build
@@ -39,21 +43,23 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export function GET(): NextResponse {
-  const body: { status: "ok"; timestamp: string; version?: string } = {
-    status: "ok",
-    timestamp: new Date().toISOString(),
-  };
+export const GET = publicHandler({
+  handle: async () => {
+    const body: { status: "ok"; timestamp: string; version?: string } = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+    };
 
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA;
-  if (sha) {
-    body.version = sha;
-  }
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+    if (sha) {
+      body.version = sha;
+    }
 
-  return NextResponse.json(body, {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-    },
-  });
-}
+    return NextResponse.json(body, {
+      status: 200,
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
+  },
+});

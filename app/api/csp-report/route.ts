@@ -56,6 +56,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
+import { publicHandler } from "@/lib/server/route";
 
 // Force the dynamic Node runtime — the request body must be read every
 // invocation and we don't want any caching layer in front.
@@ -134,54 +135,56 @@ function normaliseModern(report: Record<string, unknown>): LoggedViolation {
   };
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  // Read the body once as text — we may need to parse it as JSON or treat
-  // it as opaque if the browser sent something we don't understand.
-  let raw: string;
-  try {
-    raw = await req.text();
-  } catch {
-    return NO_CONTENT;
-  }
+export const POST = publicHandler({
+  handle: async (req: NextRequest) => {
+    // Read the body once as text — we may need to parse it as JSON or treat
+    // it as opaque if the browser sent something we don't understand.
+    let raw: string;
+    try {
+      raw = await req.text();
+    } catch {
+      return NO_CONTENT;
+    }
 
-  if (!raw) return NO_CONTENT;
+    if (!raw) return NO_CONTENT;
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // Malformed body — return 204 silently. Browsers can't retry usefully
-    // and we don't want to fill logs with parse errors.
-    return NO_CONTENT;
-  }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Malformed body — return 204 silently. Browsers can't retry usefully
+      // and we don't want to fill logs with parse errors.
+      return NO_CONTENT;
+    }
 
-  // Modern Reporting API: top-level array. Each entry has a `type`; we
-  // only care about csp-violation. Other types (network-error,
-  // deprecation, intervention) are dropped without logging — they can be
-  // routed to their own endpoint later if we ever want them.
-  if (Array.isArray(parsed)) {
-    for (const entry of parsed) {
-      if (
-        entry &&
-        typeof entry === "object" &&
-        (entry as Record<string, unknown>).type === "csp-violation"
-      ) {
-        const violation = normaliseModern(entry as Record<string, unknown>);
+    // Modern Reporting API: top-level array. Each entry has a `type`; we
+    // only care about csp-violation. Other types (network-error,
+    // deprecation, intervention) are dropped without logging — they can be
+    // routed to their own endpoint later if we ever want them.
+    if (Array.isArray(parsed)) {
+      for (const entry of parsed) {
+        if (
+          entry &&
+          typeof entry === "object" &&
+          (entry as Record<string, unknown>).type === "csp-violation"
+        ) {
+          const violation = normaliseModern(entry as Record<string, unknown>);
+          logger.warn("[csp-violation]", violation);
+        }
+      }
+      return NO_CONTENT;
+    }
+
+    // Legacy CSP2: `{ "csp-report": { ... } }`.
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      const report = obj["csp-report"];
+      if (report && typeof report === "object") {
+        const violation = normaliseLegacy(report as Record<string, unknown>);
         logger.warn("[csp-violation]", violation);
       }
     }
+
     return NO_CONTENT;
-  }
-
-  // Legacy CSP2: `{ "csp-report": { ... } }`.
-  if (parsed && typeof parsed === "object") {
-    const obj = parsed as Record<string, unknown>;
-    const report = obj["csp-report"];
-    if (report && typeof report === "object") {
-      const violation = normaliseLegacy(report as Record<string, unknown>);
-      logger.warn("[csp-violation]", violation);
-    }
-  }
-
-  return NO_CONTENT;
-}
+  },
+});

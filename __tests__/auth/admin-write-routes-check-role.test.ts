@@ -170,6 +170,18 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   // photos/upload — any farm user may upload photos for observations; not
   // tenant config. Migrated to getFarmContext in Phase D/G.
   'photos/upload/route.ts::POST',
+
+  // Wave H1 (#173) — proxy-matcher exclusions wrapped in `publicHandler`.
+  // publicHandler is the no-auth adapter; these routes intentionally have no
+  // admin gate (pure beacons + tenant-select shortcircuit). They were already
+  // outside this test's mechanical scope before H1 (no `getPrismaWithAuth`)
+  // but the adapter import (`@/lib/server/route`) widens coverage, so they
+  // must be explicitly classified.
+  'csp-report/route.ts::POST',
+  'farms/[slug]/select/route.ts::GET',
+  'health/route.ts::GET',
+  'telemetry/client-errors/route.ts::POST',
+  'telemetry/vitals/route.ts::POST',
 ]);
 
 /** Find every route.ts under app/api recursively. */
