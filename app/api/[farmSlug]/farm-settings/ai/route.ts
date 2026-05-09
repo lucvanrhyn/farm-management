@@ -13,22 +13,34 @@
  * Tier gate: paid only. Basic attempts get 403 even though the UI greys the
  * form — defence-in-depth against direct API callers.
  *
+ * Wave G7 (#171) — migrated onto `tenantWriteSlug`.
+ *
+ * Wire-shape preservation (hybrid per ADR-0001 / Wave G7 spec):
+ *   - 401 envelope migrates to the adapter's canonical
+ *     `{ error: "AUTH_REQUIRED", message: "Unauthorized" }`. Legacy
+ *     `FARM_ACCESS_DENIED` 403 collapses into the adapter's 401 — same
+ *     `getFarmContextForSlug` null path the adapter centralises (matches
+ *     Wave G5 settings/alerts; no test/client reads `FARM_ACCESS_DENIED`).
+ *   - 400 INVALID_BODY on malformed JSON now flows through the adapter for
+ *     Content-Type-driven malformed JSON; the explicit `req.json()` parse
+ *     in this handler stays so we can keep the legacy `INVALID_BODY` shape
+ *     when the body parses but isn't an object (defence-in-depth — adapter
+ *     accepts `[]` as valid JSON).
+ *   - All other handler-minted typed envelopes preserved verbatim.
+ *
  * Error codes (silent-failure cure pattern):
- *   AUTH_REQUIRED                 — 401
- *   FARM_ACCESS_DENIED            — 403, session user doesn't belong to farm
+ *   AUTH_REQUIRED                 — 401 (adapter)
  *   EINSTEIN_TIER_LOCKED          — 403, paid-tier-only feature
  *   AI_INVALID_NAME               — 400, bad chars or over length
  *   AI_INVALID_LANGUAGE           — 400, not en|af|auto
  *   AI_INVALID_BUDGET             — 400, NaN or out of [MIN,MAX]
  *   AI_BUDGET_NOT_ALLOWED         — 400, Consulting must not set a cap
  *   INVALID_BODY                  — 400, not JSON
- *   FARM_NOT_FOUND                — 404
  *   AI_SETTINGS_SAVE_FAILED       — 500, DB write blew up
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
-import { classifyFarmContextFailure } from "@/lib/server/farm-context-errors";
+import { NextResponse } from "next/server";
+import { tenantWriteSlug } from "@/lib/server/route";
 import { getFarmCreds } from "@/lib/meta-db";
 import { isPaidTier, isBudgetExempt, type FarmTier } from "@/lib/tier";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
@@ -155,114 +167,105 @@ function validateBody(
   return { ok: true, value: patch };
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ farmSlug: string }> },
-) {
-  const { farmSlug } = await params;
-  const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) {
-    const { code, status } = await classifyFarmContextFailure(req);
-    const mapped = code === "CROSS_TENANT_FORBIDDEN" ? "FARM_ACCESS_DENIED" : code;
-    return asErr(mapped, code === "AUTH_REQUIRED" ? "Sign in required" : "Forbidden", status);
-  }
-
-  // Tier gate — Basic must not write.
-  const creds = await getFarmCreds(farmSlug);
-  const tier: FarmTier = (creds?.tier as FarmTier) ?? "basic";
-  if (!isPaidTier(tier)) {
-    return asErr(
-      "EINSTEIN_TIER_LOCKED",
-      "Einstein AI settings are available on Advanced and Consulting plans",
-      403,
-    );
-  }
-  const budgetExempt = isBudgetExempt(tier);
-
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return asErr("INVALID_BODY", "Body must be valid JSON", 400);
-  }
-
-  const validation = validateBody(body, budgetExempt);
-  if (!validation.ok) {
-    return asErr(validation.code, validation.message, 400);
-  }
-
-  // Build the merge patch. Top-level for assistantName + responseLanguage;
-  // budget cap nests under ragConfig (see AiSettings schema). We carry the
-  // existing ragConfig forward so runtime budget counters aren't wiped.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prisma: any = ctx.prisma;
-    const row = await prisma.farmSettings.findFirst({
-      select: { aiSettings: true },
-    });
-    const existing = parseAiSettings(row?.aiSettings);
-
-    // Mutable local shape — `AiSettings` is readonly by design for callers,
-    // but we're building the patch here and immediately handing it to the
-    // (immutable) merge helper.
-    const patch: {
-      assistantName?: string;
-      responseLanguage?: ResponseLanguage;
-      ragConfig?: RagConfig;
-    } = {};
-    if ("assistantName" in validation.value) {
-      patch.assistantName = validation.value.assistantName;
+export const PUT = tenantWriteSlug<unknown, { farmSlug: string }>({
+  revalidate: revalidateSettingsWrite,
+  handle: async (ctx, parsedBody, _req, { farmSlug }) => {
+    // Tier gate — Basic must not write.
+    const creds = await getFarmCreds(farmSlug);
+    const tier: FarmTier = (creds?.tier as FarmTier) ?? "basic";
+    if (!isPaidTier(tier)) {
+      return asErr(
+        "EINSTEIN_TIER_LOCKED",
+        "Einstein AI settings are available on Advanced and Consulting plans",
+        403,
+      );
     }
-    if ("responseLanguage" in validation.value) {
-      patch.responseLanguage = validation.value.responseLanguage;
+    const budgetExempt = isBudgetExempt(tier);
+
+    // Adapter has already parsed JSON; verify object shape (rejects arrays,
+    // primitives, null) so validateBody can safely treat it as a record.
+    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+      return asErr("INVALID_BODY", "Body must be valid JSON", 400);
     }
-    if ("budgetCapZarPerMonth" in validation.value) {
-      const existingRag: Partial<RagConfig> = existing.ragConfig ?? {};
-      patch.ragConfig = {
-        enabled: existingRag.enabled ?? true,
-        budgetCapZarPerMonth: validation.value.budgetCapZarPerMonth!,
-        monthSpentZar: existingRag.monthSpentZar ?? 0,
-        currentMonthKey: existingRag.currentMonthKey ?? "",
-      };
+    const body = parsedBody as Record<string, unknown>;
+
+    const validation = validateBody(body, budgetExempt);
+    if (!validation.ok) {
+      return asErr(validation.code, validation.message, 400);
     }
 
-    const merged = mergeAiSettings(existing, patch as Partial<AiSettings>);
-    const serialised = JSON.stringify(merged);
-
-    if (row) {
-      await prisma.farmSettings.updateMany({
-        data: { aiSettings: serialised },
+    // Build the merge patch. Top-level for assistantName + responseLanguage;
+    // budget cap nests under ragConfig (see AiSettings schema). We carry the
+    // existing ragConfig forward so runtime budget counters aren't wiped.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prisma: any = ctx.prisma;
+      const row = await prisma.farmSettings.findFirst({
+        select: { aiSettings: true },
       });
-    } else {
-      // Brand-new tenant with no FarmSettings row — upsert the singleton.
-      await prisma.farmSettings.upsert({
-        where: { id: "singleton" },
-        update: { aiSettings: serialised },
-        create: {
-          id: "singleton",
-          farmName: "My Farm",
-          breed: "Mixed",
-          aiSettings: serialised,
+      const existing = parseAiSettings(row?.aiSettings);
+
+      // Mutable local shape — `AiSettings` is readonly by design for callers,
+      // but we're building the patch here and immediately handing it to the
+      // (immutable) merge helper.
+      const patch: {
+        assistantName?: string;
+        responseLanguage?: ResponseLanguage;
+        ragConfig?: RagConfig;
+      } = {};
+      if ("assistantName" in validation.value) {
+        patch.assistantName = validation.value.assistantName;
+      }
+      if ("responseLanguage" in validation.value) {
+        patch.responseLanguage = validation.value.responseLanguage;
+      }
+      if ("budgetCapZarPerMonth" in validation.value) {
+        const existingRag: Partial<RagConfig> = existing.ragConfig ?? {};
+        patch.ragConfig = {
+          enabled: existingRag.enabled ?? true,
+          budgetCapZarPerMonth: validation.value.budgetCapZarPerMonth!,
+          monthSpentZar: existingRag.monthSpentZar ?? 0,
+          currentMonthKey: existingRag.currentMonthKey ?? "",
+        };
+      }
+
+      const merged = mergeAiSettings(existing, patch as Partial<AiSettings>);
+      const serialised = JSON.stringify(merged);
+
+      if (row) {
+        await prisma.farmSettings.updateMany({
+          data: { aiSettings: serialised },
+        });
+      } else {
+        // Brand-new tenant with no FarmSettings row — upsert the singleton.
+        await prisma.farmSettings.upsert({
+          where: { id: "singleton" },
+          update: { aiSettings: serialised },
+          create: {
+            id: "singleton",
+            farmName: "My Farm",
+            breed: "Mixed",
+            aiSettings: serialised,
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        settings: {
+          assistantName: merged.assistantName ?? "",
+          responseLanguage: merged.responseLanguage ?? "auto",
+          budgetCapZarPerMonth:
+            merged.ragConfig?.budgetCapZarPerMonth ?? null,
         },
       });
+    } catch (err) {
+      logger.error('[farm-settings/ai] save failed', { farmSlug, err });
+      return asErr(
+        "AI_SETTINGS_SAVE_FAILED",
+        "Could not save settings — please try again",
+        500,
+      );
     }
-
-    revalidateSettingsWrite(farmSlug);
-    return NextResponse.json({
-      success: true,
-      settings: {
-        assistantName: merged.assistantName ?? "",
-        responseLanguage: merged.responseLanguage ?? "auto",
-        budgetCapZarPerMonth:
-          merged.ragConfig?.budgetCapZarPerMonth ?? null,
-      },
-    });
-  } catch (err) {
-    logger.error('[farm-settings/ai] save failed', { farmSlug, err });
-    return asErr(
-      "AI_SETTINGS_SAVE_FAILED",
-      "Could not save settings — please try again",
-      500,
-    );
-  }
-}
+  },
+});
