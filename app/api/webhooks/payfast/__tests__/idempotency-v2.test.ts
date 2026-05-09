@@ -213,6 +213,12 @@ function makeRequest(body: string): NextRequest {
   });
 }
 
+// Wave H5 (#177) — webhooks/payfast is now wrapped in `publicHandler`, so
+// the export is `RouteHandler` shape (req, ctx) instead of the legacy bare
+// `POST(req)`. Tests call `POST(makeRequest(...), CTX)`; the route has no
+// dynamic params so `params` resolves to an empty object.
+const CTX = { params: Promise.resolve({}) };
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
@@ -299,7 +305,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
   describe("Facet A — retry after failed mutation should re-process (not 200 as duplicate)", () => {
     it("[A1] first COMPLETE processes the subscription", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
-      const res = await POST(makeRequest(buildBody()));
+      const res = await POST(makeRequest(buildBody()), CTX);
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
     });
@@ -312,7 +318,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       mocks.state.nextUpdateThrows = true;
       let firstRes: Response | undefined;
       try {
-        firstRes = await POST(makeRequest(buildBody()));
+        firstRes = await POST(makeRequest(buildBody()), CTX);
         // If it returned a response, it must NOT be 200 (that would falsely signal success).
         expect(firstRes.status).not.toBe(200);
       } catch {
@@ -322,7 +328,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       }
 
       // Retry: same pf_payment_id. The mutation should run again.
-      const res2 = await POST(makeRequest(buildBody()));
+      const res2 = await POST(makeRequest(buildBody()), CTX);
       expect(res2.status).toBe(200);
       // updateFarmSubscription must have been called on the retry.
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(2);
@@ -334,7 +340,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       // First call: mutation throws — appliedAt must remain null.
       mocks.state.nextUpdateThrows = true;
       try {
-        await POST(makeRequest(buildBody()));
+        await POST(makeRequest(buildBody()), CTX);
       } catch {
         // Route propagated — expected.
       }
@@ -347,7 +353,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       }
 
       // Retry succeeds — appliedAt must now be set.
-      const res2 = await POST(makeRequest(buildBody()));
+      const res2 = await POST(makeRequest(buildBody()), CTX);
       expect(res2.status).toBe(200);
 
       const rowAfterSuccess = mocks.state.eventsByPaymentId.get("PF-12345");
@@ -359,11 +365,11 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
 
       // First call succeeds fully.
-      await POST(makeRequest(buildBody()));
+      await POST(makeRequest(buildBody()), CTX);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
 
       // Second call (normal PayFast retry) — must be a no-op.
-      const res2 = await POST(makeRequest(buildBody()));
+      const res2 = await POST(makeRequest(buildBody()), CTX);
       expect(res2.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1); // still 1
     });
@@ -374,7 +380,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       // Fail first attempt.
       mocks.state.nextUpdateThrows = true;
       try {
-        await POST(makeRequest(buildBody()));
+        await POST(makeRequest(buildBody()), CTX);
       } catch {
         // expected
       }
@@ -388,7 +394,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       mocks.updateFarmSubscription.mockImplementation(async () => {});
 
       // Retry.
-      await POST(makeRequest(buildBody()));
+      await POST(makeRequest(buildBody()), CTX);
 
       // Should have warned about the retry (incomplete-apply / retry-after-failure branch).
       const warnCalls = mocks.logger.warn.mock.calls;
@@ -405,6 +411,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
 
       const res = await POST(
         makeRequest(buildBody({ payment_status: "PENDING" })),
+        CTX,
       );
       expect(res.status).toBe(200);
       // PENDING should not call updateFarmSubscription at all (it's a no-op status).
@@ -415,12 +422,13 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
 
       // PENDING first.
-      await POST(makeRequest(buildBody({ payment_status: "PENDING" })));
+      await POST(makeRequest(buildBody({ payment_status: "PENDING" })), CTX);
       expect(mocks.updateFarmSubscription).not.toHaveBeenCalled();
 
       // COMPLETE arrives — must trigger activation despite same pf_payment_id.
       const res = await POST(
         makeRequest(buildBody({ payment_status: "COMPLETE" })),
+        CTX,
       );
       expect(res.status).toBe(200);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
@@ -435,7 +443,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
 
       // COMPLETE first — fully applied.
-      await POST(makeRequest(buildBody({ payment_status: "COMPLETE" })));
+      await POST(makeRequest(buildBody({ payment_status: "COMPLETE" })), CTX);
       expect(mocks.updateFarmSubscription).toHaveBeenCalledTimes(1);
 
       // Stale PENDING arrives (late PayFast retry). Must be a no-op.
@@ -446,6 +454,7 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
             timestamp: "2026-05-03T09:00:00Z", // older timestamp
           }),
         ),
+        CTX,
       );
       expect(res.status).toBe(200);
       // updateFarmSubscription must NOT have been called again.
@@ -455,8 +464,8 @@ describe("POST /api/webhooks/payfast — Issue #95 regression", () => {
     it("[B4] subscription ends up COMPLETE after PENDING→COMPLETE sequence", async () => {
       const { POST } = await import("@/app/api/webhooks/payfast/route");
 
-      await POST(makeRequest(buildBody({ payment_status: "PENDING" })));
-      await POST(makeRequest(buildBody({ payment_status: "COMPLETE" })));
+      await POST(makeRequest(buildBody({ payment_status: "PENDING" })), CTX);
+      await POST(makeRequest(buildBody({ payment_status: "COMPLETE" })), CTX);
 
       // The activation call must have fired with "active".
       expect(mocks.updateFarmSubscription).toHaveBeenCalledWith(
