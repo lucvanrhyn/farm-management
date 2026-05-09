@@ -132,6 +132,12 @@ const { POST: askPOST } = await import('@/app/api/einstein/ask/route');
 const { POST: feedbackPOST } = await import('@/app/api/einstein/feedback/route');
 const { EinsteinBudgetError } = await import('@/lib/einstein/budget');
 
+// Wave H3 (#175) — askPOST + feedbackPOST are now wrapped in `publicHandler`,
+// so their signature is `(req, ctx)`. The adapter tolerates an empty params
+// context (no dynamic segments) — every test below passes this `CTX` to
+// satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 // ── Shared test fixtures ──────────────────────────────────────────────────────
 
 const validSession = {
@@ -256,6 +262,7 @@ describe('Integration: full ask → feedback roundtrip', () => {
     // Step A: POST /api/einstein/ask
     const askResp = await askPOST(
       makeAskRequest({ question: 'What treatment did Bonnie get?', farmSlug: 'trio-b-boerdery' }),
+      CTX,
     );
     expect(askResp.status).toBe(200);
     const sseBody = await readSSE(askResp);
@@ -284,6 +291,7 @@ describe('Integration: full ask → feedback roundtrip', () => {
         feedback: 'up',
         note: 'Correct and well-cited',
       }),
+      CTX,
     );
     expect(feedbackResp.status).toBe(200);
     const feedbackJson = await feedbackResp.json();
@@ -310,6 +318,7 @@ describe('Integration: tier lock', () => {
 
     const resp = await askPOST(
       makeAskRequest({ question: 'Is my herd healthy?', farmSlug: 'trio-b-boerdery' }),
+      CTX,
     );
     expect(resp.status).toBe(403);
     const json = await resp.json();
@@ -337,6 +346,7 @@ describe('Integration: budget exhausted via stampCostBeforeSend', () => {
 
     const resp = await askPOST(
       makeAskRequest({ question: 'How are my animals?', farmSlug: 'trio-b-boerdery' }),
+      CTX,
     );
     // stampCostBeforeSend error returns 500 (not 429 — the budget was ok when checked)
     expect(resp.status).toBe(500);
@@ -368,6 +378,7 @@ describe('Integration: citation fabrication detection', () => {
 
     const resp = await askPOST(
       makeAskRequest({ question: 'Tell me about camp 3', farmSlug: 'trio-b-boerdery' }),
+      CTX,
     );
     expect(resp.status).toBe(200); // SSE always starts with 200
     const body = await readSSE(resp);
@@ -397,6 +408,7 @@ describe('Integration: RagQueryLog written on all error paths (finally block)', 
 
     const resp = await askPOST(
       makeAskRequest({ question: 'What is my LSU count?', farmSlug: 'trio-b-boerdery' }),
+      CTX,
     );
     // Response is 200 + SSE (stream opened), error embedded in SSE body
     expect(resp.status).toBe(200);
@@ -428,6 +440,7 @@ describe('Integration: feedback route edge cases', () => {
 
     const resp = await feedbackPOST(
       makeFeedbackRequest({ queryLogId: 'nonexistent-id', feedback: 'down' }),
+      CTX,
     );
     expect(resp.status).toBe(404);
     const json = await resp.json();
@@ -439,6 +452,7 @@ describe('Integration: feedback route edge cases', () => {
 
     const resp = await feedbackPOST(
       makeFeedbackRequest({ queryLogId: 'log-1', feedback: 'sideways' }),
+      CTX,
     );
     expect(resp.status).toBe(400);
     const json = await resp.json();
@@ -455,6 +469,7 @@ describe('Integration: feedback route edge cases', () => {
 
     const resp = await feedbackPOST(
       makeFeedbackRequest({ queryLogId: 'log-1', feedback: 'up' }),
+      CTX,
     );
     expect(resp.status).toBe(403);
     const json = await resp.json();
@@ -496,6 +511,7 @@ describe('Integration: ask with conversation history', () => {
           { role: 'assistant', content: 'There are 8 camps.' },
         ],
       }),
+      CTX,
     );
     expect(resp.status).toBe(200);
     await readSSE(resp);

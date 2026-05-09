@@ -42,13 +42,13 @@ const EXEMPT: ReadonlySet<string> = new Set([
   //   telemetry/{vitals,client-errors}, farms/[slug]/select. ADR-0001 8/8 part 1.
   // Wave H2 (#174) — wrapped in `publicHandler`: auth/login-check, auth/register,
   //   auth/resend-verification, auth/verify-email. ADR-0001 8/8 part 2.
-  //   NextAuth catch-all (`auth/[...nextauth]/route.ts`) stays EXEMPT — to be
-  //   assessed in H4 (wraps `NextAuth(authOptions)`; framework-managed flow).
-  // Wave H3-H5 — remaining proxy-matcher exclusions (einstein/*, inngest,
-  //   webhooks/payfast, NextAuth catch-all) to be wrapped in subsequent sub-waves.
+  // Wave H3 (#175) — wrapped in `publicHandler`: einstein/ask, einstein/feedback.
+  //   ADR-0001 8/8 part 3. NextAuth catch-all (`auth/[...nextauth]/route.ts`)
+  //   and Inngest serve (`inngest/route.ts`) stay EXEMPT — assessed in H4
+  //   (framework-managed handlers may be permanent carve-outs).
+  // Wave H4-H5 — remaining proxy-matcher exclusions (NextAuth catch-all,
+  //   inngest, webhooks/payfast) to be wrapped in subsequent sub-waves.
   "auth/[...nextauth]/route.ts",
-  "einstein/ask/route.ts",
-  "einstein/feedback/route.ts",
   "inngest/route.ts",
   "webhooks/payfast/route.ts",
 
