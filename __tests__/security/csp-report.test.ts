@@ -25,6 +25,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { buildCsp, buildSecurityHeaders } from "@/lib/security/csp";
 
+// Wave H1 (#173) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 // ── Logger spy — set up before the route module is imported ──────────────
 // Per `feedback-vi-hoisted-shared-mocks.md`: when a vi.mock factory needs
 // to reference shared mock state, that state must be created inside
@@ -157,14 +162,14 @@ describe("POST /api/csp-report", () => {
   it("returns 204 No Content for a legacy application/csp-report POST", async () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const req = makeRequest(legacyBody, "application/csp-report");
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(204);
   });
 
   it("logs the legacy violation under [csp-violation] with the directive + blocked URI", async () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const req = makeRequest(legacyBody, "application/csp-report");
-    await POST(req);
+    await POST(req, CTX);
 
     expect(loggerMock.warn).toHaveBeenCalledTimes(1);
     const [tag, fields] = loggerMock.warn.mock.calls[0];
@@ -179,7 +184,7 @@ describe("POST /api/csp-report", () => {
   it("returns 204 for a modern application/reports+json POST", async () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const req = makeRequest(modernBody, "application/reports+json");
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(204);
   });
 
@@ -187,7 +192,7 @@ describe("POST /api/csp-report", () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const batch = [...modernBody, ...modernBody]; // two reports in one POST
     const req = makeRequest(batch, "application/reports+json");
-    await POST(req);
+    await POST(req, CTX);
 
     expect(loggerMock.warn).toHaveBeenCalledTimes(2);
     const [tag, fields] = loggerMock.warn.mock.calls[0];
@@ -214,7 +219,7 @@ describe("POST /api/csp-report", () => {
       ],
       "application/reports+json",
     );
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(204);
     expect(loggerMock.warn).not.toHaveBeenCalled();
   });
@@ -222,7 +227,7 @@ describe("POST /api/csp-report", () => {
   it("returns 204 even on malformed JSON (browsers cannot retry usefully)", async () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const req = makeRequest("{not json", "application/csp-report");
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(204);
     expect(loggerMock.warn).not.toHaveBeenCalled();
   });
@@ -230,7 +235,7 @@ describe("POST /api/csp-report", () => {
   it("returns 204 on an empty body", async () => {
     const { POST } = await import("@/app/api/csp-report/route");
     const req = makeRequest("", "application/csp-report");
-    const res = await POST(req);
+    const res = await POST(req, CTX);
     expect(res.status).toBe(204);
   });
 });

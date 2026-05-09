@@ -38,19 +38,18 @@ const API_ROOT = join(REPO_ROOT, "app", "api");
 const EXEMPT: ReadonlySet<string> = new Set([
   // ── proxy-matcher exclusions: outside the auth hop, will be wrapped in
   //    `publicHandler` once the adapter contract has soaked. ──
+  // Wave H1 (#173) — wrapped in `publicHandler`: csp-report, health,
+  //   telemetry/{vitals,client-errors}, farms/[slug]/select. ADR-0001 8/8 part 1.
+  // Wave H2-H5 — remaining proxy-matcher exclusions (auth/*, einstein/*,
+  //   inngest, webhooks/payfast) to be wrapped in subsequent sub-waves.
   "auth/[...nextauth]/route.ts",
   "auth/login-check/route.ts",
   "auth/register/route.ts",
   "auth/resend-verification/route.ts",
   "auth/verify-email/route.ts",
-  "csp-report/route.ts",
   "einstein/ask/route.ts",
   "einstein/feedback/route.ts",
-  "farms/[slug]/select/route.ts",
-  "health/route.ts",
   "inngest/route.ts",
-  "telemetry/client-errors/route.ts",
-  "telemetry/vitals/route.ts",
   "webhooks/payfast/route.ts",
 
   // ── platform-admin / cross-farm: not under per-farm context. ──
