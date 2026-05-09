@@ -148,6 +148,11 @@ vi.mock('@/lib/einstein/answer', async () => {
 const { POST } = await import('@/app/api/einstein/ask/route');
 const { EinsteinBudgetError } = await import('@/lib/einstein/budget');
 
+// Wave H3 (#175) — POST is now wrapped in `publicHandler`, so its signature
+// is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
+// segments) — every test below passes this `CTX` to satisfy the type.
+const CTX = { params: Promise.resolve({}) };
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function createRequest(body: unknown): NextRequest {
@@ -255,7 +260,7 @@ beforeEach(() => resetAll());
 describe('POST /api/einstein/ask — auth + validation', () => {
   it('returns 401 EINSTEIN_UNAUTHENTICATED when session is missing', async () => {
     mockGetServerSession.mockResolvedValue(null);
-    const resp = await POST(createRequest({ question: 'q', farmSlug: 'delta-livestock' }));
+    const resp = await POST(createRequest({ question: 'q', farmSlug: 'delta-livestock' }), CTX);
     expect(resp.status).toBe(401);
     const json = await resp.json();
     expect(json.code).toBe('EINSTEIN_UNAUTHENTICATED');
@@ -263,7 +268,7 @@ describe('POST /api/einstein/ask — auth + validation', () => {
 
   it('returns 400 EINSTEIN_BAD_REQUEST when body is not valid JSON', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
-    const resp = await POST(createRequest('{not valid json'));
+    const resp = await POST(createRequest('{not valid json'), CTX);
     expect(resp.status).toBe(400);
     const json = await resp.json();
     expect(json.code).toBe('EINSTEIN_BAD_REQUEST');
@@ -271,13 +276,13 @@ describe('POST /api/einstein/ask — auth + validation', () => {
 
   it('returns 400 when question is missing', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
-    const resp = await POST(createRequest({ farmSlug: 'delta-livestock' }));
+    const resp = await POST(createRequest({ farmSlug: 'delta-livestock' }), CTX);
     expect(resp.status).toBe(400);
   });
 
   it('returns 400 when farmSlug is missing', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
-    const resp = await POST(createRequest({ question: 'q' }));
+    const resp = await POST(createRequest({ question: 'q' }), CTX);
     expect(resp.status).toBe(400);
   });
 });
@@ -288,6 +293,7 @@ describe('POST /api/einstein/ask — tier gate', () => {
     mockGetFarmCreds.mockResolvedValue(null);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'ghost' }),
+      CTX,
     );
     expect(resp.status).toBe(404);
     const json = await resp.json();
@@ -299,6 +305,7 @@ describe('POST /api/einstein/ask — tier gate', () => {
     mockGetFarmCreds.mockResolvedValue(basicCreds);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     expect(resp.status).toBe(403);
     const json = await resp.json();
@@ -314,6 +321,7 @@ describe('POST /api/einstein/ask — tier gate', () => {
     });
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     expect(resp.status).toBe(403);
     const json = await resp.json();
@@ -339,6 +347,7 @@ describe('POST /api/einstein/ask — budget branch', () => {
 
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     expect(resp.status).toBe(429);
     const json = await resp.json();
@@ -380,6 +389,7 @@ describe('POST /api/einstein/ask — happy path (advanced)', () => {
         question: 'any sick cows?',
         farmSlug: 'delta-livestock',
       }),
+      CTX,
     );
     expect(resp.status).toBe(200);
     expect(resp.headers.get('Content-Type')).toBe('text/event-stream');
@@ -467,6 +477,7 @@ describe('POST /api/einstein/ask — happy path (advanced)', () => {
 
     const resp = await POST(
       createRequest({ question: 'how many animals', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     await readSSE(resp);
     // Both retrievers are called — hybrid mode.
@@ -494,6 +505,7 @@ describe('POST /api/einstein/ask — consulting tier', () => {
 
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     expect(resp.status).toBe(200);
     await readSSE(resp);
@@ -518,6 +530,7 @@ describe('POST /api/einstein/ask — stream-time errors', () => {
 
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
     );
     expect(resp.status).toBe(200);
     const body = await readSSE(resp);

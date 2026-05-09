@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server';
 import { getFarmContext } from '@/lib/server/farm-context';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
+import { publicHandler } from '@/lib/server/route';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,54 +49,63 @@ function parseBody(raw: unknown): FeedbackBody | { error: string } {
   return { queryLogId: r.queryLogId, feedback: r.feedback, note };
 }
 
-export async function POST(req: NextRequest): Promise<Response> {
-  let rawBody: unknown;
-  try {
-    rawBody = await req.json();
-  } catch {
-    return jsonError('EINSTEIN_BAD_REQUEST', 'Request body must be valid JSON', 400);
-  }
+/**
+ * Wave H3 (#175) — wrapped in `publicHandler` for typed-error envelope on
+ * unexpected throws + observability. Tenant resolution is preserved verbatim:
+ * the route uses cookie-based `getFarmContext(req)` (active-farm cookie) NOT
+ * `getFarmContextForSlug` because the route doesn't accept a `[farmSlug]` URL
+ * parameter. Wire-shape, tier gate, and Prisma P2025 mapping all preserved.
+ */
+export const POST = publicHandler({
+  handle: async (req: NextRequest): Promise<Response> => {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return jsonError('EINSTEIN_BAD_REQUEST', 'Request body must be valid JSON', 400);
+    }
 
-  const parsed = parseBody(rawBody);
-  if ('error' in parsed) {
-    return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
-  }
+    const parsed = parseBody(rawBody);
+    if ('error' in parsed) {
+      return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
+    }
 
-  const ctx = await getFarmContext(req);
-  if (!ctx) {
-    return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
-  }
-  const { prisma, slug } = ctx;
+    const ctx = await getFarmContext(req);
+    if (!ctx) {
+      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
+    }
+    const { prisma, slug } = ctx;
 
-  const creds = await getFarmCreds(slug);
-  if (!creds) {
-    return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${slug} not found`, 404);
-  }
-  if (!isPaidTier(creds.tier)) {
-    return jsonError(
-      'EINSTEIN_TIER_LOCKED',
-      'Farm Einstein requires an Advanced or Consulting subscription.',
-      403,
-    );
-  }
+    const creds = await getFarmCreds(slug);
+    if (!creds) {
+      return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${slug} not found`, 404);
+    }
+    if (!isPaidTier(creds.tier)) {
+      return jsonError(
+        'EINSTEIN_TIER_LOCKED',
+        'Farm Einstein requires an Advanced or Consulting subscription.',
+        403,
+      );
+    }
 
-  try {
-    const updated = await prisma.ragQueryLog.update({
-      where: { id: parsed.queryLogId },
-      data: { feedback: parsed.feedback, feedbackNote: parsed.note ?? null },
-      select: { id: true },
-    });
-    return new Response(JSON.stringify({ success: true, id: updated.id }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    // Prisma P2025 → row not found.
-    const code =
-      err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === 'P2025'
-        ? 'EINSTEIN_FEEDBACK_NOT_FOUND'
-        : 'EINSTEIN_FEEDBACK_FAILED';
-    const status = code === 'EINSTEIN_FEEDBACK_NOT_FOUND' ? 404 : 500;
-    return jsonError(code, err instanceof Error ? err.message : 'feedback update failed', status);
-  }
-}
+    try {
+      const updated = await prisma.ragQueryLog.update({
+        where: { id: parsed.queryLogId },
+        data: { feedback: parsed.feedback, feedbackNote: parsed.note ?? null },
+        select: { id: true },
+      });
+      return new Response(JSON.stringify({ success: true, id: updated.id }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      // Prisma P2025 → row not found.
+      const code =
+        err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === 'P2025'
+          ? 'EINSTEIN_FEEDBACK_NOT_FOUND'
+          : 'EINSTEIN_FEEDBACK_FAILED';
+      const status = code === 'EINSTEIN_FEEDBACK_NOT_FOUND' ? 404 : 500;
+      return jsonError(code, err instanceof Error ? err.message : 'feedback update failed', status);
+    }
+  },
+});

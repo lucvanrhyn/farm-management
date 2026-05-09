@@ -23,6 +23,7 @@ import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
 import { logger } from '@/lib/logger';
+import { publicHandler } from '@/lib/server/route';
 import {
   assertWithinBudget,
   stampCostBeforeSend,
@@ -137,212 +138,221 @@ function readAiSettingsFromPrisma(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest): Promise<Response> {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
-  }
+/**
+ * Wave H3 (#175) — wrapped in `publicHandler` for typed-error envelope on
+ * unexpected throws + observability. The route's own auth, tier gate, budget
+ * assertion, mark-before-send cost stamping, SSE streaming, and best-effort
+ * RagQueryLog write are all preserved verbatim inside `handle`. The adapter
+ * only intervenes when the handler itself throws unexpectedly.
+ */
+export const POST = publicHandler({
+  handle: async (req: NextRequest): Promise<Response> => {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
+    }
 
-  let rawBody: unknown;
-  try {
-    rawBody = await req.json();
-  } catch {
-    return jsonError('EINSTEIN_BAD_REQUEST', 'Request body must be valid JSON', 400);
-  }
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return jsonError('EINSTEIN_BAD_REQUEST', 'Request body must be valid JSON', 400);
+    }
 
-  const parsed = parseBody(rawBody);
-  if ('error' in parsed) {
-    return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
-  }
+    const parsed = parseBody(rawBody);
+    if ('error' in parsed) {
+      return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
+    }
 
-  // Tier gate (must be done before any further work).
-  const creds = await getFarmCreds(parsed.farmSlug);
-  if (!creds) {
-    return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${parsed.farmSlug} not found`, 404);
-  }
-  if (!isPaidTier(creds.tier)) {
-    return jsonError(
-      'EINSTEIN_TIER_LOCKED',
-      'Farm Einstein requires an Advanced or Consulting subscription.',
-      403,
-    );
-  }
-
-  // Auth the slug against the session (farm access verification).
-  const authed = await getPrismaForSlugWithAuth(session, parsed.farmSlug);
-  if ('error' in authed) {
-    return jsonError('EINSTEIN_FORBIDDEN', authed.error, authed.status);
-  }
-  const { prisma } = authed;
-
-  // Budget assertion (consulting → bypass).
-  try {
-    await assertWithinBudget(parsed.farmSlug);
-  } catch (err) {
-    if (err instanceof EinsteinBudgetError) {
-      const status = err.code === 'EINSTEIN_BUDGET_EXHAUSTED' ? 429 : 500;
-      return new Response(
-        JSON.stringify({ code: err.code, message: err.message, resetsAt: err.resetsAt }),
-        { status, headers: { 'Content-Type': 'application/json' } },
+    // Tier gate (must be done before any further work).
+    const creds = await getFarmCreds(parsed.farmSlug);
+    if (!creds) {
+      return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${parsed.farmSlug} not found`, 404);
+    }
+    if (!isPaidTier(creds.tier)) {
+      return jsonError(
+        'EINSTEIN_TIER_LOCKED',
+        'Farm Einstein requires an Advanced or Consulting subscription.',
+        403,
       );
     }
-    return jsonError('EINSTEIN_BUDGET_UNKNOWN', 'budget check failed', 500);
-  }
 
-  // Plan the query (Haiku).
-  let plan: StructuredQueryPlan;
-  try {
-    plan = await planQuery(parsed.question);
-  } catch (err) {
-    if (err instanceof QueryPlannerError) {
-      return jsonError(err.code, err.message, err.code === 'QUERY_PLANNER_NO_KEY' ? 500 : 502);
+    // Auth the slug against the session (farm access verification).
+    const authed = await getPrismaForSlugWithAuth(session, parsed.farmSlug);
+    if ('error' in authed) {
+      return jsonError('EINSTEIN_FORBIDDEN', authed.error, authed.status);
     }
-    return jsonError('QUERY_PLANNER_API_ERROR', 'query planner failed', 502);
-  }
+    const { prisma } = authed;
 
-  // Retrieve — hybrid when the plan is "structured" (Haiku classified it as a
-  // count/aggregate question). The structured path answers pure counts like
-  // "how many animals" but misses field-value lookups like "how many hectares
-  // is camp X". Running BOTH in parallel and merging chunks lets the answer
-  // LLM pick the right evidence: the aggregate count if it matches, otherwise
-  // the semantic chunks that carry the actual field values.
-  //
-  // Pre-fix (2026-04-21 postmortem): this was an exclusive OR. Any question
-  // whose planner-rewrite contained "how many" got classified structured and
-  // short-circuited past the camp/animal detail chunks, producing
-  // NO_GROUNDED_EVIDENCE refusals on obviously-answerable lookups.
-  let retrieval: RetrievalResult;
-  try {
-    const hybridMode =
-      plan.isStructuredQuery && (plan.entityTypeFilter?.length ?? 0) > 0;
-    if (hybridMode) {
-      const [structured, semantic] = await Promise.all([
-        retrieve.structured(parsed.farmSlug, plan),
-        retrieve.semantic(parsed.farmSlug, plan.rewrittenQuery, {
+    // Budget assertion (consulting → bypass).
+    try {
+      await assertWithinBudget(parsed.farmSlug);
+    } catch (err) {
+      if (err instanceof EinsteinBudgetError) {
+        const status = err.code === 'EINSTEIN_BUDGET_EXHAUSTED' ? 429 : 500;
+        return new Response(
+          JSON.stringify({ code: err.code, message: err.message, resetsAt: err.resetsAt }),
+          { status, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return jsonError('EINSTEIN_BUDGET_UNKNOWN', 'budget check failed', 500);
+    }
+
+    // Plan the query (Haiku).
+    let plan: StructuredQueryPlan;
+    try {
+      plan = await planQuery(parsed.question);
+    } catch (err) {
+      if (err instanceof QueryPlannerError) {
+        return jsonError(err.code, err.message, err.code === 'QUERY_PLANNER_NO_KEY' ? 500 : 502);
+      }
+      return jsonError('QUERY_PLANNER_API_ERROR', 'query planner failed', 502);
+    }
+
+    // Retrieve — hybrid when the plan is "structured" (Haiku classified it as a
+    // count/aggregate question). The structured path answers pure counts like
+    // "how many animals" but misses field-value lookups like "how many hectares
+    // is camp X". Running BOTH in parallel and merging chunks lets the answer
+    // LLM pick the right evidence: the aggregate count if it matches, otherwise
+    // the semantic chunks that carry the actual field values.
+    //
+    // Pre-fix (2026-04-21 postmortem): this was an exclusive OR. Any question
+    // whose planner-rewrite contained "how many" got classified structured and
+    // short-circuited past the camp/animal detail chunks, producing
+    // NO_GROUNDED_EVIDENCE refusals on obviously-answerable lookups.
+    let retrieval: RetrievalResult;
+    try {
+      const hybridMode =
+        plan.isStructuredQuery && (plan.entityTypeFilter?.length ?? 0) > 0;
+      if (hybridMode) {
+        const [structured, semantic] = await Promise.all([
+          retrieve.structured(parsed.farmSlug, plan),
+          retrieve.semantic(parsed.farmSlug, plan.rewrittenQuery, {
+            entityTypeFilter: plan.entityTypeFilter,
+            dateRangeFilter: plan.dateRangeFilter,
+          }),
+        ]);
+        retrieval = {
+          // Structured chunks ship first so the answer LLM sees the aggregate
+          // up front; semantic detail chunks provide grounding for specific
+          // field values / names. Citations dedupe by entityId downstream.
+          chunks: [...structured.chunks, ...semantic.chunks],
+          latencyMs: Math.max(structured.latencyMs, semantic.latencyMs),
+        };
+      } else {
+        retrieval = await retrieve.semantic(parsed.farmSlug, plan.rewrittenQuery, {
           entityTypeFilter: plan.entityTypeFilter,
           dateRangeFilter: plan.dateRangeFilter,
-        }),
-      ]);
-      retrieval = {
-        // Structured chunks ship first so the answer LLM sees the aggregate
-        // up front; semantic detail chunks provide grounding for specific
-        // field values / names. Citations dedupe by entityId downstream.
-        chunks: [...structured.chunks, ...semantic.chunks],
-        latencyMs: Math.max(structured.latencyMs, semantic.latencyMs),
-      };
-    } else {
-      retrieval = await retrieve.semantic(parsed.farmSlug, plan.rewrittenQuery, {
-        entityTypeFilter: plan.entityTypeFilter,
-        dateRangeFilter: plan.dateRangeFilter,
-      });
-    }
-  } catch (err) {
-    if (err instanceof RetrieverError) {
-      return jsonError(err.code, err.message, 502);
-    }
-    return jsonError('RETRIEVER_UNKNOWN', 'retrieval failed', 500);
-  }
-
-  // Load methodology + resolve assistant name (request override > stored > default).
-  const { methodology, assistantName: storedName } = await readAiSettingsFromPrisma(prisma);
-  const assistantName = parsed.assistantName ?? storedName ?? DEFAULT_ASSISTANT_NAME;
-
-  // MARK-BEFORE-SEND: stamp pessimistic cost BEFORE Anthropic streaming call.
-  const estimatedCostZar = estimatePessimisticCostZar();
-  try {
-    await stampCostBeforeSend(parsed.farmSlug, estimatedCostZar);
-  } catch (err) {
-    if (err instanceof EinsteinBudgetError) {
-      return new Response(
-        JSON.stringify({ code: err.code, message: err.message, resetsAt: err.resetsAt }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-    return jsonError('EINSTEIN_BUDGET_STAMP_FAILED', 'failed to pre-stamp cost', 500);
-  }
-
-  // Open SSE stream. We iterate streamAnswer() and forward each event.
-  const answerStartedAt = Date.now();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      const send = (event: string, data: unknown) => {
-        controller.enqueue(
-          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
-        );
-      };
-
-      let finalPayload: EinsteinAnswer | null = null;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-
-      try {
-        for await (const ev of streamAnswer({
-          question: parsed.question,
-          assistantName,
-          methodology,
-          retrieval,
-          history: parsed.history,
-        })) {
-          const typed = ev as AnswerStreamEvent;
-          if (typed.type === 'token') {
-            send('token', { text: typed.text });
-          } else if (typed.type === 'final') {
-            finalPayload = typed.payload;
-            send('final', typed.payload);
-          } else if (typed.type === 'error') {
-            errorCode = typed.code;
-            errorMessage = typed.message;
-            send('error', { code: typed.code, message: typed.message });
-            break;
-          }
-        }
-      } catch (err) {
-        if (err instanceof EinsteinAnswerError) {
-          errorCode = err.code;
-          errorMessage = err.message;
-        } else {
-          errorCode = 'EINSTEIN_STREAM_FAILED';
-          errorMessage = err instanceof Error ? err.message : 'unknown stream error';
-        }
-        send('error', { code: errorCode, message: errorMessage });
-      } finally {
-        // Best-effort RagQueryLog row. Never let logging throw into the stream.
-        try {
-          await prisma.ragQueryLog.create({
-            data: {
-              userId: session.user?.id ?? 'unknown',
-              assistantName,
-              question: parsed.question,
-              answerText: finalPayload?.answer ?? null,
-              citations: JSON.stringify(finalPayload?.citations ?? []),
-              retrievalLatencyMs: retrieval.latencyMs,
-              answerLatencyMs: Date.now() - answerStartedAt,
-              inputTokens: ESTIMATED_INPUT_TOKENS,
-              outputTokens: ESTIMATED_OUTPUT_TOKENS,
-              cachedInputTokens: 0,
-              costZar: estimatedCostZar,
-              modelId: 'claude-sonnet-4-6',
-              errorCode,
-              refusedReason: finalPayload?.refusedReason ?? null,
-            },
-          });
-        } catch (logErr) {
-          logger.warn('[einstein/ask] failed to persist RagQueryLog', {
-            err: logErr instanceof Error ? logErr.message : String(logErr),
-          });
-        }
-        controller.close();
+        });
       }
-    },
-  });
+    } catch (err) {
+      if (err instanceof RetrieverError) {
+        return jsonError(err.code, err.message, 502);
+      }
+      return jsonError('RETRIEVER_UNKNOWN', 'retrieval failed', 500);
+    }
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
-}
+    // Load methodology + resolve assistant name (request override > stored > default).
+    const { methodology, assistantName: storedName } = await readAiSettingsFromPrisma(prisma);
+    const assistantName = parsed.assistantName ?? storedName ?? DEFAULT_ASSISTANT_NAME;
+
+    // MARK-BEFORE-SEND: stamp pessimistic cost BEFORE Anthropic streaming call.
+    const estimatedCostZar = estimatePessimisticCostZar();
+    try {
+      await stampCostBeforeSend(parsed.farmSlug, estimatedCostZar);
+    } catch (err) {
+      if (err instanceof EinsteinBudgetError) {
+        return new Response(
+          JSON.stringify({ code: err.code, message: err.message, resetsAt: err.resetsAt }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return jsonError('EINSTEIN_BUDGET_STAMP_FAILED', 'failed to pre-stamp cost', 500);
+    }
+
+    // Open SSE stream. We iterate streamAnswer() and forward each event.
+    const answerStartedAt = Date.now();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const send = (event: string, data: unknown) => {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+
+        let finalPayload: EinsteinAnswer | null = null;
+        let errorCode: string | null = null;
+        let errorMessage: string | null = null;
+
+        try {
+          for await (const ev of streamAnswer({
+            question: parsed.question,
+            assistantName,
+            methodology,
+            retrieval,
+            history: parsed.history,
+          })) {
+            const typed = ev as AnswerStreamEvent;
+            if (typed.type === 'token') {
+              send('token', { text: typed.text });
+            } else if (typed.type === 'final') {
+              finalPayload = typed.payload;
+              send('final', typed.payload);
+            } else if (typed.type === 'error') {
+              errorCode = typed.code;
+              errorMessage = typed.message;
+              send('error', { code: typed.code, message: typed.message });
+              break;
+            }
+          }
+        } catch (err) {
+          if (err instanceof EinsteinAnswerError) {
+            errorCode = err.code;
+            errorMessage = err.message;
+          } else {
+            errorCode = 'EINSTEIN_STREAM_FAILED';
+            errorMessage = err instanceof Error ? err.message : 'unknown stream error';
+          }
+          send('error', { code: errorCode, message: errorMessage });
+        } finally {
+          // Best-effort RagQueryLog row. Never let logging throw into the stream.
+          try {
+            await prisma.ragQueryLog.create({
+              data: {
+                userId: session.user?.id ?? 'unknown',
+                assistantName,
+                question: parsed.question,
+                answerText: finalPayload?.answer ?? null,
+                citations: JSON.stringify(finalPayload?.citations ?? []),
+                retrievalLatencyMs: retrieval.latencyMs,
+                answerLatencyMs: Date.now() - answerStartedAt,
+                inputTokens: ESTIMATED_INPUT_TOKENS,
+                outputTokens: ESTIMATED_OUTPUT_TOKENS,
+                cachedInputTokens: 0,
+                costZar: estimatedCostZar,
+                modelId: 'claude-sonnet-4-6',
+                errorCode,
+                refusedReason: finalPayload?.refusedReason ?? null,
+              },
+            });
+          } catch (logErr) {
+            logger.warn('[einstein/ask] failed to persist RagQueryLog', {
+              err: logErr instanceof Error ? logErr.message : String(logErr),
+            });
+          }
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  },
+});
