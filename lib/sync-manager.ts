@@ -106,20 +106,29 @@ async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
  * pure cache pull) keep the timestamp truthful. `syncAndRefresh` flips it
  * false when submits were attempted and zero succeeded — otherwise the UI
  * shows "Synced: Just now" while every queued row failed silently.
+ *
+ * `species` scopes the /api/camps fetch to a single species so the returned
+ * `animal_count` per camp reflects only that species' herd. When omitted,
+ * the route returns cross-species counts (back-compat for callers that
+ * pre-date the multi-species mode toggle). Wave D-U3 / Codex audit P2 U3.
  */
 interface RefreshCachedDataOptions {
   tickLastSyncedAt?: boolean;
+  species?: string;
 }
 
 export async function refreshCachedData(
   options: RefreshCachedDataOptions = {},
 ): Promise<void> {
-  const { tickLastSyncedAt = true } = options;
+  const { tickLastSyncedAt = true, species } = options;
   // Three top-level refreshes run in parallel; animals pagination happens
   // inside its own helper. /api/animals is no longer in the outer fan-out
   // because it may take multiple requests.
+  const campsUrl = species
+    ? `/api/camps?species=${encodeURIComponent(species)}`
+    : '/api/camps';
   const [campsRes, animals, farmRes, statusRes] = await Promise.all([
-    fetch('/api/camps'),
+    fetch(campsUrl),
     fetchAllAnimalsPaged(),
     fetch('/api/farm'),
     fetch('/api/camps/status'),
@@ -405,7 +414,15 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
   return { synced, failed };
 }
 
-export async function syncAndRefresh(): Promise<{ synced: number; failed: number }> {
+interface SyncAndRefreshOptions {
+  /** Forwarded to `refreshCachedData` so the post-sync cache pull is mode-scoped. */
+  species?: string;
+}
+
+export async function syncAndRefresh(
+  options: SyncAndRefreshOptions = {},
+): Promise<{ synced: number; failed: number }> {
+  const { species } = options;
   const [obsResult, animalsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
     syncPendingAnimals(),
@@ -424,7 +441,7 @@ export async function syncAndRefresh(): Promise<{ synced: number; failed: number
   // cache-refresh GETs themselves are the sync that happened.
   const submitsAttempted = synced + failed > 0;
   const tickLastSyncedAt = !submitsAttempted || synced > 0;
-  await refreshCachedData({ tickLastSyncedAt });
+  await refreshCachedData({ tickLastSyncedAt, species });
 
   return { synced, failed };
 }

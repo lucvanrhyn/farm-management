@@ -25,6 +25,7 @@ import {
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
+import { useFarmModeSafe } from '@/lib/farm-mode';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
 
@@ -94,6 +95,11 @@ async function getCachedTasks(farmSlug: string): Promise<CachedTask[]> {
 export function OfflineProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const farmSlug = pathname.split('/')[1] || '';
+  // Mode is read from FarmModeProvider (mounted above OfflineProvider in
+  // `app/[farmSlug]/layout.tsx`). useFarmModeSafe returns a "cattle" default
+  // when no provider is present, which keeps unit-test harnesses that mount
+  // OfflineProvider in isolation working. Wave D-U3 / Codex audit P2 U3.
+  const { mode } = useFarmModeSafe();
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [pendingCount, setPendingCount] = useState(0);
@@ -104,6 +110,10 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<CachedTask[]>([]);
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks the mode the camps in React state were last fetched for. The
+  // mode-change effect uses this to skip the initial-mount no-op (the
+  // mount-time refresh path already handles the first paint).
+  const lastFetchedModeRef = useRef<string | null>(null);
 
   const refreshPendingCount = useCallback(async () => {
     const count = await getPendingCount();
@@ -131,12 +141,14 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     setSyncStatus('syncing');
     try {
       // If there are pending changes, sync-and-refresh (handles both sync + cache pull)
-      // Otherwise just pull fresh data from server
+      // Otherwise just pull fresh data from server.
+      // `species: mode` scopes /api/camps' animal_count to the active species.
       if (pendingCount > 0) {
-        await syncAndRefresh();
+        await syncAndRefresh({ species: mode });
       } else {
-        await refreshCachedData();
+        await refreshCachedData({ species: mode });
       }
+      lastFetchedModeRef.current = mode;
       const iso = new Date().toISOString();
       setLastSyncedAtState(iso);
       await refreshPendingCount();
@@ -149,13 +161,13 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       clientLogger.error('refreshData error', { err });
       setSyncStatus('error');
     }
-  }, [pendingCount, syncStatus, refreshPendingCount, refreshHeroImage]);
+  }, [pendingCount, syncStatus, mode, refreshPendingCount, refreshHeroImage]);
 
   const syncNow = useCallback(async () => {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const { synced, failed } = await syncAndRefresh();
+      const { synced, failed } = await syncAndRefresh({ species: mode });
       // Surface the toast whenever a sync cycle produced ANY visible outcome —
       // a success, a failure, or a partial mix. Previously we only toasted on
       // synced > 0, so a wave of 422s left users with a green tick and zero
@@ -170,11 +182,12 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       setCamps(updated);
       await refreshHeroImage();
       await refreshPendingCount();
+      lastFetchedModeRef.current = mode;
       setSyncStatus('idle');
     } catch {
       setSyncStatus('error');
     }
-  }, [syncStatus, refreshPendingCount, refreshHeroImage]);
+  }, [syncStatus, mode, refreshPendingCount, refreshHeroImage]);
 
   // Initialize on farm switch — set farm slug for IndexedDB isolation BEFORE any DB calls.
   // The `cancelled` flag discards async results that resolve after a subsequent farm switch,
@@ -248,6 +261,36 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, [syncNow]);
+
+  // Mode-aware camp refresh (Wave D-U3 / Codex audit P2 U3).
+  //
+  // When the user toggles Cattle↔Sheep via the ModeSwitcher, the camp grid's
+  // `animal_count` chips must update to the new species' counts. The mount
+  // effect's initial refresh already pulls camps scoped to the current mode
+  // (via `refreshData`), so we only need to re-fetch on a SUBSEQUENT change.
+  //
+  // `lastFetchedModeRef` is seeded by `refreshData` / `syncNow` on every
+  // successful refresh. On first commit it is `null` — we seed it to the
+  // current mode to avoid a duplicate fan-out (the mount effect's freshness
+  // gate will handle the first fetch). On any later mode change, we compare
+  // and fire a refresh if they diverge.
+  //
+  // IDB seeding intentionally is NOT mode-partitioned: `seedCamps` writes
+  // whatever the server returned (mode-scoped animal_count for the
+  // CURRENT mode). The React state `camps` stays in sync via `refreshData`'s
+  // `setCamps(updated)` call. A future visit on a different mode triggers a
+  // fresh fetch that overwrites the cache — acceptable for v1.
+  useEffect(() => {
+    if (!campsLoaded) return;
+    if (lastFetchedModeRef.current === null) {
+      // Initial mount path: seed the ref to silence the first invocation.
+      lastFetchedModeRef.current = mode;
+      return;
+    }
+    if (lastFetchedModeRef.current === mode) return;
+    refreshData();
+    // refreshData updates lastFetchedModeRef internally on success.
+  }, [mode, campsLoaded, refreshData]);
 
   return (
     <OfflineContext.Provider
