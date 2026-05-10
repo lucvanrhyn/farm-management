@@ -81,7 +81,6 @@ export default async function FinansiesPage({
           <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
           <div className="flex items-center gap-2">
             <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
-            <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
           </div>
         </div>
         <FinansiesClient
@@ -111,6 +110,23 @@ export default async function FinansiesPage({
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
           <FinancialChartsSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
+        {/*
+          Wave C / U4 — see animals/page.tsx for full rationale. Danger zone
+          sits at the bottom so destroying the entire transactions ledger is
+          an intentional end-of-page action.
+        */}
+        <div
+          data-testid="danger-zone"
+          className="mt-12 pt-6 border-t border-[#E8DFD2]"
+        >
+          <p
+            className="text-xs uppercase tracking-wider mb-3"
+            style={{ color: "#9C8E7A" }}
+          >
+            Danger zone
+          </p>
+          <ClearSectionButton endpoint="/api/transactions/reset" label="Clear All Transactions" />
+        </div>
     </AdminPage>
   );
 }
