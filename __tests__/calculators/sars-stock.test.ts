@@ -275,3 +275,74 @@ describe("mapFarmTrackCategoryToSarsClass — unmapped", () => {
     ).toThrow(UnknownLivestockClassError);
   });
 });
+
+// ── valueStockBlock — resilience to unmapped classes (P1.4) ──────────────────
+//
+// Pre-P1.4, valueStockBlock called lookupStandardValue() on every snapshot row
+// and let UnknownLivestockClassError bubble. The IT3 preview path catches it
+// in the route adapter, but the user lands with `{error: "DB_QUERY_FAILED"}`
+// and the issue button stays disabled. The structural fix mirrors the
+// inventory-replay `unmapped` bucket: gazetted-class lookup misses are
+// surfaced through `unmappedLines` (zero-rand contribution) instead of
+// throwing.
+
+describe("valueStockBlock — unmapped class resilience (P1.4)", () => {
+  it("buckets a non-gazetted (species, ageCategory) into unmappedLines without throwing", () => {
+    const snapshot: AnimalSnapshot[] = [
+      // 'pigs/Boar' is NOT in STANDARD_VALUES — gazetted classes are
+      // 'pigs/Over 6 months' and 'pigs/Under 6 months' only.
+      { species: "pigs", ageCategory: "Boar", count: 5 },
+      { species: "cattle", ageCategory: "Bulls", count: 10 },
+    ];
+    const result = valueStockBlock(snapshot, []);
+    // Mapped class still values normally.
+    expect(result.totalZar).toBe(10 * 50);
+    // Unmapped class contributes ZERO rand — taxpayer values it separately.
+    expect(result.unmappedLines).toBeDefined();
+    expect(result.unmappedLines).toEqual([
+      { species: "pigs", ageCategory: "Boar", count: 5 },
+    ]);
+    // Lines array contains only the mapped row.
+    expect(result.lines).toHaveLength(1);
+    expect(result.lines[0].species).toBe("cattle");
+  });
+
+  it("does not throw when species is unknown — surfaces it as unmapped", () => {
+    const snapshot: AnimalSnapshot[] = [
+      { species: "alpaca", ageCategory: "Adult", count: 2 },
+    ];
+    expect(() => valueStockBlock(snapshot, [])).not.toThrow();
+    const result = valueStockBlock(snapshot, []);
+    expect(result.totalZar).toBe(0);
+    expect(result.unmappedLines).toEqual([
+      { species: "alpaca", ageCategory: "Adult", count: 2 },
+    ]);
+  });
+
+  it("returns an empty unmappedLines array when every class is gazetted", () => {
+    const snapshot: AnimalSnapshot[] = [
+      { species: "cattle", ageCategory: "Bulls", count: 1 },
+    ];
+    const result = valueStockBlock(snapshot, []);
+    expect(result.unmappedLines).toEqual([]);
+  });
+});
+
+describe("summariseStockMovement — resilient to unmapped classes (P1.4)", () => {
+  it("does not throw when opening or closing contains an unmapped class", () => {
+    const opening: AnimalSnapshot[] = [
+      { species: "cattle", ageCategory: "Bulls", count: 100 },
+      { species: "pigs", ageCategory: "Boar", count: 3 }, // unmapped
+    ];
+    const closing: AnimalSnapshot[] = [
+      { species: "cattle", ageCategory: "Bulls", count: 110 },
+      { species: "pigs", ageCategory: "Boar", count: 4 }, // unmapped
+    ];
+    expect(() => summariseStockMovement(opening, closing, [])).not.toThrow();
+    const movement = summariseStockMovement(opening, closing, []);
+    // Only mapped Bulls contribute: 100 * 50 = 5000 → 110 * 50 = 5500
+    expect(movement.openingStockValueZar).toBe(5_000);
+    expect(movement.closingStockValueZar).toBe(5_500);
+    expect(movement.deltaZar).toBe(500);
+  });
+});

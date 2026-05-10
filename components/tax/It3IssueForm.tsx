@@ -10,6 +10,42 @@ interface It3IssueFormProps {
   onIssued: (taxYear: number) => void;
 }
 
+/**
+ * Map a server-emitted error envelope (or empty body / parse failure) to a
+ * user-readable message. Production-triage P1.4 (2026-05-03) tracked the
+ * literal "Failed to execute 'json' on 'Response'" UX bug back to an empty
+ * body from /api/[farmSlug]/tax/it3/preview when the route handler threw.
+ * Wave G8 (PR #172) wraps the route in `tenantReadSlug` so throws now emit
+ * `{error: "DB_QUERY_FAILED"}` JSON, but the toast still surfaced the raw
+ * code. This mapping turns SCREAMING_SNAKE codes into actionable text.
+ */
+interface It3ErrorEnvelope {
+  error?: string;
+  message?: string;
+}
+
+async function readIt3ErrorMessage(res: Response, fallback: string): Promise<string> {
+  let body: It3ErrorEnvelope | null = null;
+  try {
+    const text = await res.text();
+    body = text ? (JSON.parse(text) as It3ErrorEnvelope) : null;
+  } catch {
+    body = null;
+  }
+  const code = body?.error;
+  switch (code) {
+    case "DB_QUERY_FAILED":
+      return "Could not generate the IT3 preview right now. Please try again in a moment, or contact support if it keeps happening.";
+    case "AUTH_REQUIRED":
+      return "Your session has expired. Please sign in again.";
+    case "EINSTEIN_TIER_LOCKED":
+    case "TIER_LOCKED":
+      return "IT3 requires the Advanced plan. Upgrade in Settings → Subscription.";
+    default:
+      return body?.message ?? code ?? fallback;
+  }
+}
+
 export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) {
   // Default to the 5 most recent tax years, today.
   const taxYearOptions = getRecentTaxYears(new Date(), 5);
@@ -28,8 +64,7 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
         { cache: "no-store" },
       );
       if (!res.ok) {
-        const err = (await res.json()) as { error?: string };
-        setError(err.error ?? "Failed to load preview");
+        setError(await readIt3ErrorMessage(res, "Failed to load preview"));
         setPreview(null);
         return;
       }
@@ -58,8 +93,7 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
         body: JSON.stringify({ taxYear }),
       });
       if (!res.ok) {
-        const err = (await res.json()) as { error?: string };
-        setError(err.error ?? "Failed to issue snapshot");
+        setError(await readIt3ErrorMessage(res, "Failed to issue snapshot"));
         return;
       }
       onIssued(taxYear);
