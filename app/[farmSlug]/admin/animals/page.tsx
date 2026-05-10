@@ -8,6 +8,7 @@ import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { activeSpeciesWhere } from "@/lib/animals/active-species-filter";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -46,7 +47,10 @@ export default async function AdminAnimalsPage({
   // page because the cursor is empty.
   const [animals, prismaCamps, withdrawalAnimals, prismaMobs] = await Promise.all([
     prisma.animal.findMany({
-      where: { species: mode },
+      // Wave A2: per-species + Active. Previously `where: { species: mode }`
+      // leaked inactive/sold/dead rows into the admin table. Helper keeps
+      // this surface in lockstep with CampDetailPanel and any future caller.
+      where: activeSpeciesWhere(mode),
       orderBy: cursor
         ? { animalId: "asc" }
         : [{ category: "asc" }, { animalId: "asc" }],
