@@ -666,7 +666,7 @@ export async function promoteToProd(
   const {
     branchName,
     headSha,
-    minSoakHours = 0.5,
+    minSoakHours = 0,
     forceSkipSoak = false,
     escalatedPathsTouched,
     now = () => new Date(),
@@ -683,20 +683,24 @@ export async function promoteToProd(
     throw new BranchCloneNotFoundError(branchName);
   }
 
-  // 2. Soak gate — conditional per #178.
+  // 2. Soak gate — disabled by default per Wave 179 audit (#179).
   //
-  // ESCALATED_PATHS rationale: `lib/migrator.ts` and `lib/ops/branch-clone.ts`
-  // are the two files where a bug invalidates the backstop probes. Everywhere
-  // else, the structural backstops shipped in PRD #128 catch the migration-
-  // replay class synchronously — no temporal soak needed.
+  // Empirical record: 60+ merges, 0 bugs caught by soak. The structural
+  // backstops shipped in PRD #128 (verifyMigrationApplied #141, parity
+  // audit #137, no-select audit #140) plus the post-promote authenticated
+  // smoke (rolls back on 500/error-boundary) cover the entire known
+  // failure surface synchronously at promote time. The temporal soak
+  // window adds nothing real — it sleeps a CI runner, not real traffic.
   //
-  // back-compat: when `escalatedPathsTouched` is undefined (caller hasn't
-  // been updated), treat as `true` — i.e. enforce soak. This keeps every
-  // existing call site at the old policy until it is explicitly updated.
+  // The bookkeeping infrastructure (soak_started_at column,
+  // recordCiPassForCommit, escalatedPathsTouched parameter, headSha SHA
+  // match) is RETAINED for one-line revertability. To re-enable, change
+  // `minSoakHours = 0` back to `0.5` (escalated-only) or `1` (blanket).
   //
-  // Issue #101 fix (preserved): when headSha is provided, the gate keys on the
-  // per-commit `soak_started_at` timestamp rather than the branch-level
-  // `created_at`. If headSha is not provided, fall back to created_at.
+  // Issue #101 SHA mismatch check (preserved): when headSha is provided,
+  // a stored mismatch still throws SoakNotMetError(shaMismatch=true).
+  // This protects against the "post-CI-green commit pushed before soak
+  // started" race regardless of minSoakHours value.
   if (!forceSkipSoak) {
     const isEscalated = escalatedPathsTouched !== false; // undefined -> true
     if (isEscalated) {

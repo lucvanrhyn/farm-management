@@ -1,17 +1,20 @@
 /**
- * Issue #178 — conditional soak gate.
+ * Wave 179 — soak gate eliminated. Default `minSoakHours = 0`.
  *
- * Tests the new `escalatedPathsTouched` flag on promoteToProd:
- *   - `false` → skip soak entirely (pure-transport fast path)
- *   - `true`  → enforce soak (escalated tier — `lib/migrator.ts` or
- *               `lib/ops/branch-clone.ts` touched)
- *   - undefined → back-compat (treat as `true` to keep unmigrated callers
- *                 on the old behaviour)
+ * Empirical record: 0 bugs caught across 60+ merges. The synchronous
+ * backstops from PRD #128 (verifyMigrationApplied #141, parity audit
+ * #137, no-select audit #140) plus the post-promote authenticated smoke
+ * cover the entire known failure surface. The temporal soak window is
+ * theatre — it sleeps a CI runner, not real traffic.
  *
- * Plus locks in the `diffTouchesEscalated` helper's contract: only the
- * narrow ESCALATED_PATHS set triggers the gate. Migrations, schema, and
- * app routes are NOT escalated (covered by structural backstops at
- * promote time per PRD #128).
+ * Tests cover:
+ *   - default behaviour (no minSoakHours arg) → soak no-op, promote
+ *     succeeds even when "elapsed" is 0 min.
+ *   - LEGACY revert path (`minSoakHours: 0.5`) — preserved for the
+ *     one-line revert: `escalatedPathsTouched=false` skips, `=true`
+ *     enforces, undefined treats as escalated.
+ *   - `diffTouchesEscalated` helper — still exported for callers that
+ *     opt into the legacy path.
  *
  * The metaClient stub pattern mirrors __tests__/lib/ops/branch-clone.test.ts.
  */
@@ -137,7 +140,103 @@ describe('diffTouchesEscalated', () => {
   });
 });
 
-describe('promoteToProd — conditional soak (#178)', () => {
+describe('promoteToProd — default soak disabled (Wave 179)', () => {
+  it('promotes immediately under default minSoakHours=0 even with 0 elapsed', async () => {
+    // Default minSoakHours=0 (no arg passed) — soak gate is a no-op.
+    // Even an "escalated" PR (lib/migrator.ts or lib/ops/branch-clone.ts
+    // touched) under the default policy promotes without delay.
+    const { promoteToProd } = await import('@/lib/ops/branch-clone');
+
+    const justNow = new Date().toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/179-default-fast',
+      tursoDbName: 'ft-clone-179-fast-abc101',
+      createdAt: justNow,
+    });
+
+    const runProdMigration = vi.fn().mockResolvedValue({
+      applied: ['0001_init.sql'],
+      skipped: [],
+    });
+
+    const result = await promoteToProd({
+      branchName: 'wave/179-default-fast',
+      // No minSoakHours, no escalatedPathsTouched — both rely on defaults.
+      metaClient: memClient,
+      now: () => new Date(),
+      runProdMigration,
+      parityVerifyEnabled: false,
+    });
+
+    expect(result.branchName).toBe('wave/179-default-fast');
+    expect(runProdMigration).toHaveBeenCalledTimes(1);
+    expect(result.prodMigrationAppliedFiles).toContain('0001_init.sql');
+  });
+
+  it('promotes immediately under default even when escalatedPathsTouched=true', async () => {
+    // Wave 179 flip: escalatedPathsTouched=true is now dormant under the
+    // default minSoakHours=0. The gate logic still runs (isEscalated branch)
+    // but elapsedHours >= 0 always passes the `< 0` check.
+    const { promoteToProd } = await import('@/lib/ops/branch-clone');
+
+    const justNow = new Date().toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/179-default-esc',
+      tursoDbName: 'ft-clone-179-esc-abc102',
+      createdAt: justNow,
+    });
+
+    const runProdMigration = vi.fn().mockResolvedValue({ applied: [], skipped: [] });
+
+    const result = await promoteToProd({
+      branchName: 'wave/179-default-esc',
+      escalatedPathsTouched: true, // legacy escalation flag — dormant
+      // minSoakHours omitted → default 0
+      metaClient: memClient,
+      now: () => new Date(),
+      runProdMigration,
+      parityVerifyEnabled: false,
+    });
+
+    expect(result.branchName).toBe('wave/179-default-esc');
+    expect(runProdMigration).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the meta row promoted under default policy', async () => {
+    // Verifies the default-fast-path is a true promote (not an early return) —
+    // the migration runs and the meta row is updated as for any successful promote.
+    const { promoteToProd } = await import('@/lib/ops/branch-clone');
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    const oneMinAgo = new Date(Date.now() - 60 * 1000).toISOString();
+    await insertCloneRow(memClient, {
+      branchName: 'wave/179-default-marks',
+      tursoDbName: 'ft-clone-179-mark-abc103',
+      createdAt: oneMinAgo,
+    });
+
+    const fixedNow = new Date('2026-05-10T12:00:00.000Z');
+    await promoteToProd({
+      branchName: 'wave/179-default-marks',
+      metaClient: memClient,
+      now: () => fixedNow,
+      runProdMigration: async () => ({ applied: [], skipped: [] }),
+      parityVerifyEnabled: false,
+    });
+
+    const row = await getBranchClone('wave/179-default-marks');
+    expect(row!.prodMigrationAt).toBe('2026-05-10T12:00:00.000Z');
+    expect(row!.lastPromotedAt).toBe('2026-05-10T12:00:00.000Z');
+  });
+});
+
+// ── LEGACY revert-path tests ──────────────────────────────────────────────────
+// These tests exercise the soak-gate behaviour that activates when a future
+// caller (or one-line revert) passes an explicit `minSoakHours > 0`. The
+// bookkeeping infrastructure (escalatedPathsTouched parameter, soak_started_at,
+// SHA-match) is retained for one-line revertability per Wave 179.
+
+describe('promoteToProd — legacy soak path (minSoakHours: 0.5 — revert target)', () => {
   it('skips soak when escalatedPathsTouched=false (pure-transport)', async () => {
     // Soak elapsed = 5 min < 30 min floor — would normally throw SoakNotMetError.
     // With escalatedPathsTouched=false, the gate is bypassed entirely.
@@ -145,8 +244,8 @@ describe('promoteToProd — conditional soak (#178)', () => {
 
     const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     await insertCloneRow(memClient, {
-      branchName: 'wave/178-fast-path',
-      tursoDbName: 'ft-clone-178-fast-abc001',
+      branchName: 'wave/179-legacy-fast-path',
+      tursoDbName: 'ft-clone-179-lfast-abc001',
       createdAt: fiveMinsAgo,
     });
 
@@ -156,7 +255,7 @@ describe('promoteToProd — conditional soak (#178)', () => {
     });
 
     const result = await promoteToProd({
-      branchName: 'wave/178-fast-path',
+      branchName: 'wave/179-legacy-fast-path',
       minSoakHours: 0.5,
       escalatedPathsTouched: false,
       metaClient: memClient,
@@ -165,7 +264,7 @@ describe('promoteToProd — conditional soak (#178)', () => {
       parityVerifyEnabled: false,
     });
 
-    expect(result.branchName).toBe('wave/178-fast-path');
+    expect(result.branchName).toBe('wave/179-legacy-fast-path');
     // Migration should have been invoked (gate did NOT block).
     expect(runProdMigration).toHaveBeenCalledTimes(1);
     expect(result.prodMigrationAppliedFiles).toContain('0001_init.sql');
@@ -177,8 +276,8 @@ describe('promoteToProd — conditional soak (#178)', () => {
 
     const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     await insertCloneRow(memClient, {
-      branchName: 'wave/178-escalated',
-      tursoDbName: 'ft-clone-178-esc-abc002',
+      branchName: 'wave/179-legacy-escalated',
+      tursoDbName: 'ft-clone-179-lesc-abc002',
       createdAt: fiveMinsAgo,
     });
 
@@ -186,7 +285,7 @@ describe('promoteToProd — conditional soak (#178)', () => {
 
     await expect(
       promoteToProd({
-        branchName: 'wave/178-escalated',
+        branchName: 'wave/179-legacy-escalated',
         minSoakHours: 0.5,
         escalatedPathsTouched: true,
         metaClient: memClient,
@@ -201,13 +300,14 @@ describe('promoteToProd — conditional soak (#178)', () => {
 
   it('enforces soak when escalatedPathsTouched is undefined (back-compat)', async () => {
     // Old callers that have not been updated must keep the old behaviour:
-    // undefined → treat as escalated → enforce soak.
+    // undefined → treat as escalated → enforce soak (when caller opts into
+    // a non-zero minSoakHours).
     const { promoteToProd, SoakNotMetError } = await import('@/lib/ops/branch-clone');
 
     const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     await insertCloneRow(memClient, {
-      branchName: 'wave/178-backcompat',
-      tursoDbName: 'ft-clone-178-bc-abc003',
+      branchName: 'wave/179-legacy-backcompat',
+      tursoDbName: 'ft-clone-179-lbc-abc003',
       createdAt: fiveMinsAgo,
     });
 
@@ -215,7 +315,7 @@ describe('promoteToProd — conditional soak (#178)', () => {
 
     await expect(
       promoteToProd({
-        branchName: 'wave/178-backcompat',
+        branchName: 'wave/179-legacy-backcompat',
         minSoakHours: 0.5,
         // escalatedPathsTouched intentionally omitted
         metaClient: memClient,
@@ -228,43 +328,14 @@ describe('promoteToProd — conditional soak (#178)', () => {
     expect(runProdMigration).not.toHaveBeenCalled();
   });
 
-  it('marks the meta row promoted when fast-path is taken', async () => {
-    // Verifies the fast-path is a true skip (not an early return) — the
-    // migration runs and the meta row is updated as for any successful promote.
-    const { promoteToProd } = await import('@/lib/ops/branch-clone');
-    const { getBranchClone } = await import('@/lib/meta-db');
-
-    const oneMinAgo = new Date(Date.now() - 60 * 1000).toISOString();
-    await insertCloneRow(memClient, {
-      branchName: 'wave/178-fast-marks',
-      tursoDbName: 'ft-clone-178-mark-abc004',
-      createdAt: oneMinAgo,
-    });
-
-    const fixedNow = new Date('2026-05-09T12:00:00.000Z');
-    await promoteToProd({
-      branchName: 'wave/178-fast-marks',
-      minSoakHours: 0.5,
-      escalatedPathsTouched: false,
-      metaClient: memClient,
-      now: () => fixedNow,
-      runProdMigration: async () => ({ applied: [], skipped: [] }),
-      parityVerifyEnabled: false,
-    });
-
-    const row = await getBranchClone('wave/178-fast-marks');
-    expect(row!.prodMigrationAt).toBe('2026-05-09T12:00:00.000Z');
-    expect(row!.lastPromotedAt).toBe('2026-05-09T12:00:00.000Z');
-  });
-
   it('passes soak gate when escalatedPathsTouched=true and soak elapsed', async () => {
     // Soak elapsed = 1h > 30 min floor — must succeed.
     const { promoteToProd } = await import('@/lib/ops/branch-clone');
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     await insertCloneRow(memClient, {
-      branchName: 'wave/178-esc-soaked',
-      tursoDbName: 'ft-clone-178-soaked-abc005',
+      branchName: 'wave/179-legacy-esc-soaked',
+      tursoDbName: 'ft-clone-179-lsoaked-abc005',
       createdAt: oneHourAgo,
     });
 
@@ -274,7 +345,7 @@ describe('promoteToProd — conditional soak (#178)', () => {
     });
 
     const result = await promoteToProd({
-      branchName: 'wave/178-esc-soaked',
+      branchName: 'wave/179-legacy-esc-soaked',
       minSoakHours: 0.5,
       escalatedPathsTouched: true,
       metaClient: memClient,
