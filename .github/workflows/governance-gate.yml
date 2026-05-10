@@ -20,6 +20,14 @@ jobs:
       BRANCH_CLONE_GROUP: ${{ vars.BRANCH_CLONE_GROUP || 'eu-dub' }}
     steps:
       - uses: actions/checkout@v4
+        # `fetch-depth: 0` makes `origin/main` reachable inside the runner.
+        # The schema-parity step (below) compares tenant `_migrations`
+        # against the migration set merged on `origin/main`, NOT the PR
+        # branch — so any PR that adds a new migration doesn't fail by
+        # construction. Without `fetch-depth: 0` the script falls back to
+        # the working tree and the gate reverts to the pre-fix behavior.
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
