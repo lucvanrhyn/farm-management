@@ -35,9 +35,9 @@ DATABASE_URL="your-production-db-url" npx tsx prisma/seed.ts
 ```
 
 Default users seeded:
-- `admin@example.com` / `SCRUBBED-PASSWORD` (admin)
-- `field@example.com` / `SCRUBBED-PASSWORD` (field_logger)
-- `viewer@example.com` / `SCRUBBED-PASSWORD` (viewer)
+- `admin@example.com` / `<<seed-from-env>>` (admin)
+- `field@example.com` / `<<seed-from-env>>` (field_logger)
+- `viewer@example.com` / `<<seed-from-env>>` (viewer)
 
 **Change passwords immediately after first login in production.**
 
@@ -47,4 +47,4 @@ Default users seeded:
 2. Import project in Vercel, set all env vars above
 3. Deploy — Vercel auto-detects Next.js
 4. Reseed users against the production database
-5. Verify: visit `/login`, sign in with `viewer@example.com` / `SCRUBBED-PASSWORD`
+5. Verify: visit `/login`, sign in with `viewer@example.com` / `<<seed-from-env>>`

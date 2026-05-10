@@ -1,25 +1,27 @@
 import { createClient } from "@libsql/client";
 import { hashSync } from "bcryptjs";
 
-const users = [
-  {
-    email: "admin@example.com",
-    password: "SCRUBBED-PASSWORD",
-    name: "Luc",
-    role: "admin",
-  },
-  {
-    email: "field@example.com",
-    password: "SCRUBBED-PASSWORD",
-    name: "Dicky",
-    role: "field_logger",
-  },
-  {
-    email: "viewer@example.com",
-    password: "SCRUBBED-PASSWORD",
-    name: "Oupa",
-    role: "viewer",
-  },
+// Seed users come from env vars so plaintext passwords never live in source.
+// Required: SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD/SEED_ADMIN_NAME (and the same
+// trio for FIELD_ and VIEWER_). The script throws below if any are missing.
+type SeedUser = { email: string; password: string; name: string; role: string };
+
+function readSeedUser(prefix: string, role: string): SeedUser {
+  const email = process.env[`${prefix}_EMAIL`];
+  const password = process.env[`${prefix}_PASSWORD`];
+  const name = process.env[`${prefix}_NAME`];
+  if (!email || !password || !name) {
+    throw new Error(
+      `Missing seed env vars: set ${prefix}_EMAIL, ${prefix}_PASSWORD, ${prefix}_NAME`,
+    );
+  }
+  return { email, password, name, role };
+}
+
+const users: SeedUser[] = [
+  readSeedUser("SEED_ADMIN", "admin"),
+  readSeedUser("SEED_FIELD", "field_logger"),
+  readSeedUser("SEED_VIEWER", "viewer"),
 ];
 
 async function main() {

@@ -11,7 +11,7 @@ import {
 } from "@/lib/onboarding/schema-dictionary";
 
 // The schema dictionary is the cached system prompt for the Sonnet 4.6 AI
-// Import Wizard. These tests assert that every rule lifted from the Acme
+// Import Wizard. These tests assert that every rule lifted from the reference
 // onboarding script survives into the prompt, so that accidentally deleting
 // one fails CI instead of silently corrupting imports.
 

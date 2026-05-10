@@ -36,7 +36,7 @@ const deny = { allowed: false as const, retryAfterMs: 60_000 };
 
 const VALID_CREDENTIALS = {
   identifier: 'field@example.com',
-  password: 'SCRUBBED-PASSWORD',
+  password: '<<seed-from-env>>',
 };
 
 const STORED_USER = {

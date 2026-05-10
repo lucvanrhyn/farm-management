@@ -97,14 +97,14 @@ Set-difference probe:
   types: `LEGACY_DROUGHT_SEVERE`, `LEGACY_VELD_OVERDUE_ASSESSMENT`,
   `LEGACY_FEED_ON_OFFER_STALE_READING`, `LEGACY_STALE_INSPECTIONS`.
 
-Same pattern as example-tenant-a — daily notification cron post-cutover. No replay.
+Same pattern as the sibling tenant — daily notification cron post-cutover. No replay.
 
 ### All 41 other tables: parity
 
 `Animal` (105), `Camp` (9), `EinsteinChunk` (65), `FarmSettings` (1),
 `Observation` (598), `RainfallNormal` (12), `TaskTemplate` (20),
 `Transaction` (25), `TransactionCategory` (10), plus zero-row tables.
-`User` is 0 on both sides (basson uses meta-DB users only — confirmed).
+`User` is 0 on both sides (this tenant uses meta-DB users only — confirmed).
 
 ## Top-N divergent rows (per the Wave-1 brief)
 
@@ -138,8 +138,8 @@ The Phase E migration was run **on 2026-04-21** (when EinsteinChunk last wrote
 on both sides — same timestamp on src/dst confirms the dump captured
 everything up to that moment). Once the meta-DB pointer swapped, every
 subsequent write in production hit Ireland. The two tenants in question are
-not in active interactive use during cutover windows — example-tenant-a and Acme are
-both demo/single-user farms, not multi-user production. The only writes
+not in active interactive use during cutover windows — both tenants are
+demo/single-user farms, not multi-user production. The only writes
 between dump and swap on production-like cadence would be the daily cron at
 03:00 UTC, and the operator timed the cutover well outside that window. No
 human user submitted a form or ran a sync against the source between dump

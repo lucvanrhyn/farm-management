@@ -26,9 +26,9 @@
  *   5. Run against a "trio-b-shaped" Animal table (column already present and
  *      populated), it leaves rows untouched.
  *
- * The chunker assertion guards the original symptom — "Acme has 0 animal
+ * The chunker assertion guards the original symptom — "tenant has 0 animal
  * chunks" — by proving the post-backfill row shape produces output identical
- * (in cardinality) to a healthy trio-b row.
+ * (in cardinality) to a healthy reference row.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -52,7 +52,7 @@ async function selectAnimalRows(
 }
 
 /** Animal table shape on basson — missing the `species` column entirely. */
-async function createBassonShapedAnimalTable(db: Client): Promise<void> {
+async function createTenantShapedAnimalTable(db: Client): Promise<void> {
   await db.execute(`
     CREATE TABLE "Animal" (
       "id"          TEXT PRIMARY KEY,
@@ -120,7 +120,7 @@ describe('backfillAnimalSpeciesOnDb — basson-shaped DB (column missing)', () =
 
   beforeEach(async () => {
     db = createClient({ url: ':memory:' });
-    await createBassonShapedAnimalTable(db);
+    await createTenantShapedAnimalTable(db);
 
     // Three animals: a cattle breed, a sheep breed, an unknown breed.
     await db.execute({

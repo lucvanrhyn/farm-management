@@ -826,13 +826,13 @@ async function seedFarmSettings(client: Client): Promise<void> {
 async function provisionMetaRecords(farmDbUrl: string, farmDbToken: string): Promise<void> {
   console.log('\n── Meta DB: Users & Farm ─────────────────────────────\n');
 
-  // 1. Create Acme users (Kobus, Danie, Louis)
+  // 1. Create tenant users (kobus, danie, louis)
   const kobusId = randomUUID();
   const danieId = randomUUID();
   const louisId = randomUUID();
 
-  const kobusHash = hashSync('SCRUBBED-PASSWORD', 12);
-  const danieHash = hashSync('SCRUBBED-PASSWORD', 12);
+  const kobusHash = hashSync('<<seed-from-env>>', 12);
+  const danieHash = hashSync('<<seed-from-env>>', 12);
   const louisHash = hashSync('Louis2026!', 12);
 
   await createUser(kobusId, 'kobus@example.com', 'kobus.example', kobusHash, 'Kobus Example', true);
@@ -923,8 +923,8 @@ async function main() {
   console.log(`  Camps: ${CAMPS.length}`);
   console.log(`  Users: Kobus (ADMIN), Danie (ADMIN), Louis (LOGGER), Luc (ADMIN)`);
   console.log(`\n  Logins:`);
-  console.log(`    kobus.example / SCRUBBED-PASSWORD`);
-  console.log(`    danie.example / SCRUBBED-PASSWORD`);
+  console.log(`    kobus.example / <<seed-from-env>>`);
+  console.log(`    danie.example / <<seed-from-env>>`);
   console.log(`    louis.petrus / Louis2026!`);
   console.log(`    luc / (existing password)`);
   console.log('');

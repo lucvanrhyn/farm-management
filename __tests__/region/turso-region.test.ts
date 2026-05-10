@@ -46,7 +46,7 @@ describe("parseTursoRegion", () => {
 
   it("is case-insensitive on the region suffix", () => {
     const url =
-      "libsql://Trio-B-Boerdery.AWS-EU-CENTRAL-1.turso.io";
+      "libsql://Delta-Livestock.AWS-EU-CENTRAL-1.turso.io";
     expect(parseTursoRegion(url)).toBe("fra");
   });
 });

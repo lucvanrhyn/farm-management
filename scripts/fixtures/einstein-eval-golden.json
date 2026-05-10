@@ -22,7 +22,7 @@
   },
   {
     "id": "g-004",
-    "question": "What is the water source for camp 'Bloukom'?",
+    "question": "What is the water source for camp 'A'?",
     "expectedGroundedAnswer": true,
     "expectedCitationEntityTypes": ["camp"],
     "category": "veld"
