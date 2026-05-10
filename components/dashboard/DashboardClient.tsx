@@ -129,6 +129,7 @@ function ViewToggle({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient({
+  farmSlug,
   totalAnimals,
   totalBySpecies,
   campAnimalCounts,
@@ -141,6 +142,7 @@ export default function DashboardClient({
   veldScoreByCamp,
   feedOnOfferKgDmPerHaByCamp,
 }: {
+  farmSlug: string;
   totalAnimals: number;
   totalBySpecies?: Record<string, number>;
   campAnimalCounts: Record<string, number>;
@@ -257,7 +259,12 @@ export default function DashboardClient({
   }
 
   function handleViewDetails(campId: string) {
-    setSelectedCampId(campId);
+    // Codex audit C4 (2026-05-10): the "View Full Details →" CTA inside the
+    // schematic zoom card has nav affordance (label + arrow) but used to
+    // pop a side-panel overlay, leaving users on /dashboard. Route to the
+    // real per-camp page instead — the same surface OverviewTab and
+    // AnimalsTable already link to.
+    router.push(`/${farmSlug}/dashboard/camp/${campId}`);
   }
 
   const [boundaryError, setBoundaryError] = useState<string | null>(null);
