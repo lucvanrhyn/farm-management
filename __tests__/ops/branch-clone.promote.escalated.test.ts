@@ -208,14 +208,19 @@ describe('promoteToProd — default soak disabled (Wave 179)', () => {
     const { promoteToProd } = await import('@/lib/ops/branch-clone');
     const { getBranchClone } = await import('@/lib/meta-db');
 
-    const oneMinAgo = new Date(Date.now() - 60 * 1000).toISOString();
+    // Both `createdAt` and `now` must be derived from the same fixed clock.
+    // Using `Date.now()` for createdAt while pinning `now` to a fixed past
+    // date drifts elapsedHours into negative territory after wall-clock UTC
+    // crosses fixedNow, tripping `elapsedHours < minSoakHours` (0) — a
+    // pre-existing flake that surfaces post-2026-05-10T12:00:00Z.
+    const fixedNow = new Date('2026-05-10T12:00:00.000Z');
+    const oneMinAgo = new Date(fixedNow.getTime() - 60 * 1000).toISOString();
     await insertCloneRow(memClient, {
       branchName: 'wave/179-default-marks',
       tursoDbName: 'ft-clone-179-mark-abc103',
       createdAt: oneMinAgo,
     });
 
-    const fixedNow = new Date('2026-05-10T12:00:00.000Z');
     await promoteToProd({
       branchName: 'wave/179-default-marks',
       metaClient: memClient,
