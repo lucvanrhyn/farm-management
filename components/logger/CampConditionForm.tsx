@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
@@ -12,11 +12,26 @@ interface Props {
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  // Lock body scroll while the bottom-sheet is mounted to prevent
+  // touch-drag on the page behind the modal (frustrates data entry on iOS).
+  // Restore the previous value on unmount so we don't clobber other modals'
+  // overflow state.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
-        className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
+        // max-h-[88dvh] (dynamic viewport height) shrinks correctly when
+        // iOS Safari's URL bar appears. The previous `88vh` was locked to
+        // the largest viewport, pushing Submit off-screen with the toolbar.
+        className="relative rounded-t-3xl max-h-[88dvh] flex flex-col shadow-2xl"
         style={{ backgroundColor: '#1E0F07' }}
       >
         <div className="flex justify-center pt-3 pb-1">
@@ -40,7 +55,16 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
             ×
           </button>
         </div>
-        <div className="overflow-y-auto flex-1">{children}</div>
+        {/* Bottom padding adds env(safe-area-inset-bottom) so Submit/Skip
+            clear the iPhone home indicator. Inline style is required —
+            Tailwind v4 doesn't ship a built-in pb-[env(...)] utility and the
+            project hasn't registered a `pb-safe` arbitrary variant globally. */}
+        <div
+          className="overflow-y-auto flex-1"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
