@@ -99,7 +99,22 @@ async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
   return collected;
 }
 
-export async function refreshCachedData(): Promise<void> {
+/**
+ * Options for `refreshCachedData`.
+ *
+ * `tickLastSyncedAt` defaults true so direct callers (no pending submits,
+ * pure cache pull) keep the timestamp truthful. `syncAndRefresh` flips it
+ * false when submits were attempted and zero succeeded — otherwise the UI
+ * shows "Synced: Just now" while every queued row failed silently.
+ */
+interface RefreshCachedDataOptions {
+  tickLastSyncedAt?: boolean;
+}
+
+export async function refreshCachedData(
+  options: RefreshCachedDataOptions = {},
+): Promise<void> {
+  const { tickLastSyncedAt = true } = options;
   // Three top-level refreshes run in parallel; animals pagination happens
   // inside its own helper. /api/animals is no longer in the outer fan-out
   // because it may take multiple requests.
@@ -149,7 +164,9 @@ export async function refreshCachedData(): Promise<void> {
     });
   }
 
-  await setLastSyncedAt(new Date().toISOString());
+  if (tickLastSyncedAt) {
+    await setLastSyncedAt(new Date().toISOString());
+  }
 }
 
 async function uploadObservation(obs: PendingObservation): Promise<string | null> {
@@ -395,9 +412,19 @@ export async function syncAndRefresh(): Promise<{ synced: number; failed: number
     syncPendingCoverReadings(),
   ]);
   await syncPendingPhotos(obsResult.localToServerId);
-  await refreshCachedData(); // now server is up to date before we pull
-  return {
-    synced: obsResult.synced + animalsResult.synced + coversResult.synced,
-    failed: obsResult.failed + animalsResult.failed + coversResult.failed,
-  };
+
+  const synced = obsResult.synced + animalsResult.synced + coversResult.synced;
+  const failed = obsResult.failed + animalsResult.failed + coversResult.failed;
+
+  // Truthfulness gate: when submits were attempted and every one failed, do
+  // NOT tick `lastSyncedAt`. Partial success counts as success — the user
+  // got at least one record through, and the UI is allowed to show "Synced
+  // just now" alongside a non-zero failure toast (`failed > 0`). When no
+  // submits were attempted (queue was empty) we still tick, since the
+  // cache-refresh GETs themselves are the sync that happened.
+  const submitsAttempted = synced + failed > 0;
+  const tickLastSyncedAt = !submitsAttempted || synced > 0;
+  await refreshCachedData({ tickLastSyncedAt });
+
+  return { synced, failed };
 }
