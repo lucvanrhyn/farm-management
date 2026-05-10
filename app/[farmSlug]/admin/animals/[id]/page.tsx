@@ -59,7 +59,7 @@ export default async function AnimalDetailPage({
           orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),
-    // audit-allow-findmany: per-tenant camp list (≤36 typical) for EditAnimalModal camp picker
+    // audit-allow-findmany-no-select: per-tenant camp list (≤36 typical) for EditAnimalModal camp picker; modal uses full Camp type
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
