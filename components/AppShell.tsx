@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth-options";
 import { Providers } from "@/app/providers";
 import { SWRegistrar } from "@/components/SWRegistrar";
 import { ReportWebVitals } from "@/components/ReportWebVitals";
+import { SessionExpiryBanner } from "@/components/auth/SessionExpiryBanner";
 
 /**
  * Authenticated-shell wrapper. Bundles SessionProvider, service-worker
@@ -12,6 +13,13 @@ import { ReportWebVitals } from "@/components/ReportWebVitals";
  * Auth routes (`/login`, `/register`, `/verify-email`) live under the
  * `(auth)` route group which does NOT render this shell, so their
  * first-load JS budget stays tight.
+ *
+ * <SessionExpiryBanner> is mounted at the top of the providers subtree so
+ * every authenticated route (the entire `[farmSlug]` tree, `/farms`,
+ * `/subscribe`) gets proactive expiry warning + re-auth-with-return-to-page
+ * for free. The banner self-suppresses on auth routes (defence in depth —
+ * those routes don't render <AppShell> anyway). See P1.6 in
+ * `tasks/production-triage-2026-05-03.md`.
  *
  * Usage: any top-level layout that serves authenticated content should
  * wrap its children in <AppShell>.
@@ -26,7 +34,10 @@ export default async function AppShell({
     <>
       <SWRegistrar />
       <ReportWebVitals />
-      <Providers session={session}>{children}</Providers>
+      <Providers session={session}>
+        <SessionExpiryBanner />
+        {children}
+      </Providers>
     </>
   );
 }
