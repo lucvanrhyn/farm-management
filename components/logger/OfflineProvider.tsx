@@ -39,6 +39,7 @@ const REFRESH_TTL_MS = 60_000;
 
 interface SyncResult {
   synced: number;
+  failed: number;
   timestamp: number;
 }
 
@@ -154,9 +155,13 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const { synced } = await syncAndRefresh();
-      if (synced > 0) {
-        setSyncResult({ synced, timestamp: Date.now() });
+      const { synced, failed } = await syncAndRefresh();
+      // Surface the toast whenever a sync cycle produced ANY visible outcome —
+      // a success, a failure, or a partial mix. Previously we only toasted on
+      // synced > 0, so a wave of 422s left users with a green tick and zero
+      // signal that anything had gone wrong.
+      if (synced > 0 || failed > 0) {
+        setSyncResult({ synced, failed, timestamp: Date.now() });
         if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
         syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 4000);
       }

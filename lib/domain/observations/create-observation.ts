@@ -36,6 +36,8 @@ export const VALID_OBSERVATION_TYPES: ReadonlySet<string> = new Set([
   "weaning",
   "death",
   "mob_movement",
+  "animal_movement",
+  "health_issue",
   "general",
   "dosing",
   "shearing",
