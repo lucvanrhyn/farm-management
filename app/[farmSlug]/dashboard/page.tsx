@@ -16,6 +16,7 @@ export default async function DashboardPage({
 
   return (
     <DashboardClient
+      farmSlug={farmSlug}
       totalAnimals={data.totalAll}
       totalBySpecies={data.totalBySpecies}
       campAnimalCounts={data.campAnimalCounts}

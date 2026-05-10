@@ -18,6 +18,7 @@ import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
 import { BASE_TABS, PROGENY_TAB, type TabKey } from "./_components/tabs";
+import EditAnimalButton from "./_components/EditAnimalButton";
 import { OverviewTab } from "./_components/OverviewTab";
 import { ReproductionTab } from "./_components/ReproductionTab";
 import { HealthTab } from "./_components/HealthTab";
@@ -43,7 +44,7 @@ export default async function AnimalDetailPage({
 
   const isBull = animal.category === "Bull";
 
-  const [observations, camp, weightData, investmentData, offspring] = await Promise.all([
+  const [observations, camp, weightData, investmentData, offspring, allCamps] = await Promise.all([
     prisma.observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
@@ -58,6 +59,9 @@ export default async function AnimalDetailPage({
           orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),
+    // audit-allow-findmany: per-tenant camp list (≤36 typical) needed for
+    // the EditAnimalModal camp picker.
+    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
   // Fetch calving observations for offspring birth weights & difficulty
@@ -105,7 +109,8 @@ export default async function AnimalDetailPage({
             {getCategoryLabel(animal.category as AnimalCategory)}
           </span>
           {animal.status === "Active" && (
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <EditAnimalButton animal={animal} camps={allCamps} />
               <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="detail" />
             </div>
           )}

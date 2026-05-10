@@ -221,7 +221,9 @@ describe('isPlatformAdmin', () => {
     );
     const { isPlatformAdmin } = await import('@/lib/meta-db');
 
-    await expect(isPlatformAdmin('LucVanRhyn@iCloud.com')).resolves.toBe(true);
+    // Mixed-case input proves the lookup is case-insensitive against the
+    // lowercased allowlist.
+    await expect(isPlatformAdmin('Owner@Example.com')).resolves.toBe(true);
     // Should not have hit the DB
     expect(mockExecute).not.toHaveBeenCalled();
 
