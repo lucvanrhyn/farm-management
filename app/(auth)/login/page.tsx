@@ -62,7 +62,16 @@ function LoginForm() {
   const searchParams = useSearchParams();
   // `next` is user-controllable — sanitise via getSafeNext() before
   // navigating to defend against open-redirect (`/login?next=//evil`).
-  const safeNext = getSafeNext(searchParams.get("next")) ?? "/farms";
+  //
+  // P1.6 — also accept `callbackUrl` (next-auth's convention) so the
+  // session-expiry banner's `signIn(undefined, { callbackUrl })` lands the
+  // user back on their original page after re-auth. `next=` wins if both
+  // are present (the proxy.ts deep-link path uses `next=`). Both flow
+  // through getSafeNext, which rejects open-redirect attempts.
+  const safeNext =
+    getSafeNext(searchParams.get("next")) ??
+    getSafeNext(searchParams.get("callbackUrl")) ??
+    "/farms";
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
