@@ -1,6 +1,4 @@
 /**
- * @vitest-environment jsdom
- *
  * __tests__/logger/camp-condition-done-label.test.ts
  *
  * Wave C / U1 — Codex audit P2 polish (2026-05-10).
@@ -18,48 +16,13 @@
  *   - good / unknown / nullish → "All Normal — Camp Good" (unchanged)
  *   - Fair / Poor / Overgrazed (case-insensitive) → "Done — no animals flagged"
  *
- * Lives on the page.tsx surface so the helper stays inside the allow-listed
- * file. Heavy client deps (offline-store / next-auth / next/dynamic chunks)
- * are stub-mocked here so module load resolves under vitest without dragging
- * IndexedDB or the React component tree into the test.
+ * The helper lives in a sibling `_lib/` file (underscore folder = not
+ * routed by Next.js) so it can be a pure unit-tested function without
+ * tripping Next 16's page export contract.
  */
 
-import { describe, it, expect, vi } from "vitest";
-
-// Mocks must register before importing page.tsx — the page is a client
-// component so all of these resolve eagerly.
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock("next/dynamic", () => ({
-  default: () => () => null,
-}));
-vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null }) }));
-vi.mock("@/components/logger/OfflineProvider", () => ({
-  useOffline: () => ({
-    isOnline: true,
-    refreshPendingCount: vi.fn(),
-    refreshCampsState: vi.fn(),
-    camps: [],
-    campsLoaded: true,
-    syncNow: vi.fn(),
-  }),
-}));
-vi.mock("@/components/logger/AnimalChecklist", () => ({ default: () => null }));
-vi.mock("@/lib/offline-store", () => ({
-  getAnimalsByCampCached: vi.fn().mockResolvedValue([]),
-  queueObservation: vi.fn(),
-  queuePhoto: vi.fn(),
-  queueCoverReading: vi.fn(),
-  updateCampCondition: vi.fn(),
-  updateAnimalCamp: vi.fn(),
-  updateAnimalStatus: vi.fn(),
-}));
-vi.mock("@/lib/logger-actions", () => ({
-  submitCalvingObservation: vi.fn(),
-  submitMobMove: vi.fn(),
-}));
-vi.mock("@/lib/farm-mode", () => ({ useFarmModeSafe: () => ({ mode: "cattle" }) }));
-
-import { campConditionDoneLabel } from "@/app/[farmSlug]/logger/[campId]/page";
+import { describe, it, expect } from "vitest";
+import { campConditionDoneLabel } from "@/app/[farmSlug]/logger/[campId]/_lib/camp-condition-done-label";
 
 describe("campConditionDoneLabel — Wave C / U1", () => {
   it("returns 'All Normal — Camp Good' when grazing quality is null/undefined", () => {
@@ -71,27 +34,24 @@ describe("campConditionDoneLabel — Wave C / U1", () => {
     expect(campConditionDoneLabel("Good")).toBe("All Normal — Camp Good");
   });
 
-  it("returns 'All Normal — Camp Good' for unknown / unrecognised values (safety default)", () => {
-    // If a future grazing tier is added we'd rather over-praise than under-praise.
+  it("returns 'All Normal — Camp Good' for unknown / unrecognised tiers (safety default)", () => {
     expect(campConditionDoneLabel("Excellent")).toBe("All Normal — Camp Good");
     expect(campConditionDoneLabel("")).toBe("All Normal — Camp Good");
   });
 
-  it("returns 'Done — no animals flagged' for Fair (must not lie about camp condition)", () => {
+  it("returns 'Done — no animals flagged' when grazing quality is Fair", () => {
     expect(campConditionDoneLabel("Fair")).toBe("Done — no animals flagged");
   });
 
-  it("returns 'Done — no animals flagged' for Poor", () => {
+  it("returns 'Done — no animals flagged' when grazing quality is Poor", () => {
     expect(campConditionDoneLabel("Poor")).toBe("Done — no animals flagged");
   });
 
-  it("returns 'Done — no animals flagged' for Overgrazed", () => {
+  it("returns 'Done — no animals flagged' when grazing quality is Overgrazed", () => {
     expect(campConditionDoneLabel("Overgrazed")).toBe("Done — no animals flagged");
   });
 
-  it("is case-insensitive (handles DB / IndexedDB casing drift)", () => {
-    // IndexedDB merges may have lowercased values; SQL inserts may have
-    // mixed-case. Either way the label must reflect the underlying state.
+  it("is case-insensitive on input (IndexedDB merges + SQL inserts use different casing)", () => {
     expect(campConditionDoneLabel("fair")).toBe("Done — no animals flagged");
     expect(campConditionDoneLabel("POOR")).toBe("Done — no animals flagged");
     expect(campConditionDoneLabel("overgrazed")).toBe("Done — no animals flagged");

@@ -36,36 +36,9 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import { campConditionDoneLabel } from "./_lib/camp-condition-done-label";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
-
-/**
- * Wave C / U1 — Codex audit P2 polish.
- *
- * Maps a camp's current grazing quality to the copy on the "complete visit"
- * button when zero animals have been flagged. Previously hardcoded to
- * "All Normal — Camp Good", which lied on Fair / Poor / Overgrazed camps —
- * the visit can legitimately end with no individual animal alerts even when
- * the veld itself is in trouble, but the button must not claim the camp is
- * good when it isn't.
- *
- * Case-insensitive on input because IndexedDB merges + SQL inserts use
- * different casing conventions across the codebase. Unknown values fall
- * through to the original copy (safety default — better to over-praise an
- * unrecognised tier than under-praise a good one).
- *
- * Exported for unit testing — see
- * __tests__/logger/camp-condition-done-label.test.ts.
- */
-export function campConditionDoneLabel(
-  grazingQuality: string | null | undefined,
-): string {
-  const normalised = (grazingQuality ?? "").toLowerCase();
-  if (normalised === "fair" || normalised === "poor" || normalised === "overgrazed") {
-    return "Done — no animals flagged";
-  }
-  return "All Normal — Camp Good";
-}
 
 const DEATH_CAUSES_BY_SPECIES: Record<string, string[]> = {
   cattle: ["Unknown", "Redwater", "Heartwater", "Snake", "Old age", "Birth complications", "Other"],
