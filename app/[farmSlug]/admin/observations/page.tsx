@@ -65,14 +65,28 @@ export default async function AdminObservationsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>All field observations — search, filter and edit</p>
-        </div>
-        <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
+        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>All field observations — filter and edit</p>
       </div>
       <ObservationsPageClient camps={camps} animals={animals} species={mode} />
+      {/*
+        Wave C / U4 — see animals/page.tsx for full rationale. Danger zone
+        sits at the bottom so destroying the entire observations log is an
+        intentional end-of-page action.
+      */}
+      <div
+        data-testid="danger-zone"
+        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+      >
+        <p
+          className="text-xs uppercase tracking-wider mb-3"
+          style={{ color: "#9C8E7A" }}
+        >
+          Danger zone
+        </p>
+        <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />
+      </div>
     </AdminPage>
   );
 }

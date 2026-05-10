@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import { campConditionDoneLabel } from "./_lib/camp-condition-done-label";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
 
@@ -465,7 +466,7 @@ export default function CampInspectionPage({
             <span>
               {flaggedAnimalIds.size > 0
                 ? `Done — ${flaggedAnimalIds.size} animal${flaggedAnimalIds.size > 1 ? 's' : ''} flagged`
-                : 'All Normal — Camp Good'}
+                : campConditionDoneLabel(campWithCondition?.grazing_quality)}
             </span>
           </button>
         )}

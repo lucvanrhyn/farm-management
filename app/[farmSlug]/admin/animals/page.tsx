@@ -99,7 +99,6 @@ export default async function AdminAnimalsPage({
         <div className="flex gap-2 items-center">
           <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} />
           <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
-          <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
         </div>
       </div>
       <AnimalsTable
@@ -114,6 +113,26 @@ export default async function AdminAnimalsPage({
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>
+      {/*
+        Wave C / U4 — Codex audit P2 polish (2026-05-10). Destructive
+        "Clear All …" buttons used to live next to the page title. Moved
+        here to a footer-level danger zone so a wipe-everything tap is
+        a deliberate end-of-page action, not a one-tap-from-anywhere
+        risk. ClearSectionButton's two-step confirm UX is unchanged —
+        only its placement.
+      */}
+      <div
+        data-testid="danger-zone"
+        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+      >
+        <p
+          className="text-xs uppercase tracking-wider mb-3"
+          style={{ color: "#9C8E7A" }}
+        >
+          Danger zone
+        </p>
+        <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Animals" />
+      </div>
     </AdminPage>
   );
 }
