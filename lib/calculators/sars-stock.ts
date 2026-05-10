@@ -47,11 +47,34 @@ export interface StockBlockLine {
   source: string;
 }
 
+/**
+ * Animals whose (species, ageCategory) is NOT in the gazetted STANDARD_VALUES
+ * table. They contribute zero rand to the stock-block total but their counts
+ * stay visible so the IT3 PDF can surface them as "uncategorised — taxpayer
+ * to value separately". Mirrors the `unmapped` bucket in inventory-replay.ts
+ * — the read paths now have parity. See P1.4 wave (production-triage 2026-05-03):
+ * pre-fix, an unmapped class threw `UnknownLivestockClassError` from inside
+ * `valueStockBlock`, which leaked through `getIt3Payload` and stalled the
+ * "Issue snapshot" button on /tools/tax with an empty body / DB_QUERY_FAILED
+ * toast.
+ */
+export interface UnmappedStockLine {
+  species: string;
+  ageCategory: string;
+  count: number;
+}
+
 export interface StockBlockTotal {
   lines: StockBlockLine[];
   totalZar: number;
   /** True iff at least one election was applied to a non-zero-count line. */
   electionApplied: boolean;
+  /**
+   * Snapshot rows whose class is not in STANDARD_VALUES. Always present (may
+   * be empty). The taxpayer values these separately on the IT3 — the renderer
+   * surfaces them in the "uncategorised" footer block.
+   */
+  unmappedLines: UnmappedStockLine[];
 }
 
 export interface StockMovementSummary {
@@ -86,6 +109,7 @@ export function valueStockBlock(
   elections: ElectionRecord[],
 ): StockBlockTotal {
   const lines: StockBlockLine[] = [];
+  const unmappedLines: UnmappedStockLine[] = [];
   let total = 0;
   let electionApplied = false;
 
@@ -94,7 +118,20 @@ export function valueStockBlock(
       species: item.species as SarsSpecies,
       ageCategory: item.ageCategory,
     };
-    const standard = lookupStandardValue(cls);
+    let standard: number;
+    try {
+      standard = lookupStandardValue(cls);
+    } catch (err) {
+      if (err instanceof UnknownLivestockClassError) {
+        unmappedLines.push({
+          species: item.species,
+          ageCategory: item.ageCategory,
+          count: item.count,
+        });
+        continue;
+      }
+      throw err;
+    }
     const election = findElection(elections, item.species, item.ageCategory);
     const effective = election ? effectiveValue({ class: cls, election }) : standard;
     const subtotal = effective * item.count;
@@ -117,7 +154,7 @@ export function valueStockBlock(
     total += subtotal;
   }
 
-  return { lines, totalZar: total, electionApplied };
+  return { lines, totalZar: total, electionApplied, unmappedLines };
 }
 
 // ── summariseStockMovement ───────────────────────────────────────────────────
