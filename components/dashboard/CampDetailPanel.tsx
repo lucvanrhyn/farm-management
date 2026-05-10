@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import StatusIndicator from "./StatusIndicator";
 import { getCategoryLabel, getCategoryPluralLabel } from "@/lib/utils";
+import { useFarmModeSafe } from "@/lib/farm-mode";
+import { activeSpeciesQueryString } from "@/lib/animals/active-species-filter";
 import type { AnimalCategory, Camp, PrismaAnimal } from "@/lib/types";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 
@@ -45,17 +47,22 @@ const WARM_CHIP_TEXT: Record<string, string> = {
 
 export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal, liveCondition }: Props) {
   const [animals, setAnimals] = useState<PrismaAnimal[]>([]);
+  const { mode } = useFarmModeSafe();
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/animals?camp=${encodeURIComponent(campId)}&status=all`, { signal: controller.signal })
+    // Per-species + Active filter (Wave A2): the previous `status=all` leaked
+    // both cross-species rows AND inactive/sold/dead animals into a per-camp
+    // view. activeSpeciesQueryString centralises the contract.
+    const url = `/api/animals?camp=${encodeURIComponent(campId)}&${activeSpeciesQueryString(mode)}`;
+    fetch(url, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: PrismaAnimal[]) => setAnimals(Array.isArray(data) ? data : []))
       .catch((err: unknown) => {
         if ((err as { name?: string }).name !== "AbortError") setAnimals([]);
       });
     return () => controller.abort();
-  }, [campId]);
+  }, [campId, mode]);
 
   // Compute stats from fetched animals
   const stats = {
