@@ -60,13 +60,24 @@ export function LoggerStatusBar() {
         </div>
       </div>
 
-      {/* Sync success toast */}
-      {syncResult && (
+      {/* Sync result toasts. Success and failure render as siblings so a
+          partial-success cycle (some 200s + some 422s) shows BOTH — the
+          user sees the count that landed and the count that needs a retry. */}
+      {syncResult && syncResult.synced > 0 && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
           style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
         >
           ✓ {syncResult.synced} observation{syncResult.synced !== 1 ? 's' : ''} synced
+        </div>
+      )}
+      {syncResult && syncResult.failed > 0 && (
+        <div
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
+          style={{ backgroundColor: '#B33A3A', color: '#F5F0E8' }}
+          role="alert"
+        >
+          ✗ {syncResult.failed} observation{syncResult.failed !== 1 ? 's' : ''} failed to sync — open the offline log to retry
         </div>
       )}
     </>
