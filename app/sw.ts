@@ -8,6 +8,7 @@ import {
   ExpirationPlugin,
 } from "serwist";
 import { defaultCache } from "@serwist/next/worker";
+import { isTelemetryRequest } from "@/lib/sw/telemetry-bypass";
 
 // Required: declare __SW_MANIFEST on the SW global scope.
 // This token is replaced by @serwist/next at build time with the actual
@@ -98,8 +99,20 @@ const serwist = new Serwist({
     // API routes — always network only.
     // The app-layer IndexedDB queue handles offline observation logging;
     // the SW must never try to cache or serve API responses.
+    //
+    // Telemetry endpoints (`/api/telemetry/*`) are deliberately excluded
+    // from this matcher (production triage P2.2, wave/182). They are
+    // posted via `navigator.sendBeacon` / `fetch({ keepalive: true })`
+    // from `pagehide` / `visibilitychange` handlers, and routing them
+    // through a SW `NetworkOnly` strategy aborts the request as the page
+    // unloads — even though the page-side caller chose unload-survival
+    // APIs. Returning false from the matcher means no Serwist route
+    // matches, `event.respondWith` is never called, and the browser
+    // delivers the request natively with full keepalive/beacon
+    // semantics. See `lib/sw/telemetry-bypass.ts` for the predicate.
     {
-      matcher: /\/api\//i,
+      matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
+        sameOrigin && url.pathname.startsWith("/api/") && !isTelemetryRequest(url.pathname),
       handler: new NetworkOnly(),
     },
     // Serwist default strategies for all remaining Next.js static assets.
