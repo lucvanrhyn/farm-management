@@ -123,6 +123,16 @@ export async function submitCalvingObservation(
       species: ctx.mode,
     };
 
+    // Issue #207 — mount-stable idempotency key for the calf create. Generated
+    // once per calving submit; carried by both the in-flight POST and the
+    // offline queue fallback so a retry (network blip mid-POST, browser close
+    // before queue drain) collapses to a single Animal row via the server-side
+    // `Animal.clientLocalId` upsert.
+    const calfClientLocalId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : undefined;
+
     const queuedCalf = {
       animal_id: data.calfAnimalId,
       name: data.calfName || undefined,
@@ -132,6 +142,7 @@ export async function submitCalvingObservation(
       mother_id: data.animalId,
       date_added: data.dateOfBirth,
       sync_status: "pending" as const,
+      clientLocalId: calfClientLocalId,
     };
 
     if (ctx.isOnline) {
@@ -140,7 +151,10 @@ export async function submitCalvingObservation(
         const res = await fetch("/api/animals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(calfPayload),
+          body: JSON.stringify({
+            ...calfPayload,
+            clientLocalId: calfClientLocalId,
+          }),
         });
         if (!res.ok) throw new Error("POST failed");
       } catch {

@@ -328,7 +328,11 @@ export default function CampInspectionPage({
     setActiveModal(null);
   }
 
-  async function handleCoverSubmit(data: { coverCategory: "Good" | "Fair" | "Poor"; photoBlob: Blob | null }) {
+  async function handleCoverSubmit(data: {
+    coverCategory: "Good" | "Fair" | "Poor";
+    photoBlob: Blob | null;
+    clientLocalId: string;
+  }) {
     await queueCoverReading({
       farm_slug: farmSlug,
       camp_id: decodedId,
@@ -336,6 +340,10 @@ export default function CampInspectionPage({
       created_at: new Date().toISOString(),
       photo_blob: data.photoBlob ?? undefined,
       sync_status: "pending",
+      // Issue #207 — mount-stable UUID from CampCoverLogForm. Persisted on
+      // the queue row + replayed verbatim by sync-manager so a retry
+      // collapses to the same server row via the upsert path.
+      clientLocalId: data.clientLocalId,
     });
     refreshPendingCount();
     if (isOnline) syncNow();

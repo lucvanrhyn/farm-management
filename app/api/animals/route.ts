@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { tenantRead, tenantWrite, routeError } from "@/lib/server/route";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { timeAsync } from "@/lib/server/server-timing";
+import {
+  createAnimal,
+  CreateAnimalValidationError,
+} from "@/lib/domain/animals/create-animal";
 
 // Pagination tunables. Default 500/request balances payload size (~100KB JSON
 // for a typical cattle row) against round-trip count on large herds. Max
@@ -145,82 +149,49 @@ export const POST = tenantWrite<unknown>({
       species,
       tagNumber,
       brandSequence,
+      clientLocalId,
     } = (body ?? {}) as Record<string, unknown>;
 
-    if (!animalId || !sex || !category || !currentCamp) {
-      return NextResponse.json(
-        { error: "Missing required fields: animalId, sex, category, currentCamp" },
-        { status: 400 },
-      );
-    }
-
-    // Validate field types and values.
-    const VALID_SPECIES = ["cattle", "sheep", "game"] as const;
-    const VALID_SEX = ["Male", "Female"] as const;
-    const VALID_STATUS = ["Active", "Sold", "Dead", "Removed"] as const;
-
-    if (typeof animalId !== "string" || animalId.length > 50) {
-      return NextResponse.json({ error: "Invalid animalId" }, { status: 400 });
-    }
-    if (!(VALID_SEX as readonly string[]).includes(sex as string)) {
-      return NextResponse.json({ error: "Invalid sex" }, { status: 400 });
-    }
-    if (typeof category !== "string" || category.length > 50) {
-      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-    }
-    if (species && !(VALID_SPECIES as readonly string[]).includes(species as string)) {
-      return NextResponse.json({ error: "Invalid species" }, { status: 400 });
-    }
-    if (status && !(VALID_STATUS as readonly string[]).includes(status as string)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-    }
-    if (
-      dateOfBirth &&
-      (typeof dateOfBirth !== "string" || isNaN(Date.parse(dateOfBirth as string)))
-    ) {
-      return NextResponse.json({ error: "Invalid dateOfBirth" }, { status: 400 });
-    }
-
-    // AIA 2002 — tagNumber + brandSequence are optional free-text fields, but
-    // we cap length and reject obviously bad payloads (objects, numbers).
-    if (
-      tagNumber != null &&
-      (typeof tagNumber !== "string" || (tagNumber as string).length > 50)
-    ) {
-      return NextResponse.json({ error: "Invalid tagNumber" }, { status: 400 });
-    }
-    if (
-      brandSequence != null &&
-      (typeof brandSequence !== "string" || (brandSequence as string).length > 50)
-    ) {
-      return NextResponse.json({ error: "Invalid brandSequence" }, { status: 400 });
-    }
-
-    const animal = await prisma.animal.create({
-      data: {
+    // Issue #207 — domain extraction. Validation + persistence now live in
+    // `lib/domain/animals/create-animal.ts` (mirrors the #206 / PR #214
+    // extraction of `createObservation`). The route is a thin adapter that
+    // forwards the parsed body and the optional `clientLocalId` idempotency
+    // key, then maps `CreateAnimalValidationError` onto the legacy 400
+    // envelope so existing clients (admin form, sync-manager retry path)
+    // see the same wire shape.
+    try {
+      const result = await createAnimal(prisma, {
         animalId: animalId as string,
         name: (name as string | undefined) ?? null,
         sex: sex as string,
         dateOfBirth: (dateOfBirth as string | undefined) ?? null,
-        breed: (breed as string | undefined) || undefined,
+        breed: breed as string | undefined,
         category: category as string,
         currentCamp: currentCamp as string,
-        status: (status as string | undefined) ?? "Active",
+        status: status as string | undefined,
         motherId: (motherId as string | undefined) ?? null,
         fatherId: (fatherId as string | undefined) ?? null,
-        species: (species as string | undefined) ?? "cattle",
-        dateAdded: new Date().toISOString().split("T")[0],
-        tagNumber:
-          typeof tagNumber === "string" && tagNumber.trim()
-            ? tagNumber.trim()
+        species: species as string | undefined,
+        tagNumber: tagNumber as string | null | undefined,
+        brandSequence: brandSequence as string | null | undefined,
+        // Issue #207 — forward the client UUID so the upsert path activates.
+        // Falsy values (null, empty string) fall through to the legacy create
+        // path, preserving back-compat for pre-#207 clients.
+        clientLocalId:
+          typeof clientLocalId === "string" && clientLocalId
+            ? clientLocalId
             : null,
-        brandSequence:
-          typeof brandSequence === "string" && brandSequence.trim()
-            ? brandSequence.trim()
-            : null,
-      },
-    });
+      });
 
-    return NextResponse.json({ success: true, animal }, { status: 201 });
+      return NextResponse.json(
+        { success: true, animal: result.animal },
+        { status: 201 },
+      );
+    } catch (err) {
+      if (err instanceof CreateAnimalValidationError) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      throw err;
+    }
   },
 });
