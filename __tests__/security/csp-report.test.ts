@@ -81,13 +81,15 @@ describe("buildSecurityHeaders — Reporting-Endpoints", () => {
   });
 
   it("keeps the prior six security headers (defense-in-depth contract)", () => {
+    // Wave CSP-Enforce (2026-05-11): `Content-Security-Policy-Report-Only`
+    // → `Content-Security-Policy` after a clean 2-week soak.
     for (const key of [
       "Strict-Transport-Security",
       "X-Frame-Options",
       "X-Content-Type-Options",
       "Referrer-Policy",
       "Permissions-Policy",
-      "Content-Security-Policy-Report-Only",
+      "Content-Security-Policy",
     ]) {
       expect(map.has(key)).toBe(true);
     }

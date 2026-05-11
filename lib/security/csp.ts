@@ -13,12 +13,18 @@
  * Both `buildCsp()` and `buildSecurityHeaders()` are pure (string in / array
  * out, no I/O) so they can be unit-tested without booting Next.
  *
- * CSP soak (TODO 2026-05-11)
- * ──────────────────────────
- * The CSP is shipped as `Content-Security-Policy-Report-Only` for the first
- * two weeks. After 2026-05-11 — once we've watched browser violation reports
- * and fixed any false positives — flip the header name to
- * `Content-Security-Policy` to enforce. Do NOT enforce sooner.
+ * CSP enforcement (Wave CSP-Enforce, 2026-05-11)
+ * ──────────────────────────────────────────────
+ * The CSP shipped as `Content-Security-Policy-Report-Only` from 2026-04-27
+ * through 2026-05-11. The 2-week soak closed with no production-impacting
+ * violations posted to `/api/csp-report`, so we flipped the header key to
+ * `Content-Security-Policy` (enforcement) on 2026-05-11.
+ *
+ * Still outstanding (separate refactor): the policy retains `'unsafe-inline'`
+ * + `'unsafe-eval'` tokens in script-src / style-src because Next.js 16's
+ * bootstrap, Tailwind, and next/font emit inline content. Moving to
+ * nonces / hashes requires auditing every emission point and is tracked
+ * as a future wave — do NOT lump that change into a header-key flip.
  *
  * Report sink (Wave 4 A8, 2026-05-02)
  * ───────────────────────────────────
@@ -36,8 +42,10 @@
  *
  * `Reporting-Endpoints` (v1) is the replacement for the deprecated
  * `Report-To` JSON-config header (v0). Chromium accepts both; we ship only
- * `Reporting-Endpoints` so we don't leave deprecated config on the wire when
- * we flip to enforce.
+ * `Reporting-Endpoints` so we don't leave deprecated config on the wire.
+ * The report sink stays wired in enforce mode — browsers still POST
+ * violations against an enforced CSP, which gives us ongoing drift
+ * telemetry (the same reason we kept it after the 2026-05-11 flip).
  *
  * Both directives target the same handler (`app/api/csp-report/route.ts`)
  * which content-negotiates on the request body shape.
@@ -107,11 +115,15 @@ export const CSP_SOURCES = {
  *    X-Frame-Options header is kept as a belt-and-braces fallback for
  *    pre-2018 IE / legacy crawlers that don't implement CSP3.
  *
- * TODO(2026-05-11): once the report-only soak is clean, switch the
- * caller in next.config.ts from 'Content-Security-Policy-Report-Only' to
- * 'Content-Security-Policy' (enforcement). Do NOT remove the unsafe-inline
- * tokens at the same time — that's a separate, larger refactor (move to
- * nonces / hashes, audit every Tailwind + next/font emission point).
+ * Wave CSP-Enforce (2026-05-11, DONE): the header key was flipped from
+ * `Content-Security-Policy-Report-Only` to `Content-Security-Policy` after
+ * a clean 2-week Report-Only soak (started 2026-04-27, zero
+ * production-impacting violations).
+ *
+ * Future refactor (separate wave, NOT done): remove `'unsafe-inline'` /
+ * `'unsafe-eval'` by moving Next.js bootstrap + Tailwind + next/font onto
+ * nonces or hashes. Requires auditing every inline-emission point — do
+ * NOT bundle into the header-key flip.
  */
 export function buildCsp(): string {
   const directives: Record<string, string[]> = {
@@ -155,7 +167,8 @@ export function buildCsp(): string {
     "object-src": ["'none'"],
     "upgrade-insecure-requests": [],
     // Report sink — see top-of-file rationale. We ship BOTH directives so
-    // older browsers (which ignore `report-to`) still post during the soak.
+    // older browsers (which ignore `report-to`) still post violations.
+    // Kept in enforce mode (Wave CSP-Enforce) for ongoing drift telemetry.
     "report-uri": [CSP_REPORT_URI],
     "report-to": [CSP_REPORT_GROUP],
   };
@@ -167,7 +180,8 @@ export function buildCsp(): string {
 
 /**
  * Standard defense-in-depth headers applied to every response.
- * The CSP ships as Report-Only for the 2-week soak (see TODO above).
+ * The CSP is enforced (Wave CSP-Enforce, 2026-05-11) after a clean
+ * 2-week Report-Only soak from 2026-04-27. See top-of-file rationale.
  */
 export function buildSecurityHeaders(): Array<{ key: string; value: string }> {
   return [
@@ -185,9 +199,11 @@ export function buildSecurityHeaders(): Array<{ key: string; value: string }> {
       // microphone=()  → unused, lock down
       value: "camera=(self), microphone=(), geolocation=(self)",
     },
-    // TODO(2026-05-11): rename to 'Content-Security-Policy' to enforce
-    // after a clean 2-week report-only soak. Owner: security review.
-    { key: "Content-Security-Policy-Report-Only", value: buildCsp() },
+    // Wave CSP-Enforce (2026-05-11): flipped from
+    // `Content-Security-Policy-Report-Only` to `Content-Security-Policy`
+    // after a clean 2-week soak. The `unsafe-inline` / `unsafe-eval`
+    // refactor (nonces / hashes) is a separately-tracked future wave.
+    { key: "Content-Security-Policy", value: buildCsp() },
     // Reporting API v1 — names the `csp-endpoint` group referenced by the
     // `report-to csp-endpoint` directive in the CSP. Structured-fields
     // dictionary syntax (RFC 8941). See top-of-file rationale.

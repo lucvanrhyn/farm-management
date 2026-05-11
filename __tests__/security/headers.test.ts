@@ -8,8 +8,11 @@
  * future "let me just add 'unsafe-inline' real quick" change shows up in
  * code review.
  *
- * The CSP itself ships as report-only for the first 2 weeks — see TODO
- * inside `lib/security/csp.ts` for the enforcement-flip date.
+ * The CSP soak ran 2026-04-27 → 2026-05-11 in Report-Only mode. After a
+ * clean 2-week window (no production-impacting violations posted to
+ * `/api/csp-report`), Wave CSP-Enforce flipped the header to
+ * `Content-Security-Policy` (enforcement). The report sink stays wired so
+ * we keep getting drift telemetry in enforce mode.
  */
 
 import { describe, it, expect } from "vitest";
@@ -45,19 +48,24 @@ describe("buildSecurityHeaders", () => {
     );
   });
 
-  it("ships CSP as Report-Only during soak, not enforcement", () => {
-    expect(map.has("Content-Security-Policy-Report-Only")).toBe(true);
-    expect(map.has("Content-Security-Policy")).toBe(false);
+  it("enforces CSP after 2026-05-11 soak (flipped from Report-Only)", () => {
+    // Wave CSP-Enforce (2026-05-11): after a clean 2-week Report-Only soak
+    // (started 2026-04-27, no production-impacting violations) we flipped
+    // the header key to `Content-Security-Policy`. The unsafe-inline /
+    // unsafe-eval tokens stay — moving to nonces is a separate refactor.
+    expect(map.has("Content-Security-Policy")).toBe(true);
+    expect(map.has("Content-Security-Policy-Report-Only")).toBe(false);
   });
 
   it("emits exactly the seven expected headers (no surprise additions)", () => {
     // Wave 4 A8 (2026-05-02): added `Reporting-Endpoints` so the CSP
     // report-only soak actually collects telemetry. Detailed contract
-    // for the new header lives in `csp-report.test.ts`.
+    // for the new header lives in `csp-report.test.ts`. Wave CSP-Enforce
+    // (2026-05-11): `Content-Security-Policy-Report-Only` → `Content-Security-Policy`.
     const keys = headers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
-        "Content-Security-Policy-Report-Only",
+        "Content-Security-Policy",
         "Permissions-Policy",
         "Referrer-Policy",
         "Reporting-Endpoints",
