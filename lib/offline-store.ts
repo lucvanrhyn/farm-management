@@ -297,6 +297,65 @@ export async function setLastSyncedAt(iso: string): Promise<void> {
   await db.put('metadata', { key: 'lastSyncedAt', value: iso });
 }
 
+/**
+ * Generic metadata read for the new sync queue facade (PRD #194 wave 1).
+ *
+ * The `metadata` object store is keyed by `{ key, value: string }` records.
+ * `lib/sync/queue.ts` persists its `lastAttemptAt` / `lastFullSuccessAt`
+ * timestamps here so the truth survives reloads alongside `lastSyncedAt`.
+ *
+ * Returns `null` when the key is absent OR the active farm slug isn't set
+ * (e.g. SSR — sync-manager only runs in the browser, but defensive null is
+ * safer than throwing).
+ */
+export async function getSyncMetadataValue(key: string): Promise<string | null> {
+  try {
+    const db = await getDB();
+    const meta = await db.get('metadata', key);
+    return (meta as { key: string; value: string } | undefined)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Generic metadata write — paired with `getSyncMetadataValue`. */
+export async function setSyncMetadataValue(key: string, value: string): Promise<void> {
+  const db = await getDB();
+  await db.put('metadata', { key, value });
+}
+
+// ── Failed-row counters (sync queue facade) ──────────────────────────────────
+//
+// Each pending-* store already tags rows with `sync_status: 'pending' | 'synced'
+// | 'failed'`. The queue facade derives `failedCount` for `SyncTruth` from a
+// live count of `failed` rows across all four stores. Synced rows are kept
+// until next refresh for diagnostic purposes, so we filter explicitly rather
+// than counting `getPendingXxx().length` (which already includes `failed`).
+
+export async function getFailedObservationsCount(): Promise<number> {
+  const db = await getDB();
+  const all = await db.getAll('pending_observations');
+  return all.filter((o) => o.sync_status === 'failed').length;
+}
+
+export async function getFailedAnimalCreatesCount(): Promise<number> {
+  const db = await getDB();
+  const all = await db.getAll('pending_animal_creates');
+  return all.filter((a) => a.sync_status === 'failed').length;
+}
+
+export async function getFailedCoverReadingsCount(): Promise<number> {
+  const db = await getDB();
+  const all = await db.getAll('pending_cover_readings');
+  return all.filter((r) => r.sync_status === 'failed').length;
+}
+
+export async function getFailedPhotosCount(): Promise<number> {
+  const db = await getDB();
+  const all = await db.getAll('pending_photos');
+  return all.filter((p) => p.sync_status === 'failed').length;
+}
+
 export interface CachedFarmSettings {
   farmName: string;
   breed: string;

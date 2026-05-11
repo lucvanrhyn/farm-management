@@ -11,24 +11,17 @@ import {
   seedFarmSettings,
   getCachedFarmSettings,
   getPendingObservations,
-  markObservationSynced,
-  markObservationFailed,
   getPendingAnimalCreates,
-  markAnimalCreateSynced,
-  markAnimalCreateFailed,
   getPendingPhotos,
-  markPhotoSynced,
   markPhotoUploaded,
-  markPhotoFailed,
   getPendingCoverReadings,
-  markCoverReadingSynced,
-  markCoverReadingFailed,
   markCoverReadingPosted,
   setLastSyncedAt,
   clearPendingAnimalUpdate,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
+import { markSucceeded, markFailed, recordSyncAttempt } from './sync/queue';
 
 import type { Camp, Animal, AnimalSex, GrazingQuality, WaterStatus, FenceStatus } from './types';
 import type { PrismaAnimal } from './types';
@@ -102,28 +95,49 @@ async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
 /**
  * Options for `refreshCachedData`.
  *
- * `tickLastSyncedAt` defaults true so direct callers (no pending submits,
- * pure cache pull) keep the timestamp truthful. `syncAndRefresh` flips it
- * false when submits were attempted and zero succeeded — otherwise the UI
- * shows "Synced: Just now" while every queued row failed silently.
- *
  * `species` scopes the /api/camps fetch to a single species so the returned
  * `animal_count` per camp reflects only that species' herd. When omitted,
  * the route returns cross-species counts (back-compat for callers that
  * pre-date the multi-species mode toggle). Wave D-U3 / Codex audit P2 U3.
+ *
+ * Note (PRD #194 wave 1): the previous `tickLastSyncedAt` boolean was
+ * removed. Cache-pull is no longer responsible for moving the "last synced"
+ * timestamp — `syncAndRefresh` owns that via `recordSyncAttempt` from the
+ * sync queue facade. Direct cache-only callers (UI cold start) get a
+ * `setLastSyncedAt` tick inside this function for backward compat with the
+ * existing UI getter; this collapses to the new facade in wave 2.
  */
 interface RefreshCachedDataOptions {
-  tickLastSyncedAt?: boolean;
   species?: string;
 }
 
+/**
+ * Pull the latest camps / animals / farm-settings snapshot from the server
+ * into IndexedDB. Pure cache pull — no per-row sync, no failure paths
+ * surfaced upward (a failed GET silently leaves the previous IDB row in
+ * place; `seedAnimals` early-returns on empty payloads so a transient
+ * fetch failure can never wipe a live herd).
+ *
+ * The legacy `lastSyncedAt` timestamp is ticked at the end so cache-only
+ * callers (UI cold start) keep the existing UI getter working until wave 2
+ * (issue #196) migrates consumers to `getCurrentSyncTruth().lastFullSuccessAt`.
+ * `syncAndRefresh` uses `refreshCachedDataNoTick` to skip this tick because
+ * the coordinator owns both the new `recordSyncAttempt` call and the
+ * conditional legacy tick (truthfulness gate from Codex C1/C3).
+ */
 export async function refreshCachedData(
   options: RefreshCachedDataOptions = {},
 ): Promise<void> {
-  const { tickLastSyncedAt = true, species } = options;
-  // Three top-level refreshes run in parallel; animals pagination happens
-  // inside its own helper. /api/animals is no longer in the outer fan-out
-  // because it may take multiple requests.
+  await refreshCachedDataNoTick(options.species);
+  await setLastSyncedAt(new Date().toISOString());
+}
+
+/**
+ * Internal: cache pull without the legacy `setLastSyncedAt` tick. The
+ * coordinator (`syncAndRefresh`) owns timestamp movement so the
+ * truthfulness gate stays in exactly one place.
+ */
+async function refreshCachedDataNoTick(species?: string): Promise<void> {
   const campsUrl = species
     ? `/api/camps?species=${encodeURIComponent(species)}`
     : '/api/camps';
@@ -137,8 +151,9 @@ export async function refreshCachedData(
   if (campsRes.ok) {
     const camps: Camp[] = await campsRes.json();
 
-    // Merge server-authoritative condition data so camp colors survive a sync cycle.
-    // /api/camps/status returns the latest camp_condition observation per camp.
+    // Merge server-authoritative condition data so camp colors survive a sync
+    // cycle. /api/camps/status returns the latest camp_condition observation
+    // per camp.
     let mergedCamps = camps;
     if (statusRes.ok) {
       const statusMap: Record<string, ServerCampCondition> = await statusRes.json();
@@ -155,7 +170,6 @@ export async function refreshCachedData(
         };
       });
     }
-
     await seedCamps(mergedCamps);
   }
 
@@ -171,10 +185,6 @@ export async function refreshCachedData(
       breed: farm.breed,
       heroImageUrl: farm.heroImageUrl,
     });
-  }
-
-  if (tickLastSyncedAt) {
-    await setLastSyncedAt(new Date().toISOString());
   }
 }
 
@@ -215,7 +225,7 @@ export async function syncPendingObservations(): Promise<{
   for (const obs of pending) {
     const serverId = await uploadObservation(obs);
     if (serverId) {
-      await markObservationSynced(obs.local_id!);
+      await markSucceeded('observation', obs.local_id!, { id: serverId });
       localToServerId.set(obs.local_id!, serverId);
       synced++;
       // If this observation carried an animal-level mutation (camp_move,
@@ -227,7 +237,7 @@ export async function syncPendingObservations(): Promise<{
         await clearPendingAnimalUpdate(obs.animal_id);
       }
     } else {
-      await markObservationFailed(obs.local_id!);
+      await markFailed('observation', obs.local_id!, 'upload_failed');
       failed++;
     }
   }
@@ -273,10 +283,10 @@ export async function syncPendingAnimals(): Promise<{ synced: number; failed: nu
   for (const animal of pending) {
     const ok = await uploadAnimalCreate(animal);
     if (ok) {
-      await markAnimalCreateSynced(animal.local_id!);
+      await markSucceeded('animal', animal.local_id!);
       synced++;
     } else {
-      await markAnimalCreateFailed(animal.local_id!);
+      await markFailed('animal', animal.local_id!, 'upload_failed');
       failed++;
     }
   }
@@ -284,7 +294,11 @@ export async function syncPendingAnimals(): Promise<{ synced: number; failed: nu
   return { synced, failed };
 }
 
-async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<void> {
+async function syncPendingPhotos(
+  localToServerId: Map<number, string>,
+): Promise<{ synced: number; failed: number }> {
+  let synced = 0;
+  let failed = 0;
   const pendingPhotos = await getPendingPhotos();
   for (const photo of pendingPhotos) {
     try {
@@ -292,7 +306,8 @@ async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<
       // They are unrecoverable (the server already created the observation
       // without an attachment URL), so mark failed and move on.
       if (typeof photo.observation_local_id !== 'number') {
-        await markPhotoFailed(photo.local_id!);
+        await markFailed('photo', photo.local_id!, 'legacy_string_id');
+        failed++;
         continue;
       }
 
@@ -326,16 +341,20 @@ async function syncPendingPhotos(localToServerId: Map<number, string>): Promise<
       if (!patchRes.ok) {
         // PATCH failed — mark as failed so it retries, but blob_url is
         // already persisted so the next retry skips the upload step.
-        await markPhotoFailed(photo.local_id!);
+        await markFailed('photo', photo.local_id!, `patch_failed_${patchRes.status}`);
+        failed++;
         continue;
       }
 
-      await markPhotoSynced(photo.local_id!);
+      await markSucceeded('photo', photo.local_id!);
+      synced++;
     } catch (e) {
       console.error('Photo sync failed', e);
-      await markPhotoFailed(photo.local_id!);
+      await markFailed('photo', photo.local_id!, 'exception');
+      failed++;
     }
   }
+  return { synced, failed };
 }
 
 export async function syncPendingCoverReadings(): Promise<{ synced: number; failed: number }> {
@@ -358,7 +377,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           },
         );
         if (!res.ok) {
-          await markCoverReadingFailed(reading.local_id!);
+          await markFailed('cover-reading', reading.local_id!, `post_failed_${res.status}`);
           failed++;
           continue;
         }
@@ -381,7 +400,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           console.error(
             `[sync] cover photo upload failed (status ${uploadRes.status}) for reading ${reading.local_id}`,
           );
-          await markCoverReadingFailed(reading.local_id!);
+          await markFailed('cover-reading', reading.local_id!, `photo_upload_failed_${uploadRes.status}`);
           failed++;
           continue;
         }
@@ -396,17 +415,17 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
         );
         if (!patchRes.ok) {
           // Leave as failed — reading row exists, next cycle retries photo only.
-          await markCoverReadingFailed(reading.local_id!);
+          await markFailed('cover-reading', reading.local_id!, `photo_patch_failed_${patchRes.status}`);
           failed++;
           continue;
         }
       }
 
-      await markCoverReadingSynced(reading.local_id!);
+      await markSucceeded('cover-reading', reading.local_id!);
       synced++;
     } catch (e) {
       console.error('[sync] cover reading failed:', e);
-      await markCoverReadingFailed(reading.local_id!);
+      await markFailed('cover-reading', reading.local_id!, 'exception');
       failed++;
     }
   }
@@ -428,20 +447,42 @@ export async function syncAndRefresh(
     syncPendingAnimals(),
     syncPendingCoverReadings(),
   ]);
-  await syncPendingPhotos(obsResult.localToServerId);
+  const photoResult = await syncPendingPhotos(obsResult.localToServerId);
 
-  const synced = obsResult.synced + animalsResult.synced + coversResult.synced;
-  const failed = obsResult.failed + animalsResult.failed + coversResult.failed;
+  const synced =
+    obsResult.synced + animalsResult.synced + coversResult.synced + photoResult.synced;
+  const failed =
+    obsResult.failed + animalsResult.failed + coversResult.failed + photoResult.failed;
 
-  // Truthfulness gate: when submits were attempted and every one failed, do
-  // NOT tick `lastSyncedAt`. Partial success counts as success — the user
-  // got at least one record through, and the UI is allowed to show "Synced
-  // just now" alongside a non-zero failure toast (`failed > 0`). When no
-  // submits were attempted (queue was empty) we still tick, since the
-  // cache-refresh GETs themselves are the sync that happened.
+  // Cache pull — does NOT tick the legacy timestamp. The coordinator owns
+  // both the new SyncTruth update (recordSyncAttempt) and the legacy
+  // setLastSyncedAt tick below.
+  await refreshCachedDataNoTick(species);
+
+  // New canonical truth: every cycle records an attempt; lastFullSuccessAt
+  // moves only when every kind reported zero failures. This is the
+  // structural fix for the caller-must-remember bug from Codex C1/C3.
+  const cycleTimestamp = new Date().toISOString();
+  await recordSyncAttempt({
+    timestamp: cycleTimestamp,
+    perKindResults: {
+      observation: obsResult,
+      animal: animalsResult,
+      'cover-reading': coversResult,
+      photo: photoResult,
+    },
+  });
+
+  // Legacy back-compat: existing UI consumers still read `getLastSyncedAt`
+  // until wave 2 (issue #196) migrates them to `getCurrentSyncTruth`. Keep
+  // the same truthfulness gate they relied on — tick when no submits were
+  // attempted (empty queue, cache-only) OR when at least one submit
+  // succeeded (partial success is real success in the legacy contract).
   const submitsAttempted = synced + failed > 0;
-  const tickLastSyncedAt = !submitsAttempted || synced > 0;
-  await refreshCachedData({ tickLastSyncedAt, species });
+  const tickLegacyTimestamp = !submitsAttempted || synced > 0;
+  if (tickLegacyTimestamp) {
+    await setLastSyncedAt(cycleTimestamp);
+  }
 
   return { synced, failed };
 }
