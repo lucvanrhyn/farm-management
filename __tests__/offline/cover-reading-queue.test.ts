@@ -88,18 +88,32 @@ describe('markCoverReadingSynced', () => {
 });
 
 describe('markCoverReadingFailed', () => {
-  it('keeps reading in pending list for retry', async () => {
-    const { queueCoverReading, markCoverReadingFailed, getPendingCoverReadings } = await loadStore();
+  // Issue #208 — failed rows now move out of the pending bucket into their
+  // own (sticky) failed bucket. The auto-retry behaviour that this test
+  // originally pinned is gone; #209's retry-from-UI nudges failed rows back
+  // to pending explicitly.
+  it('moves reading from pending bucket into failed bucket', async () => {
+    const {
+      queueCoverReading,
+      markCoverReadingFailed,
+      getPendingCoverReadings,
+      getFailedCoverReadings,
+    } = await loadStore();
 
     const id = await queueCoverReading({
       farm_slug: 'f', camp_id: 'c', cover_category: 'Poor',
       created_at: '', sync_status: 'pending',
     });
-    await markCoverReadingFailed(id);
+    await markCoverReadingFailed(id, { statusCode: 500, error: 'server explode' });
 
-    const readings = await getPendingCoverReadings();
-    expect(readings).toHaveLength(1);
-    expect(readings[0].sync_status).toBe('failed');
+    const pending = await getPendingCoverReadings();
+    expect(pending).toHaveLength(0);
+
+    const failed = await getFailedCoverReadings();
+    expect(failed).toHaveLength(1);
+    expect(failed[0].sync_status).toBe('failed');
+    expect(failed[0].lastStatusCode).toBe(500);
+    expect(failed[0].lastError).toBe('server explode');
   });
 });
 

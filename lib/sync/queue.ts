@@ -58,9 +58,10 @@ import {
   queueAnimalCreate,
   queueCoverReading,
   queuePhoto,
-  type PendingObservation,
-  type PendingAnimalCreate,
-  type PendingCoverReading,
+  type QueueObservationInput,
+  type QueueAnimalCreateInput,
+  type QueueCoverReadingInput,
+  type QueueRowFailureInput,
 } from '@/lib/offline-store';
 
 // ── Public types ─────────────────────────────────────────────────────────────
@@ -120,25 +121,25 @@ export interface EnqueuePhotoInput {
 
 export async function enqueuePending(
   kind: 'observation',
-  row: Omit<PendingObservation, 'local_id'>,
+  row: QueueObservationInput,
 ): Promise<number>;
 export async function enqueuePending(
   kind: 'animal',
-  row: Omit<PendingAnimalCreate, 'local_id'>,
+  row: QueueAnimalCreateInput,
 ): Promise<number>;
 export async function enqueuePending(
   kind: 'cover-reading',
-  row: Omit<PendingCoverReading, 'local_id'>,
+  row: QueueCoverReadingInput,
 ): Promise<number>;
 export async function enqueuePending(kind: 'photo', row: EnqueuePhotoInput): Promise<number>;
 export async function enqueuePending(kind: SyncKind, row: unknown): Promise<number> {
   switch (kind) {
     case 'observation':
-      return queueObservation(row as Omit<PendingObservation, 'local_id'>);
+      return queueObservation(row as QueueObservationInput);
     case 'animal':
-      return queueAnimalCreate(row as Omit<PendingAnimalCreate, 'local_id'>);
+      return queueAnimalCreate(row as QueueAnimalCreateInput);
     case 'cover-reading':
-      return queueCoverReading(row as Omit<PendingCoverReading, 'local_id'>);
+      return queueCoverReading(row as QueueCoverReadingInput);
     case 'photo': {
       const { observationLocalId, blob } = row as EnqueuePhotoInput;
       return queuePhoto(observationLocalId, blob);
@@ -180,29 +181,45 @@ export async function markSucceeded(
 }
 
 /**
- * Mark one queued row as failed. The `reason` is currently advisory — the
- * underlying row schemas don't carry a per-row failure reason yet (that
- * arrives in wave 2 when `SyncFailure` is wired through). Tracked here for
- * the public signature so callers can pass the HTTP status / parse error
- * text without a follow-up signature change.
+ * Mark one queued row as failed.
+ *
+ * `reason` is the legacy human-readable tag (e.g. `"post_failed_500"`); it is
+ * preserved in the signature for source-compat across the codebase and is
+ * folded into `failureMeta.error` when the explicit meta isn't supplied —
+ * this keeps every existing call site working while letting #208 callers
+ * pass the structured `{ statusCode, error }` shape that `lib/offline-store`
+ * now persists onto the row.
+ *
+ * Photo rows still take the legacy short path because the photo row schema
+ * is out of scope for #208 (see issue body and dispatch allow-list).
  */
 export async function markFailed(
   kind: SyncKind,
   id: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _reason: string,
+  reason: string,
+  failureMeta?: QueueRowFailureInput,
 ): Promise<void> {
+  // For the three pending-payload queues that #208 extended with failure
+  // metadata, default the explicit meta to the legacy `reason` string +
+  // unknown HTTP status. Sync-manager will pass the structured form so the
+  // dead-letter UI can show the real status / truncated body.
+  const meta: QueueRowFailureInput = failureMeta ?? {
+    statusCode: null,
+    error: reason,
+  };
   switch (kind) {
     case 'observation':
-      await markObservationFailed(id);
+      await markObservationFailed(id, meta);
       return;
     case 'animal':
-      await markAnimalCreateFailed(id);
+      await markAnimalCreateFailed(id, meta);
       return;
     case 'cover-reading':
-      await markCoverReadingFailed(id);
+      await markCoverReadingFailed(id, meta);
       return;
     case 'photo':
+      // Photo rows don't carry the new failure metadata (out of scope for
+      // #208). The structured meta is intentionally discarded here.
       await markPhotoFailed(id);
       return;
   }

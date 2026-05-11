@@ -133,9 +133,10 @@ afterEach(() => {
 
 describe('Animal idempotency — end-to-end (#207 Cycle 4)', () => {
   it('survives network failure + retry: exactly one row after multiple replays of the same clientLocalId', async () => {
-    const { setActiveFarmSlug, queueAnimalCreate, getPendingAnimalCreates } =
+    const { setActiveFarmSlug, queueAnimalCreate, getFailedAnimals } =
       await import('@/lib/offline-store');
-    setActiveFarmSlug(`test-${Math.random().toString(36).slice(2)}`);
+    const farmSlug = `test-${Math.random().toString(36).slice(2)}`;
+    setActiveFarmSlug(farmSlug);
 
     const uuid = 'aa888888-8888-4888-8888-888888888888';
 
@@ -190,12 +191,26 @@ describe('Animal idempotency — end-to-end (#207 Cycle 4)', () => {
     expect(r1.failed).toBe(1);
     expect(server.rows).toHaveLength(0);
 
-    // Queued row still present + clientLocalId intact.
-    const afterFail = await getPendingAnimalCreates();
+    // Issue #208 — failed rows live in their own (sticky) bucket; the row is
+    // still in IDB and reachable via `getFailedAnimals()`. Simulate the
+    // #209 retry-from-UI by raw-IDB-toggling status back to `pending` before
+    // the second sync cycle.
+    const afterFail = await getFailedAnimals();
     expect(afterFail).toHaveLength(1);
     expect(afterFail[0].clientLocalId).toBe(uuid);
 
     // 4. Second sync cycle: network succeeds, row lands.
+    {
+      const { openDB } = await import('idb');
+      const db = await openDB(`farmtrack-${farmSlug}`);
+      const failedLocalId = afterFail[0].local_id!;
+      const row = (await db.get('pending_animal_creates', failedLocalId)) as {
+        sync_status: 'pending' | 'synced' | 'failed';
+      };
+      await db.put('pending_animal_creates', { ...row, sync_status: 'pending' });
+      db.close();
+    }
+
     vi.restoreAllMocks();
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (input: RequestInfo | URL, init?: RequestInit) => {

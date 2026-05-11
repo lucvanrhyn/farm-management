@@ -94,9 +94,10 @@ afterEach(() => {
 
 describe('CampCoverReading idempotency — end-to-end (#207 Cycle 4)', () => {
   it('survives network failure + retry: exactly one row after multiple replays of the same clientLocalId', async () => {
-    const { setActiveFarmSlug, queueCoverReading, getPendingCoverReadings } =
+    const { setActiveFarmSlug, queueCoverReading, getFailedCoverReadings } =
       await import('@/lib/offline-store');
-    setActiveFarmSlug(`test-${Math.random().toString(36).slice(2)}`);
+    const farmSlug = `test-${Math.random().toString(36).slice(2)}`;
+    setActiveFarmSlug(farmSlug);
 
     const uuid = 'cc888888-8888-4888-8888-888888888888';
 
@@ -142,9 +143,22 @@ describe('CampCoverReading idempotency — end-to-end (#207 Cycle 4)', () => {
     expect(r1.failed).toBe(1);
     expect(server.rows).toHaveLength(0);
 
-    const afterFail = await getPendingCoverReadings();
+    // Issue #208 — failed rows live in the sticky failed bucket; simulate
+    // the #209 retry-from-UI by raw-IDB-toggling status back to `pending`.
+    const afterFail = await getFailedCoverReadings();
     expect(afterFail).toHaveLength(1);
     expect(afterFail[0].clientLocalId).toBe(uuid);
+
+    {
+      const { openDB } = await import('idb');
+      const db = await openDB(`farmtrack-${farmSlug}`);
+      const failedLocalId = afterFail[0].local_id!;
+      const row = (await db.get('pending_cover_readings', failedLocalId)) as {
+        sync_status: 'pending' | 'synced' | 'failed';
+      };
+      await db.put('pending_cover_readings', { ...row, sync_status: 'pending' });
+      db.close();
+    }
 
     // 2. Second cycle — network succeeds.
     vi.restoreAllMocks();
