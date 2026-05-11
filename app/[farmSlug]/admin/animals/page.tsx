@@ -8,7 +8,7 @@ import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { activeSpeciesWhere } from "@/lib/animals/active-species-filter";
+import { activeSpeciesWhere, ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -45,7 +45,17 @@ export default async function AdminAnimalsPage({
   // the shape of /api/animals?cursor=<animalId>. When there is no cursor we
   // can still keep the richer `[category, animalId]` sort for the first
   // page because the cursor is empty.
-  const [animals, prismaCamps, withdrawalAnimals, prismaMobs] = await Promise.all([
+  //
+  // Issue #205 — also fetch:
+  //   * speciesTotal       — count of Active rows for the current mode, so
+  //                          the header denominator is stable as Load more
+  //                          streams batches in.
+  //   * crossSpeciesTotal  — count of Active rows across ALL species, so a
+  //                          per-species view on a multi-species farm can
+  //                          surface the reconciliation total ("101 total
+  //                          Active across species") and the missing 20
+  //                          non-cattle rows aren't invisible.
+  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, speciesTotal, crossSpeciesTotal] = await Promise.all([
     prisma.animal.findMany({
       // Wave A2: per-species + Active. Previously `where: { species: mode }`
       // leaked inactive/sold/dead rows into the admin table. Helper keeps
@@ -64,6 +74,10 @@ export default async function AdminAnimalsPage({
     getAnimalsInWithdrawal(prisma),
     // audit-allow-findmany: mob list is per-tenant and bounded (≤20 typical); needed for table column map.
     prisma.mob.findMany({ orderBy: { name: "asc" } }),
+    prisma.animal.count({ where: activeSpeciesWhere(mode) }),
+    // cross-species by design: drives the reconciliation total in the header
+    // on multi-species tenants. Matches `getCachedFarmSummary` (lib/server/cached.ts).
+    prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
 
   const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
@@ -92,9 +106,10 @@ export default async function AdminAnimalsPage({
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-            Showing first {animals.length.toLocaleString()} · scroll or Load more to see the rest
-          </p>
+          {/* Header count line moved into <AnimalsTable /> (issue #205) so the
+              "Showing X of Y" denominator updates as Load more streams the
+              next cursor window, and so multi-species tenants see the
+              cross-species reconciliation total alongside. */}
         </div>
         <div className="flex gap-2 items-center">
           <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} />
@@ -109,6 +124,8 @@ export default async function AdminAnimalsPage({
         mobs={mobs}
         initialNextCursor={nextCursor}
         species={mode}
+        speciesTotal={speciesTotal}
+        crossSpeciesActiveTotal={crossSpeciesTotal}
       />
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />

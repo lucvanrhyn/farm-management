@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToString } from "react-dom/server";
 
 const animalFindManyMock = vi.fn();
+const animalCountMock = vi.fn();
 const campFindManyMock = vi.fn();
 const mobFindManyMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
@@ -73,6 +74,7 @@ function fakeAnimals(n: number) {
 
 beforeEach(() => {
   animalFindManyMock.mockReset();
+  animalCountMock.mockReset();
   campFindManyMock.mockReset();
   mobFindManyMock.mockReset();
   getPrismaForFarmMock.mockReset();
@@ -83,9 +85,13 @@ beforeEach(() => {
   getAnimalsInWithdrawalMock.mockResolvedValue([]);
   campFindManyMock.mockResolvedValue([{ campId: "camp-1", campName: "Camp 1" }]);
   mobFindManyMock.mockResolvedValue([]);
+  // Issue #205 — page.tsx now also fires `animal.count` for species + cross-
+  // species totals. Returning a constant here keeps the existing payload-size
+  // assertions valid (count is a primitive, doesn't bloat HTML).
+  animalCountMock.mockResolvedValue(50);
 
   getPrismaForFarmMock.mockResolvedValue({
-    animal: { findMany: animalFindManyMock },
+    animal: { findMany: animalFindManyMock, count: animalCountMock },
     camp: { findMany: campFindManyMock },
     mob: { findMany: mobFindManyMock },
   });

@@ -27,6 +27,21 @@ interface Props {
    * the "Load more" fetch returns the same-species batch.
    */
   species?: string;
+  /**
+   * Total Active rows for the current species mode (server-side count). The
+   * header reads "Showing {loaded} of {speciesTotal} {species}" and the
+   * denominator stays stable as Load more streams batches in. Issue #205.
+   */
+  speciesTotal?: number;
+  /**
+   * Total Active rows across ALL species on the farm. Only used to surface
+   * a reconciliation line ("X total Active across species") when the
+   * tenant has animals outside the current species mode — otherwise a
+   * cattle-only-mode farm with 81 cattle + 20 other-species Active rows
+   * would render "Showing 50 of 81" with no hint of the 20 missing rows.
+   * Sourced from `getCachedFarmSummary().animalCount`. Issue #205.
+   */
+  crossSpeciesActiveTotal?: number;
 }
 
 const farmInput =
@@ -42,6 +57,8 @@ export default function AnimalsTable({
   mobs,
   initialNextCursor,
   species,
+  speciesTotal,
+  crossSpeciesActiveTotal,
 }: Props) {
   const { mode } = useFarmModeSafe();
   const [tab, setTab] = useState<"active" | "deceased">("active");
@@ -155,8 +172,54 @@ export default function AnimalsTable({
   const categories: AnimalCategory[] = getSpeciesModule(mode).config.categories.map((c) => c.value);
   const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
 
+  // Issue #205 — header count text. SSR previously hard-coded `animals.length`
+  // in page.tsx so the number never updated when Load more streamed the next
+  // window. Lives in the client component now and reacts to `animals` state.
+  //
+  // `speciesTotal` is the server-side count of Active rows for the current
+  // mode (e.g. 81 cattle). When omitted (caller hasn't migrated yet), we fall
+  // back to the legacy "Showing first N" message.
+  //
+  // The reconciliation line surfaces the cross-species Active total when it
+  // differs from the species total — a cattle-only-mode farm with 81 cattle
+  // + 20 other-species Active rows reads
+  //   Showing 50 of 81 cattle (101 total Active across species)
+  // so the farmer can see the 20 non-cattle rows are accounted for, not lost.
+  const loaded = animals.length;
+  const showReconciliation =
+    typeof crossSpeciesActiveTotal === "number" &&
+    typeof speciesTotal === "number" &&
+    crossSpeciesActiveTotal !== speciesTotal;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Header count line — issue #205 */}
+      <p
+        className="text-sm"
+        style={{ color: "#9C8E7A" }}
+        data-testid="animals-header-count"
+      >
+        {typeof speciesTotal === "number" ? (
+          <>
+            Showing {loaded.toLocaleString()} of{" "}
+            {speciesTotal.toLocaleString()}
+            {species ? ` ${species}` : ""}
+            {showReconciliation && (
+              <>
+                {" "}
+                ({crossSpeciesActiveTotal!.toLocaleString()} total Active
+                across species)
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            Showing first {loaded.toLocaleString()} · scroll or Load more to
+            see the rest
+          </>
+        )}
+      </p>
+
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "#F0EBE4" }}>
         {(["active", "deceased"] as const).map((t) => {

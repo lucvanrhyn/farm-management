@@ -70,9 +70,11 @@ vi.mock("@/lib/auth-options", () => ({ authOptions: {} }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
 // Active-species filter is a tiny helper; safe to use the real impl, but
-// stubbing it avoids dragging extra imports.
+// stubbing it avoids dragging extra imports. Issue #205 added `ACTIVE_STATUS`
+// to the surface — page.tsx imports it for the cross-species count.
 vi.mock("@/lib/animals/active-species-filter", () => ({
   activeSpeciesWhere: () => ({}),
+  ACTIVE_STATUS: "Active",
 }));
 
 interface PageHarnessResult {
@@ -121,7 +123,14 @@ beforeEach(() => {
     throw new Error("redirect-not-expected-in-this-test");
   });
   getPrismaForFarmMock.mockResolvedValue({
-    animal: { findMany: vi.fn().mockResolvedValue([]) },
+    // Issue #205 — admin/animals page now also calls `animal.count` for the
+    // species + cross-species reconciliation totals in the header. Returning 0
+    // is fine for this placement test, which only inspects the danger-zone
+    // wrapper position.
+    animal: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
     camp: { findMany: vi.fn().mockResolvedValue([]) },
     mob: { findMany: vi.fn().mockResolvedValue([]) },
     transaction: { findMany: vi.fn().mockResolvedValue([]) },
