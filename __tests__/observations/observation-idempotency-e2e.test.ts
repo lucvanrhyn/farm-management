@@ -127,9 +127,13 @@ afterEach(() => {
 
 describe('Observation idempotency — end-to-end (#206 Cycle 4)', () => {
   it('survives network failure + retry: exactly one row after multiple replays of the same clientLocalId', async () => {
-    const { setActiveFarmSlug, queueObservation, getPendingObservations } =
-      await import('@/lib/offline-store');
-    setActiveFarmSlug(`test-${Math.random().toString(36).slice(2)}`);
+    const {
+      setActiveFarmSlug,
+      queueObservation,
+      getFailedObservations,
+    } = await import('@/lib/offline-store');
+    const farmSlug = `test-${Math.random().toString(36).slice(2)}`;
+    setActiveFarmSlug(farmSlug);
 
     const uuid = '88888888-8888-4888-8888-888888888888';
 
@@ -188,12 +192,29 @@ describe('Observation idempotency — end-to-end (#206 Cycle 4)', () => {
     expect(r1.failed).toBe(1);
     expect(server.rows).toHaveLength(0);
 
-    // The queued row is still present, still carries the original UUID.
-    const afterFailure = await getPendingObservations();
+    // Issue #208 — failed rows now live in their own (sticky) bucket. The
+    // row is still in IDB, still carries the original UUID, and is reachable
+    // via `getFailedObservations()`. Auto-retry on the next sync cycle is
+    // gone; #209's retry-from-UI will flip the row back to pending. To
+    // simulate that nudge in this test, we raw-IDB-toggle the row before
+    // the second sync cycle.
+    const afterFailure = await getFailedObservations();
     expect(afterFailure).toHaveLength(1);
     expect(afterFailure[0].clientLocalId).toBe(uuid);
 
-    // 4. Second sync cycle: network succeeds. The row lands.
+    // 4. Second sync cycle: simulate the #209 retry nudge — flip the failed
+    //    row back to pending via raw IDB. Then run sync; the row lands.
+    {
+      const { openDB } = await import('idb');
+      const db = await openDB(`farmtrack-${farmSlug}`);
+      const failedLocalId = afterFailure[0].local_id!;
+      const row = (await db.get('pending_observations', failedLocalId)) as {
+        sync_status: 'pending' | 'synced' | 'failed';
+      };
+      await db.put('pending_observations', { ...row, sync_status: 'pending' });
+      db.close();
+    }
+
     vi.restoreAllMocks();
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (input: RequestInfo | URL, init?: RequestInit) => {

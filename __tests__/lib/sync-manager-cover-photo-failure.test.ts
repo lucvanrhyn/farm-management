@@ -120,6 +120,13 @@ describe('syncPendingCoverReadings — photo upload failure', () => {
     expect(markCoverReadingSyncedMock).not.toHaveBeenCalled();
 
     // It must be marked failed so the next cycle retries the photo.
-    expect(markCoverReadingFailedMock).toHaveBeenCalledWith(1);
+    // Issue #208 — markCoverReadingFailed now takes a structured failure
+    // meta as second arg so the dead-letter UI (#209) can render status +
+    // truncated body. Assert via objectContaining so the body wording isn't
+    // pinned (it comes from the failing fetch's response text).
+    expect(markCoverReadingFailedMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ statusCode: expect.any(Number) }),
+    );
   });
 });

@@ -184,7 +184,30 @@ async function refreshCachedDataInternal(species?: string): Promise<void> {
   }
 }
 
-async function uploadObservation(obs: PendingObservation): Promise<string | null> {
+/**
+ * Issue #208 — cap persisted error bodies to keep IDB rows sane. The
+ * server can return arbitrarily large HTML/JSON on a 5xx, and we don't
+ * want the dead-letter UI carrying multi-MB rows around.
+ */
+const MAX_ERROR_BODY_CHARS = 500;
+
+function truncateError(body: string): string {
+  return body.length > MAX_ERROR_BODY_CHARS ? body.slice(0, MAX_ERROR_BODY_CHARS) : body;
+}
+
+/**
+ * Issue #208 — upload result envelope. The legacy contract was "string or
+ * null" which dropped the failure cause on the floor. Returning the
+ * structured envelope lets `syncPendingObservations` forward the cause
+ * (HTTP status + truncated body, OR thrown-error message) to
+ * `markObservationFailed` so the #209 dead-letter UI has something
+ * actionable to show.
+ */
+type UploadResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; statusCode: number | null; error: string };
+
+async function uploadObservation(obs: PendingObservation): Promise<UploadResult<string>> {
   try {
     // Issue #206 — explicit POST body. Previously this stringified the whole
     // `obs` row, which coincidentally forwarded `clientLocalId` once the
@@ -208,17 +231,39 @@ async function uploadObservation(obs: PendingObservation): Promise<string | null
     if (!res.ok) {
       // Offline-first: caller marks the observation as failed and retries
       // later. We still log so operators can diagnose why syncing stalls.
+      // Issue #208 — capture status + truncated body so the dead-letter UI
+      // can render "stuck because …".
+      const text = await res.text().catch(() => '');
       console.warn('[sync] observation upload failed:', res.status, res.statusText);
-      return null;
+      return {
+        ok: false,
+        statusCode: res.status,
+        error: truncateError(text || res.statusText),
+      };
     }
     const data = await res.json().catch((parseErr) => {
       console.warn('[sync] observation response was not JSON:', parseErr);
       return {};
     });
-    return (data.id as string) ?? null;
+    const serverId = (data.id as string) ?? null;
+    if (!serverId) {
+      // Defensive: 2xx with no `id` field is a contract violation; surface
+      // it as a structured failure so the row enters the dead-letter UI
+      // instead of vanishing.
+      return {
+        ok: false,
+        statusCode: res.status,
+        error: 'server returned 2xx with no id field',
+      };
+    }
+    return { ok: true, value: serverId };
   } catch (err) {
     console.warn('[sync] observation upload threw:', err);
-    return null;
+    return {
+      ok: false,
+      statusCode: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -227,16 +272,20 @@ export async function syncPendingObservations(): Promise<{
   failed: number;
   localToServerId: Map<number, string>;
 }> {
+  // Issue #208 — `getPendingObservations` no longer returns failed rows.
+  // Failed rows stay sticky in their own bucket until the #209 retry-from-UI
+  // explicitly flips them back. This is the structural fix for the
+  // perpetual-"N pending"-pill bug.
   const pending = await getPendingObservations();
   let synced = 0;
   let failed = 0;
   const localToServerId = new Map<number, string>();
 
   for (const obs of pending) {
-    const serverId = await uploadObservation(obs);
-    if (serverId) {
-      await markSucceeded('observation', obs.local_id!, { id: serverId });
-      localToServerId.set(obs.local_id!, serverId);
+    const result = await uploadObservation(obs);
+    if (result.ok) {
+      await markSucceeded('observation', obs.local_id!, { id: result.value });
+      localToServerId.set(obs.local_id!, result.value);
       synced++;
       // If this observation carried an animal-level mutation (camp_move,
       // status_change, etc.), the server has now applied it — drop the
@@ -247,7 +296,10 @@ export async function syncPendingObservations(): Promise<{
         await clearPendingAnimalUpdate(obs.animal_id);
       }
     } else {
-      await markFailed('observation', obs.local_id!, 'upload_failed');
+      await markFailed('observation', obs.local_id!, 'upload_failed', {
+        statusCode: result.statusCode,
+        error: result.error,
+      });
       failed++;
     }
   }
@@ -255,7 +307,9 @@ export async function syncPendingObservations(): Promise<{
   return { synced, failed, localToServerId };
 }
 
-async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean> {
+async function uploadAnimalCreate(
+  animal: PendingAnimalCreate,
+): Promise<UploadResult<true>> {
   try {
     const settings = await getCachedFarmSettings();
     const breed = settings?.breed ?? 'Mixed';
@@ -283,27 +337,41 @@ async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean>
       }),
     });
     if (!res.ok) {
+      const text = await res.text().catch(() => '');
       console.warn('[sync] animal create upload failed:', res.status, res.statusText);
+      return {
+        ok: false,
+        statusCode: res.status,
+        error: truncateError(text || res.statusText),
+      };
     }
-    return res.ok;
+    return { ok: true, value: true };
   } catch (err) {
     console.warn('[sync] animal create upload threw:', err);
-    return false;
+    return {
+      ok: false,
+      statusCode: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
 export async function syncPendingAnimals(): Promise<{ synced: number; failed: number }> {
+  // Issue #208 — pending list is now strict pending (no auto-retry of failed).
   const pending = await getPendingAnimalCreates();
   let synced = 0;
   let failed = 0;
 
   for (const animal of pending) {
-    const ok = await uploadAnimalCreate(animal);
-    if (ok) {
+    const result = await uploadAnimalCreate(animal);
+    if (result.ok) {
       await markSucceeded('animal', animal.local_id!);
       synced++;
     } else {
-      await markFailed('animal', animal.local_id!, 'upload_failed');
+      await markFailed('animal', animal.local_id!, 'upload_failed', {
+        statusCode: result.statusCode,
+        error: result.error,
+      });
       failed++;
     }
   }
@@ -375,6 +443,7 @@ async function syncPendingPhotos(
 }
 
 export async function syncPendingCoverReadings(): Promise<{ synced: number; failed: number }> {
+  // Issue #208 — pending list is now strict pending (no auto-retry of failed).
   const pending = await getPendingCoverReadings();
   let synced = 0;
   let failed = 0;
@@ -401,7 +470,16 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           },
         );
         if (!res.ok) {
-          await markFailed('cover-reading', reading.local_id!, `post_failed_${res.status}`);
+          const text = await res.text().catch(() => '');
+          await markFailed(
+            'cover-reading',
+            reading.local_id!,
+            `post_failed_${res.status}`,
+            {
+              statusCode: res.status,
+              error: truncateError(text || res.statusText),
+            },
+          );
           failed++;
           continue;
         }
@@ -424,7 +502,16 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           console.error(
             `[sync] cover photo upload failed (status ${uploadRes.status}) for reading ${reading.local_id}`,
           );
-          await markFailed('cover-reading', reading.local_id!, `photo_upload_failed_${uploadRes.status}`);
+          const text = await uploadRes.text().catch(() => '');
+          await markFailed(
+            'cover-reading',
+            reading.local_id!,
+            `photo_upload_failed_${uploadRes.status}`,
+            {
+              statusCode: uploadRes.status,
+              error: truncateError(text || `photo upload failed ${uploadRes.statusText}`),
+            },
+          );
           failed++;
           continue;
         }
@@ -439,7 +526,16 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
         );
         if (!patchRes.ok) {
           // Leave as failed — reading row exists, next cycle retries photo only.
-          await markFailed('cover-reading', reading.local_id!, `photo_patch_failed_${patchRes.status}`);
+          const text = await patchRes.text().catch(() => '');
+          await markFailed(
+            'cover-reading',
+            reading.local_id!,
+            `photo_patch_failed_${patchRes.status}`,
+            {
+              statusCode: patchRes.status,
+              error: truncateError(text || `photo attachment PATCH failed ${patchRes.statusText}`),
+            },
+          );
           failed++;
           continue;
         }
@@ -449,7 +545,10 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
       synced++;
     } catch (e) {
       console.error('[sync] cover reading failed:', e);
-      await markFailed('cover-reading', reading.local_id!, 'exception');
+      await markFailed('cover-reading', reading.local_id!, 'exception', {
+        statusCode: null,
+        error: e instanceof Error ? e.message : String(e),
+      });
       failed++;
     }
   }
