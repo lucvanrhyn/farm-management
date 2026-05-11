@@ -46,15 +46,22 @@ vi.mock('@/lib/logger-actions', () => ({
 // Stub the offline-store so OfflineProvider's mount effect doesn't touch IDB.
 let _stubEpoch = 0;
 vi.mock('@/lib/offline-store', () => ({
-  getPendingCount: vi.fn(async () => 0),
-  getLastSyncedAt: vi.fn(async () => null),
   getCachedCamps: vi.fn(async () => []),
   getCachedFarmSettings: vi.fn(async () => null),
   setActiveFarmSlug: vi.fn(() => { _stubEpoch += 1; }),
   getFarmEpoch: vi.fn(() => _stubEpoch),
   getCachedCampsForEpoch: vi.fn(async () => []),
   getCachedFarmSettingsForEpoch: vi.fn(async () => null),
-  getLastSyncedAtForEpoch: vi.fn(async () => null),
+}));
+
+// PRD #194 wave 2 — OfflineProvider reads sync state via the queue facade.
+vi.mock('@/lib/sync/queue', () => ({
+  getCurrentSyncTruth: vi.fn(async () => ({
+    pendingCount: 0,
+    failedCount: 0,
+    lastAttemptAt: null,
+    lastFullSuccessAt: null,
+  })),
 }));
 
 vi.mock('@/lib/sync-manager', () => ({

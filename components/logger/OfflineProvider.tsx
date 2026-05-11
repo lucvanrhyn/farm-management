@@ -12,16 +12,14 @@ import {
 import { usePathname } from 'next/navigation';
 import { openDB } from 'idb';
 import {
-  getPendingCount,
-  getLastSyncedAt,
   getCachedCamps,
   getCachedFarmSettings,
   setActiveFarmSlug,
   getFarmEpoch,
   getCachedCampsForEpoch,
-  getLastSyncedAtForEpoch,
   getCachedFarmSettingsForEpoch,
 } from '@/lib/offline-store';
+import { getCurrentSyncTruth } from '@/lib/sync/queue';
 import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
@@ -60,6 +58,20 @@ interface OfflineContextType {
   isOnline: boolean;
   syncStatus: SyncStatus;
   pendingCount: number;
+  /**
+   * Number of queued rows currently in `failed` state across all four sync
+   * kinds. Sourced from `getCurrentSyncTruth().failedCount`. Surfaced so the
+   * status bar can render a "N failed" pill — closes Codex audit gap C3
+   * (stuck-row invisibility).
+   */
+  failedCount: number;
+  /**
+   * Timestamp of the most recent FULL-SUCCESS sync cycle. Mirrors
+   * `SyncTruth.lastFullSuccessAt` — a partial-failure cycle deliberately does
+   * NOT advance this value. This is the truthfulness invariant the C1/C3 bug
+   * violated: the UI's "Synced: …" badge is the user's guarantee that
+   * everything they queued reached the server.
+   */
   lastSyncedAt: string | null;
   syncResult: SyncResult | null;
   camps: Camp[];
@@ -102,7 +114,13 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const { mode } = useFarmModeSafe();
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  // pendingCount / failedCount / lastSyncedAt are all derived from a single
+  // `getCurrentSyncTruth()` read. The four fields move together — assembling
+  // them from independent IDB getters is the exact pattern that produced
+  // Codex audit C1 + C3 ("Synced: Just now" lies). Keep them updated through
+  // the same `applySyncTruth` writer so divergence is structurally impossible.
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
@@ -115,10 +133,21 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   // mount-time refresh path already handles the first paint).
   const lastFetchedModeRef = useRef<string | null>(null);
 
-  const refreshPendingCount = useCallback(async () => {
-    const count = await getPendingCount();
-    setPendingCount(count);
+  // Re-derives the three SyncTruth-backed fields (pending / failed /
+  // lastSyncedAt) from `getCurrentSyncTruth()` in one shot. All consumers
+  // that previously called `setPendingCount` / `setLastSyncedAtState`
+  // independently now go through this single writer.
+  const applySyncTruth = useCallback(async () => {
+    const truth = await getCurrentSyncTruth();
+    setPendingCount(truth.pendingCount);
+    setFailedCount(truth.failedCount);
+    setLastSyncedAtState(truth.lastFullSuccessAt);
   }, []);
+
+  // Public name preserved for backward compat — existing call sites
+  // (online listener, post-sync refreshes) read "refreshPendingCount" but the
+  // implementation now re-derives ALL truth fields atomically.
+  const refreshPendingCount = applySyncTruth;
 
   const refreshCampsState = useCallback(async () => {
     const updated = await getCachedCamps();
@@ -149,8 +178,10 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         await refreshCachedData({ species: mode });
       }
       lastFetchedModeRef.current = mode;
-      const iso = new Date().toISOString();
-      setLastSyncedAtState(iso);
+      // Do NOT optimistically tick `lastSyncedAt` from a local clock here —
+      // that was the C1/C3 root cause. `refreshPendingCount` re-derives all
+      // SyncTruth fields from the queue facade, which only advances
+      // `lastFullSuccessAt` when the cycle actually finished with zero failures.
       await refreshPendingCount();
       // Reload camps + hero image into context after refresh
       const updated = await getCachedCamps();
@@ -207,6 +238,11 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
 
     setIsOnline(navigator.onLine);
 
+    // Seed pendingCount / failedCount / lastSyncedAt from the queue facade.
+    // The facade is the single source of truth for these three fields — the
+    // legacy per-epoch getLastSyncedAtForEpoch call was removed in PRD #194
+    // wave 2 because it could disagree with the queue's view of the world
+    // (Codex audit C1/C3).
     refreshPendingCount();
 
     // Paint instantly from cache, then pull fresh IFF the last full sync is
@@ -215,12 +251,15 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // /api/camps + /api/animals + /api/farm + /api/camps/status fan-outs.
     // Cache-first is correct here and online-reconnect schedules its own
     // refresh, so users coming back from offline never serve stale data.
+    //
+    // Freshness check now reads `lastFullSuccessAt` via the queue facade
+    // rather than the legacy `getLastSyncedAtForEpoch` — see PRD #194 wave 2.
     Promise.all([
       getCachedCampsForEpoch(epoch),
       getCachedFarmSettingsForEpoch(epoch),
-      getLastSyncedAtForEpoch(epoch),
+      getCurrentSyncTruth(epoch),
     ]).then(
-      ([cachedCamps, cachedSettings, lastSyncedIso]) => {
+      ([cachedCamps, cachedSettings, truth]) => {
         // Discard if React unmounted OR if epoch is stale (farm switched mid-flight)
         if (cancelled) return;
         if (cachedCamps === null) return; // stale epoch — another farm's data
@@ -228,7 +267,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         // M3: heroImageUrl is no longer stored in cache; always fall back to /farm-hero.jpg
         setHeroImageUrl(cachedSettings?.heroImageUrl ?? null);
         setCampsLoaded(true);
-        setLastSyncedAtState(lastSyncedIso);
+        const lastSyncedIso = truth.lastFullSuccessAt;
         const lastSyncedMs = lastSyncedIso ? Date.parse(lastSyncedIso) : 0;
         const staleMs = Date.now() - lastSyncedMs;
         if (Number.isNaN(lastSyncedMs) || staleMs > REFRESH_TTL_MS) {
@@ -298,6 +337,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         isOnline,
         syncStatus,
         pendingCount,
+        failedCount,
         lastSyncedAt,
         syncResult,
         camps,
