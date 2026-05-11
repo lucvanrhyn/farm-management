@@ -213,7 +213,7 @@ describe('LoggerStatusBar — N failed pill', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText(/2 failed/i)).toBeTruthy();
+    expect(screen.getByText(/Failed: 2/i)).toBeTruthy();
   });
 
   it('hides the failed-count pill when failedCount is zero', async () => {

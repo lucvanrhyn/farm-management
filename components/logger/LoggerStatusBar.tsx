@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useOffline } from './OfflineProvider';
+import FailedSyncDialog from './FailedSyncDialog';
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return 'Never';
@@ -23,6 +25,11 @@ export function LoggerStatusBar() {
     syncResult,
     syncNow,
   } = useOffline();
+
+  // Issue #209 — the failed-row dead-letter dialog. Open state lives here
+  // (not in OfflineProvider) because nothing else needs to read it; this is
+  // a pure local UI affordance gated on `failedCount > 0`.
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const statusIcon = !isOnline ? '🔴' : syncStatus === 'syncing' ? '🟡' : '🟢';
   const statusText = !isOnline ? 'Offline' : syncStatus === 'syncing' ? 'Uploading...' : 'Online';
@@ -51,16 +58,23 @@ export function LoggerStatusBar() {
           {/* PRD #194 wave 2 — surface stuck rows. Closes Codex audit gap C3:
               previously a row that hit a 422 vanished from the pending count
               into a `failed` IDB state with no UI affordance to retry. The
-              red pill is the user's signal to open the offline log. */}
+              red pill is the user's signal to open the offline log.
+
+              Issue #209 — the pill is now a button that opens the dead-letter
+              dialog. The dialog renders each failed row with metadata + per-row
+              retry; the retry preserves `clientLocalId` so the server upsert
+              from #206 / #207 collapses any "client thought POST failed but
+              server got it" race to a single canonical row. */}
           {failedCount > 0 && (
-            <span
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
               className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
               style={{ backgroundColor: '#B33A3A' }}
-              role="status"
               aria-label={`${failedCount} failed rows pending retry`}
             >
-              {failedCount} failed
-            </span>
+              Failed: {failedCount}
+            </button>
           )}
         </div>
 
@@ -101,6 +115,8 @@ export function LoggerStatusBar() {
           ✗ {syncResult.failed} observation{syncResult.failed !== 1 ? 's' : ''} failed to sync — open the offline log to retry
         </div>
       )}
+
+      <FailedSyncDialog isOpen={dialogOpen} onClose={() => setDialogOpen(false)} />
     </>
   );
 }

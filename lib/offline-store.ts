@@ -352,6 +352,35 @@ function applySuccessMeta<T extends PendingQueueFailureMeta>(row: T): T {
 }
 
 /**
+ * Issue #209 — apply a "re-queued for retry" transition. Flips status back to
+ * `pending` so the next sync cycle picks the row up, but DELIBERATELY leaves
+ * `attempts`, `firstFailedAt`, `lastError`, `lastStatusCode` untouched:
+ *
+ *   - `attempts` is audit history. The user pressing Retry doesn't make the
+ *     row's third attempt the new "first". We bump `attempts` only on the
+ *     actual sync attempt (`applySuccessMeta` / `applyFailureMeta`), never on
+ *     the local re-queue.
+ *   - `firstFailedAt` answers "stuck since…" — if the user retries and the
+ *     row fails again, the stuck-since time should reflect the original
+ *     failure, not the most recent re-queue.
+ *   - `lastError` / `lastStatusCode` stay visible in the dead-letter UI even
+ *     after re-queueing so the user can keep the context while watching the
+ *     sync attempt fly. They are cleared by `applySuccessMeta` only if the
+ *     retry actually succeeds.
+ *
+ * The single-writer shape mirrors `applyFailureMeta` so the three per-kind
+ * helpers (`markObservationPending`, `markAnimalCreatePending`,
+ * `markCoverReadingPending`) cannot drift from one another.
+ */
+function applyPendingMeta<T extends PendingQueueFailureMeta>(row: T): T {
+  const defaulted = withDefaultedFailureMeta(row);
+  return {
+    ...defaulted,
+    sync_status: 'pending' as const,
+  };
+}
+
+/**
  * Issue #208 — enqueue payload. Callers (forms, sync helpers, tests) do NOT
  * supply `attempts` / `lastError` / `firstFailedAt` / `lastStatusCode`;
  * `queueObservation` fills them via `withDefaultedFailureMeta` so every row
@@ -409,6 +438,25 @@ export async function markObservationFailed(
   const obs = await db.get('pending_observations', localId);
   if (obs) {
     await db.put('pending_observations', applyFailureMeta(obs as PendingObservation, meta));
+  }
+}
+
+/**
+ * Issue #209 — flip a previously-failed observation back to `pending` so the
+ * next sync cycle retries it. Crucially, `clientLocalId` and the entire
+ * failure-metadata block are preserved by `applyPendingMeta`: the retry POST
+ * carries the same UUID the original attempt did, which is what makes the
+ * server-side upsert (#206) collapse a re-attempted row to a single canonical
+ * server row even if a previous attempt was actually received but the
+ * response was lost in transit. Audit history (`attempts`, `firstFailedAt`,
+ * `lastError`, `lastStatusCode`) intentionally remains on the row so the
+ * dead-letter UI can show "attempted N times" after a successful retry.
+ */
+export async function markObservationPending(localId: number): Promise<void> {
+  const db = await getDB();
+  const obs = await db.get('pending_observations', localId);
+  if (obs) {
+    await db.put('pending_observations', applyPendingMeta(obs as PendingObservation));
   }
 }
 
@@ -668,6 +716,18 @@ export async function markAnimalCreateFailed(
   }
 }
 
+/** Issue #209 — symmetric to `markObservationPending`. See its doc-comment. */
+export async function markAnimalCreatePending(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_animal_creates', localId);
+  if (rec) {
+    await db.put(
+      'pending_animal_creates',
+      applyPendingMeta(rec as PendingAnimalCreate),
+    );
+  }
+}
+
 // ── Pending Photos (offline photo capture) ───────────────────────────────────
 
 export interface PendingPhoto {
@@ -805,6 +865,18 @@ export async function markCoverReadingFailed(
     await db.put(
       'pending_cover_readings',
       applyFailureMeta(rec as PendingCoverReading, meta),
+    );
+  }
+}
+
+/** Issue #209 — symmetric to `markObservationPending`. See its doc-comment. */
+export async function markCoverReadingPending(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_cover_readings', localId);
+  if (rec) {
+    await db.put(
+      'pending_cover_readings',
+      applyPendingMeta(rec as PendingCoverReading),
     );
   }
 }
