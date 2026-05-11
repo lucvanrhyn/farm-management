@@ -31,6 +31,10 @@ export function CoverReadingForm({
   const [category, setCategory] = useState<'Good' | 'Fair' | 'Poor'>('Fair');
   const [kgOverride, setKgOverride] = useState<string>('');
   const [useOverride, setUseOverride] = useState(false);
+  // Issue #207 — mount-stable idempotency key. See `CampCoverForm` for the
+  // same pattern; both cover-create forms write through the same `/cover`
+  // POST so both must carry a `clientLocalId`.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   const effectiveKg = useOverride && kgOverride
     ? Number(kgOverride)
@@ -46,7 +50,11 @@ export function CoverReadingForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const body: Record<string, unknown> = { coverCategory: category };
+    const body: Record<string, unknown> = {
+      coverCategory: category,
+      // Issue #207 — mount-stable idempotency key.
+      clientLocalId,
+    };
     if (useOverride && kgOverride) {
       body.kgDmPerHaOverride = Number(kgOverride);
     }

@@ -83,6 +83,14 @@ export interface PendingAnimalCreate {
   mother_id?: string;
   date_added: string;       // ISO date
   sync_status: 'pending' | 'synced' | 'failed';
+  /**
+   * Issue #207 — client-generated idempotency key. Form / queue helper
+   * generates this once at the moment of capture; the sync queue replays it
+   * VERBATIM on every retry; the server upserts on `Animal.clientLocalId`
+   * so duplicate POSTs collapse to a single row. Optional for back-compat
+   * with rows queued pre-#207. Once set, MUST NOT be regenerated on replay.
+   */
+  clientLocalId?: string;
 }
 
 function getDB(): Promise<IDBPDatabase> {
@@ -572,6 +580,19 @@ export interface PendingCoverReading {
   // attachment PATCH can retry without re-creating the reading row.
   server_reading_id?: string;
   sync_status: 'pending' | 'synced' | 'failed';
+  /**
+   * Issue #207 — client-generated idempotency key. Form / queue helper
+   * generates this once at capture; the sync queue replays it VERBATIM on
+   * every retry; the server upserts on `CampCoverReading.clientLocalId` so
+   * duplicate POSTs collapse to a single row. Optional for back-compat with
+   * rows queued pre-#207. Once set, MUST NOT be regenerated on replay.
+   *
+   * Note: `server_reading_id` already protects against re-creating the row
+   * on a known-succeeded POST. `clientLocalId` is the complementary safety
+   * net for the "client thought POST failed but server got it" race — the
+   * canonical class of bug the idempotency contract exists to absorb.
+   */
+  clientLocalId?: string;
 }
 
 export async function queueCoverReading(

@@ -22,6 +22,13 @@ export default function RecordBirthButton({ animals, camps }: Props) {
   const [camp, setCamp] = useState(camps[0]?.camp_id ?? "");
   const [motherId, setMotherId] = useState("");
   const [fatherId, setFatherId] = useState("");
+  // Issue #207 — mount-stable idempotency key. `useState(() => …)` runs the
+  // initializer exactly once per mount, so accidental double-submit (or any
+  // re-render) reuses the same UUID. The server upserts on this key,
+  // collapsing duplicate POSTs to a single row. A fresh mount (modal close
+  // + reopen, page reload) gets a fresh UUID — each create attempt is its
+  // own write. Mirrors `CampConditionForm`'s pattern from #206 / PR #214.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   const females = animals.filter((a) => a.sex === "Female" && a.status === "Active");
   const males = animals.filter((a) => a.sex === "Male" && a.status === "Active");
@@ -56,6 +63,9 @@ export default function RecordBirthButton({ animals, camps }: Props) {
           motherId: motherId || null,
           fatherId: fatherId || null,
           status: "Active",
+          // Issue #207 — mount-stable UUID, replayed verbatim on retry so the
+          // server `Animal.clientLocalId` upsert collapses duplicate POSTs.
+          clientLocalId,
         }),
       });
       const data = await res.json();

@@ -20,12 +20,12 @@
  * stays inline — no domain extraction this wave.
  */
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 
 import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateCampWrite } from "@/lib/server/revalidate";
 import type { FarmContext } from "@/lib/server/farm-context";
+import { createCoverReading } from "@/lib/domain/cover/create-cover-reading";
 
 export const dynamic = "force-dynamic";
 
@@ -115,9 +115,14 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string; campId: string 
     const denied = await denyIfNotFreshAdmin(ctx);
     if (denied) return denied;
 
-    const { coverCategory, kgDmPerHaOverride } = (body ?? {}) as {
+    const { coverCategory, kgDmPerHaOverride, clientLocalId } = (body ?? {}) as {
       coverCategory?: unknown;
       kgDmPerHaOverride?: unknown;
+      // Issue #207 — client-generated idempotency key. Optional on the wire
+      // (back-compat for pre-#207 clients), but the new cover forms populate
+      // it via `crypto.randomUUID()` at form mount so retries collapse to
+      // one row via the domain op's upsert.
+      clientLocalId?: unknown;
     };
 
     if (
@@ -151,16 +156,22 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string; campId: string 
     ]);
     if (!camp) return NextResponse.json({ error: "Camp not found" }, { status: 404 });
 
-    const reading = await ctx.prisma.campCoverReading.create({
-      data: {
-        id: randomUUID(),
-        campId,
-        coverCategory,
-        kgDmPerHa,
-        useFactor: DEFAULT_USE_FACTOR,
-        recordedAt: new Date().toISOString(),
-        recordedBy: ctx.session.user?.email ?? "Unknown",
-      },
+    // Issue #207 — domain extraction. Persistence + idempotency upsert live
+    // in `lib/domain/cover/create-cover-reading.ts`. Days-remaining math /
+    // camp lookup / fresh-admin gating stay in the route (orthogonal to
+    // idempotency). Mirrors the #206 / PR #214 extraction pattern.
+    const { reading } = await createCoverReading(ctx.prisma, {
+      campId,
+      coverCategory: coverCategory as "Good" | "Fair" | "Poor",
+      kgDmPerHa,
+      useFactor: DEFAULT_USE_FACTOR,
+      recordedBy: ctx.session.user?.email ?? "Unknown",
+      // Forward only well-formed string UUIDs. Falsy / non-string values
+      // fall through to the legacy create path (back-compat).
+      clientLocalId:
+        typeof clientLocalId === "string" && clientLocalId
+          ? clientLocalId
+          : null,
     });
 
     const daysRemaining = camp.sizeHectares

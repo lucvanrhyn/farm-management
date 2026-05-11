@@ -5,7 +5,17 @@ import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Props {
   campName: string;
-  onSubmit: (data: { coverCategory: CoverCategory; photoBlob: Blob | null }) => Promise<void>;
+  onSubmit: (data: {
+    coverCategory: CoverCategory;
+    photoBlob: Blob | null;
+    /**
+     * Issue #207 — mount-stable idempotency key. The Logger page persists
+     * this onto the queued cover reading; offline-sync replays it verbatim;
+     * the server upserts on `CampCoverReading.clientLocalId` so a retry
+     * returns the original row instead of creating a duplicate.
+     */
+    clientLocalId: string;
+  }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -78,6 +88,10 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  // Issue #207 — mount-stable idempotency key. See `CampConditionForm`
+  // (#206 / PR #214) for the same pattern: `useState(() => …)` runs the
+  // initializer exactly once per mount so double-tap collapses to one row.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   async function submit() {
     if (!coverCategory) return;
@@ -85,7 +99,7 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
     setSubmitting(true);
     setError("");
     try {
-      await onSubmit({ coverCategory, photoBlob });
+      await onSubmit({ coverCategory, photoBlob, clientLocalId });
       setCoverCategory(null);
       setPhotoBlob(null);
     } catch {

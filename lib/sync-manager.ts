@@ -263,6 +263,12 @@ async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean>
     const res = await fetch('/api/animals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // Issue #207 — explicit POST body. Mirrors the same load-bearing
+      // discipline applied to `uploadObservation` under #206 / PR #214:
+      // naming each field makes the idempotency contract structural — a
+      // future refactor that drops `clientLocalId` by accident will fail
+      // the Cycle 3 replay test instead of silently regressing back to
+      // duplicate-row land.
       body: JSON.stringify({
         animalId: animal.animal_id,
         name: animal.name ?? null,
@@ -273,6 +279,7 @@ async function uploadAnimalCreate(animal: PendingAnimalCreate): Promise<boolean>
         dateAdded: animal.date_added,
         breed,
         status: 'Active',
+        clientLocalId: animal.clientLocalId ?? null,
       }),
     });
     if (!res.ok) {
@@ -383,7 +390,14 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coverCategory: reading.cover_category }),
+            // Issue #207 — forward the queued `clientLocalId` so a retry
+            // (network blip between successful POST and the local
+            // `markCoverReadingPosted` write) collapses to one server row
+            // via `CampCoverReading.clientLocalId` upsert.
+            body: JSON.stringify({
+              coverCategory: reading.cover_category,
+              clientLocalId: reading.clientLocalId ?? null,
+            }),
           },
         );
         if (!res.ok) {

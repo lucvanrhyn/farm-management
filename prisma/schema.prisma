@@ -84,6 +84,15 @@ model Animal {
   tagNumber      String? // ear-tag number (numeric or alphanumeric)
   brandSequence  String? // brand or tattoo sequence linking to FarmSettings.aiaIdentificationMark
 
+  // Issue #207 — idempotency key. Client (form mount) generates a UUID;
+  // the offline-sync queue replays it verbatim. The domain op upserts on
+  // this column so a retried create returns the original row instead of
+  // creating a duplicate. Nullable + @unique so legacy rows pre-#207 and
+  // any future server-issued create (no client UUID in scope) coexist with
+  // the new idempotent path. Per-tenant DB architecture means the unique
+  // scope is implicitly per-farm — there is no global `Animal` table.
+  clientLocalId  String?    @unique
+
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
   @@index([species, status], name: "idx_animal_species_status")
@@ -249,6 +258,14 @@ model CampCoverReading {
   recordedAt    String
   recordedBy    String
   attachmentUrl String? // optional photo uploaded from the logger
+
+  // Issue #207 — idempotency key. Client form generates a UUID at mount;
+  // the offline-sync queue replays it verbatim on retry. The domain op
+  // upserts on this column so a retried submit returns the original row
+  // instead of creating a duplicate. Nullable + @unique mirrors the same
+  // back-compat pattern used on Observation (#206) and Animal — per-tenant
+  // DB architecture makes the unique scope implicitly per-farm.
+  clientLocalId String? @unique
 
   @@index([campId, recordedAt], name: "idx_cover_camp_date")
 }

@@ -62,6 +62,12 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Issue #207 — mount-stable idempotency key. The initializer runs exactly
+  // once per mount so re-renders / double-clicks reuse the same UUID. The
+  // server upserts on `CampCoverReading.clientLocalId`, collapsing duplicate
+  // POSTs to a single row. A fresh mount gets a fresh UUID. Mirrors the
+  // pattern from `CampConditionForm` shipped under #206 / PR #214.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   const kgDmPreview = selected ? CATEGORY_KG_DM[selected] : null;
   const daysPreview =
@@ -77,7 +83,9 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
       const res = await fetch(`/api/${farmSlug}/camps/${campId}/cover`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coverCategory: selected }),
+        // Issue #207 — forward the mount-stable UUID so a network blip /
+        // double-click collapses to the same server row.
+        body: JSON.stringify({ coverCategory: selected, clientLocalId }),
       });
       if (!res.ok) {
         const data = await res.json();
