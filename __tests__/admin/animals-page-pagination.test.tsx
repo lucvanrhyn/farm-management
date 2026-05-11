@@ -17,6 +17,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import React from "react";
 
 const animalFindManyMock = vi.fn();
+const animalCountMock = vi.fn();
 const campFindManyMock = vi.fn();
 const mobFindManyMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
@@ -97,6 +98,7 @@ function fakeAnimals(n: number): AnyAnimal[] {
 
 beforeEach(() => {
   animalFindManyMock.mockReset();
+  animalCountMock.mockReset();
   campFindManyMock.mockReset();
   mobFindManyMock.mockReset();
   getPrismaForFarmMock.mockReset();
@@ -107,9 +109,13 @@ beforeEach(() => {
   getAnimalsInWithdrawalMock.mockResolvedValue([]);
   campFindManyMock.mockResolvedValue([{ campId: "camp-1", campName: "Camp 1" }]);
   mobFindManyMock.mockResolvedValue([]);
+  // Issue #205 — page.tsx now fires two `animal.count` calls (species total +
+  // cross-species Active total) for the header reconciliation line. The
+  // existing pagination assertions don't care about the values; any number works.
+  animalCountMock.mockResolvedValue(0);
 
   getPrismaForFarmMock.mockResolvedValue({
-    animal: { findMany: animalFindManyMock },
+    animal: { findMany: animalFindManyMock, count: animalCountMock },
     camp: { findMany: campFindManyMock },
     mob: { findMany: mobFindManyMock },
   });
