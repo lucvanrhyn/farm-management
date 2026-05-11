@@ -76,6 +76,7 @@ async function getEnabledSpeciesModules(
   try {
     const rows = await prisma.farmSpeciesSettings.findMany({
       select: { species: true, enabled: true },
+      take: 50,
     });
     const enabled = new Set<string>(
       rows.filter((r) => r.enabled).map((r) => r.species),
