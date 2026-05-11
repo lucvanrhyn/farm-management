@@ -55,6 +55,22 @@ export interface PendingObservation {
   created_at: string; // ISO
   synced_at: string | null;
   sync_status: 'pending' | 'synced' | 'failed';
+  /**
+   * Issue #206 — client-generated idempotency key. The form (e.g.
+   * `CampConditionForm`) generates this once at mount via `crypto.randomUUID()`.
+   * The sync queue replays it VERBATIM on every retry; the server upserts on
+   * `Observation.clientLocalId` so duplicate POSTs collapse to a single row.
+   *
+   * Optional for two reasons:
+   *   1. Back-compat — rows queued before this slice landed have no UUID.
+   *   2. #207 (Animal + Cover) will extend the same pattern to other form
+   *      payloads; until each Logger handler is wired, rows for those types
+   *      may still arrive without a key.
+   *
+   * Once set, this field MUST NOT be regenerated on replay — that would
+   * defeat the entire idempotency contract.
+   */
+  clientLocalId?: string;
 }
 
 export interface PendingAnimalCreate {

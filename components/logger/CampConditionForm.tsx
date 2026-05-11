@@ -8,7 +8,20 @@ interface Props {
   campId: string;
   onClose: () => void;
   onSkip?: () => void;
-  onSubmit?: (data: { campId: string; grazing: GrazingQuality; water: WaterStatus; fence: FenceStatus; photoBlob: Blob | null }) => void;
+  onSubmit?: (data: {
+    campId: string;
+    grazing: GrazingQuality;
+    water: WaterStatus;
+    fence: FenceStatus;
+    photoBlob: Blob | null;
+    /**
+     * Issue #206 — mount-stable idempotency key. The Logger page persists this
+     * onto the queued observation; offline-sync replays it verbatim; the
+     * server upserts on `(clientLocalId)` so a retry returns the original row
+     * instead of creating a duplicate.
+     */
+    clientLocalId: string;
+  }) => void;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -133,10 +146,16 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
   const [water, setWater] = useState<WaterStatus>("Full");
   const [fence, setFence] = useState<FenceStatus>("Intact");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  // Issue #206 — mount-stable idempotency key. `useState(() => …)` runs the
+  // initializer exactly once per mount, so accidental double-clicks (or any
+  // re-render) reuse the same UUID. The server upserts on this key, collapsing
+  // duplicate POSTs to a single row. A fresh mount (new modal open, browser
+  // reload) gets a fresh UUID — each logging session is its own write.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   function submit() {
     if (onSubmit) {
-      onSubmit({ campId, grazing, water, fence, photoBlob });
+      onSubmit({ campId, grazing, water, fence, photoBlob, clientLocalId });
     } else {
       alert(`Camp ${campId} condition recorded:\nGrazing: ${grazing}\nWater: ${water}\nFence: ${fence}`);
       onClose();

@@ -348,8 +348,9 @@ export default function CampInspectionPage({
     water: WaterStatus;
     fence: FenceStatus;
     photoBlob: Blob | null;
+    clientLocalId: string;
   }) {
-    const { photoBlob, ...obsData } = data;
+    const { photoBlob, clientLocalId, ...obsData } = data;
     const now = new Date().toISOString();
     const loggedBy = session?.user?.name ?? "Logger";
     const localId = await queueObservation({
@@ -359,6 +360,10 @@ export default function CampInspectionPage({
       created_at: now,
       synced_at: null,
       sync_status: "pending",
+      // Issue #206 — mount-stable UUID from CampConditionForm. Persisted on
+      // the queue row + replayed verbatim by sync-manager so a retry collapses
+      // to the same server row via Observation.clientLocalId upsert.
+      clientLocalId,
     });
     if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
     await updateCampCondition(decodedId, {
