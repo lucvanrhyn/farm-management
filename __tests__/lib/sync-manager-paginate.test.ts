@@ -14,7 +14,6 @@ afterEach(() => {
 const seededAnimalBatches: unknown[][] = [];
 const seededFarmSettings: unknown[] = [];
 const seededCamps: unknown[][] = [];
-const setLastSyncedAtMock = vi.fn(async () => {});
 
 vi.mock('@/lib/offline-store', () => ({
   seedCamps: vi.fn(async (c: unknown[]) => {
@@ -35,7 +34,6 @@ vi.mock('@/lib/offline-store', () => ({
   markAnimalCreateFailed: vi.fn(),
   getPendingPhotos: vi.fn(async () => []),
   markPhotoSynced: vi.fn(),
-  setLastSyncedAt: setLastSyncedAtMock,
   clearPendingAnimalUpdate: vi.fn(),
 }));
 
@@ -78,7 +76,6 @@ beforeEach(() => {
   seededFarmSettings.length = 0;
   seededCamps.length = 0;
   fetchCalls.length = 0;
-  setLastSyncedAtMock.mockClear();
 });
 
 describe('refreshCachedData — animals pagination', () => {
@@ -203,20 +200,10 @@ describe('refreshCachedData — animals pagination', () => {
     });
   });
 
-  it('updates lastSyncedAt on success', async () => {
-    mockFetch((url) => {
-      if (url.startsWith('/api/animals')) {
-        return jsonResponse({ items: [], nextCursor: null, hasMore: false });
-      }
-      if (url === '/api/camps') return jsonResponse([]);
-      if (url === '/api/farm') return jsonResponse({ farmName: 'F', breed: 'B' });
-      if (url === '/api/camps/status') return jsonResponse({});
-      return new Response('not found', { status: 404 });
-    });
-
-    const { refreshCachedData } = await import('@/lib/sync-manager');
-    await refreshCachedData();
-
-    expect(setLastSyncedAtMock).toHaveBeenCalledOnce();
-  });
+  // PRD #194 wave 3 / #197: the "refreshCachedData updates lastSyncedAt"
+  // invariant was deleted alongside the legacy `setLastSyncedAt` setter.
+  // Cache pulls no longer tick truth — only `syncAndRefresh` records cycle
+  // outcomes via `recordSyncAttempt`. See
+  // `__tests__/sync/sync-manager-truth.test.ts` for the canonical truth-tick
+  // contract.
 });
