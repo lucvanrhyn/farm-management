@@ -8,7 +8,17 @@ import { SignOutButton } from "@/components/logger/SignOutButton";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
 import WeatherWidget from "./WeatherWidget";
 import type { Camp } from "@/lib/types";
-import { useFarmModeSafe } from "@/lib/farm-mode";
+import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
+
+// Wave A3 — labels for the per-species chip in the dashboard header.
+// Inlined rather than imported from `lib/species/registry` to keep the
+// dashboard route's initial JS bundle lean (registry pulls every species
+// module). Three keys, hand-maintained alongside `FarmMode`.
+const MODE_LABELS: Record<FarmMode, string> = {
+  cattle: "Cattle",
+  sheep: "Sheep",
+  game: "Game",
+};
 
 // Phase M: framer-motion used to be imported statically here for the
 // header stats strip and the slide-in side panel. It's now split into
@@ -156,7 +166,7 @@ export default function DashboardClient({
   feedOnOfferKgDmPerHaByCamp?: Record<string, number>;
 }) {
   const router = useRouter();
-  const { mode } = useFarmModeSafe();
+  const { mode, isMultiMode } = useFarmModeSafe();
 
   // Species-filtered counts — fall back to unfiltered totals
   const filteredTotal = totalBySpecies?.[mode] ?? totalAnimals;
@@ -351,13 +361,19 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* Summary stats — framer-motion loaded lazily (see dynamic() above) */}
+        {/* Summary stats — framer-motion loaded lazily (see dynamic() above).
+            Wave A3 (Codex C2 follow-up): on multi-species farms, also pass
+            the cross-species Total so DashboardStatsStrip can render a
+            second chip alongside the mode-filtered count. Single-species
+            tenants get the legacy single-chip layout untouched. */}
         <DashboardStatsStrip
           totalAnimals={filteredTotal}
           inspectedLabel={conditionsLoading ? "—" : `${inspectedToday}/${camps.length}`}
           alertLabel={conditionsLoading ? "—" : alertCount}
           alertAccent={!conditionsLoading && alertCount > 0}
           alertPulse={!conditionsLoading && alertCount > 0}
+          crossSpeciesTotal={isMultiMode ? totalAnimals : undefined}
+          modeLabel={isMultiMode ? MODE_LABELS[mode] : undefined}
         />
         {conditionsError && (
           <span style={{ fontSize: 10, color: "rgba(239,68,68,0.7)", whiteSpace: "nowrap" }}>
