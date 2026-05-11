@@ -186,10 +186,24 @@ async function refreshCachedDataInternal(species?: string): Promise<void> {
 
 async function uploadObservation(obs: PendingObservation): Promise<string | null> {
   try {
+    // Issue #206 — explicit POST body. Previously this stringified the whole
+    // `obs` row, which coincidentally forwarded `clientLocalId` once the
+    // field was added to `PendingObservation`. Naming the fields makes the
+    // idempotency contract load-bearing: a future refactor that drops one
+    // field by accident will now fail the Cycle 3 replay test instead of
+    // silently regressing back to duplicate-row land.
+    const body = {
+      type: obs.type,
+      camp_id: obs.camp_id,
+      animal_id: obs.animal_id ?? null,
+      details: obs.details,
+      created_at: obs.created_at,
+      clientLocalId: obs.clientLocalId ?? null,
+    };
     const res = await fetch('/api/observations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(obs),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       // Offline-first: caller marks the observation as failed and retries

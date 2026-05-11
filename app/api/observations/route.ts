@@ -32,6 +32,12 @@ interface CreateObservationBody {
   animal_id?: string | null;
   details?: string | null;
   created_at?: string | null;
+  /**
+   * Issue #206 — client-generated idempotency key. Optional on the wire
+   * (back-compat for pre-#206 clients), but the new logger UI populates it
+   * via `crypto.randomUUID()` at form mount so retries collapse to one row.
+   */
+  clientLocalId?: string | null;
 }
 
 const createObservationSchema = {
@@ -87,6 +93,10 @@ export const POST = tenantWrite<CreateObservationBody>({
       details: body.details ?? "",
       created_at: body.created_at ?? null,
       loggedBy: ctx.session.user?.email ?? null,
+      // Issue #206 — forward the client UUID into the domain op so the upsert
+      // path activates. Falsy values (null, empty string) fall through to the
+      // legacy create path, preserving back-compat.
+      clientLocalId: body.clientLocalId ?? null,
     };
     const result = await createObservation(ctx.prisma, input);
     return NextResponse.json(result);

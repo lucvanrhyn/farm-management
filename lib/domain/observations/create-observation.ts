@@ -54,6 +54,15 @@ export interface CreateObservationInput {
   created_at?: string | null;
   /** Email of the actor — captured on the audit trail. */
   loggedBy: string | null;
+  /**
+   * Issue #206 — client-generated UUID for idempotent retries. The Logger
+   * forms generate this at mount via `crypto.randomUUID()`; the offline-sync
+   * queue replays it verbatim on retry. When supplied, the domain op upserts
+   * on this column so a retried submit returns the existing observation's
+   * id (200, not 409, not duplicate row). Omitting it falls back to the
+   * legacy create path — back-compat for callers that pre-date #206.
+   */
+  clientLocalId?: string | null;
 }
 
 export interface CreateObservationResult {
@@ -100,6 +109,35 @@ export async function createObservation(
     species = animal?.species ?? null;
   }
 
+  // Issue #206 — idempotent write path. When the client supplies a UUID, route
+  // through `upsert` so a retry returns the original row instead of creating a
+  // duplicate. The `update: {}` is intentional: the observation contents at
+  // first-write time are canonical; a retry with a tweaked `details` must NOT
+  // silently mutate the persisted row (audit trail integrity). The race between
+  // SELECT-then-INSERT lives in `create` — `upsert` against the UNIQUE index
+  // (`idx_observation_client_local_id`, migration 0019) collapses concurrent
+  // retries down to a single row at the DB layer.
+  if (input.clientLocalId) {
+    const record = await prisma.observation.upsert({
+      where: { clientLocalId: input.clientLocalId },
+      update: {},
+      create: {
+        type: input.type,
+        campId: input.camp_id,
+        animalId: input.animal_id ?? null,
+        details: input.details ?? "",
+        observedAt,
+        loggedBy: input.loggedBy,
+        species,
+        clientLocalId: input.clientLocalId,
+      },
+    });
+    return { success: true, id: record.id };
+  }
+
+  // Legacy fallback (no idempotency promise). Callers that pre-date #206 —
+  // including the back-compat path for any server-side create that has no
+  // client UUID in scope — keep the original behaviour.
   const record = await prisma.observation.create({
     data: {
       type: input.type,

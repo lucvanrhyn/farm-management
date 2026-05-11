@@ -36,6 +36,14 @@ model Observation {
   // observations (animalId null). Backfilled from Animal.species by
   // migration 0003 and kept in sync at write-time by logger API routes.
   species       String?
+  // Issue #206 — idempotency key. Client (form mount) generates a UUID;
+  // the offline-sync queue replays it verbatim. The domain op upserts on
+  // this column so a retried submit returns the original row instead of
+  // creating a duplicate. Nullable + @unique so legacy rows pre-#206 and
+  // any future server-issued create (no client UUID in scope) coexist with
+  // the new idempotent path. Per-tenant DB architecture means the unique
+  // scope is implicitly per-farm — there is no global `Observation` table.
+  clientLocalId String?   @unique
 
   @@index([type, campId, observedAt], name: "idx_obs_type_camp_date")
   @@index([type, animalId, observedAt], name: "idx_obs_type_animal_date")
