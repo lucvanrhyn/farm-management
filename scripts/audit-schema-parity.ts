@@ -153,6 +153,81 @@ async function fsLoadMigrationsFromWorkingTreeImpl(): Promise<string[]> {
   return files.map((m) => m.name);
 }
 
+// ─── resolveExpectedPrismaSchema ────────────────────────────────────────────
+//
+// Same shape as `resolveExpectedMigrations` but for the column-parity arm of
+// the audit (`checkPrismaColumnParityAcrossTenants`). Pre-issue #215 this
+// read `prisma/schema.prisma` from the working tree, which meant every PR
+// adding a new column reported "missing column" on every tenant (the
+// migration ships in the same PR, so tenants don't have it yet). Same class
+// of bug PR #185 fixed for the migration list — extended here.
+//
+// Returns the schema content as a string; downstream `parsePrismaSchema` +
+// `expectedColumnsByTable` handle the rest. Dep-injected for unit testing.
+
+export interface ResolveExpectedPrismaSchemaDeps {
+  /**
+   * Read `prisma/schema.prisma` from `origin/main`. Returns the file contents
+   * on success, or `null` when git can't reach the base ref (forks, shallow
+   * clones without `fetch-depth: 0`).
+   *
+   * An empty-string return is treated as "fall back" by the caller: the file
+   * being 0 bytes on main would break Prisma in prod, and silently passing
+   * against zero expected columns would mask real drift. See test file
+   * header for the full rationale.
+   */
+  gitReadBaseRefPrismaSchema: () => Promise<string | null>;
+  /**
+   * Working-tree fallback. Used when `gitReadBaseRefPrismaSchema` returns
+   * `null` or an empty string. Reads `prisma/schema.prisma` from disk.
+   */
+  fsLoadPrismaSchemaFromWorkingTree: () => Promise<string>;
+  /** Diagnostic logger. Tests pass `vi.fn()`; CLI passes `console.warn`. */
+  log: (msg: string) => void;
+}
+
+export async function resolveExpectedPrismaSchema(
+  deps: ResolveExpectedPrismaSchemaDeps,
+): Promise<string> {
+  const fromBase = await deps.gitReadBaseRefPrismaSchema();
+  if (fromBase === null) {
+    deps.log(
+      'audit-schema-parity: origin/main not reachable for prisma/schema.prisma; falling back to working tree',
+    );
+    return deps.fsLoadPrismaSchemaFromWorkingTree();
+  }
+  if (fromBase === '') {
+    deps.log(
+      'audit-schema-parity: origin/main returned empty prisma/schema.prisma; falling back to working tree',
+    );
+    return deps.fsLoadPrismaSchemaFromWorkingTree();
+  }
+  return fromBase;
+}
+
+async function gitReadBaseRefPrismaSchemaImpl(): Promise<string | null> {
+  try {
+    const { stdout } = await execFileP(
+      'git',
+      ['show', 'origin/main:prisma/schema.prisma'],
+      {
+        cwd: fileURLToPath(new URL('..', import.meta.url)),
+        // schema.prisma is ~1500 lines; bump from the 1MB default for safety.
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
+    return stdout;
+  } catch {
+    // origin/main not fetched, or file missing on main — caller falls back.
+    return null;
+  }
+}
+
+async function fsLoadPrismaSchemaFromWorkingTreeImpl(): Promise<string> {
+  const schemaPath = fileURLToPath(new URL('../prisma/schema.prisma', import.meta.url));
+  return readFile(schemaPath, 'utf-8');
+}
+
 // ─── main ───────────────────────────────────────────────────────────────────
 
 async function main(argv: readonly string[]): Promise<number> {
@@ -201,8 +276,16 @@ async function main(argv: readonly string[]): Promise<number> {
   // audit (wave/131, issue #131). This catches the basson-style drift
   // where a column is declared in the schema but never written into a
   // migration file — invisible to the migration-row check above.
-  const schemaPath = fileURLToPath(new URL('../prisma/schema.prisma', import.meta.url));
-  const prismaSchemaSrc = await readFile(schemaPath, 'utf-8');
+  //
+  // Schema source is `origin/main` (with working-tree fallback), same
+  // rationale as `resolveExpectedMigrations` above: tenants are promoted
+  // from main, so new-in-PR columns must be excluded from the drift
+  // check. Issue #215 / mirrors PR #185.
+  const prismaSchemaSrc = await resolveExpectedPrismaSchema({
+    gitReadBaseRefPrismaSchema: gitReadBaseRefPrismaSchemaImpl,
+    fsLoadPrismaSchemaFromWorkingTree: fsLoadPrismaSchemaFromWorkingTreeImpl,
+    log: (msg) => console.warn(msg),
+  });
   const expectedColumns = expectedColumnsByTable(parsePrismaSchema(prismaSchemaSrc));
 
   let driftDetected = false;
