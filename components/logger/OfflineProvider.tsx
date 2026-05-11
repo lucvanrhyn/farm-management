@@ -240,9 +240,9 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
 
     // Seed pendingCount / failedCount / lastSyncedAt from the queue facade.
     // The facade is the single source of truth for these three fields — the
-    // legacy per-epoch getLastSyncedAtForEpoch call was removed in PRD #194
-    // wave 2 because it could disagree with the queue's view of the world
-    // (Codex audit C1/C3).
+    // legacy per-epoch sync-state getters were deleted in PRD #194 wave 3
+    // (#197) because they could disagree with the queue's view of the world
+    // (Codex audit C1/C3). See docs/adr/0002-client-side-sync-state.md.
     refreshPendingCount();
 
     // Paint instantly from cache, then pull fresh IFF the last full sync is
@@ -252,8 +252,8 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // Cache-first is correct here and online-reconnect schedules its own
     // refresh, so users coming back from offline never serve stale data.
     //
-    // Freshness check now reads `lastFullSuccessAt` via the queue facade
-    // rather than the legacy `getLastSyncedAtForEpoch` — see PRD #194 wave 2.
+    // Freshness check reads `lastFullSuccessAt` via the queue facade — the
+    // only source of sync-state truth after PRD #194 (#197).
     Promise.all([
       getCachedCampsForEpoch(epoch),
       getCachedFarmSettingsForEpoch(epoch),

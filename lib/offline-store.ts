@@ -10,10 +10,10 @@ let _activeFarmSlug: string | null = null;
 // ── farmEpoch — monotonic counter for cross-tenant cache invalidation (M4) ───
 //
 // Every call to setActiveFarmSlug bumps this counter. Epoch-aware read helpers
-// (getCachedCampsForEpoch, getLastSyncedAtForEpoch, getCachedFarmSettingsForEpoch)
-// compare the caller's snapshot against the current epoch and return null if they
-// diverge — this prevents any in-flight Promise that resolved AFTER a farm switch
-// from delivering stale-tenant data into the new farm's UI.
+// (getCachedCampsForEpoch, getCachedFarmSettingsForEpoch) compare the caller's
+// snapshot against the current epoch and return null if they diverge — this
+// prevents any in-flight Promise that resolved AFTER a farm switch from
+// delivering stale-tenant data into the new farm's UI.
 //
 // The epoch is a plain module-level number so the check is always synchronous,
 // which eliminates the race window between "read epoch" and "read IDB value".
@@ -274,35 +274,15 @@ export async function getPendingCount(): Promise<number> {
   return pending.length + pendingAnimals.length + pendingCovers.length;
 }
 
-export async function getLastSyncedAt(): Promise<string | null> {
-  const db = await getDB();
-  const meta = await db.get('metadata', 'lastSyncedAt');
-  return (meta as { key: string; value: string } | undefined)?.value ?? null;
-}
-
 /**
- * Epoch-aware variant of getLastSyncedAt (M4).
- * Returns null if the epoch is stale (farm switched since caller captured it).
- */
-export async function getLastSyncedAtForEpoch(epoch: number): Promise<string | null> {
-  if (epoch !== _farmEpoch) return null;
-  const db = await getDB();
-  const meta = await db.get('metadata', 'lastSyncedAt');
-  if (epoch !== _farmEpoch) return null;
-  return (meta as { key: string; value: string } | undefined)?.value ?? null;
-}
-
-export async function setLastSyncedAt(iso: string): Promise<void> {
-  const db = await getDB();
-  await db.put('metadata', { key: 'lastSyncedAt', value: iso });
-}
-
-/**
- * Generic metadata read for the new sync queue facade (PRD #194 wave 1).
+ * Generic metadata read for the sync queue facade (PRD #194, `@/lib/sync/queue`).
  *
  * The `metadata` object store is keyed by `{ key, value: string }` records.
  * `lib/sync/queue.ts` persists its `lastAttemptAt` / `lastFullSuccessAt`
- * timestamps here so the truth survives reloads alongside `lastSyncedAt`.
+ * timestamps here so the truth survives reloads. The legacy `lastSyncedAt`
+ * key, plus its direct getter / setter / epoch-aware variant, were deleted in
+ * wave 3 (#197) — UI consumers read `getCurrentSyncTruth()` from the facade
+ * instead. See docs/adr/0002-client-side-sync-state.md.
  *
  * Returns `null` when the key is absent OR the active farm slug isn't set
  * (e.g. SSR — sync-manager only runs in the browser, but defensive null is
