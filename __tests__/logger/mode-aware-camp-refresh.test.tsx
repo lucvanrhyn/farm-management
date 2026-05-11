@@ -42,18 +42,27 @@ vi.mock('@/lib/sync-manager', () => ({
 // Resolve cache reads immediately so campsLoaded flips true synchronously
 // (we want the mode-change effect to be free to fire).
 vi.mock('@/lib/offline-store', () => ({
-  getPendingCount: vi.fn(async () => 0),
-  getLastSyncedAt: vi.fn(async () => null),
   getCachedCamps: vi.fn(async () => []),
   getCachedFarmSettings: vi.fn(async () => null),
   setActiveFarmSlug: vi.fn(),
   getFarmEpoch: vi.fn(() => 1),
-  // Epoch-aware variants: resolve with a recent timestamp so the mount-time
-  // refreshData skips (lastSynced freshness gate) — we want a clean baseline
-  // where the only refreshData firing is the mode-change one we cause.
+  // Epoch-aware variants: cache reads resolve empty so campsLoaded flips
+  // immediately.
   getCachedCampsForEpoch: vi.fn(async () => []),
   getCachedFarmSettingsForEpoch: vi.fn(async () => null),
-  getLastSyncedAtForEpoch: vi.fn(async () => new Date().toISOString()),
+}));
+
+// PRD #194 wave 2 — sync state is now read via the queue facade. Resolve a
+// fresh `lastFullSuccessAt` so the mount-time refreshData skips its
+// freshness gate (we want a clean baseline where the only refreshData firing
+// is the mode-change one we cause).
+vi.mock('@/lib/sync/queue', () => ({
+  getCurrentSyncTruth: vi.fn(async () => ({
+    pendingCount: 0,
+    failedCount: 0,
+    lastAttemptAt: new Date().toISOString(),
+    lastFullSuccessAt: new Date().toISOString(),
+  })),
 }));
 
 // Stub Image — not strictly needed here, but matches the sibling test setup

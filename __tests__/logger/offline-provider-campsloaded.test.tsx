@@ -29,9 +29,7 @@ let resolveLastSyncedRead: ((s: string | null) => void) | null = null;
 let _stubEpoch = 0;
 
 vi.mock('@/lib/offline-store', () => ({
-  getPendingCount: vi.fn(async () => 0),
   // Non-epoch variants (still imported by refreshCampsState, refreshHeroImage etc.)
-  getLastSyncedAt: vi.fn(async () => null),
   getCachedCamps: vi.fn(async () => []),
   getCachedFarmSettings: vi.fn(async () => null),
   setActiveFarmSlug: vi.fn(() => { _stubEpoch += 1; }),
@@ -49,10 +47,29 @@ vi.mock('@/lib/offline-store', () => ({
         resolveSettingsRead = resolve;
       }),
   ),
-  getLastSyncedAtForEpoch: vi.fn(
+}));
+
+// PRD #194 wave 2 — Provider now reads sync-state from the queue facade,
+// not from `@/lib/offline-store` directly. The controlled-Promise pattern
+// is preserved so the test can still observe the pre-settle state of the
+// mount effect's `Promise.all`.
+vi.mock('@/lib/sync/queue', () => ({
+  getCurrentSyncTruth: vi.fn(
     () =>
-      new Promise<string | null>((resolve) => {
-        resolveLastSyncedRead = resolve;
+      new Promise<{
+        pendingCount: number;
+        failedCount: number;
+        lastAttemptAt: string | null;
+        lastFullSuccessAt: string | null;
+      }>((resolve) => {
+        resolveLastSyncedRead = (iso: string | null) => {
+          resolve({
+            pendingCount: 0,
+            failedCount: 0,
+            lastAttemptAt: iso,
+            lastFullSuccessAt: iso,
+          });
+        };
       }),
   ),
 }));

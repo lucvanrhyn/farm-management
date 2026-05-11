@@ -14,8 +14,15 @@ function formatRelativeTime(iso: string | null): string {
 }
 
 export function LoggerStatusBar() {
-  const { isOnline, syncStatus, pendingCount, lastSyncedAt, syncResult, syncNow } =
-    useOffline();
+  const {
+    isOnline,
+    syncStatus,
+    pendingCount,
+    failedCount,
+    lastSyncedAt,
+    syncResult,
+    syncNow,
+  } = useOffline();
 
   const statusIcon = !isOnline ? '🔴' : syncStatus === 'syncing' ? '🟡' : '🟢';
   const statusText = !isOnline ? 'Offline' : syncStatus === 'syncing' ? 'Uploading...' : 'Online';
@@ -39,6 +46,20 @@ export function LoggerStatusBar() {
               style={{ backgroundColor: '#B87333' }}
             >
               {pendingCount} pending
+            </span>
+          )}
+          {/* PRD #194 wave 2 — surface stuck rows. Closes Codex audit gap C3:
+              previously a row that hit a 422 vanished from the pending count
+              into a `failed` IDB state with no UI affordance to retry. The
+              red pill is the user's signal to open the offline log. */}
+          {failedCount > 0 && (
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+              style={{ backgroundColor: '#B33A3A' }}
+              role="status"
+              aria-label={`${failedCount} failed rows pending retry`}
+            >
+              {failedCount} failed
             </span>
           )}
         </div>
