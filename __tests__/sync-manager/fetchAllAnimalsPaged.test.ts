@@ -30,7 +30,6 @@ vi.mock('@/lib/offline-store', () => ({
   markAnimalCreateFailed: vi.fn(),
   getPendingPhotos: vi.fn(async () => []),
   markPhotoSynced: vi.fn(),
-  setLastSyncedAt: vi.fn(async () => {}),
   clearPendingAnimalUpdate: vi.fn(),
 }));
 

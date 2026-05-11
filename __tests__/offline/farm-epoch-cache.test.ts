@@ -7,11 +7,6 @@
  * chain was already in flight. The epoch guard makes stale-epoch reads return
  * null regardless of what IDB contains.
  *
- * TDD spec:
- *   RED  → getCachedCampsForEpoch / getLastSyncedAtForEpoch do not exist yet.
- *   GREEN → implement epoch tracking in offline-store.ts.
- *   REFACTOR → epoch is synchronous (module-level ref, not async IDB read).
- *
  * Test scenario (rapid farm-switch):
  *   1. Set active farm to "farm-a", prime camps cache with A's data.
  *   2. Bump epoch: set active farm to "farm-b" (different slug → epoch resets).
@@ -19,10 +14,15 @@
  *   4. Read camps with farm-b's current epoch → returns data once primed.
  *
  * Also covers:
- *   - lastSyncedAt stale-epoch rejection
  *   - farmSettings stale-epoch rejection
  *   - Happy path: reads within the same farm + epoch succeed normally
  *   - Hero image defaults to /farm-hero.jpg regardless of DB stored value (M3)
+ *
+ * Note (PRD #194 wave 3, #197): the legacy `setLastSyncedAt` /
+ * `getLastSyncedAtForEpoch` direct getters were deleted. Sync-truth across
+ * farm-switches is now owned by the queue facade — see
+ * `__tests__/sync/sync-manager-truth.test.ts` for the truth-tick contract
+ * and `docs/adr/0002-client-side-sync-state.md` for the design rationale.
  */
 
 import 'fake-indexeddb/auto';
@@ -109,34 +109,6 @@ describe('farmEpoch — getCachedCampsForEpoch', () => {
   });
 });
 
-describe('farmEpoch — getLastSyncedAtForEpoch', () => {
-  it('returns null for stale epoch', async () => {
-    const store = await loadStore();
-
-    store.setActiveFarmSlug(`farm-sync-a-${Math.random().toString(36).slice(2)}`);
-    const epochA = store.getFarmEpoch();
-    await store.setLastSyncedAt(new Date().toISOString());
-
-    // Switch farm → epoch bumps
-    store.setActiveFarmSlug(`farm-sync-b-${Math.random().toString(36).slice(2)}`);
-
-    const result = await store.getLastSyncedAtForEpoch(epochA);
-    expect(result).toBeNull();
-  });
-
-  it('returns data for current epoch', async () => {
-    const store = await loadStore();
-
-    store.setActiveFarmSlug(`farm-sync-c-${Math.random().toString(36).slice(2)}`);
-    const epoch = store.getFarmEpoch();
-    const iso = new Date().toISOString();
-    await store.setLastSyncedAt(iso);
-
-    const result = await store.getLastSyncedAtForEpoch(epoch);
-    expect(result).toBe(iso);
-  });
-});
-
 describe('farmEpoch — getCachedFarmSettingsForEpoch', () => {
   it('returns null for stale epoch', async () => {
     const store = await loadStore();
@@ -210,7 +182,6 @@ describe('rapid farm-switch end-to-end', () => {
     store.setActiveFarmSlug(`farm-rapid-a-${Math.random().toString(36).slice(2)}`);
     const epochA = store.getFarmEpoch();
     await store.seedCamps([makeCamp('camp-a-1'), makeCamp('camp-a-2')]);
-    await store.setLastSyncedAt('2026-01-01T00:00:00.000Z');
 
     // 2. Switch to farm-b → epoch bumps
     store.setActiveFarmSlug(`farm-rapid-b-${Math.random().toString(36).slice(2)}`);
@@ -219,9 +190,7 @@ describe('rapid farm-switch end-to-end', () => {
 
     // 3. Stale-epoch reads for farm-a must return null
     const staleA_camps = await store.getCachedCampsForEpoch(epochA);
-    const staleA_sync = await store.getLastSyncedAtForEpoch(epochA);
     expect(staleA_camps).toBeNull();
-    expect(staleA_sync).toBeNull();
 
     // 4. Prime farm-b cache and verify reads succeed with current epoch
     await store.seedCamps([makeCamp('camp-b-1')]);

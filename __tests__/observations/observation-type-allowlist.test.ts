@@ -24,11 +24,17 @@
  *   On submission `createObservation` throws `InvalidTypeError`, the
  *   `tenantWrite` adapter returns 422 INVALID_TYPE, sync-manager logs a
  *   console.warn, marks the observation `failed` (it stays counted by
- *   `getPendingCount`), but `syncAndRefresh` STILL calls `setLastSyncedAt`
- *   unconditionally at the end of `refreshCachedData()`.
+ *   `getPendingCount`). On main at the time, `syncAndRefresh` ALSO ticked
+ *   the legacy `setLastSyncedAt` timestamp unconditionally at the end of
+ *   `refreshCachedData()` — the truth-divergence root cause C1 / C3.
  *
  *   Result: "Synced: Just now" timestamp updates while pending > 0, AND the
  *   row never reaches the database, so /admin/observations never sees it.
+ *
+ *   (PRD #194 wave 3 / #197: the legacy `setLastSyncedAt` getter / setter
+ *   pair was deleted entirely. The UI now reads
+ *   `getCurrentSyncTruth().lastFullSuccessAt` from `@/lib/sync/queue`, which
+ *   only advances when every kind in the cycle reports zero failures.)
  *
  * The failing assertions below describe the CORRECT contract — that the
  * client and server agree on the set of valid observation types submitted by

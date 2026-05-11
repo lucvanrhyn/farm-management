@@ -43,7 +43,6 @@ vi.mock('@/lib/offline-store', () => ({
   seedAnimals: vi.fn(),
   seedFarmSettings: vi.fn(),
   getCachedFarmSettings: vi.fn(async () => null),
-  setLastSyncedAt: vi.fn(),
   clearPendingAnimalUpdate: vi.fn(),
 }));
 

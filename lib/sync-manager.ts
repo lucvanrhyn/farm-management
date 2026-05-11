@@ -16,7 +16,6 @@ import {
   markPhotoUploaded,
   getPendingCoverReadings,
   markCoverReadingPosted,
-  setLastSyncedAt,
   clearPendingAnimalUpdate,
   PendingObservation,
   PendingAnimalCreate,
@@ -100,12 +99,12 @@ async function fetchAllAnimalsPaged(): Promise<Animal[] | null> {
  * the route returns cross-species counts (back-compat for callers that
  * pre-date the multi-species mode toggle). Wave D-U3 / Codex audit P2 U3.
  *
- * Note (PRD #194 wave 1): the previous `tickLastSyncedAt` boolean was
- * removed. Cache-pull is no longer responsible for moving the "last synced"
- * timestamp — `syncAndRefresh` owns that via `recordSyncAttempt` from the
- * sync queue facade. Direct cache-only callers (UI cold start) get a
- * `setLastSyncedAt` tick inside this function for backward compat with the
- * existing UI getter; this collapses to the new facade in wave 2.
+ * Note (PRD #194 wave 3, #197): `refreshCachedData` is a pure cache pull.
+ * It does NOT tick any sync-truth field. Only `syncAndRefresh` records
+ * cycle outcomes — via `recordSyncAttempt` from the sync queue facade —
+ * because that is the only path that distinguishes a full-success cycle
+ * from a partial-failure one. This makes the caller-must-remember bug from
+ * Codex C1/C3 structurally impossible: a cache pull cannot tick "synced".
  */
 interface RefreshCachedDataOptions {
   species?: string;
@@ -118,26 +117,23 @@ interface RefreshCachedDataOptions {
  * place; `seedAnimals` early-returns on empty payloads so a transient
  * fetch failure can never wipe a live herd).
  *
- * The legacy `lastSyncedAt` timestamp is ticked at the end so cache-only
- * callers (UI cold start) keep the existing UI getter working until wave 2
- * (issue #196) migrates consumers to `getCurrentSyncTruth().lastFullSuccessAt`.
- * `syncAndRefresh` uses `refreshCachedDataNoTick` to skip this tick because
- * the coordinator owns both the new `recordSyncAttempt` call and the
- * conditional legacy tick (truthfulness gate from Codex C1/C3).
+ * Truth-tick: none. The displayed "Synced: …" timestamp is owned by the
+ * coordinator (`syncAndRefresh` → `recordSyncAttempt`). Cache pulls are
+ * not sync cycles and must not advance the truth surface.
  */
 export async function refreshCachedData(
   options: RefreshCachedDataOptions = {},
 ): Promise<void> {
-  await refreshCachedDataNoTick(options.species);
-  await setLastSyncedAt(new Date().toISOString());
+  await refreshCachedDataInternal(options.species);
 }
 
 /**
- * Internal: cache pull without the legacy `setLastSyncedAt` tick. The
- * coordinator (`syncAndRefresh`) owns timestamp movement so the
- * truthfulness gate stays in exactly one place.
+ * Internal: cache pull. Same shape as the public entry point; kept as a
+ * separate name so `syncAndRefresh` can call the cache pull without going
+ * through the public entry point that may grow additional side effects in
+ * future waves.
  */
-async function refreshCachedDataNoTick(species?: string): Promise<void> {
+async function refreshCachedDataInternal(species?: string): Promise<void> {
   const campsUrl = species
     ? `/api/camps?species=${encodeURIComponent(species)}`
     : '/api/camps';
@@ -454,12 +450,11 @@ export async function syncAndRefresh(
   const failed =
     obsResult.failed + animalsResult.failed + coversResult.failed + photoResult.failed;
 
-  // Cache pull — does NOT tick the legacy timestamp. The coordinator owns
-  // both the new SyncTruth update (recordSyncAttempt) and the legacy
-  // setLastSyncedAt tick below.
-  await refreshCachedDataNoTick(species);
+  // Cache pull. Does not tick truth — `recordSyncAttempt` below is the
+  // single place a cycle outcome can move `lastFullSuccessAt`.
+  await refreshCachedDataInternal(species);
 
-  // New canonical truth: every cycle records an attempt; lastFullSuccessAt
+  // Canonical truth: every cycle records an attempt; lastFullSuccessAt
   // moves only when every kind reported zero failures. This is the
   // structural fix for the caller-must-remember bug from Codex C1/C3.
   const cycleTimestamp = new Date().toISOString();
@@ -472,17 +467,6 @@ export async function syncAndRefresh(
       photo: photoResult,
     },
   });
-
-  // Legacy back-compat: existing UI consumers still read `getLastSyncedAt`
-  // until wave 2 (issue #196) migrates them to `getCurrentSyncTruth`. Keep
-  // the same truthfulness gate they relied on — tick when no submits were
-  // attempted (empty queue, cache-only) OR when at least one submit
-  // succeeded (partial success is real success in the legacy contract).
-  const submitsAttempted = synced + failed > 0;
-  const tickLegacyTimestamp = !submitsAttempted || synced > 0;
-  if (tickLegacyTimestamp) {
-    await setLastSyncedAt(cycleTimestamp);
-  }
 
   return { synced, failed };
 }
