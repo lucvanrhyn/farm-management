@@ -132,6 +132,24 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   // mode-change effect uses this to skip the initial-mount no-op (the
   // mount-time refresh path already handles the first paint).
   const lastFetchedModeRef = useRef<string | null>(null);
+  // Issue #202 — track the slug the per-tenant state above was loaded for.
+  // When the pathname's farmSlug changes, reset stale state SYNCHRONOUSLY
+  // during render, BEFORE the mount effect's async cache read resolves.
+  // Without this, switching from a populated tenant to one with an empty
+  // IDB cache leaves the previous tenant's camps/tasks/heroImageUrl in
+  // React state because the mount effect's seed path short-circuits
+  // `setCamps(cachedCamps)` when `cachedCamps.length === 0`. Same
+  // useState-pair pattern as the AnimatedHero fix (#24).
+  // See: memory/feedback-react-state-from-props.md.
+  const [loadedForSlug, setLoadedForSlug] = useState<string | null>(null);
+  if (farmSlug && loadedForSlug !== farmSlug) {
+    setCamps([]);
+    setTasks([]);
+    setHeroImageUrl(null);
+    setCampsLoaded(false);
+    lastFetchedModeRef.current = null;
+    setLoadedForSlug(farmSlug);
+  }
 
   // Re-derives the three SyncTruth-backed fields (pending / failed /
   // lastSyncedAt) from `getCurrentSyncTruth()` in one shot. All consumers
