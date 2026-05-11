@@ -109,13 +109,40 @@ export default function DashboardStatsStrip({
   alertLabel,
   alertAccent,
   alertPulse,
+  crossSpeciesTotal,
+  modeLabel,
 }: {
+  /**
+   * Primary headline number. On multi-species farms this is the
+   * mode-filtered Active count (e.g. 88 active cattle); on single-species
+   * farms it is the cross-species Active total. The label adapts via
+   * `modeLabel`.
+   */
   totalAnimals: number;
   inspectedLabel: string;
   alertLabel: string | number;
   alertAccent: boolean;
   alertPulse: boolean;
+  /**
+   * Cross-species Active total. Only rendered as a second chip when (a)
+   * provided by the caller (caller decides based on `isMultiMode`) AND
+   * (b) it differs from `totalAnimals` — otherwise a duplicate chip is
+   * noise. See Wave A3 dispatch + `__tests__/counts/cross-surface-divergence.test.ts`.
+   */
+  crossSpeciesTotal?: number;
+  /**
+   * Label for the primary chip on multi-species farms (e.g. "Cattle").
+   * When omitted, the primary chip falls back to the legacy
+   * "Total Animals" label used on single-species farms.
+   */
+  modeLabel?: string;
 }) {
+  const showDualChip =
+    crossSpeciesTotal !== undefined &&
+    modeLabel !== undefined &&
+    crossSpeciesTotal !== totalAnimals;
+  const primaryLabel = showDualChip ? modeLabel : "Total Animals";
+
   return (
     <motion.div
       initial="hidden"
@@ -123,7 +150,8 @@ export default function DashboardStatsStrip({
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
       style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
     >
-      <StatChip label="Total Animals" value={totalAnimals} />
+      <StatChip label={primaryLabel} value={totalAnimals} />
+      {showDualChip && <StatChip label="Total" value={crossSpeciesTotal} />}
       <StatChip label="Inspected" value={inspectedLabel} />
       <StatChip
         label="Active Alerts"
