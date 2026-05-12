@@ -1,0 +1,57 @@
+name: audit-species-where
+
+# Structural lint that enforces "every per-species `prisma.<model>.<op>`
+# call commits to the species axis". PRD #222 / issue #224.
+#
+# Sibling of audit-findmany-no-take (row bounds) and audit-findmany-no-select
+# (column bounds). This audit covers the cross-species-leak class:
+#
+#   const animals = await prisma.animal.findMany({ where: { status: "Active" } });
+#                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#   On a multi-species tenant this returns rows from every species — silent
+#   bug, no exception, no failing test. The structural cure is the species-
+#   scoped facade (`lib/server/species-scoped-prisma.ts`) which makes
+#   "forgetting mode" a compile error. This workflow closes the loop at every
+#   non-facade callsite by failing CI on raw `prisma.<model>.<op>` reads/
+#   mutations that lack a top-level `species:` predicate.
+#
+# Compliant patterns:
+#   1. `where: { species: mode, ... }` — explicit literal predicate.
+#   2. `where: activeSpeciesWhere(mode)` — helper that returns the predicate.
+#   3. `// audit-allow-species-where: <reason>` pragma on the preceding line
+#      (cross-species deliberate spans).
+#   4. Callsite is routed through `scoped(prisma, mode).<model>.<op>(...)`
+#      — the facade dispatches and injects species, so the source literal
+#      doesn't carry `prisma.<model>` at all.
+#
+# Baseline file: `.audit-species-where-baseline.json` grandfathers existing
+# offenders so this workflow fails ONLY on NEW violations. The baseline can
+# only shrink over time — every entry is a follow-up migration to the facade.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  audit-species-where:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit prisma per-species calls — species predicate enforcement
+        run: pnpm tsx scripts/audit-species-where.ts
