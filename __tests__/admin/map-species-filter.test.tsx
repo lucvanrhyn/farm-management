@@ -156,10 +156,9 @@ beforeEach(() => {
   getLatestCoverByCampMock.mockResolvedValue(new Map());
 
   // getCachedDashboardData returns the FULL cross-species camp list (cache
-  // is keyed per-farm, not per-mode — see lib/server/cached.ts JSDoc). The
-  // dashboard PAGE wrapper is responsible for replacing `camps` with the
-  // species-scoped result from `scoped(prisma, mode).camp.findMany(...)`
-  // before passing it to DashboardClient.
+  // is keyed per-farm, not per-mode — see lib/server/cached.ts JSDoc). Wave
+  // 233 threads `species` through the Camp DTO so the dashboard page can
+  // filter in-memory without a second Prisma round-trip.
   getCachedDashboardDataMock.mockResolvedValue({
     totalAll: 15,
     totalBySpecies: { cattle: 10, sheep: 5 },
@@ -170,6 +169,7 @@ beforeEach(() => {
       camp_name: c.campName,
       size_hectares: c.sizeHectares,
       water_source: c.waterSource,
+      species: c.species,
     })),
     latitude: -33,
     longitude: 22,
@@ -248,17 +248,11 @@ describe("Wave 233 — dashboard page filters map camps by FarmMode", () => {
     });
     render(tree as React.ReactElement);
 
-    // The species-scoped camp fetch (the new one this wave adds) must
-    // inject species: cattle.
-    const scopedCalls = campFindManyMock.mock.calls.filter((call) => {
-      const where = (call[0] as { where?: { species?: string } })?.where;
-      return where?.species !== undefined;
-    });
-    expect(scopedCalls.length).toBeGreaterThan(0);
-    for (const call of scopedCalls) {
-      const where = (call[0] as { where?: { species?: string } }).where;
-      expect(where?.species).toBe("cattle");
-    }
+    // Phase-F contract: the dashboard page MUST NOT touch raw Prisma
+    // (cache-flag-removal regression guard). The species filter is an
+    // in-memory cut over `getCachedDashboardData().camps`, which threads
+    // `species` through the Camp DTO (lib/types.ts + lib/server/cached.ts).
+    expect(campFindManyMock).not.toHaveBeenCalled();
 
     expect(dashboardClientCalls.length).toBe(1);
     const camps = dashboardClientCalls[0].camps;
@@ -276,15 +270,7 @@ describe("Wave 233 — dashboard page filters map camps by FarmMode", () => {
     });
     render(tree as React.ReactElement);
 
-    const scopedCalls = campFindManyMock.mock.calls.filter((call) => {
-      const where = (call[0] as { where?: { species?: string } })?.where;
-      return where?.species !== undefined;
-    });
-    expect(scopedCalls.length).toBeGreaterThan(0);
-    for (const call of scopedCalls) {
-      const where = (call[0] as { where?: { species?: string } }).where;
-      expect(where?.species).toBe("sheep");
-    }
+    expect(campFindManyMock).not.toHaveBeenCalled();
 
     expect(dashboardClientCalls.length).toBe(1);
     const camps = dashboardClientCalls[0].camps;

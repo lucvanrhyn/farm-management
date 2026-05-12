@@ -102,6 +102,7 @@ export interface Camp {
   water_source?: string;       // "borehole" | "dam" | "river" | "trough"
   geojson?: string;            // GeoJSON polygon coordinates (stringified)
   color?: string;              // Hex identity color for this camp (e.g. "#2563EB")
+  species?: string;            // "cattle" | "sheep" | "game" — denormalised from prisma.camp.species (NOT NULL per migrations 0010/0011). Threaded through the cached Camp DTO so client surfaces (dashboard map) can filter by FarmMode without a second Prisma round-trip. Optional for back-compat with hand-built Camp instances missing the column.
   // Live condition fields — populated from IndexedDB after logger observations
   grazing_quality?: GrazingQuality;
   water_status?: WaterStatus;
