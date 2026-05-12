@@ -13,6 +13,8 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { CampData } from "@/components/map/layers/CampLayer";
 import AdminMapClient from "./AdminMapClient";
 
@@ -44,11 +46,17 @@ export default async function AdminMapPage({
     );
   }
 
+  // Wave 233: camp markers are filtered by FarmMode (PRD #222 / issue #224).
+  // Route the camp read through the species-scoped facade so a sheep-mode
+  // tenant sees only sheep paddocks on the map (and vice versa). Cookie is
+  // written by FarmModeProvider; AdminMapClient calls `router.refresh()` on
+  // mode flips so this server fetch re-runs without a full page reload.
+  const mode = await getFarmMode(farmSlug);
   const [settings, camps] = await Promise.all([
     prisma.farmSettings.findFirst({
       select: { latitude: true, longitude: true },
     }),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
   const campData: CampData[] = camps.map((c) => ({

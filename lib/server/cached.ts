@@ -586,7 +586,10 @@ export async function getCachedDashboardData(
           censusCountByCamp[row.campId] = row.totalPopulation;
         }
 
-        // Camps in snake_case for Camp type
+        // Camps in snake_case for Camp type. Wave 233: thread `species`
+        // through so the dashboard map can filter camps by the active
+        // FarmMode without a second Prisma round-trip (the cache is keyed
+        // per-farm, not per-mode — filtering happens in `page.tsx`).
         const camps: Camp[] = prismaCamps.map((c) => ({
           camp_id: c.campId,
           camp_name: c.campName,
@@ -594,6 +597,7 @@ export async function getCachedDashboardData(
           water_source: c.waterSource ?? undefined,
           geojson: c.geojson ?? undefined,
           color: c.color ?? undefined,
+          species: c.species,
         }));
 
         // Rotation status per camp

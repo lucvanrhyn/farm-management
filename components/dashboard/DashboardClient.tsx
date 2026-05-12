@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
 import dynamic from "next/dynamic";
@@ -171,6 +171,21 @@ export default function DashboardClient({
   // Species-filtered counts — fall back to unfiltered totals
   const filteredTotal = totalBySpecies?.[mode] ?? totalAnimals;
   const filteredCampCounts = campCountsBySpecies?.[mode] ?? campAnimalCounts;
+
+  // Wave 233: when the user flips the FarmMode toggle, trigger a server
+  // re-render so the species-scoped camp.findMany in
+  // `app/[farmSlug]/dashboard/page.tsx` re-runs with the new cookie. The
+  // server then hands DashboardClient a fresh `camps` prop with only the
+  // current-species camps. `router.refresh()` updates the RSC payload
+  // without unmounting the client tree — no full page reload, as required
+  // by issue #233.
+  const lastModeRef = useRef(mode);
+  useEffect(() => {
+    if (lastModeRef.current !== mode) {
+      lastModeRef.current = mode;
+      router.refresh();
+    }
+  }, [mode, router]);
   const [viewMode, setViewMode]                 = useState<ViewMode>("schematic");
   const [filterBy, setFilterBy]                 = useState<FilterMode>("grazing");
   // Zoom state — driven by map clicks
