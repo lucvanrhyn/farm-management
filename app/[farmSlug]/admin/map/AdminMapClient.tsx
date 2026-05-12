@@ -7,11 +7,13 @@
  * FarmMap shell, to keep the shell generic).
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import FarmMap from "@/components/map/FarmMap";
 import LogAtSpotSheet from "@/components/map/LogAtSpotSheet";
 import type { CampData } from "@/components/map/layers/CampLayer";
+import { useFarmModeSafe } from "@/lib/farm-mode";
 
 interface Props {
   farmSlug: string;
@@ -31,6 +33,22 @@ export default function AdminMapClient({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [lngLat, setLngLat] = useState<{ lng: number; lat: number } | null>(null);
   const [upgradeToast, setUpgradeToast] = useState(false);
+
+  // Wave 233: when the user flips the FarmMode toggle (cattle ↔ sheep ↔
+  // game), trigger a server re-render so the species-scoped camp.findMany
+  // in `page.tsx` re-runs with the new cookie. This delivers the issue
+  // #233 acceptance criterion "Switching the toggle re-renders the map
+  // without a full page reload" — `router.refresh()` re-fetches RSC
+  // payload without unmounting the client tree.
+  const router = useRouter();
+  const { mode } = useFarmModeSafe();
+  const lastModeRef = useRef(mode);
+  useEffect(() => {
+    if (lastModeRef.current !== mode) {
+      lastModeRef.current = mode;
+      router.refresh();
+    }
+  }, [mode, router]);
 
   const handleCampClick = useCallback((_campId: string) => {
     // Camp click routing is handled by FarmMap's built-in popup.
