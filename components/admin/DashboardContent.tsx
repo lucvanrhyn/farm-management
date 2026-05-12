@@ -22,14 +22,22 @@ import {
 import { getCachedDashboardOverview } from "@/lib/server/cached";
 import { getSession } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
+import type { SpeciesId } from "@/lib/species/types";
 
 interface Props {
   farmSlug: string;
   prisma: PrismaClient;
   tier: FarmTier;
+  /**
+   * Active FarmMode (issue #225). Threaded through to the cached overview
+   * helper so cache keys split by species AND every per-species figure
+   * (active animal count, pregnancy rate, health issues this week, etc.)
+   * reflects the selected mode.
+   */
+  mode: SpeciesId;
 }
 
-export default async function DashboardContent({ farmSlug, prisma, tier }: Props) {
+export default async function DashboardContent({ farmSlug, prisma, tier, mode }: Props) {
   const isBasic = tier === "basic";
 
   const session = await getSession();
@@ -37,7 +45,9 @@ export default async function DashboardContent({ farmSlug, prisma, tier }: Props
 
   // Single cached call — all dashboard data in one cache entry (30s TTL).
   // On cache hit: zero Turso queries. On miss: all queries fire in parallel.
-  const overview = await getCachedDashboardOverview(farmSlug);
+  // `mode` is part of the cache key (#225) so cattle and sheep never share
+  // an entry.
+  const overview = await getCachedDashboardOverview(farmSlug, mode);
   const {
     totalAnimals,
     totalCamps,

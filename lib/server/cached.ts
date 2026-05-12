@@ -34,6 +34,8 @@ import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
 import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/rotation-engine";
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 import type { Camp } from "@/lib/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -150,15 +152,23 @@ export interface DashboardOverview {
 
 export async function getCachedDashboardOverview(
   farmSlug: string,
+  mode: SpeciesId,
 ): Promise<DashboardOverview> {
   const fetcher = unstable_cache(
-    async (slug: string): Promise<DashboardOverview> => {
+    async (slug: string, currentMode: SpeciesId): Promise<DashboardOverview> => {
       return withFarmPrisma(slug, async (prisma) => {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const currentMonth = new Date().toISOString().slice(0, 7);
+
+        // Issue #225: route per-species reads through the species-scoped
+        // facade so `{ species: currentMode }` is injected by construction
+        // (PRD #222). `scoped()` is a no-cost in-memory wrapper — same
+        // underlying Prisma client; the facade just merges the species
+        // predicate into the where clause of each delegate call.
+        const speciesPrisma = scoped(prisma, currentMode);
 
         const [
           totalAnimals,
@@ -176,23 +186,30 @@ export async function getCachedDashboardOverview(
           mtdTransactions,
           dataHealth,
         ] = await Promise.all([
-          // cross-species by design: dashboard total spans all species.
-          prisma.animal.count({ where: { status: "Active" } }),
+          // Active head for the current species (issue #225). The facade's
+          // count() injects `{ species: mode }` — status stays caller-controlled
+          // per the facade contract (species-scoped-prisma.ts JSDoc).
+          speciesPrisma.animal.count({ where: { status: "Active" } }),
+          // audit-allow-species-where: camp total is the same on every per-species view; not species-scoped because every camp serves some species at some point.
           prisma.camp.count(),
           prisma.farmSettings.findFirst(),
-          getReproStats(prisma),
+          getReproStats(prisma, { species: currentMode }),
           getLatestCampConditions(prisma),
-          countHealthIssuesSince(prisma, sevenDaysAgo),
-          countInspectedToday(prisma),
-          getRecentHealthObservations(prisma, 8),
+          countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
+          countInspectedToday(prisma, currentMode),
+          getRecentHealthObservations(prisma, 8, currentMode),
+          // cross-species by design: low-grazing math is LSU across all species (camp can host any species).
           getLowGrazingCampCount(prisma),
-          prisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
-          prisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
+          // Per-species death/calving tile counts: route through facade so
+          // observation rows are filtered to the active species.
+          speciesPrisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
+          speciesPrisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
           getWithdrawalCount(prisma),
           prisma.transaction.findMany({
             where: { date: { startsWith: currentMonth } },
             select: { type: true, amount: true },
           }),
+          // cross-species by design: data-health is a farm-wide hygiene score.
           getDataHealthScore(prisma),
         ]);
 
@@ -215,6 +232,7 @@ export async function getCachedDashboardOverview(
             staleCampInspectionHours: settings.alertThresholdHours,
           },
           { reproStats, campConditions },
+          currentMode,
         );
 
         return {
@@ -235,10 +253,14 @@ export async function getCachedDashboardOverview(
         };
       });
     },
+    // Issue #225: `mode` is part of the cache key so cattle and sheep
+    // dashboards never share an entry. unstable_cache treats every fn arg as
+    // part of the key, but we also include it in keyParts as a documentation
+    // signal — same pattern as `multi-farm-overview` keying off userId.
     ["dashboard-overview"],
     { revalidate: 30, tags: [farmTag(farmSlug, "dashboard")] },
   );
-  return fetcher(farmSlug);
+  return fetcher(farmSlug, mode);
 }
 
 // ── Cached: Farm Settings (5 min) ────────────────────────────────────────────
