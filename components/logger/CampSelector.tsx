@@ -28,11 +28,52 @@ function CampSkeleton() {
   );
 }
 
-export default function CampSelector() {
+/**
+ * Issue #234 — Logger camp tiles filter by FarmMode.
+ *
+ * The IDB-backed `useOffline().camps` is not species-aware (the Camp
+ * shape in `lib/types.ts` has no `species` field, and the cached
+ * `/api/camps` response doesn't filter `camp.findMany` by species — only
+ * `animal.groupBy` is mode-scoped). On a multi-species tenant this used
+ * to leak sheep/game camps into a cattle operator's picker — a real
+ * data-corruption risk because a cattle inspection logged against a
+ * sheep camp downstream-feeds the wrong species' Einstein RAG slice.
+ *
+ * The fix: the server page (`app/[farmSlug]/logger/page.tsx`) pre-fetches
+ * the camps for the active mode via the species-scoped Prisma facade
+ * (`scoped(prisma, mode).camp.findMany(...)`, PRD #222 / #224) and
+ * passes their IDs down as `allowedCampIds`. The picker filters the
+ * IDB-backed list against the allowlist before rendering tiles.
+ *
+ * Why an allowlist prop and not "stop reading from IDB":
+ *   - the IDB cache is the offline source of truth; we cannot ditch it
+ *     without breaking the offline-first UX
+ *   - the offline-queue boundary (ADR-0002, `lib/sync/queue.ts`) is
+ *     untouched — queued observations for any camp keep flushing
+ *     regardless of which tile the user sees today
+ *   - back-compat path (allowedCampIds === undefined) preserves the
+ *     pre-fix render for unit tests and any future offline-only paint
+ *     where the server prop hasn't hydrated yet.
+ */
+interface CampSelectorProps {
+  /**
+   * Allowed camp IDs for the active FarmMode. When provided, the picker
+   * filters its IDB-backed camp list against this set so cross-species
+   * tiles can't be selected. When undefined, all IDB camps render
+   * (back-compat / offline-first first paint).
+   */
+  allowedCampIds?: ReadonlySet<string>;
+}
+
+export default function CampSelector({ allowedCampIds }: CampSelectorProps = {}) {
   const router = useRouter();
   const params = useParams<{ farmSlug: string }>();
   const { camps } = useOffline();
   const { isMultiMode } = useFarmModeSafe();
+
+  const visibleCamps = allowedCampIds
+    ? camps.filter((c) => allowedCampIds.has(c.camp_id))
+    : camps;
 
   if (camps.length === 0) {
     return (
@@ -53,7 +94,7 @@ export default function CampSelector() {
         </div>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
-      {camps.map((camp) => {
+      {visibleCamps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
         // Use grey dot when no condition has ever been recorded; do not default to "Fair"
         const dotColor = camp.grazing_quality ? getGrazingDot(camp.grazing_quality) : "bg-gray-500";
