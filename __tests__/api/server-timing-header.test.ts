@@ -26,7 +26,21 @@ vi.mock("next-auth", () => ({
 }));
 
 const mockPrisma = {
-  animal: { findMany: vi.fn().mockResolvedValue([]) },
+  animal: {
+    findMany: vi.fn().mockResolvedValue([]),
+    // Wave 226 (#226): /api/farm now reads species-scoped counts via the
+    // facade; the test fixture needs `count` so the inner query block can
+    // resolve without falling into the catch and dropping the `query` span.
+    count: vi.fn().mockResolvedValue(0),
+  },
+  camp: { count: vi.fn().mockResolvedValue(0) },
+  farmSettings: {
+    findFirst: vi.fn().mockResolvedValue({
+      farmName: "Test",
+      breed: "",
+      heroImageUrl: "/farm-hero.jpg",
+    }),
+  },
   task: { findMany: vi.fn().mockResolvedValue([]) },
 };
 
@@ -41,11 +55,23 @@ vi.mock("@/lib/farm-prisma", () => ({
 }));
 
 vi.mock("@/lib/server/cached", () => ({
+  // Other instrumented routes (camps, camps/status) still consume cached
+  // helpers; /api/farm no longer does (Wave 226), but the mock is kept so
+  // the camps test cases don't blow up.
   getCachedFarmSummary: vi
     .fn()
     .mockResolvedValue({ farmName: "Test", breed: "", animalCount: 0, campCount: 0 }),
   getCachedCampList: vi.fn().mockResolvedValue([]),
   getCachedCampConditions: vi.fn().mockResolvedValue(new Map()),
+}));
+
+// Wave 226 (#226): /api/farm now reads the FarmMode cookie via
+// `getFarmMode(slug)`. Vitest runs outside a Next.js request scope, so the
+// real `cookies()` helper throws — stub it to a no-op store that returns
+// undefined (which makes getFarmMode fall back to "cattle").
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({ get: () => undefined }),
+  headers: vi.fn().mockResolvedValue({ get: () => null }),
 }));
 
 vi.mock("next/cache", () => ({

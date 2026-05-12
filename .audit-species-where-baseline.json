@@ -71,8 +71,6 @@
     "components/admin/PerformanceSection.tsx::observation::findMany::0",
     "lib/domain/map/list-task-pins.ts::camp::findMany::0",
     "lib/domain/mobs/delete-mob.ts::animal::count::0",
-    "lib/domain/mobs/list-mobs.ts::animal::groupBy::0",
-    "lib/domain/mobs/list-mobs.ts::mob::findMany::0",
     "lib/domain/nvd/snapshot.ts::animal::findMany::0",
     "lib/domain/nvd/snapshot.ts::observation::findMany::0",
     "lib/domain/observations/create-observation.ts::camp::findFirst::0",
