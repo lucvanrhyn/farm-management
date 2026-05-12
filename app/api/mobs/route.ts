@@ -19,6 +19,7 @@ import { tenantRead, adminWrite, RouteValidationError } from "@/lib/server/route
 import { revalidateMobWrite } from "@/lib/server/revalidate";
 import { isValidSpecies } from "@/lib/species/registry";
 import type { SpeciesId } from "@/lib/species/types";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import {
   listMobs,
   createMob,
@@ -59,7 +60,11 @@ const createMobSchema = {
 
 export const GET = tenantRead({
   handle: async (ctx) => {
-    const result = await listMobs(ctx.prisma);
+    // Wave 226 (#226): scope the list to the active FarmMode so a
+    // multi-species tenant doesn't see the other species' mobs bleed onto
+    // the cattle dashboard. Cookie is read per-request via getFarmMode.
+    const mode = await getFarmMode(ctx.slug);
+    const result = await listMobs(ctx.prisma, mode);
     return NextResponse.json(result);
   },
 });

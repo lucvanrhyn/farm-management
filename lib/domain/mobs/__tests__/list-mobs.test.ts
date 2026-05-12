@@ -3,16 +3,21 @@
  *
  * Wave B (#151) — domain op: `listMobs`.
  *
- * Pure function: given a tenant-scoped Prisma client, returns the per-tenant
- * mob list with derived `animal_count` per mob. Mirrors the GET /api/mobs
- * wire shape (snake_case current_camp + animal_count fields).
+ * Pure function: given a tenant-scoped Prisma client AND the active FarmMode,
+ * returns the per-tenant mob list (filtered to the species) with derived
+ * `animal_count` per mob. Mirrors the GET /api/mobs wire shape (snake_case
+ * `current_camp` + `animal_count` fields).
+ *
+ * Wave 226 (#226): the second positional argument is `mode: SpeciesId`.
+ * The function routes through `scoped(prisma, mode)` so both the mob list
+ * and the animal-count groupBy are species-injected by the facade.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 
 import { listMobs } from "../list-mobs";
 
-describe("listMobs(prisma)", () => {
+describe("listMobs(prisma, mode)", () => {
   const mobFindMany = vi.fn();
   const animalGroupBy = vi.fn();
   const prisma = {
@@ -25,7 +30,7 @@ describe("listMobs(prisma)", () => {
     animalGroupBy.mockReset();
   });
 
-  it("returns mobs with derived animal_count, snake_case wire shape", async () => {
+  it("returns mobs with derived animal_count, snake_case wire shape — species-scoped via facade", async () => {
     mobFindMany.mockResolvedValue([
       { id: "m1", name: "Mob A", currentCamp: "NORTH-01" },
       { id: "m2", name: "Mob B", currentCamp: "SOUTH-02" },
@@ -35,16 +40,20 @@ describe("listMobs(prisma)", () => {
       { mobId: "m2", _count: { _all: 0 } },
     ]);
 
-    const result = await listMobs(prisma);
+    const result = await listMobs(prisma, "cattle");
 
     expect(result).toEqual([
       { id: "m1", name: "Mob A", current_camp: "NORTH-01", animal_count: 12 },
       { id: "m2", name: "Mob B", current_camp: "SOUTH-02", animal_count: 0 },
     ]);
-    expect(mobFindMany).toHaveBeenCalledWith({ orderBy: { name: "asc" } });
+    // Facade injects { species: "cattle" } into both reads.
+    expect(mobFindMany).toHaveBeenCalledWith({
+      orderBy: { name: "asc" },
+      where: { species: "cattle" },
+    });
     expect(animalGroupBy).toHaveBeenCalledWith({
       by: ["mobId"],
-      where: { status: "Active", mobId: { not: null } },
+      where: { species: "cattle", status: "Active", mobId: { not: null } },
       _count: { _all: true },
     });
   });
@@ -55,7 +64,7 @@ describe("listMobs(prisma)", () => {
     ]);
     animalGroupBy.mockResolvedValue([]);
 
-    const result = await listMobs(prisma);
+    const result = await listMobs(prisma, "cattle");
 
     expect(result).toEqual([
       { id: "empty", name: "Empty Mob", current_camp: "NORTH-01", animal_count: 0 },
@@ -71,7 +80,7 @@ describe("listMobs(prisma)", () => {
       { mobId: "m1", _count: { _all: 5 } },
     ]);
 
-    const result = await listMobs(prisma);
+    const result = await listMobs(prisma, "cattle");
 
     expect(result).toEqual([
       { id: "m1", name: "Mob A", current_camp: "NORTH-01", animal_count: 5 },
@@ -82,8 +91,20 @@ describe("listMobs(prisma)", () => {
     mobFindMany.mockResolvedValue([]);
     animalGroupBy.mockResolvedValue([]);
 
-    const result = await listMobs(prisma);
+    const result = await listMobs(prisma, "cattle");
 
     expect(result).toEqual([]);
+  });
+
+  it("injects species: sheep when mode is sheep", async () => {
+    mobFindMany.mockResolvedValue([]);
+    animalGroupBy.mockResolvedValue([]);
+
+    await listMobs(prisma, "sheep");
+
+    expect(mobFindMany.mock.calls[0][0]?.where).toEqual({ species: "sheep" });
+    expect(animalGroupBy.mock.calls[0][0]?.where).toMatchObject({
+      species: "sheep",
+    });
   });
 });
