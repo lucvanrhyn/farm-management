@@ -208,6 +208,7 @@ export function scoped(
 ): SpeciesScopedPrisma {
   const animal: AnimalBuilder = {
     findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
       return prisma.animal.findMany({
         ...(args ?? {}),
         where: mergeWhere<Prisma.AnimalWhereInput>(
@@ -268,6 +269,7 @@ export function scoped(
 
   const camp: CampBuilder = {
     findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
       return prisma.camp.findMany({
         ...(args ?? {}),
         where: mergeWhere<Prisma.CampWhereInput>({ species: mode }, args),
@@ -301,6 +303,7 @@ export function scoped(
 
   const mob: MobBuilder = {
     findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
       return prisma.mob.findMany({
         ...(args ?? {}),
         where: mergeWhere<Prisma.MobWhereInput>({ species: mode }, args),
@@ -334,6 +337,7 @@ export function scoped(
 
   const observation: ObservationBuilder = {
     findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
       return prisma.observation.findMany({
         ...(args ?? {}),
         where: mergeWhere<Prisma.ObservationWhereInput>({ species: mode }, args),

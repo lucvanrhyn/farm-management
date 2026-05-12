@@ -335,6 +335,21 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
       if (full.endsWith("/audit-findmany-no-take.ts")) continue;
       if (full.endsWith("/audit-findmany-no-take.test.ts")) continue;
       if (full.endsWith("/audit-findmany-rekey.test.ts")) continue;
+      // Sibling audit (species-axis, PR #239 / wave/224) — its source and
+      // unit-test fixtures contain literal `prisma.<model>.findMany(...)`
+      // strings as test inputs that would self-trigger this column-bound
+      // check. Same reasoning as the `-no-take` skip above.
+      if (full.endsWith("/audit-species-where.ts")) continue;
+      if (full.endsWith("/audit-species-where.test.ts")) continue;
+      // Architecture-test fixtures for sibling audits intentionally contain
+      // violating prisma calls. Skip the whole tree rather than enumerate
+      // each fixture file so future fixtures are covered automatically.
+      const normalised = full.split(path.sep).join("/");
+      if (
+        normalised.includes("/__tests__/architecture/audit-species-where-fixtures/")
+      ) {
+        continue;
+      }
       out.push(full);
     }
   }
