@@ -7,9 +7,16 @@ import { usePathname } from "next/navigation";
 // existing Reproduction tab so the sheep namespace mirrors the cattle
 // admin UX. Order matters — Animals first (catalogue is the canonical
 // landing per ADR-0003), then Camps, then the species-specific tabs.
+//
+// Wave 5 (#231) lit up Observations alongside Animals/Camps so the
+// sheep namespace surfaces the same cross-cutting "what happened on the
+// farm" feed the cattle admin tree has. It slots between Camps and
+// Reproduction to mirror the cognitive grouping (catalogue → grazing
+// surface → activity log → species-specific workflow tabs).
 const TABS = [
   { label: "Animals",      href: "/sheep/animals" },
   { label: "Camps",        href: "/sheep/camps" },
+  { label: "Observations", href: "/sheep/observations" },
   { label: "Reproduction", href: "/sheep/reproduction" },
   { label: "Health",       href: "/sheep/health",       disabled: true },
   { label: "Wool",         href: "/sheep/wool",         disabled: true },
