@@ -23,6 +23,10 @@ export default defineConfig({
     // E2E_IDENTIFIER / E2E_PASSWORD are unset (local dev), so safe to list
     // here unconditionally — CI sets the env from secrets.
     'admin-journey.spec.ts',
+    // Issue #236 (2026-05-12): multi-species toggle — locks the cattle→sheep
+    // dashboard flip, cookie persistence, per-tenant isolation, and the sheep
+    // namespace routes against regression. Self-skips when auth creds are unset.
+    'multi-species-toggle.spec.ts',
   ],
   reporter: 'list',
   use: {
