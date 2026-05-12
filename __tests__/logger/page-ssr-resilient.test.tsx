@@ -31,6 +31,14 @@ vi.mock("next-auth", () => ({
   }),
 }));
 
+// Issue #234 — LoggerPage now reads the FarmMode cookie via
+// `getFarmMode(slug)` to pre-fetch species-scoped camps. In the Vitest
+// request-store-less environment, `cookies()` throws — stub the reader
+// to return the cattle default so the page can resolve.
+vi.mock("@/lib/server/get-farm-mode", () => ({
+  getFarmMode: vi.fn().mockResolvedValue("cattle"),
+}));
+
 vi.mock("@/lib/auth", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth")>("@/lib/auth");
   return {
@@ -42,9 +50,22 @@ vi.mock("@/lib/auth", async () => {
 });
 
 const findFirst = vi.fn();
+const campFindMany = vi.fn().mockResolvedValue([]);
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForFarm: vi.fn().mockResolvedValue({
     farmSettings: { findFirst },
+    camp: { findMany: campFindMany },
+  }),
+}));
+
+// Issue #234 — stub the species-scoped facade so the page's allowed-
+// camp-IDs fetch resolves with an empty set in this hotfix-resilience
+// suite. Behaviour under test here is the farmName-fallback path, not
+// the camp filter (that's covered by
+// __tests__/components/logger-camp-selector-mode-filter.test.tsx).
+vi.mock("@/lib/server/species-scoped-prisma", () => ({
+  scoped: () => ({
+    camp: { findMany: campFindMany },
   }),
 }));
 
