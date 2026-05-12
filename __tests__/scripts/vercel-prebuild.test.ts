@@ -55,6 +55,7 @@ function makeDeps(
       VERCEL_ENV: undefined,
       VERCEL_GIT_COMMIT_REF: undefined,
       BRANCH_CLONE_SOURCE_DB: undefined,
+      BRANCH_CLONE_GROUP: undefined,
       VERCEL_ENV_FILE: undefined,
       ...envOverrides,
     } as unknown as NodeJS.ProcessEnv,
@@ -131,6 +132,53 @@ describe('preview happy path', () => {
     const allLogs = deps.logLines.join('\n');
     expect(allLogs).toMatch(/preview/i);
     expect(allLogs).toMatch(/wave\/19-option-c/);
+  });
+
+  // Issue #220: Turso orgs with >1 DB group require `--group <name>` on
+  // `turso db create --from-db`. The prebuild reads BRANCH_CLONE_GROUP from
+  // env and threads it through to cloneBranch as `groupName`. When unset
+  // (single-group orgs), `groupName` is omitted entirely so the CLI keeps
+  // its prior single-group default behavior.
+  it('preview + BRANCH_CLONE_GROUP set → groupName threaded to cloneBranchImpl', async () => {
+    const cloneResult = makeCloneResult();
+    const deps = makeDeps(
+      {
+        VERCEL_ENV: 'preview',
+        VERCEL_GIT_COMMIT_REF: 'wave/19-option-c',
+        BRANCH_CLONE_SOURCE_DB: 'acme-cattle',
+        BRANCH_CLONE_GROUP: 'default-eu',
+      },
+      {
+        cloneBranchImpl: vi.fn().mockResolvedValue(cloneResult),
+      },
+    );
+
+    const code = await runPrebuild(deps);
+
+    expect(code).toBe(0);
+    const callArg = (deps.cloneBranchImpl as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.groupName).toBe('default-eu');
+  });
+
+  it('preview without BRANCH_CLONE_GROUP → groupName omitted (back-compat for single-group orgs)', async () => {
+    const cloneResult = makeCloneResult();
+    const deps = makeDeps(
+      {
+        VERCEL_ENV: 'preview',
+        VERCEL_GIT_COMMIT_REF: 'wave/19-option-c',
+        BRANCH_CLONE_SOURCE_DB: 'acme-cattle',
+        // BRANCH_CLONE_GROUP intentionally unset
+      },
+      {
+        cloneBranchImpl: vi.fn().mockResolvedValue(cloneResult),
+      },
+    );
+
+    const code = await runPrebuild(deps);
+
+    expect(code).toBe(0);
+    const callArg = (deps.cloneBranchImpl as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArg.groupName).toBeUndefined();
   });
 });
 
