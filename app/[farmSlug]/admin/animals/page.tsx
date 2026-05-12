@@ -8,7 +8,8 @@ import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { activeSpeciesWhere, ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
+import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -55,12 +56,14 @@ export default async function AdminAnimalsPage({
   //                          surface the reconciliation total ("101 total
   //                          Active across species") and the missing 20
   //                          non-cattle rows aren't invisible.
+  // Wave 224: per-species reads routed through `scoped(prisma, mode)` so
+  // the species axis is injected by construction (PRD #222). The facade
+  // injects { species: mode, status: "Active" } on animal.findMany and
+  // { species: mode } on animal.count — both predicates match what this
+  // page used pre-#224 via `activeSpeciesWhere(mode)`.
+  const speciesPrisma = scoped(prisma, mode);
   const [animals, prismaCamps, withdrawalAnimals, prismaMobs, speciesTotal, crossSpeciesTotal] = await Promise.all([
-    prisma.animal.findMany({
-      // Wave A2: per-species + Active. Previously `where: { species: mode }`
-      // leaked inactive/sold/dead rows into the admin table. Helper keeps
-      // this surface in lockstep with CampDetailPanel and any future caller.
-      where: activeSpeciesWhere(mode),
+    speciesPrisma.animal.findMany({
       orderBy: cursor
         ? { animalId: "asc" }
         : [{ category: "asc" }, { animalId: "asc" }],
@@ -70,13 +73,14 @@ export default async function AdminAnimalsPage({
         : {}),
     }),
     // audit-allow-findmany: camp list is per-tenant and bounded (trio-b ≈ 36 camps); needed for filter dropdown.
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    speciesPrisma.camp.findMany({ orderBy: { campName: "asc" } }),
     getAnimalsInWithdrawal(prisma),
     // audit-allow-findmany: mob list is per-tenant and bounded (≤20 typical); needed for table column map.
-    prisma.mob.findMany({ orderBy: { name: "asc" } }),
-    prisma.animal.count({ where: activeSpeciesWhere(mode) }),
+    speciesPrisma.mob.findMany({ orderBy: { name: "asc" } }),
+    speciesPrisma.animal.count({ where: { status: ACTIVE_STATUS } }),
     // cross-species by design: drives the reconciliation total in the header
     // on multi-species tenants. Matches `getCachedFarmSummary` (lib/server/cached.ts).
+    // audit-allow-species-where: dashboard reconciliation total spans species
     prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
 

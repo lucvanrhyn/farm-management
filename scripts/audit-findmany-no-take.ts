@@ -412,6 +412,22 @@ async function collectFiles(root: string, out: string[] = []): Promise<string[]>
       // strings that would otherwise self-trigger this row-bound check.
       if (full.endsWith("/audit-findmany-no-select.ts")) continue;
       if (full.endsWith("/audit-findmany-no-select.test.ts")) continue;
+      // Sibling audit (species-axis, PR #239 / wave/224) — same reason as
+      // the no-select pair above: the source + tests carry literal
+      // `prisma.<model>.findMany(...)` fixture strings that would self-
+      // trigger this row-bound check.
+      if (full.endsWith("/audit-species-where.ts")) continue;
+      if (full.endsWith("/audit-species-where.test.ts")) continue;
+      // Architecture-test fixtures (one per sibling audit) that intentionally
+      // contain violating prisma calls. They live under a stable directory
+      // so we skip the whole tree rather than enumerate each fixture file;
+      // future fixtures added to the dir are covered automatically.
+      const normalised = full.split(path.sep).join("/");
+      if (
+        normalised.includes("/__tests__/architecture/audit-species-where-fixtures/")
+      ) {
+        continue;
+      }
       out.push(full);
     }
   }
