@@ -92,6 +92,12 @@ vi.mock("@/lib/species/registry", () => ({
     { id: "cattle", label: "Cattle" },
     { id: "sheep", label: "Sheep" },
   ]),
+  // Issue #232 — `POST /api/camps` now calls `isValidSpecies` on the body.
+  // Mock-truthy for the canonical three; everything else falls through to
+  // the typed-error path.
+  isValidSpecies: vi.fn().mockImplementation((s: string) =>
+    s === "cattle" || s === "sheep" || s === "game",
+  ),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -154,7 +160,10 @@ describe("POST /api/camps", () => {
     const { POST } = await import("@/app/api/camps/route");
     const req = new NextRequest("http://localhost/api/camps", {
       method: "POST",
-      body: JSON.stringify({ campId: "C1", campName: "Test Camp" }),
+      // Issue #232 — `species` is required on the camp-create wire contract.
+      // Without it the route returns 422 MISSING_SPECIES and never reaches
+      // the revalidate hook this suite is asserting on.
+      body: JSON.stringify({ campId: "C1", campName: "Test Camp", species: "cattle" }),
     });
 
     const res = await POST(req, { params: Promise.resolve({}) });

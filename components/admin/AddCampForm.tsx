@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
 
 const FIELD_STYLE = {
   background: "#FAFAF8",
@@ -24,8 +25,19 @@ const LABEL_STYLE = {
   letterSpacing: "0.05em",
 };
 
+const SPECIES_LABELS: Record<FarmMode, string> = {
+  cattle: "Cattle",
+  sheep: "Sheep",
+  game: "Game",
+};
+
 export default function AddCampForm() {
   const router = useRouter();
+  // Issue #232 — read the active mode + enabled species from FarmModeProvider.
+  // useFarmModeSafe returns defaults (cattle only, single-species) when used
+  // outside a provider, so the component degrades gracefully on legacy mounts.
+  const { mode, enabledModes, isMultiMode } = useFarmModeSafe();
+
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,19 +49,41 @@ export default function AddCampForm() {
     waterSource: "",
   });
 
+  // Picker default mirrors current FarmMode, but on a multi-species farm the
+  // user MUST acknowledge by interacting with the radio group before the form
+  // accepts a submit. `speciesTouched=false` blocks submit on multi-species
+  // farms — see "default-but-must-confirm" in #232.
+  const [species, setSpecies] = useState<FarmMode>(mode);
+  const [speciesTouched, setSpeciesTouched] = useState(false);
+
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
   }
 
+  function onSpeciesChange(next: FarmMode) {
+    setSpecies(next);
+    setSpeciesTouched(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Single-species farms (e.g. Basson — cattle only): picker is hidden and
+    // there's only one valid choice, so no acknowledgement step is required.
+    // Multi-species farms: the user must have touched the species control.
+    if (isMultiMode && !speciesTouched) {
+      setError("Please confirm species before saving.");
+      return;
+    }
+
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
         campId: form.campId.trim(),
         campName: form.campName.trim(),
+        species,
       };
       if (form.sizeHectares) body.sizeHectares = parseFloat(form.sizeHectares);
       if (form.waterSource) body.waterSource = form.waterSource.trim();
@@ -62,11 +96,15 @@ export default function AddCampForm() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error ?? "Failed to create camp.");
+        // Surface the typed-error code (e.g. MISSING_SPECIES) so the user
+        // can tell omitted-species from a generic validation failure.
+        setError(data.error ?? data.message ?? "Failed to create camp.");
         return;
       }
 
       setForm({ campId: "", campName: "", sizeHectares: "", waterSource: "" });
+      setSpecies(mode);
+      setSpeciesTouched(false);
       setOpen(false);
       router.refresh();
     } finally {
@@ -135,6 +173,51 @@ export default function AddCampForm() {
               />
             </div>
           </div>
+
+          {/*
+            Species picker — multi-species farms only. Single-species farms
+            (Basson cattle-only) get a hidden input so the POST payload still
+            carries `species`, satisfying the server-side 422 MISSING_SPECIES
+            guard without an unnecessary UI step. (#232 AC #4)
+          */}
+          {isMultiMode ? (
+            <fieldset className="mt-4" style={{ border: "none", padding: 0, margin: 0 }}>
+              <legend style={LABEL_STYLE}>Species *</legend>
+              <div className="flex gap-3 flex-wrap">
+                {enabledModes.map((s) => (
+                  <label
+                    key={s}
+                    className="inline-flex items-center gap-2 cursor-pointer text-sm"
+                    style={{ color: "#1C1815" }}
+                  >
+                    <input
+                      type="radio"
+                      name="species"
+                      value={s}
+                      checked={species === s}
+                      onChange={() => onSpeciesChange(s)}
+                      // Clicking the already-checked radio also counts as an
+                      // explicit acknowledgement — browsers don't fire
+                      // `onChange` when the value is unchanged.
+                      onClick={() => setSpeciesTouched(true)}
+                    />
+                    {SPECIES_LABELS[s]}
+                  </label>
+                ))}
+              </div>
+              {!speciesTouched && (
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: "#9C8E7A" }}
+                  data-testid="species-confirm-hint"
+                >
+                  Please confirm species before saving.
+                </p>
+              )}
+            </fieldset>
+          ) : (
+            <input type="hidden" name="species" value={species} />
+          )}
 
           {error && (
             <p className="mt-3 text-xs" style={{ color: "#C0574C" }}>{error}</p>
