@@ -1,6 +1,7 @@
 import { type PrismaClient } from "@prisma/client";
 import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
+import type { SpeciesId } from "@/lib/species/types";
 
 export interface LiveCampStatus {
   grazing_quality: GrazingQuality;
@@ -58,9 +59,19 @@ export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map
   return result;
 }
 
-export async function getRecentHealthObservations(prisma: PrismaClient, limit = 8): Promise<HealthObservation[]> {
+export async function getRecentHealthObservations(
+  prisma: PrismaClient,
+  limit = 8,
+  mode?: SpeciesId,
+): Promise<HealthObservation[]> {
   const rows = await prisma.observation.findMany({
-    where: { type: "health_issue" },
+    where: {
+      type: "health_issue",
+      // Per-species when `mode` is provided (admin dashboard #225); cross-species
+      // when omitted (any legacy caller). The denormalised `species` column
+      // (migration 0003) is the canonical scoping axis for observations.
+      ...(mode ? { species: mode } : {}),
+    },
     orderBy: { observedAt: "desc" },
     take: limit,
   });
@@ -82,9 +93,17 @@ export async function getRecentHealthObservations(prisma: PrismaClient, limit = 
   });
 }
 
-export async function countHealthIssuesSince(prisma: PrismaClient, since: Date): Promise<number> {
+export async function countHealthIssuesSince(
+  prisma: PrismaClient,
+  since: Date,
+  mode?: SpeciesId,
+): Promise<number> {
   return prisma.observation.count({
-    where: { type: "health_issue", observedAt: { gte: since } },
+    where: {
+      type: "health_issue",
+      observedAt: { gte: since },
+      ...(mode ? { species: mode } : {}),
+    },
   });
 }
 
@@ -134,7 +153,10 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
   return count;
 }
 
-export async function countInspectedToday(prisma: PrismaClient): Promise<number> {
+export async function countInspectedToday(
+  prisma: PrismaClient,
+  mode?: SpeciesId,
+): Promise<number> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -142,6 +164,12 @@ export async function countInspectedToday(prisma: PrismaClient): Promise<number>
     where: {
       type: { in: ["camp_condition", "camp_check"] },
       observedAt: { gte: todayStart },
+      // Camp-condition observations log against a campId AND now carry a
+      // denormalised species (migration 0003). On a per-mode dashboard,
+      // only count inspections logged for the active species. When `mode`
+      // is omitted, fall back to cross-species (legacy callers / farm-wide
+      // metric).
+      ...(mode ? { species: mode } : {}),
     },
     select: { campId: true },
   });

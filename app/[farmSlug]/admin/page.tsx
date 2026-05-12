@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmSettings } from "@/lib/server/cached";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import type { FarmTier } from "@/lib/tier";
@@ -74,10 +75,17 @@ export default async function AdminPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
-  const [prisma, creds, farmSettings] = await Promise.all([
+  // Issue #225: read the persisted FarmMode cookie and thread `mode` into
+  // every cached helper behind the dashboard so the headline numbers
+  // (active animal count, repro stats, health issues, inspected today,
+  // recent incidents, alerts) reflect the active species, not the whole
+  // farm. Falls back to "cattle" when no cookie is present (see
+  // getFarmMode), preserving Basson regression behaviour.
+  const [prisma, creds, farmSettings, mode] = await Promise.all([
     getPrismaForFarm(farmSlug),
     getFarmCreds(farmSlug),
     getCachedFarmSettings(farmSlug),
+    getFarmMode(farmSlug),
   ]);
   const tier = (creds?.tier ?? "advanced") as FarmTier;
   if (!prisma) {
@@ -117,7 +125,7 @@ export default async function AdminPage({
           </>
         }
       >
-        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} />
+        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} mode={mode} />
       </Suspense>
     </div>
   );

@@ -117,6 +117,7 @@ export async function getDashboardAlerts(
   farmSlug: string,
   thresholds: AlertThresholds,
   preFetched: PreFetchedAlertData = {},
+  mode?: SpeciesId,
 ): Promise<DashboardAlerts> {
   const {
     staleCampInspectionHours,
@@ -128,7 +129,16 @@ export async function getDashboardAlerts(
   // Resolve which species modules to query for this farm (issue #203). We do
   // this first so the species-alert fan-out only hits enabled modules — sheep
   // alerts must not leak onto cattle-only farms.
-  const enabledModules = await getEnabledSpeciesModules(prisma);
+  //
+  // Issue #225: when the caller passes `mode` (i.e. the admin dashboard home
+  // reading the FarmMode cookie), narrow further to the active species so the
+  // alert panel only reflects that mode's herd. Farm-wide alerts (rotation,
+  // veld, feed-on-offer, drought, stale inspections) are not species-scoped
+  // and continue to fire regardless of mode.
+  const allEnabled = await getEnabledSpeciesModules(prisma);
+  const enabledModules = mode
+    ? allEnabled.filter((m) => m.config.id === mode)
+    : allEnabled;
 
   // ── Parallel: species module alerts + farm-wide data ─────────────────────
   const [allSpeciesAlerts, withdrawalAnimals, campConditions, totalCamps, rotationPayload, veldSummary, feedOnOfferPayload, farmSettings] =
