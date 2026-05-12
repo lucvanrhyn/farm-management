@@ -180,9 +180,18 @@ export async function runPrebuild(deps?: PrebuildDeps): Promise<number> {
       log(`vercel-prebuild: turso CLI installed at ${installedAt}`);
     }
 
+    // Issue #220: Turso orgs with >1 DB group require `--group <name>` on
+    // `turso db create --from-db`. Thread BRANCH_CLONE_GROUP through;
+    // unset = single-group org, no flag emitted.
+    const groupName = env.BRANCH_CLONE_GROUP;
+
     let result;
     try {
-      result = await resolvedClone({ branchName, sourceDbName });
+      result = await resolvedClone({
+        branchName,
+        sourceDbName,
+        ...(groupName ? { groupName } : {}),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log(`vercel-prebuild ERROR: clone failed — ${message}`);
