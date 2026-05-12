@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Wave 3 (#227 / #228 / #229): Animals and Camps lit up alongside the
+// existing Reproduction tab so the sheep namespace mirrors the cattle
+// admin UX. Order matters — Animals first (catalogue is the canonical
+// landing per ADR-0003), then Camps, then the species-specific tabs.
 const TABS = [
+  { label: "Animals",      href: "/sheep/animals" },
+  { label: "Camps",        href: "/sheep/camps" },
   { label: "Reproduction", href: "/sheep/reproduction" },
   { label: "Health",       href: "/sheep/health",       disabled: true },
   { label: "Wool",         href: "/sheep/wool",         disabled: true },
