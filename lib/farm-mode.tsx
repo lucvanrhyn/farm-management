@@ -26,6 +26,14 @@ interface FarmModeContextValue {
   readonly enabledModes: readonly FarmMode[];
   /** Whether the farm has more than one species enabled */
   readonly isMultiMode: boolean;
+  /**
+   * Issue #235 — whether the tenant currently has 2+ distinct species
+   * present in its `Animal` table (Active rows). Sourced from
+   * `getCachedHasMultipleActiveSpecies` in the [farmSlug]/layout
+   * server component. `false` drives the "+ Add species" upsell pill
+   * in `ModeSwitcher` on cattle-only tenants.
+   */
+  readonly hasMultipleSpecies: boolean;
 }
 
 const FarmModeContext = createContext<FarmModeContextValue | null>(null);
@@ -68,12 +76,21 @@ interface FarmModeProviderProps {
   readonly farmSlug: string;
   /** Enabled species from server (FarmSpeciesSettings). Cattle is always included. */
   readonly enabledSpecies: readonly string[];
+  /**
+   * Issue #235 — server-fetched signal: does the tenant have 2+
+   * distinct species in its `Animal` table? Drives the
+   * "+ Add species" upsell pill on the ModeSwitcher. Defaults to
+   * `true` so existing tests + callsites that don't pass the prop
+   * preserve their pre-#235 behaviour (no upsell pill).
+   */
+  readonly hasMultipleSpecies?: boolean;
   readonly children: ReactNode;
 }
 
 export function FarmModeProvider({
   farmSlug,
   enabledSpecies,
+  hasMultipleSpecies = true,
   children,
 }: FarmModeProviderProps) {
   // Memoize to avoid re-creating on every render
@@ -143,6 +160,7 @@ export function FarmModeProvider({
     setMode,
     enabledModes,
     isMultiMode: enabledModes.length > 1,
+    hasMultipleSpecies,
   };
 
   return (
@@ -174,6 +192,9 @@ export function useFarmModeSafe(): FarmModeContextValue {
       setMode: () => {},
       enabledModes: ["cattle"],
       isMultiMode: false,
+      // Default to `true` so callers outside the provider don't get the
+      // upsell pill — they're typically in test/storybook contexts.
+      hasMultipleSpecies: true,
     };
   }
   return ctx;

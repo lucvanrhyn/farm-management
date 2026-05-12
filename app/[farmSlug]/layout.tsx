@@ -1,5 +1,8 @@
 import { FarmModeProvider } from "@/lib/farm-mode";
-import { getCachedFarmSpeciesSettings } from "@/lib/server/cached";
+import {
+  getCachedFarmSpeciesSettings,
+  getCachedHasMultipleActiveSpecies,
+} from "@/lib/server/cached";
 import AppShell from "@/components/AppShell";
 import { OfflineProvider } from "@/components/logger/OfflineProvider";
 
@@ -20,6 +23,14 @@ export default async function FarmSlugLayout({
     // Fail-open: default to cattle-only if species settings unavailable
   }
 
+  // Issue #235 — server-fetched signal for the "+ Add species" upsell
+  // pill in `ModeSwitcher`. Cached 5 min, tagged on `animals` so any
+  // animal mutation revalidates. The helper fails closed (returns
+  // false → upsell visible) on Prisma/Turso outage, which is the
+  // correct degradation for a cosmetic header pill.
+  const hasMultipleSpecies =
+    await getCachedHasMultipleActiveSpecies(farmSlug);
+
   // AppShell wraps in SessionProvider + SWRegistrar + ReportWebVitals.
   // Added as part of the P5 perf work: the root layout no longer ships
   // the authenticated shell to unauthenticated routes. All farmSlug
@@ -37,7 +48,11 @@ export default async function FarmSlugLayout({
   // otherwise occur if both layouts mounted their own.
   return (
     <AppShell>
-      <FarmModeProvider farmSlug={farmSlug} enabledSpecies={enabledSpecies}>
+      <FarmModeProvider
+        farmSlug={farmSlug}
+        enabledSpecies={enabledSpecies}
+        hasMultipleSpecies={hasMultipleSpecies}
+      >
         <OfflineProvider>{children}</OfflineProvider>
       </FarmModeProvider>
     </AppShell>

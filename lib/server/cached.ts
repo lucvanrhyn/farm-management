@@ -10,6 +10,7 @@
 import { unstable_cache } from "next/cache";
 import { withFarmPrisma } from "@/lib/farm-prisma";
 import { farmTag, notificationTag } from "@/lib/server/cache-tags";
+import { hasMultipleActiveSpecies } from "@/lib/server/has-multiple-species";
 import { getLatestCampConditions, type LiveCampStatus } from "@/lib/server/camp-status";
 import { getOverviewForUserFarms, type FarmOverview } from "@/lib/server/multi-farm-overview";
 import type { SessionFarm } from "@/types/next-auth";
@@ -394,6 +395,25 @@ export async function getCachedFarmSummary(
         farmTag(farmSlug, "camps"),
       ],
     },
+  );
+  return fetcher(farmSlug);
+}
+
+// ── Cached: Has Multiple Active Species (5 min) ──────────────────────────────
+// Issue #235 — drives the ModeSwitcher "+ Add species" upsell pill.
+// Mirrors the 300s revalidate of FarmSpeciesSettings since the underlying
+// signal (animal-row species distribution) changes at human pace and the
+// upsell-pill cost of staleness is cosmetic.
+// Tagged on `animals` so any animal create/update/delete on the tenant
+// invalidates the cached boolean alongside per-species counts.
+
+export async function getCachedHasMultipleActiveSpecies(
+  farmSlug: string,
+): Promise<boolean> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<boolean> => hasMultipleActiveSpecies(slug),
+    ["has-multiple-active-species"],
+    { revalidate: 300, tags: [farmTag(farmSlug, "animals")] },
   );
   return fetcher(farmSlug);
 }
