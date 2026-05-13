@@ -1,0 +1,13 @@
+{
+  "allowlist": [
+    "app/[farmSlug]/admin/animals/[id]/page.tsx::raw::findMany::0",
+    "app/api/animals/route.ts::raw::findMany::0",
+    "app/api/animals/route.ts::raw::findMany::1",
+    "lib/onboarding/commit-import.ts::raw::findMany::0",
+    "lib/server/export/weight-history.ts::raw::findMany::0",
+    "lib/server/financial-analytics.ts::raw::findMany::2",
+    "lib/server/inngest/einstein.ts::raw::findMany::0",
+    "lib/server/inngest/einstein.ts::raw::findMany::1",
+    "lib/server/inventory-replay.ts::raw::findMany::0"
+  ]
+}

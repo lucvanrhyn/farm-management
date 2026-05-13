@@ -10,6 +10,7 @@ import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { searchAnimals, countAnimalsByStatus } from "@/lib/server/animal-search";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -59,11 +60,21 @@ export default async function AdminAnimalsPage({
   // Wave 224: per-species reads routed through `scoped(prisma, mode)` so
   // the species axis is injected by construction (PRD #222). The facade
   // injects { species: mode, status: "Active" } on animal.findMany and
-  // { species: mode } on animal.count — both predicates match what this
-  // page used pre-#224 via `activeSpeciesWhere(mode)`.
+  // { species: mode } on animal.count.
+  //
+  // Issue #255 (Wave 4 / PRD #250): the catalogue / tag search MUST surface
+  // deceased animals (SARS para-13A + IT3 require ≥5y traceability of
+  // mortality records). `scoped(prisma).animal.findMany` injects
+  // status: "Active" by default, silently excluding deceased rows — that
+  // was the BB-C013-after-death bug. The catalogue listing now routes
+  // through `searchAnimals(..., { includeDeceased: true })` which omits
+  // the status filter; per-species camp/mob reads stay on the facade
+  // because they have no lifecycle-axis ambiguity.
   const speciesPrisma = scoped(prisma, mode);
-  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, speciesTotal, crossSpeciesTotal] = await Promise.all([
-    speciesPrisma.animal.findMany({
+  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, statusCounts, crossSpeciesTotal] = await Promise.all([
+    searchAnimals(prisma, {
+      mode,
+      includeDeceased: true,
       orderBy: cursor
         ? { animalId: "asc" }
         : [{ category: "asc" }, { animalId: "asc" }],
@@ -77,12 +88,14 @@ export default async function AdminAnimalsPage({
     getAnimalsInWithdrawal(prisma),
     // audit-allow-findmany: mob list is per-tenant and bounded (≤20 typical); needed for table column map.
     speciesPrisma.mob.findMany({ orderBy: { name: "asc" } }),
-    speciesPrisma.animal.count({ where: { status: ACTIVE_STATUS } }),
+    countAnimalsByStatus(prisma, mode),
     // cross-species by design: drives the reconciliation total in the header
     // on multi-species tenants. Matches `getCachedFarmSummary` (lib/server/cached.ts).
     // audit-allow-species-where: dashboard reconciliation total spans species
     prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
+  const speciesTotal = statusCounts.active;
+  const deceasedTotal = statusCounts.deceased;
 
   const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
 
@@ -129,6 +142,7 @@ export default async function AdminAnimalsPage({
         initialNextCursor={nextCursor}
         species={mode}
         speciesTotal={speciesTotal}
+        deceasedTotal={deceasedTotal}
         crossSpeciesActiveTotal={crossSpeciesTotal}
       />
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
