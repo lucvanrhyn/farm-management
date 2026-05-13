@@ -35,6 +35,11 @@ vi.mock("@/components/ui/ModeSwitcher", () => ({
 // Directly control the farm-mode hook so tests can pin any mode independently
 // of the FarmModeProvider's enabled-mode expansion rules.
 let mockMode: "cattle" | "sheep" | "game" = "cattle";
+let mockEnabledModes: readonly ("cattle" | "sheep" | "game")[] = [
+  "cattle",
+  "sheep",
+  "game",
+];
 vi.mock("@/lib/farm-mode", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/farm-mode")>();
   return {
@@ -42,8 +47,9 @@ vi.mock("@/lib/farm-mode", async (importOriginal) => {
     useFarmModeSafe: () => ({
       mode: mockMode,
       setMode: () => {},
-      enabledModes: ["cattle", "sheep", "game"] as const,
-      isMultiMode: true,
+      enabledModes: mockEnabledModes,
+      isMultiMode: mockEnabledModes.length > 1,
+      hasMultipleSpecies: mockEnabledModes.length > 1,
     }),
   };
 });
@@ -59,13 +65,19 @@ function renderNav({
   pathname,
   enabledSpecies,
   mode = "cattle",
+  enabledModes,
 }: {
   pathname: string;
   enabledSpecies?: string[];
   mode?: FarmMode;
+  /** Override the FarmModeProvider's enabledModes (drives single-vs-multi
+   * species chrome). Defaults to all three so legacy tests keep their
+   * pre-#263 multi-species posture. */
+  enabledModes?: readonly FarmMode[];
 }) {
   mockPathname = pathname;
   mockMode = mode;
+  mockEnabledModes = enabledModes ?? ["cattle", "sheep", "game"];
   return render(<AdminNav tier="advanced" enabledSpecies={enabledSpecies} />);
 }
 
@@ -257,6 +269,46 @@ describe("AdminNav", () => {
       // we keep it open to preserve orientation.
       breedingHeader.click();
       expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
+
+  // ─── #263: Species settings nav link visibility ──────────────────────────
+  //
+  // The "Species" link points at /admin/settings/species which only does
+  // anything useful for tenants that actually have multiple species
+  // configured (Trio B). For single-species tenants (Basson) it surfaces
+  // the disabled "Add species" CTA that the user explicitly asked to
+  // remove. After #263 the nav link itself is hidden when the tenant has
+  // exactly one enabled species.
+  describe("#263 — Species settings link visibility", () => {
+    it("renders the Species nav link on a multi-species tenant (Trio B: cattle + sheep)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "cattle",
+        enabledModes: ["cattle", "sheep"],
+        enabledSpecies: ["cattle", "sheep"],
+      });
+      expect(getLink("Species")).not.toBeNull();
+    });
+
+    it("does NOT render the Species nav link on a single-species tenant (Basson: cattle-only)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "cattle",
+        enabledModes: ["cattle"],
+        enabledSpecies: ["cattle"],
+      });
+      expect(getLink("Species")).toBeNull();
+    });
+
+    it("does NOT render the Species nav link on a sheep-only tenant (defence in depth)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "sheep",
+        enabledModes: ["sheep"],
+        enabledSpecies: ["sheep"],
+      });
+      expect(getLink("Species")).toBeNull();
     });
   });
 });
