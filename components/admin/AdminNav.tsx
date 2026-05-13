@@ -412,7 +412,7 @@ export default function AdminNav({
   const farmSlug = pathname.split("/")[1];
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { mode, isMultiMode } = useFarmModeSafe();
+  const { mode, isMultiMode, enabledModes } = useFarmModeSafe();
 
   useEffect(() => {
     return () => {
@@ -426,6 +426,14 @@ export default function AdminNav({
   // If enabledSpecies is undefined (defensive fallback), show everything.
   const rawNavItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
   const navItems = rawNavItems.filter((item) => {
+    // #263: hide /admin/settings/species on single-species tenants —
+    // there's nothing meaningful to configure when only Cattle is
+    // enabled (the toggle for non-cattle species is the page's only
+    // job). Multi-species tenants (Trio B) keep the link so they can
+    // disable a species after enabling it.
+    if (item.path === "/admin/settings/species" && enabledModes.length <= 1) {
+      return false;
+    }
     if (!item.species) return true; // cattle/shared items always render
     if (!enabledSpecies) return true; // defensive fallback
     return enabledSpecies.includes(item.species);
