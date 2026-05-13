@@ -27,6 +27,12 @@ export default defineConfig({
     // dashboard flip, cookie persistence, per-tenant isolation, and the sheep
     // namespace routes against regression. Self-skips when auth creds are unset.
     'multi-species-toggle.spec.ts',
+    // Issue #260 (2026-05-13): TenantRouteGuard for the global /sheep/* leak
+    // paths (animals, camps, observations). The unauthenticated row runs
+    // unconditionally; the authed rows self-skip without E2E_IDENTIFIER /
+    // E2E_PASSWORD. ADR-0003 motivates the asymmetric route shape this guard
+    // backstops.
+    'sheep-global-redirect.spec.ts',
   ],
   reporter: 'list',
   use: {

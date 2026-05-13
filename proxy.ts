@@ -42,6 +42,44 @@ export async function proxy(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+  // Issue #260 — TenantRouteGuard for the global /sheep/* leak paths.
+  //
+  // ADR-0003 (`docs/adr/0003-asymmetric-multi-species-routes.md`) anchors
+  // sheep at `/[farmSlug]/sheep/*` only — there is intentionally no top-level
+  // `/sheep/*` page tree. But humans (and emails, bookmarks, marketing copy)
+  // routinely drop the slug. Without this guard, `/sheep/animals`,
+  // `/sheep/camps`, and `/sheep/observations` fall through to
+  // `app/not-found.tsx` and the user sees a generic 404 — a worse experience
+  // than the equivalent legacy `/admin/*` URLs which already redirect.
+  //
+  // Disposition matrix (mirror of the routing-matrix in
+  // `__tests__/app/sheep-global-redirect.test.tsx`):
+  //   • Unauthenticated      → /login?next=/sheep/...     (handled below by
+  //     the standard isProtectedPath() branch — the leak paths are added to
+  //     `isProtectedPath()` so they take this branch instead of falling
+  //     through to /not-found).
+  //   • Multi-tenant (≥ 2)   → /farms?toast=pick-a-farm
+  //   • Single-tenant        → /{slug}/sheep/...           (preserves search)
+  //
+  // Why the guard runs before the unauthenticated short-circuit below: when
+  // the user IS authenticated we want the multi/single-tenant branch to
+  // resolve based on `token.farms`, not be intercepted by tenant-isolation
+  // logic further down (which would mis-fire on the bare /sheep/* form).
+  if (token && Array.isArray(token.farms) && isSheepLeakPath(pathname)) {
+    const farms = token.farms as Array<{ slug: string }>;
+    if (farms.length === 1) {
+      const target = new URL(`/${farms[0].slug}${pathname}`, req.url);
+      target.search = req.nextUrl.search;
+      return NextResponse.redirect(target);
+    }
+    // Zero tenants is a corner case (newly-registered, no farm yet) — treat
+    // identically to multi-tenant: send to /farms so the user can create one.
+    const target = new URL("/farms", req.url);
+    target.searchParams.set("toast", "pick-a-farm");
+    return NextResponse.redirect(target);
+  }
+
   if (!token || !Array.isArray(token.farms)) {
     // Phase C bug C2: previously every unauthenticated request was 307'd to
     // /login regardless of whether the path resolved to a real route. SEO
@@ -146,6 +184,28 @@ export async function proxy(req: NextRequest) {
 const TENANT_ROUTE_RE =
   /^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)(\/|$)/;
 
+/**
+ * Issue #260 — the three top-level `/sheep/*` paths that humans accidentally
+ * land on without a tenant slug. ADR-0003 documents the asymmetric route
+ * shape: sheep lives at `/[farmSlug]/sheep/*` only, never at the bare global
+ * form. These three paths are the ones with confirmed user-visible 404s
+ * (admin/animals, /admin/camps, /admin/observations have always been
+ * tenant-scoped, so the same dropped-slug typo on cattle simply 404s through
+ * a different code path — out of scope for this wave).
+ *
+ * Kept as a literal Set rather than a regex so the test suite can iterate
+ * the exact list and so additions are explicit, not implicit.
+ */
+const SHEEP_LEAK_PATHS = new Set([
+  "/sheep/animals",
+  "/sheep/camps",
+  "/sheep/observations",
+]);
+
+export function isSheepLeakPath(pathname: string): boolean {
+  return SHEEP_LEAK_PATHS.has(pathname);
+}
+
 export function isProtectedPath(pathname: string): boolean {
   // Root: previously redirected unauth users to /login. Preserve that
   // behaviour — `/` is a known route, not the unknown-route case bug C2 is
@@ -163,6 +223,12 @@ export function isProtectedPath(pathname: string): boolean {
 
   // Tenant-scoped pages.
   if (TENANT_ROUTE_RE.test(pathname)) return true;
+
+  // Issue #260 — the global /sheep/* leak paths must redirect to /login when
+  // unauthenticated (preserving `?next=`) so the user lands back on the
+  // bare /sheep/animals after sign-in, where the authenticated branch in
+  // proxy() above will then bounce them to /farms or /{slug}/sheep/animals.
+  if (isSheepLeakPath(pathname)) return true;
 
   return false;
 }
