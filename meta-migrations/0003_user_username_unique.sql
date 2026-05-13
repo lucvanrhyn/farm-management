@@ -1,0 +1,25 @@
+-- Meta-DB migration 0003: enforce uniqueness on `users.username`.
+--
+-- Wave 6b (#261): sign-in is username-only (see tasks/auth-and-users.md).
+-- The `findUserByIdentifier` lookup returns AMBIGUOUS if >1 row matches a
+-- username; the DB constraint added here makes that physically impossible
+-- for new writes — defence-in-depth is in app code (see lib/meta-db.ts),
+-- but the storage layer is the truth.
+--
+-- The original `scripts/seed-meta-db.ts` already declares
+-- `username TEXT UNIQUE NOT NULL` on the freshly-created table, so any
+-- meta-DB seeded after that script's first run already has the column-
+-- level UNIQUE. This migration fills the gap for any meta-DB that was
+-- provisioned before the seed script gained the UNIQUE keyword.
+--
+-- Implementation note: SQLite cannot ALTER a column to add UNIQUE in
+-- place. The portable, idempotent pattern is to add a CREATE UNIQUE INDEX
+-- with `IF NOT EXISTS`. The index has the same uniqueness semantics as a
+-- column-level constraint and is honoured by INSERT / UPDATE.
+--
+-- If a duplicate already exists in the meta-DB at migration time, this
+-- statement will fail and the migration runner aborts — that's the
+-- correct outcome (a duplicate means an operator must reconcile the rows
+-- before sign-in works for either user).
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(username);

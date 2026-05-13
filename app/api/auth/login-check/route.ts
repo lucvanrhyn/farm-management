@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { compareSync } from 'bcryptjs';
-import { getUserByIdentifier, isEmailVerified } from '@/lib/meta-db';
+import {
+  AUTH_LOOKUP_ERROR,
+  findUserByIdentifier,
+  isEmailVerified,
+} from '@/lib/meta-db';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { AUTH_ERROR_CODES, type AuthErrorCode } from '@/lib/auth-errors';
 import { logger } from '@/lib/logger';
@@ -67,9 +71,13 @@ export const POST = publicHandler({
 
     // Meta-db lookup. A real DB error is a true server fault → 500. Wrong
     // password / missing user is normal user input → 200 + typed reason.
-    let user: Awaited<ReturnType<typeof getUserByIdentifier>>;
+    //
+    // Wave 6b (#261): username-only via `findUserByIdentifier`. Ambiguous
+    // (>1 row) is treated as a server misconfig — see meta-migration 0003
+    // and the docblock on `findUserByIdentifier`.
+    let lookup: Awaited<ReturnType<typeof findUserByIdentifier>>;
     try {
-      user = await getUserByIdentifier(identifier);
+      lookup = await findUserByIdentifier(identifier);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? (err.stack ?? '') : '';
@@ -87,10 +95,21 @@ export const POST = publicHandler({
       );
     }
 
-    if (!user) {
+    if (!lookup.ok) {
+      if (lookup.code === AUTH_LOOKUP_ERROR.AMBIGUOUS) {
+        logger.error(
+          '[login-check] ambiguous username — duplicate row in meta-DB users',
+          { identifier },
+        );
+        return payload(
+          { ok: false, reason: AUTH_ERROR_CODES.SERVER_MISCONFIGURED },
+          500,
+        );
+      }
       // Generic — avoids account enumeration.
       return payload({ ok: false, reason: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
     }
+    const user = lookup.user;
 
     const valid = compareSync(password, user.passwordHash);
     if (!valid) {

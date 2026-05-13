@@ -96,7 +96,7 @@ export default function RootLayout({
 }>) {
   return (
     // Visual audit P1 (2026-05-04): every rendered string in the UI is
-    // English ("Sign In", "Create Your Account", "Email or Username",
+    // English ("Sign In", "Create Your Account", "Username",
     // …). Declaring `lang="af-ZA"` made screen readers pronounce English
     // copy with Afrikaans phonemes and broke search-engine signals.
     // `en-ZA` matches the rendered copy and still picks up SA-flavoured

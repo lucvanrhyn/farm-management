@@ -14,11 +14,20 @@ import type { NextRequest } from 'next/server';
 // ─── Mocks (declared before route import) ───────────────────────────────────
 vi.mock('bcryptjs', () => ({ compareSync: vi.fn() }));
 
-const getUserByIdentifierMock = vi.fn();
+// Wave 6b (#261): the route now calls `findUserByIdentifier` (typed
+// result), not the deprecated `getUserByIdentifier`. Mock the new
+// surface and re-export the lookup-error vocabulary so individual specs
+// can drive the AMBIGUOUS / NOT_FOUND branches.
+const findUserByIdentifierMock = vi.fn();
 const isEmailVerifiedMock = vi.fn();
+const AUTH_LOOKUP_ERROR_FIXTURE = {
+  NOT_FOUND: 'NOT_FOUND',
+  AMBIGUOUS: 'AMBIGUOUS',
+} as const;
 vi.mock('@/lib/meta-db', () => ({
-  getUserByIdentifier: (...args: unknown[]) => getUserByIdentifierMock(...args),
+  findUserByIdentifier: (...args: unknown[]) => findUserByIdentifierMock(...args),
   isEmailVerified: (...args: unknown[]) => isEmailVerifiedMock(...args),
+  AUTH_LOOKUP_ERROR: AUTH_LOOKUP_ERROR_FIXTURE,
 }));
 
 const checkRateLimitMock = vi.fn();
@@ -52,16 +61,23 @@ const STORED_USER = {
   name: 'Dicky',
 };
 
+// Helper for the typed `findUserByIdentifier` shape (Wave 6b / #261).
+const lookupHit = (user: typeof STORED_USER) => ({ ok: true as const, user });
+const lookupMiss = () =>
+  ({ ok: false as const, code: AUTH_LOOKUP_ERROR_FIXTURE.NOT_FOUND });
+const lookupAmbiguous = () =>
+  ({ ok: false as const, code: AUTH_LOOKUP_ERROR_FIXTURE.AMBIGUOUS });
+
 describe('POST /api/auth/login-check', () => {
   beforeEach(() => {
-    getUserByIdentifierMock.mockReset();
+    findUserByIdentifierMock.mockReset();
     isEmailVerifiedMock.mockReset();
     checkRateLimitMock.mockReset().mockReturnValue({ allowed: true });
     vi.mocked(compareSync).mockReset();
   });
 
   it('returns 200 + {ok:true} on valid credentials with verified email', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(true);
 
@@ -71,7 +87,9 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 200 + {ok:true} for users with no email (LOGGER role)', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce({ ...STORED_USER, email: null });
+    findUserByIdentifierMock.mockResolvedValueOnce(
+      lookupHit({ ...STORED_USER, email: null } as unknown as typeof STORED_USER),
+    );
     vi.mocked(compareSync).mockReturnValueOnce(true);
 
     const res = await POST(buildRequest(VALID), CTX);
@@ -87,7 +105,7 @@ describe('POST /api/auth/login-check', () => {
       ok: false,
       reason: AUTH_ERROR_CODES.INVALID_CREDENTIALS,
     });
-    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
+    expect(findUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
   it('returns 200 + {ok:false, reason:"missing_input"} when password missing', async () => {
@@ -100,7 +118,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 200 + {ok:false, reason:"invalid_credentials"} when user does not exist', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupMiss());
     const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -110,7 +128,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 200 + {ok:false, reason:"invalid_credentials"} on wrong password', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(false);
     const res = await POST(buildRequest(VALID), CTX);
     expect(res.status).toBe(200);
@@ -128,11 +146,11 @@ describe('POST /api/auth/login-check', () => {
       ok: false,
       reason: AUTH_ERROR_CODES.RATE_LIMITED,
     });
-    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
+    expect(findUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
   it('returns 200 + {ok:false, reason:"email_not_verified"} when email unverified', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(false);
     const res = await POST(buildRequest(VALID), CTX);
@@ -144,7 +162,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 500 when meta-db env vars are missing (server misconfig is a real server error)', async () => {
-    getUserByIdentifierMock.mockRejectedValueOnce(
+    findUserByIdentifierMock.mockRejectedValueOnce(
       new Error('META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.'),
     );
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -158,7 +176,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('returns 500 when DB driver throws a connection error', async () => {
-    getUserByIdentifierMock.mockRejectedValueOnce(
+    findUserByIdentifierMock.mockRejectedValueOnce(
       new Error('WebSocket connection failed: ECONNREFUSED'),
     );
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -167,6 +185,21 @@ describe('POST /api/auth/login-check', () => {
     expect(await res.json()).toEqual({
       ok: false,
       reason: AUTH_ERROR_CODES.DB_UNAVAILABLE,
+    });
+    spy.mockRestore();
+  });
+
+  it('returns 500 + server_misconfigured when findUserByIdentifier returns AMBIGUOUS', async () => {
+    // Wave 6b (#261) defence-in-depth: legacy meta-DB without the
+    // username unique constraint must not silently log-in the first
+    // matching row — surface to the operator instead.
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupAmbiguous());
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await POST(buildRequest(VALID), CTX);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      ok: false,
+      reason: AUTH_ERROR_CODES.SERVER_MISCONFIGURED,
     });
     spy.mockRestore();
   });
@@ -181,7 +214,7 @@ describe('POST /api/auth/login-check', () => {
   });
 
   it('keys the rate limiter on the identifier', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupMiss());
     await POST(buildRequest(VALID), CTX);
     const [key, max, windowMs] = checkRateLimitMock.mock.calls[0] as [string, number, number];
     expect(key).toBe(`login:${VALID.identifier}`);

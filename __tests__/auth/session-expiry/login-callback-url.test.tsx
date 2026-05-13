@@ -59,7 +59,7 @@ async function submitValidCreds() {
   });
   mocks.signIn.mockResolvedValue({ ok: true, error: null });
 
-  fireEvent.change(screen.getByLabelText(/email or username/i), {
+  fireEvent.change(screen.getByLabelText(/^username$/i), {
     target: { value: "user" },
   });
   fireEvent.change(screen.getByLabelText(/password/i), {

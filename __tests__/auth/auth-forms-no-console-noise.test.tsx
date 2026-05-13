@@ -73,8 +73,8 @@ describe("login bad-creds — emits zero console.error events", () => {
     const { default: LoginPage } = await import("@/app/(auth)/login/page");
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/email or username/i), {
-      target: { value: "wrong@user.com" },
+    fireEvent.change(screen.getByLabelText(/^username$/i), {
+      target: { value: "nobody" },
     });
     fireEvent.change(screen.getByLabelText(/password/i), {
       target: { value: "nope" },
@@ -85,7 +85,7 @@ describe("login bad-creds — emits zero console.error events", () => {
     // path completed before checking the spy.
     await waitFor(() =>
       expect(
-        screen.getByText(/incorrect email\/username or password/i),
+        screen.getByText(/wrong username or password/i),
       ).toBeInTheDocument(),
     );
 
