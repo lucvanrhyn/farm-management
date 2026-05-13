@@ -20,12 +20,27 @@ import {
   getCachedFarmSettingsForEpoch,
 } from '@/lib/offline-store';
 import { getCurrentSyncTruth } from '@/lib/sync/queue';
-import { refreshCachedData, syncAndRefresh } from '@/lib/sync-manager';
+import { refreshCachedData, syncAndRefresh, type SyncedItem } from '@/lib/sync-manager';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
 import { useFarmModeSafe } from '@/lib/farm-mode';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
+
+/**
+ * Issue #252 — per-item sync event surfaced to the UI for the reconnect
+ * toast cascade. Each successful sync of a queued row produces one
+ * `RecentlySyncedItem`; the LoggerStatusBar pops one toast per item with
+ * the `label` ("Health observation for BB-C014 synced") and de-dupes on
+ * `itemKey` so a flaky retry of the same row doesn't double-toast. The
+ * buffer is bounded; older items are evicted as new ones land.
+ */
+export interface RecentlySyncedItem extends SyncedItem {
+  /** Epoch ms; used both as a stable React key and to expire stale entries. */
+  syncedAt: number;
+}
+
+const RECENT_ITEM_BUFFER_MAX = 12;
 
 // Skip the on-mount /api/{camps,animals,farm,camps/status} fan-out when the
 // cached data was refreshed within the last minute. Covers the common pattern
@@ -74,6 +89,15 @@ interface OfflineContextType {
    */
   lastSyncedAt: string | null;
   syncResult: SyncResult | null;
+  /**
+   * Issue #252 — per-item events fired by the most recent successful sync
+   * cycle. The LoggerStatusBar consumes this and pops one toast per item
+   * (de-duped on `itemKey`). The buffer is bounded (`RECENT_ITEM_BUFFER_MAX`)
+   * so a long offline session that drains 200+ rows on reconnect doesn't grow
+   * unbounded React state. Consumers MUST treat the array as append-only and
+   * not mutate it.
+   */
+  recentlySyncedItems: RecentlySyncedItem[];
   camps: Camp[];
   campsLoaded: boolean;
   tasks: CachedTask[];
@@ -123,6 +147,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const [failedCount, setFailedCount] = useState(0);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [recentlySyncedItems, setRecentlySyncedItems] = useState<RecentlySyncedItem[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campsLoaded, setCampsLoaded] = useState(false);
   const [tasks, setTasks] = useState<CachedTask[]>([]);
@@ -216,7 +241,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const { synced, failed } = await syncAndRefresh({ species: mode });
+      const { synced, failed, syncedItems } = await syncAndRefresh({ species: mode });
       // Surface the toast whenever a sync cycle produced ANY visible outcome —
       // a success, a failure, or a partial mix. Previously we only toasted on
       // synced > 0, so a wave of 422s left users with a green tick and zero
@@ -225,6 +250,28 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         setSyncResult({ synced, failed, timestamp: Date.now() });
         if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current);
         syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 4000);
+      }
+      // Issue #252 — push per-item events into the bounded buffer so the
+      // status bar can pop one toast per row that landed. De-dupe on
+      // `itemKey` (a flaky retry of the same row must not double-toast)
+      // and cap at RECENT_ITEM_BUFFER_MAX to bound React state on big
+      // reconnect drains. Older items fall off the end.
+      //
+      // `syncedItems` is the new return field (issue #252); legacy mocks in
+      // unit tests omit it, so the `?? []` fallback keeps those green.
+      const fresh = syncedItems ?? [];
+      if (fresh.length > 0) {
+        setRecentlySyncedItems((prev) => {
+          const seen = new Set(prev.map((p) => p.itemKey));
+          const additions: RecentlySyncedItem[] = fresh
+            .filter((item) => !seen.has(item.itemKey))
+            .map((item) => ({ ...item, syncedAt: Date.now() }));
+          if (additions.length === 0) return prev;
+          const next = [...prev, ...additions];
+          return next.length > RECENT_ITEM_BUFFER_MAX
+            ? next.slice(next.length - RECENT_ITEM_BUFFER_MAX)
+            : next;
+        });
       }
       // Reload camps + hero image into context after refresh
       const updated = await getCachedCamps();
@@ -358,6 +405,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         failedCount,
         lastSyncedAt,
         syncResult,
+        recentlySyncedItems,
         camps,
         campsLoaded,
         tasks,
@@ -371,4 +419,33 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       {children}
     </OfflineContext.Provider>
   );
+}
+
+/**
+ * Issue #252 — narrow read-only view of the offline sync surface.
+ *
+ * Why a separate hook on top of `useOffline()`?
+ *   The status-bar UI (banner + badge + per-item toasts) needs four fields:
+ *   `isOnline`, `pendingCount`, `failedCount`, and `recentlySyncedItems`.
+ *   The full `useOffline()` context exposes 14 fields including a couple of
+ *   side-effecting actions (`syncNow`, `refreshData`). A narrower hook keeps
+ *   the badge / banner components honestly scoped and makes the dependency
+ *   surface for future SyncBadge/OfflineBanner refactors small.
+ *
+ *   Read-only by design: the components built on top of it (`<SyncBadge />`,
+ *   `<OfflineBanner />`) render state but do not mutate it. The mutator path
+ *   stays inside the parent `<LoggerStatusBar />` (the existing
+ *   FailedSyncDialog flow) so the badge/banner can be dropped into other
+ *   surfaces (admin shell, e.g.) without dragging action handlers along.
+ */
+export interface SyncQueueStatus {
+  isOnline: boolean;
+  pendingCount: number;
+  failedCount: number;
+  recentlySyncedItems: RecentlySyncedItem[];
+}
+
+export function useSyncQueueStatus(): SyncQueueStatus {
+  const { isOnline, pendingCount, failedCount, recentlySyncedItems } = useOffline();
+  return { isOnline, pendingCount, failedCount, recentlySyncedItems };
 }

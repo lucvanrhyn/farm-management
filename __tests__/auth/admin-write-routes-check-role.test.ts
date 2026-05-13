@@ -103,6 +103,11 @@ const READ_ONLY: ReadonlySet<string> = new Set([
   '[farmSlug]/tax/it3/[id]/route.ts::GET',
   '[farmSlug]/veld-assessments/route.ts::GET',
   '[farmSlug]/veld-score/summary/route.ts::GET',
+  // Issue #252 — read-only observability surface for the offline sync queue.
+  // Returns the user's recent observations (server-side mirror) so the
+  // logger can verify "did the server actually receive my obs?". Pure read,
+  // no admin action.
+  'sync/queue/status/route.ts::GET',
 ]);
 
 /**

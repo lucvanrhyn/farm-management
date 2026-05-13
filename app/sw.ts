@@ -100,6 +100,16 @@ const serwist = new Serwist({
     // The app-layer IndexedDB queue handles offline observation logging;
     // the SW must never try to cache or serve API responses.
     //
+    // Issue #252 — pinned contract: this matcher uses NetworkOnly, which
+    // calls `event.respondWith(fetch(request))`. When the network is down
+    // the inner fetch rejects and the page-side caller (sync-manager) sees
+    // a normal network error. The SW DOES NOT swallow, intercept, mutate,
+    // or discard logger POSTs (`/api/observations`, `/api/animals`,
+    // `/api/sync/*`, etc.) — they reach the network 1:1 when online and
+    // surface as a thrown fetch when offline. The 2026-05-13 BB-C014
+    // silent-drop incident was a UI gap (no signal that the obs was
+    // queued), NOT a SW interception bug. See PRD #250 wave 2.
+    //
     // Telemetry endpoints (`/api/telemetry/*`) are deliberately excluded
     // from this matcher (production triage P2.2, wave/182). They are
     // posted via `navigator.sendBeacon` / `fetch({ keepalive: true })`
