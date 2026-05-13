@@ -81,7 +81,7 @@ describe('auditSource — animal lifecycle predicate enforcement', () => {
     // The raw-prisma path through the species facade is also covered —
     // a developer who bypasses `scoped(...)` for the species axis but
     // forgets the status axis is still in the bug class.
-    // audit-allow-findmany: template-literal test fixture for the deceased-flag audit; not a real Prisma call.
+    // audit-allow-findmany-no-select: template-literal test fixture for the deceased-flag audit; not a real Prisma call. (The longer `-no-select` pragma also satisfies the row-bound `audit-findmany-no-take` audit because its regex matches `audit-allow-findmany\b` and the `-` after `findmany` is a word boundary — see species-scoped-prisma.ts for the same trick.)
     const source = `await prisma.animal.findMany({ where: { species: mode, currentCamp: "X" } });`;
     expect(auditSource('raw.ts', source)).toHaveLength(1);
   });
