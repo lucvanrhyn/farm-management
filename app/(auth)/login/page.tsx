@@ -33,9 +33,13 @@ import { getSafeNext } from "@/lib/auth-redirect";
  * Anything unrecognised falls through to the generic credentials message so
  * we never leak server internals to the UI.
  */
+// Wave 6b (#261): copy is username-only — no email/username slash. The
+// network-failure case is handled separately in handleSubmit (see
+// NETWORK_ERROR_COPY) so users get a distinct "couldn't reach server"
+// toast instead of a generic "wrong password" blame.
 const AUTH_ERROR_COPY: Record<string, string> = {
   [AUTH_ERROR_CODES.INVALID_CREDENTIALS]:
-    "Incorrect email/username or password. Try again.",
+    "Wrong username or password — try again.",
   [AUTH_ERROR_CODES.EMAIL_NOT_VERIFIED]:
     "Your email isn't verified yet. Check your inbox (and spam) for the verification link we sent when you registered.",
   [AUTH_ERROR_CODES.RATE_LIMITED]:
@@ -45,6 +49,9 @@ const AUTH_ERROR_COPY: Record<string, string> = {
   [AUTH_ERROR_CODES.DB_UNAVAILABLE]:
     "We can't reach the login database right now. Try again in a minute — your password is probably fine.",
 };
+
+const NETWORK_ERROR_COPY =
+  "Couldn't reach the server — check your connection.";
 
 // Visual audit P1 (2026-05-04): split into Suspense-wrapped shell + the
 // actual form so `useSearchParams()` in `LoginForm` does not opt the
@@ -129,7 +136,10 @@ function LoginForm() {
         setError(AUTH_ERROR_COPY[AUTH_ERROR_CODES.INVALID_CREDENTIALS]);
       }
     } catch {
-      setError("Network error. Check your connection.");
+      // Distinct from the credential-error toast — the user reaching
+      // this branch means fetch() threw (DNS, offline, CORS) before the
+      // server ever responded. Acceptance criterion #6 (issue #261).
+      setError(NETWORK_ERROR_COPY);
     } finally {
       setLoading(false);
     }
@@ -232,10 +242,11 @@ function LoginForm() {
           action="/api/auth/callback/credentials"
           className="flex flex-col gap-4"
         >
-          {/* Identifier */}
+          {/* Username — Wave 6b (#261) renamed from "Email or Username".
+              Sign-in identifier is username only; see tasks/auth-and-users.md. */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="identifier" style={labelStyle}>
-              Email or Username
+              Username
             </label>
             <input
               id="identifier"
@@ -244,7 +255,7 @@ function LoginForm() {
               required
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="email or username"
+              placeholder="username"
               style={inputStyle}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "rgba(196,144,48,0.55)";

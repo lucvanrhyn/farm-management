@@ -73,7 +73,7 @@ describe("login page", () => {
     const LoginPage = await loadLoginPage();
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/email or username/i), {
+    fireEvent.change(screen.getByLabelText(/^username$/i), {
       target: { value: "dicky" },
     });
     fireEvent.change(screen.getByLabelText(/password/i), {
@@ -97,6 +97,32 @@ describe("login page", () => {
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith("/farms"));
   });
 
+  it("shows a distinct network-error toast when fetch() throws", async () => {
+    // Wave 6b (#261) acceptance #6: a network failure (fetch rejection)
+    // must surface "Couldn't reach the server — check your connection",
+    // NOT the generic credential error. Without this branch the user is
+    // wrongly told to check their password while their wifi is down.
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    const LoginPage = await loadLoginPage();
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/^username$/i), {
+      target: { value: "dicky" },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: "correct-horse" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/couldn't reach the server/i),
+      ).toBeInTheDocument();
+    });
+    expect(signInMock).not.toHaveBeenCalled();
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
   it("shows an error and does not call signIn on invalid credentials", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -106,7 +132,7 @@ describe("login page", () => {
     const LoginPage = await loadLoginPage();
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/email or username/i), {
+    fireEvent.change(screen.getByLabelText(/^username$/i), {
       target: { value: "wrong@user.com" },
     });
     fireEvent.change(screen.getByLabelText(/password/i), {
@@ -116,7 +142,7 @@ describe("login page", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/incorrect email\/username or password/i),
+        screen.getByText(/wrong username or password/i),
       ).toBeInTheDocument();
     });
     expect(signInMock).not.toHaveBeenCalled();

@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Keep the authorize() path importable without hitting real modules.
 vi.mock('@/lib/meta-db', () => ({
-  getUserByIdentifier: vi.fn(),
+  // Wave 6b (#261): authorize() uses `findUserByIdentifier` (typed
+  // result). This test only inspects `authOptions.session.maxAge`, so
+  // the mock returns are never used — the symbol just has to exist.
+  findUserByIdentifier: vi.fn(),
+  AUTH_LOOKUP_ERROR: { NOT_FOUND: 'NOT_FOUND', AMBIGUOUS: 'AMBIGUOUS' } as const,
   isEmailVerified: vi.fn(),
   getFarmsForUser: vi.fn(),
 }));

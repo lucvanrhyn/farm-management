@@ -5,7 +5,7 @@
  *
  * Visual audit P1 (2026-05-04): `app/layout.tsx` declares
  * `<html lang="af-ZA">` while every rendered string in the UI is in
- * English ("Sign In", "Create Your Account", "Email or Username", …).
+ * English ("Sign In", "Create Your Account", "Username", …).
  * Screen readers pronounce the English text with Afrikaans phonemes,
  * search-engine signals are wrong, and the skip-to-content link reads
  * "Spring na inhoud" — confusing every keyboard / screen-reader user

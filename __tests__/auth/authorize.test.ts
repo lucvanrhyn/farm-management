@@ -4,15 +4,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('bcryptjs', () => ({ compareSync: vi.fn() }));
 
 // ─── Mock meta-db ────────────────────────────────────────────────────────────
-// The production authorize() calls getUserByIdentifier / isEmailVerified /
-// getFarmsForUser — stub them so each test can drive a specific code path.
-const getUserByIdentifierMock = vi.fn();
+// Wave 6b (#261): authorize() now calls `findUserByIdentifier` (typed
+// result), not the deprecated `getUserByIdentifier`. Tests mock the new
+// surface and re-export the lookup-error vocabulary so individual specs
+// can drive the AMBIGUOUS / NOT_FOUND branches.
+const findUserByIdentifierMock = vi.fn();
 const isEmailVerifiedMock = vi.fn();
 const getFarmsForUserMock = vi.fn();
+const AUTH_LOOKUP_ERROR_FIXTURE = {
+  NOT_FOUND: 'NOT_FOUND',
+  AMBIGUOUS: 'AMBIGUOUS',
+} as const;
 vi.mock('@/lib/meta-db', () => ({
-  getUserByIdentifier: (...args: unknown[]) => getUserByIdentifierMock(...args),
+  findUserByIdentifier: (...args: unknown[]) => findUserByIdentifierMock(...args),
   isEmailVerified: (...args: unknown[]) => isEmailVerifiedMock(...args),
   getFarmsForUser: (...args: unknown[]) => getFarmsForUserMock(...args),
+  AUTH_LOOKUP_ERROR: AUTH_LOOKUP_ERROR_FIXTURE,
 }));
 
 // ─── Mock rate-limit ─────────────────────────────────────────────────────────
@@ -34,8 +41,11 @@ const authorize = (authOptions.providers[0] as any).options.authorize as (
 const allow = { allowed: true as const };
 const deny = { allowed: false as const, retryAfterMs: 60_000 };
 
+// Wave 6b (#261): identifier is USERNAME ONLY. The legacy email shape is
+// kept on the stored user record (email is still a valid attribute used
+// for verification flows) but it's never accepted as a sign-in identifier.
 const VALID_CREDENTIALS = {
-  identifier: 'field@example.com',
+  identifier: 'dicky',
   password: '<<seed-from-env>>',
 };
 
@@ -47,9 +57,17 @@ const STORED_USER = {
   name: 'Dicky',
 };
 
+// Helper for the typed `findUserByIdentifier` shape (Wave 6b / #261).
+const lookupHit = (user: typeof STORED_USER) =>
+  ({ ok: true as const, user });
+const lookupMiss = () =>
+  ({ ok: false as const, code: AUTH_LOOKUP_ERROR_FIXTURE.NOT_FOUND });
+const lookupAmbiguous = () =>
+  ({ ok: false as const, code: AUTH_LOOKUP_ERROR_FIXTURE.AMBIGUOUS });
+
 describe('authorize (auth-options.ts)', () => {
   beforeEach(() => {
-    getUserByIdentifierMock.mockReset();
+    findUserByIdentifierMock.mockReset();
     isEmailVerifiedMock.mockReset();
     getFarmsForUserMock.mockReset();
     checkRateLimitMock.mockReset().mockReturnValue(allow);
@@ -58,7 +76,7 @@ describe('authorize (auth-options.ts)', () => {
 
   // ── Happy path ────────────────────────────────────────────────────────────
   it('returns the user when credentials + email verification pass', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(true);
     getFarmsForUserMock.mockResolvedValueOnce([
@@ -80,7 +98,7 @@ describe('authorize (auth-options.ts)', () => {
     await expect(authorize({ identifier: '', password: '' })).rejects.toThrow(
       AUTH_ERROR_CODES.INVALID_CREDENTIALS,
     );
-    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
+    expect(findUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
   it('throws INVALID_CREDENTIALS when credentials is undefined', async () => {
@@ -95,12 +113,12 @@ describe('authorize (auth-options.ts)', () => {
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
       AUTH_ERROR_CODES.RATE_LIMITED,
     );
-    expect(getUserByIdentifierMock).not.toHaveBeenCalled();
+    expect(findUserByIdentifierMock).not.toHaveBeenCalled();
   });
 
   // ── Server misconfigured (env vars missing) ─────────────────────────────────
   it('throws SERVER_MISCONFIGURED when meta-db env vars are missing', async () => {
-    getUserByIdentifierMock.mockRejectedValueOnce(
+    findUserByIdentifierMock.mockRejectedValueOnce(
       new Error(
         'META_TURSO_URL and META_TURSO_AUTH_TOKEN must be set in environment variables.',
       ),
@@ -117,7 +135,7 @@ describe('authorize (auth-options.ts)', () => {
     const dbError = new Error(
       'WebSocket connection failed: ECONNREFUSED',
     );
-    getUserByIdentifierMock.mockRejectedValueOnce(dbError);
+    findUserByIdentifierMock.mockRejectedValueOnce(dbError);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
       AUTH_ERROR_CODES.DB_UNAVAILABLE,
@@ -138,15 +156,29 @@ describe('authorize (auth-options.ts)', () => {
 
   // ── User not found ─────────────────────────────────────────────────────────
   it('throws INVALID_CREDENTIALS (generic) when user does not exist', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupMiss());
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
       AUTH_ERROR_CODES.INVALID_CREDENTIALS,
     );
   });
 
+  // ── Ambiguous lookup (legacy meta-DB without unique constraint) ────────────
+  it('throws SERVER_MISCONFIGURED when findUserByIdentifier returns AMBIGUOUS', async () => {
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupAmbiguous());
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
+      AUTH_ERROR_CODES.SERVER_MISCONFIGURED,
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('[authorize] ambiguous username'),
+      expect.objectContaining({ identifier: 'dicky' }),
+    );
+    spy.mockRestore();
+  });
+
   // ── Wrong password ─────────────────────────────────────────────────────────
   it('throws INVALID_CREDENTIALS (generic) when password is wrong', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(false);
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
       AUTH_ERROR_CODES.INVALID_CREDENTIALS,
@@ -155,7 +187,7 @@ describe('authorize (auth-options.ts)', () => {
 
   // ── Email not verified ─────────────────────────────────────────────────────
   it('throws EMAIL_NOT_VERIFIED when the user exists but email is unverified', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockResolvedValueOnce(false);
     await expect(authorize(VALID_CREDENTIALS)).rejects.toThrow(
@@ -166,7 +198,9 @@ describe('authorize (auth-options.ts)', () => {
   // ── Users without email (e.g. LOGGER role) skip verification ────────────────
   it('does NOT check email verification when user has no email', async () => {
     const userNoEmail = { ...STORED_USER, email: null };
-    getUserByIdentifierMock.mockResolvedValueOnce(userNoEmail);
+    findUserByIdentifierMock.mockResolvedValueOnce(
+      lookupHit(userNoEmail as unknown as typeof STORED_USER),
+    );
     vi.mocked(compareSync).mockReturnValueOnce(true);
     getFarmsForUserMock.mockResolvedValueOnce([]);
 
@@ -178,7 +212,7 @@ describe('authorize (auth-options.ts)', () => {
 
   // ── Email verification check fails (DB throw on second query) ──────────────
   it('throws DB_UNAVAILABLE when email verification query throws', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(STORED_USER);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupHit(STORED_USER));
     vi.mocked(compareSync).mockReturnValueOnce(true);
     isEmailVerifiedMock.mockRejectedValueOnce(
       new Error('meta-db connection dropped'),
@@ -192,7 +226,7 @@ describe('authorize (auth-options.ts)', () => {
 
   // ── Rate-limit key uses the identifier ─────────────────────────────────────
   it('keys the rate limiter on the identifier', async () => {
-    getUserByIdentifierMock.mockResolvedValueOnce(null);
+    findUserByIdentifierMock.mockResolvedValueOnce(lookupMiss());
     await authorize(VALID_CREDENTIALS).catch(() => {});
     const [key, max, windowMs] = checkRateLimitMock.mock.calls[0] as [
       string,
