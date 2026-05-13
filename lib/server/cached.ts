@@ -35,6 +35,10 @@ import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/r
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import {
+  getTenantDayStart,
+  getTenantMonthYYYYMM,
+} from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
 import type { Camp } from "@/lib/types";
 
@@ -157,11 +161,22 @@ export async function getCachedDashboardOverview(
   const fetcher = unstable_cache(
     async (slug: string, currentMode: SpeciesId): Promise<DashboardOverview> => {
       return withFarmPrisma(slug, async (prisma) => {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        // Issue #258: every "today" derivation must consult the tenant's
+        // stored TZ. Prefetch FarmSettings once so we have `timezone` for
+        // bucketing AND alert thresholds — saves a duplicate findFirst that
+        // used to live inside the Promise.all below.
+        const settingsRow = await prisma.farmSettings.findFirst();
+        const tz = settingsRow?.timezone ?? "Africa/Johannesburg";
+
+        const now = new Date();
+        const todayStart = getTenantDayStart(tz, now);
+        // 7-day window is anchored at TZ-local midnight 7 days ago so the
+        // "Health Issues · 7d" tile lines up with the same calendar boundary
+        // as the "today" tiles.
+        const sevenDaysAgo = new Date(
+          todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
+        );
+        const currentMonth = getTenantMonthYYYYMM(tz, now);
 
         // Issue #225: route per-species reads through the species-scoped
         // facade so `{ species: currentMode }` is injected by construction
@@ -173,7 +188,6 @@ export async function getCachedDashboardOverview(
         const [
           totalAnimals,
           totalCamps,
-          settingsRow,
           reproStats,
           campConditions,
           healthIssuesThisWeek,
@@ -192,16 +206,18 @@ export async function getCachedDashboardOverview(
           speciesPrisma.animal.count({ where: { status: "Active" } }),
           // audit-allow-species-where: camp total is the same on every per-species view; not species-scoped because every camp serves some species at some point.
           prisma.camp.count(),
-          prisma.farmSettings.findFirst(),
           getReproStats(prisma, { species: currentMode }),
           getLatestCampConditions(prisma),
           countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
-          countInspectedToday(prisma, currentMode),
+          // Issue #258: pass tenant TZ so "today" matches every other tile.
+          countInspectedToday(prisma, currentMode, tz),
           getRecentHealthObservations(prisma, 8, currentMode),
           // cross-species by design: low-grazing math is LSU across all species (camp can host any species).
           getLowGrazingCampCount(prisma),
           // Per-species death/calving tile counts: route through facade so
-          // observation rows are filtered to the active species.
+          // observation rows are filtered to the active species. todayStart is
+          // tenant-TZ midnight (issue #258) so SAST early-morning events land
+          // in the right bucket.
           speciesPrisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
           speciesPrisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
           getWithdrawalCount(prisma),
