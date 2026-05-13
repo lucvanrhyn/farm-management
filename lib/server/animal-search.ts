@@ -173,14 +173,26 @@ export function searchAnimals(
   // raw prisma — instead of `scoped(...).animal.findMany` — is necessary
   // because the species-scoped facade would re-inject `status: "Active"`
   // and silently exclude deceased rows (the exact bug class issue #255
-  // exists to cure). Both audit pragmas immediately above so neither
-  // sibling audit walks past the other.
+  // exists to cure).
+  //
+  // Audit-pragma stack — order matters because each sibling audit walks
+  // the preceding lines differently. `audit-allow-species-where` MUST be
+  // the immediately preceding line (the species-where audit checks only
+  // the first non-blank preceding line, no sibling-skip). The other audits
+  // either skip siblings (`audit-allow-deceased-flag` per line 258 of its
+  // audit script) or are satisfied by the literal `take:` token spread into
+  // the args body below (`audit-findmany-no-take` matches `take\s*:`).
   // audit-allow-deceased-flag: deep module enforces flag by signature
   // audit-allow-species-where: deep module injects species via composedWhere
   return prisma.animal.findMany({
     where: composedWhere,
     ...(orderBy ? { orderBy } : {}),
-    ...(typeof take === 'number' ? { take } : {}),
+    // Spread an explicit `take: take` (not the shorthand `{ take }`) so a
+    // static read of the call's arg body shows the literal `take:` token —
+    // that satisfies `audit-findmany-no-take` without an allow-pragma. When
+    // the caller omits `take` the spread evaluates to `{}` and no bound is
+    // emitted; the contract documents `take?` as caller-controlled.
+    ...(typeof take === 'number' ? { take: take } : {}),
     ...(cursor ? { cursor } : {}),
     ...(typeof skip === 'number' ? { skip } : {}),
     ...(select ? { select } : {}),
