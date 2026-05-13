@@ -1,6 +1,7 @@
 import { type PrismaClient } from "@prisma/client";
 import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
+import { getTenantDayStart } from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
 
 export interface LiveCampStatus {
@@ -156,9 +157,15 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
 export async function countInspectedToday(
   prisma: PrismaClient,
   mode?: SpeciesId,
+  tz?: string | null,
 ): Promise<number> {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Issue #258: bucket "today" against the tenant's stored TZ
+  // (FarmSettings.timezone, default "Africa/Johannesburg") rather than the
+  // server's local TZ. UTC bucketing undercounted SAST inspections done
+  // between 00:00 and 02:00 SAST (= 22:00–00:00 UTC the previous day).
+  // `tz` is optional so legacy call-sites keep compiling; when omitted we
+  // fall back to "Africa/Johannesburg" — the FarmSettings.timezone default.
+  const todayStart = getTenantDayStart(tz ?? "Africa/Johannesburg");
 
   const rows = await prisma.observation.findMany({
     where: {
