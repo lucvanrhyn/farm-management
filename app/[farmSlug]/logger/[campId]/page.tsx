@@ -244,12 +244,21 @@ export default function CampInspectionPage({
     setActiveModal(null);
   }
 
-  async function handleDeathSubmit(cause: string) {
+  async function handleDeathSubmit(data: { cause: string; carcassDisposal: string }) {
     await queueObservation({
       type: "death",
       camp_id: decodedId,
       animal_id: selectedAnimalId,
-      details: JSON.stringify({ cause }),
+      // Wave 3b / #254 — `carcassDisposal` joins `cause` in the JSON details
+      // payload. The shared POST /api/observations route invokes
+      // `validateDeathObservation` (lib/server/validators/death.ts) and
+      // rejects a missing/invalid disposal with 422 DEATH_DISPOSAL_REQUIRED.
+      // The DeathModal's submit-gate is the UX-layer half of the same
+      // defense-in-depth.
+      details: JSON.stringify({
+        cause: data.cause,
+        carcassDisposal: data.carcassDisposal,
+      }),
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",
@@ -633,7 +642,7 @@ export default function CampInspectionPage({
           isOpen
           animalId={selectedAnimalId}
           causes={DEATH_CAUSES_BY_SPECIES[mode] ?? DEATH_CAUSES_BY_SPECIES.cattle}
-          onSelect={handleDeathSubmit}
+          onSubmit={handleDeathSubmit}
           onClose={() => setActiveModal(null)}
         />
       )}

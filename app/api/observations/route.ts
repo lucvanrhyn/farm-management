@@ -30,6 +30,11 @@ import {
   ReproMultiStateError,
   ReproRequiredError,
 } from "@/lib/server/validators/reproductive-state";
+import {
+  validateDeathObservation,
+  DeathMultiCauseError,
+  DeathDisposalRequiredError,
+} from "@/lib/server/validators/death";
 
 interface CreateObservationBody {
   type: string;
@@ -104,6 +109,27 @@ export const POST = tenantWrite<CreateObservationBody>({
         return routeError(err.code, err.message, 422);
       }
       throw err;
+    }
+
+    // Wave 3b / #254 — `validateDeathObservation`. Symmetric with the
+    // reproductive validator above: locks out the silent-multi-cause path
+    // and the SARS / NSPCA-required `carcassDisposal` field. The validator
+    // is gated externally on `body.type === 'death'` (vs. the reproductive
+    // validator which gates internally) so its public surface is a pure
+    // details-payload check — see `lib/server/validators/death.ts` for the
+    // scope-discipline rationale.
+    if (body.type === "death") {
+      try {
+        validateDeathObservation(body.details ?? null);
+      } catch (err) {
+        if (
+          err instanceof DeathMultiCauseError ||
+          err instanceof DeathDisposalRequiredError
+        ) {
+          return routeError(err.code, err.message, 422);
+        }
+        throw err;
+      }
     }
 
     const input: CreateObservationInput = {

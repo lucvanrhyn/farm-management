@@ -288,17 +288,19 @@ describe('POST /api/observations — reproductive state envelope', () => {
     expect(body).toEqual({ success: true, id: 'obs-1' });
   });
 
-  it('does NOT block a death observation (Wave 2 owns its own validator)', async () => {
-    // Smoke test for the scope-discipline guarantee: this route is shared
-    // with Wave 2 (Death single-cause radio). Adding REPRO_* error paths
-    // must not regress Death's pass-through.
+  it('does NOT block a clean death observation (scope-discipline guarantee)', async () => {
+    // Smoke test for the scope-discipline guarantee: the reproductive
+    // validator must remain a no-op for Death observations. Wave 3b /
+    // #254 added its own death validator on the same route — to keep this
+    // test orthogonal we send a payload that satisfies BOTH validators
+    // (cause: 'Old age' + carcassDisposal: 'OTHER').
     const { POST } = await import('@/app/api/observations/route');
     const res = await POST(
       postObservationReq({
         type: 'death',
         camp_id: 'CAMP-1',
         animal_id: 'COW-001',
-        details: JSON.stringify({ cause: 'Old age' }),
+        details: JSON.stringify({ cause: 'Old age', carcassDisposal: 'OTHER' }),
       }),
       { params: Promise.resolve({}) },
     );
