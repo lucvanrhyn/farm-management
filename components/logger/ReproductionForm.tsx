@@ -244,24 +244,36 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2a: heat detection */}
         {step === "details" && selectedType === "heat_detection" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-heat-method-label" style={{ color: "#D2B48C" }}>
               How was heat detected?
             </p>
-            {(
-              [
-                { value: "visual" as const, label: "Visual observation (standing heat)" },
-                { value: "scratch_card" as const, label: "Scratch card / Kamar patch" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setHeatMethod(opt.value)}
-                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors"
-                style={heatMethod === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {/*
+              Wave 1 / #253 — explicit `role="radiogroup"` so the In-Heat
+              method picker is structurally a single-select. Server-side
+              `validateReproductiveState` (lib/server/validators/reproductive-state.ts)
+              is the defense-in-depth backstop — the radio role here is the
+              UX-layer half of the fix.
+            */}
+            <div role="radiogroup" aria-labelledby="repro-heat-method-label">
+              {(
+                [
+                  { value: "visual" as const, label: "Visual observation (standing heat)" },
+                  { value: "scratch_card" as const, label: "Scratch card / Kamar patch" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={heatMethod === opt.value}
+                  onClick={() => setHeatMethod(opt.value)}
+                  className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors mb-2"
+                  style={heatMethod === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={handleSubmit}
               className="w-full font-bold py-4 rounded-2xl text-base mt-2"
@@ -323,25 +335,39 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2c: pregnancy scan */}
         {step === "details" && selectedType === "pregnancy_scan" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-scan-result-label" style={{ color: "#D2B48C" }}>
               Scan result
             </p>
-            {(
-              [
-                { value: "pregnant" as const, label: "✓  Pregnant" },
-                { value: "empty" as const, label: "✗  Empty" },
-                { value: "uncertain" as const, label: "?  Uncertain — recheck" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setScanResult(opt.value)}
-                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors"
-                style={scanResult === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {/*
+              Wave 1 / #253 — explicit `role="radiogroup"` for the
+              {Pregnant, Open (=Empty), Uncertain} mutually-exclusive states.
+              The 2026-05-13 stress test confirmed dirty payloads with
+              multiple state markers were silently collapsed at the DB.
+              The server-side `ReproductiveStateValidator` rejects those
+              with `422 REPRO_MULTI_STATE`; this radio is the UX-layer half
+              of the defense-in-depth fix.
+            */}
+            <div role="radiogroup" aria-labelledby="repro-scan-result-label">
+              {(
+                [
+                  { value: "pregnant" as const, label: "✓  Pregnant" },
+                  { value: "empty" as const, label: "✗  Open (Empty)" },
+                  { value: "uncertain" as const, label: "?  Uncertain — recheck" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={scanResult === opt.value}
+                  onClick={() => setScanResult(opt.value)}
+                  className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors mb-2"
+                  style={scanResult === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={handleSubmit}
               className="w-full font-bold py-4 rounded-2xl text-base mt-2"

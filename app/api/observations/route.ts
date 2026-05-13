@@ -17,7 +17,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantRead, tenantWrite, RouteValidationError } from "@/lib/server/route";
+import { tenantRead, tenantWrite, RouteValidationError, routeError } from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -25,6 +25,11 @@ import {
   listObservations,
   type CreateObservationInput,
 } from "@/lib/domain/observations";
+import {
+  validateReproductiveState,
+  ReproMultiStateError,
+  ReproRequiredError,
+} from "@/lib/server/validators/reproductive-state";
 
 interface CreateObservationBody {
   type: string;
@@ -84,6 +89,21 @@ export const POST = tenantWrite<CreateObservationBody>({
     const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    // Wave 1 / #253 — ReproductiveStateValidator. Defends against the
+    // "user toggled In Heat + Pregnant simultaneously" silent-data-loss
+    // path the 2026-05-13 stress test surfaced. The validator is a no-op
+    // for non-reproductive `type`s, so death (Wave 2), weighing, treatment
+    // etc. flow through unchanged. See `lib/server/validators/reproductive-state.ts`
+    // for the full state-counting contract.
+    try {
+      validateReproductiveState(body.type, body.details ?? null);
+    } catch (err) {
+      if (err instanceof ReproMultiStateError || err instanceof ReproRequiredError) {
+        return routeError(err.code, err.message, 422);
+      }
+      throw err;
     }
 
     const input: CreateObservationInput = {
