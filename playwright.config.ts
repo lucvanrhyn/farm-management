@@ -27,6 +27,9 @@ export default defineConfig({
     // dashboard flip, cookie persistence, per-tenant isolation, and the sheep
     // namespace routes against regression. Self-skips when auth creds are unset.
     'multi-species-toggle.spec.ts',
+    // Issue #256 (2026-05-13): tenant map page — locks `/<slug>/map` against
+    // regression. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'tenant-map.spec.ts',
   ],
   reporter: 'list',
   use: {

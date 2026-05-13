@@ -71,8 +71,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Enforce tenant isolation: verify user has access to the farm in the URL
-  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)/);
+  // Enforce tenant isolation: verify user has access to the farm in the URL.
+  // Keep the alternation list in sync with TENANT_ROUTE_RE below + the comment
+  // above isProtectedPath. Issue #256 (2026-05-13) added `map` for the new
+  // `/<slug>/map` v1 page.
+  const farmRouteMatch = pathname.match(/^\/([^/]+)\/(admin|dashboard|logger|home|map|tools|sheep|game)/);
   const farms = token.farms as Array<{ slug: string; tier: string; subscriptionStatus: string; role: string }>;
 
   if (farmRouteMatch) {
@@ -129,7 +132,7 @@ export async function proxy(req: NextRequest) {
  * ────────────────
  * - `/farms` and `/home` — universal authenticated entry points. Direct hits
  *   without a session must land on /login (preserves existing UX).
- * - `/[slug]/(admin|dashboard|logger|home|tools|sheep|game)/...` — every
+ * - `/[slug]/(admin|dashboard|logger|home|map|tools|sheep|game)/...` — every
  *   tenant-scoped surface that previously redirected. The regex below mirrors
  *   the `farmRouteMatch` regex used a few lines down — keeping them in sync
  *   means the protected-path check above and the tenant-isolation check below
@@ -144,7 +147,7 @@ export async function proxy(req: NextRequest) {
  * can assert disposition without booting the Edge runtime.
  */
 const TENANT_ROUTE_RE =
-  /^\/([^/]+)\/(admin|dashboard|logger|home|tools|sheep|game)(\/|$)/;
+  /^\/([^/]+)\/(admin|dashboard|logger|home|map|tools|sheep|game)(\/|$)/;
 
 export function isProtectedPath(pathname: string): boolean {
   // Root: previously redirected unauth users to /login. Preserve that
