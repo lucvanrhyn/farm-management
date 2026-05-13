@@ -71,9 +71,13 @@ const MODE_SECTIONS: Record<FarmMode, { admin: string; logger: string; map: stri
 function getSections(mode: FarmMode) {
   const desc = MODE_SECTIONS[mode];
   return [
-    { path: "/admin",     label: "Admin",  icon: ADMIN_ICON,  description: desc.admin },
-    { path: "/logger",    label: "Logger", icon: LOGGER_ICON, description: desc.logger },
-    { path: "/dashboard", label: "Map",    icon: MAP_ICON,    description: desc.map },
+    { path: "/admin",  label: "Admin",  icon: ADMIN_ICON,  description: desc.admin },
+    { path: "/logger", label: "Logger", icon: LOGGER_ICON, description: desc.logger },
+    // Issue #256 (2026-05-13): point Map tile at the dedicated tenant map
+    // page (camps + Mapbox satellite tiles). Was `/dashboard` historically,
+    // which is the analytics hub — leaving the deep-link `/<slug>/map` as a
+    // 404 surfaced via the tile label "Map".
+    { path: "/map",    label: "Map",    icon: MAP_ICON,    description: desc.map },
   ];
 }
 

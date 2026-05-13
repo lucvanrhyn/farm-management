@@ -234,6 +234,9 @@ describe("proxy.ts isProtectedPath — Phase C bug C2 fall-through", () => {
     ["/delta-livestock/dashboard", "tenant dashboard"],
     ["/delta-livestock/logger", "tenant logger"],
     ["/acme-cattle/sheep", "tenant sheep"],
+    // Issue #256 (2026-05-13) — `/<slug>/map` is a tenant-scoped page and
+    // must redirect anon visitors to /login (not fall through to 404).
+    ["/delta-livestock/map", "tenant map"],
     ["/api/camps", "authenticated API"],
     ["/api/farm/settings/tasks", "deep authenticated API"],
   ])("[PROTECTED] %s — %s", async (path) => {
