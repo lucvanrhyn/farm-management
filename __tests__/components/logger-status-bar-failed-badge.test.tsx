@@ -36,6 +36,11 @@ vi.mock('@/components/logger/FailedSyncDialog', () => ({
 // We drive OfflineProvider state via a mock so each spec controls exactly the
 // fields it cares about (pendingCount / failedCount / etc.). The real
 // provider does heavy IDB seeding on mount which is irrelevant to the badge.
+//
+// Issue #252 — `useSyncQueueStatus` is a narrow read-only view exported by
+// OfflineProvider that powers the new <SyncBadge /> + <OfflineBanner />
+// components. The mock supplies it alongside `useOffline` so this badge
+// suite keeps owning the shape contract for both hooks.
 let mockFailedCount = 0;
 vi.mock('@/components/logger/OfflineProvider', () => ({
   useOffline: () => ({
@@ -45,6 +50,7 @@ vi.mock('@/components/logger/OfflineProvider', () => ({
     failedCount: mockFailedCount,
     lastSyncedAt: null,
     syncResult: null,
+    recentlySyncedItems: [],
     syncNow: vi.fn(async () => {}),
     refreshData: vi.fn(async () => {}),
     refreshPendingCount: vi.fn(async () => {}),
@@ -53,6 +59,12 @@ vi.mock('@/components/logger/OfflineProvider', () => ({
     campsLoaded: true,
     tasks: [],
     heroImageUrl: null,
+  }),
+  useSyncQueueStatus: () => ({
+    isOnline: true,
+    pendingCount: 0,
+    failedCount: mockFailedCount,
+    recentlySyncedItems: [],
   }),
 }));
 

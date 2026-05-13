@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOffline } from './OfflineProvider';
 import FailedSyncDialog from './FailedSyncDialog';
+import { OfflineBanner } from './OfflineBanner';
+import { SyncBadge } from './SyncBadge';
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return 'Never';
@@ -15,6 +17,17 @@ function formatRelativeTime(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// Issue #252 — how long a per-item reconnect toast stays on screen before
+// being evicted. Matches the existing aggregate-syncResult toast (4s) so the
+// two banners feel coherent during a partial-failure cycle.
+const ITEM_TOAST_TTL_MS = 4000;
+
+interface ItemToast {
+  itemKey: string;
+  label: string;
+  expiresAt: number;
+}
+
 export function LoggerStatusBar() {
   const {
     isOnline,
@@ -23,6 +36,7 @@ export function LoggerStatusBar() {
     failedCount,
     lastSyncedAt,
     syncResult,
+    recentlySyncedItems,
     syncNow,
   } = useOffline();
 
@@ -31,11 +45,54 @@ export function LoggerStatusBar() {
   // a pure local UI affordance gated on `failedCount > 0`.
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Issue #252 — per-item toast state. The OfflineProvider's
+  // `recentlySyncedItems` is the source of truth (de-duped + bounded);
+  // this component only converts new entries into a transient toast list.
+  // We track which itemKeys we've already shown so a re-render that
+  // produces the same list doesn't re-toast.
+  const [itemToasts, setItemToasts] = useState<ItemToast[]>([]);
+  const seenItemKeysRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fresh = recentlySyncedItems.filter(
+      (item) => !seenItemKeysRef.current.has(item.itemKey),
+    );
+    if (fresh.length === 0) return;
+    const now = Date.now();
+    const additions: ItemToast[] = fresh.map((item) => {
+      seenItemKeysRef.current.add(item.itemKey);
+      return {
+        itemKey: item.itemKey,
+        label: `${item.label} synced`,
+        expiresAt: now + ITEM_TOAST_TTL_MS,
+      };
+    });
+    setItemToasts((prev) => [...prev, ...additions]);
+  }, [recentlySyncedItems]);
+
+  // Sweep expired toasts every 500ms. A self-scheduling timer rather than
+  // per-toast `setTimeout`s keeps the React state writes serial and avoids
+  // the classic "toast disappears mid-animation because two timers fired
+  // out of order" race.
+  useEffect(() => {
+    if (itemToasts.length === 0) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setItemToasts((prev) => prev.filter((t) => t.expiresAt > now));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [itemToasts.length]);
+
   const statusIcon = !isOnline ? '🔴' : syncStatus === 'syncing' ? '🟡' : '🟢';
   const statusText = !isOnline ? 'Offline' : syncStatus === 'syncing' ? 'Uploading...' : 'Online';
 
   return (
     <>
+      {/* Issue #252 — sticky offline banner. Renders ONLY while offline,
+          regardless of where the user has scrolled. Above the status-bar
+          row so the page chrome reads top-down: "you're offline" → "the
+          status row" → "the rest of the logger". */}
+      <OfflineBanner />
       <div
         className="px-4 py-1.5 flex items-center justify-between text-xs"
         style={{
@@ -47,14 +104,10 @@ export function LoggerStatusBar() {
         <div className="flex items-center gap-2">
           <span>{statusIcon}</span>
           <span style={{ color: '#D2B48C' }}>{statusText}</span>
-          {pendingCount > 0 && (
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-              style={{ backgroundColor: '#B87333' }}
-            >
-              {pendingCount} pending
-            </span>
-          )}
+          {/* Issue #252 — extracted to <SyncBadge /> so the same pill can
+              be slotted into the offline banner / admin debug surface
+              without copying the markup. Renders nothing when count === 0. */}
+          <SyncBadge />
           {/* PRD #194 wave 2 — surface stuck rows. Closes Codex audit gap C3:
               previously a row that hit a 422 vanished from the pending count
               into a `failed` IDB state with no UI affordance to retry. The
@@ -113,6 +166,34 @@ export function LoggerStatusBar() {
           role="alert"
         >
           ✗ {syncResult.failed} observation{syncResult.failed !== 1 ? 's' : ''} failed to sync — open the offline log to retry
+        </div>
+      )}
+
+      {/* Issue #252 — per-item replay toasts. Stacked top-right so the
+          aggregate success/failure toasts (bottom-center) and the
+          per-item cascade do not visually overlap during a partial-failure
+          cycle. The user sees both: "12 observations synced" at the bottom,
+          one labelled toast per row at the top. */}
+      {itemToasts.length > 0 && (
+        <div
+          data-testid="item-toast-stack"
+          className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs"
+        >
+          {itemToasts.map((toast) => (
+            <div
+              key={toast.itemKey}
+              data-testid={`item-toast-${toast.itemKey}`}
+              role="status"
+              className="text-xs font-medium px-4 py-2 rounded-xl shadow-lg"
+              style={{
+                backgroundColor: '#3A6B3F',
+                color: '#F5F0E8',
+                borderLeft: '3px solid #5FBF6A',
+              }}
+            >
+              ✓ {toast.label}
+            </div>
+          ))}
         </div>
       )}
 

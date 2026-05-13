@@ -17,6 +17,8 @@ import {
   getPendingCoverReadings,
   markCoverReadingPosted,
   clearPendingAnimalUpdate,
+  getFailedAnimals,
+  getFailedCoverReadings,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
@@ -561,16 +563,127 @@ interface SyncAndRefreshOptions {
   species?: string;
 }
 
+/**
+ * Issue #252 — per-item descriptor surfaced to the UI so the OfflineProvider
+ * can fire one toast per row that actually landed on the server. The 2026-05-13
+ * stress test confirmed that aggregate-only feedback ("12 synced") let users
+ * miss the BB-C014 case where the visible obs was actually a different one
+ * that landed earlier. Per-item lets the UI render "Health obs for BB-C014
+ * synced", which is the load-bearing trust signal the user needs.
+ */
+export interface SyncedItem {
+  kind: 'observation' | 'animal' | 'cover-reading';
+  /** Stable per-row identifier — `clientLocalId` when available, else the
+   *  IDB `local_id` cast to string. The OfflineProvider de-dupes its toast
+   *  buffer on this so a flaky network that retries the same row does not
+   *  fire two toasts. */
+  itemKey: string;
+  /** Human-readable subject for the toast body, e.g.
+   *  `"Health observation for BB-C014"` or `"New animal KALF-123"`. */
+  label: string;
+}
+
+function describePendingObservation(o: PendingObservation): string {
+  const typeLabel =
+    o.type === 'health_issue'
+      ? 'Health observation'
+      : o.type === 'weighing'
+        ? 'Weighing'
+        : o.type === 'reproduction'
+          ? 'Reproduction'
+          : o.type === 'movement'
+            ? 'Movement'
+            : o.type === 'calving'
+              ? 'Calving'
+              : o.type === 'camp_condition'
+                ? 'Camp condition'
+                : o.type === 'treatment'
+                  ? 'Treatment'
+                  : o.type.replace(/_/g, ' ');
+  if (o.animal_id) return `${typeLabel} for ${o.animal_id}`;
+  return `${typeLabel} on camp ${o.camp_id}`;
+}
+
 export async function syncAndRefresh(
   options: SyncAndRefreshOptions = {},
-): Promise<{ synced: number; failed: number }> {
+): Promise<{ synced: number; failed: number; syncedItems: SyncedItem[] }> {
   const { species } = options;
+
+  // Capture per-row snapshots BEFORE the sync attempts so we can describe
+  // each row that successfully synced. After `markSucceeded` flips status
+  // to `synced`, the row is no longer reachable through the pending getters.
+  const obsBefore = await getPendingObservations();
+  const animalsBefore = await getPendingAnimalCreates();
+  const coversBefore = await getPendingCoverReadings();
+
   const [obsResult, animalsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
     syncPendingAnimals(),
     syncPendingCoverReadings(),
   ]);
   const photoResult = await syncPendingPhotos(obsResult.localToServerId);
+
+  // Build the per-item event list. A row is a "synced item" iff
+  // (a) it was in the pending snapshot AND (b) the corresponding sync helper
+  // returned success for it. For observations we use `localToServerId` as the
+  // truth source; for animals/cover we re-read failed-bucket membership and
+  // exclude any row still failed.
+  const syncedItems: SyncedItem[] = [];
+  for (const o of obsBefore) {
+    if (o.local_id !== undefined && obsResult.localToServerId.has(o.local_id)) {
+      syncedItems.push({
+        kind: 'observation',
+        itemKey: o.clientLocalId ?? `obs-${o.local_id}`,
+        label: describePendingObservation(o),
+      });
+    }
+  }
+  // Animals + cover readings: a row that succeeded is gone from BOTH
+  // `getFailedAnimals()` and `getPendingAnimalCreates()`. Use the post-sync
+  // failed-bucket as the negative signal — anything in the snapshot that is
+  // NOT still failed and NOT still pending must have transitioned to synced.
+  if (animalsResult.synced > 0) {
+    const stillFailed = new Set(
+      (await getFailedAnimals()).map((a) => a.local_id),
+    );
+    const stillPending = new Set(
+      (await getPendingAnimalCreates()).map((a) => a.local_id),
+    );
+    for (const a of animalsBefore) {
+      if (
+        a.local_id !== undefined &&
+        !stillFailed.has(a.local_id) &&
+        !stillPending.has(a.local_id)
+      ) {
+        syncedItems.push({
+          kind: 'animal',
+          itemKey: a.clientLocalId ?? `animal-${a.local_id}`,
+          label: a.name ? `New animal ${a.animal_id} (${a.name})` : `New animal ${a.animal_id}`,
+        });
+      }
+    }
+  }
+  if (coversResult.synced > 0) {
+    const stillFailed = new Set(
+      (await getFailedCoverReadings()).map((c) => c.local_id),
+    );
+    const stillPending = new Set(
+      (await getPendingCoverReadings()).map((c) => c.local_id),
+    );
+    for (const c of coversBefore) {
+      if (
+        c.local_id !== undefined &&
+        !stillFailed.has(c.local_id) &&
+        !stillPending.has(c.local_id)
+      ) {
+        syncedItems.push({
+          kind: 'cover-reading',
+          itemKey: c.clientLocalId ?? `cover-${c.local_id}`,
+          label: `Cover reading on camp ${c.camp_id}`,
+        });
+      }
+    }
+  }
 
   const synced =
     obsResult.synced + animalsResult.synced + coversResult.synced + photoResult.synced;
@@ -595,5 +708,5 @@ export async function syncAndRefresh(
     },
   });
 
-  return { synced, failed };
+  return { synced, failed, syncedItems };
 }
