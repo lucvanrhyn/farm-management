@@ -50,6 +50,8 @@
 import { NextResponse } from 'next/server';
 import { tenantRead } from '@/lib/server/route';
 import { timeAsync } from '@/lib/server/server-timing';
+import { getFarmMode } from '@/lib/server/get-farm-mode';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
 const MAX_ROWS = 50;
@@ -71,11 +73,20 @@ export const GET = tenantRead({
       since = new Date(Date.now() - DEFAULT_WINDOW_MS);
     }
 
+    // PRD #222 / ADR-0003: per-species surfaces must commit to the species
+    // axis. The sync-queue verification belongs to ONE species at a time —
+    // when the user is viewing the cattle dashboard, a "did the server
+    // receive my obs?" check should not surface sheep observations queued
+    // in another tab. Route through the species-scoped facade so the
+    // species predicate is injected from the active FarmMode cookie.
+    const mode = await getFarmMode(ctx.slug);
+    const sp = scoped(ctx.prisma, mode);
+
     const rows = await timeAsync('query', () =>
-      // Per-tenant Prisma — the libSQL adapter is bound to the resolved
-      // farm context, so this query is structurally tenant-scoped. No
-      // explicit `farmId` filter is needed (and none exists on Observation).
-      ctx.prisma.observation.findMany({
+      // Per-tenant + per-species Prisma — the libSQL adapter is bound to the
+      // resolved farm context (cross-tenant impossible) and `scoped(...)`
+      // injects `species: mode` into the where (cross-species impossible).
+      sp.observation.findMany({
         where: { createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
         take: MAX_ROWS,
