@@ -139,10 +139,24 @@ export async function reconstructStockSnapshots(
 
   // Pull all exit-event observations for these animals within the tax-year
   // window. Used to time-anchor sales/dispatches that don't carry a deceasedAt.
+  //
+  // Issue #257 — `Observation.observedAt` is a Prisma `DateTime` column, so
+  // the bounds passed to `gte` / `lte` MUST be `Date` instances. Passing the
+  // YYYY-MM-DD strings returned by `getSaTaxYearRange()` directly trips the
+  // Prisma engine's "premature end of input. Expected ISO-8601 DateTime."
+  // validator (verified 2026-05-13 against the basson-boerdery clone), which
+  // bubbles up as `DB_QUERY_FAILED` to the IT3 preview client.
+  //
+  // The string contract on `start` / `end` is shared with `Animal.dateAdded`
+  // / `Transaction.date` (both `String` columns) — those callsites stay
+  // string-comparison-correct and must NOT change. Only the Observation
+  // predicate needs the Date coercion.
   const exitTypes = ["death", "predation_loss", "game_mortality", "game_predation", "animal_movement"];
   const animalIds = animals.map((a) => a.id);
   let exitObsRaw: ObservationRow[] = [];
   if (animalIds.length > 0) {
+    const observedAtGte = new Date(`${start}T00:00:00.000Z`);
+    const observedAtLte = new Date(`${end}T23:59:59.999Z`);
     // Bounded by animalIds (capped by the animal scan above) AND by the SA
     // tax-year window — full population is required to reproduce paragraph
     // 5(1) opening/closing reconciliation faithfully.
@@ -151,7 +165,7 @@ export async function reconstructStockSnapshots(
       where: {
         type: { in: exitTypes },
         animalId: { in: animalIds },
-        observedAt: { gte: start, lte: end },
+        observedAt: { gte: observedAtGte, lte: observedAtLte },
       },
       select: { id: true, type: true, animalId: true, observedAt: true, details: true },
     });
