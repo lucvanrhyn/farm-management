@@ -9,6 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { searchAnimals, countAnimalsByStatus } from "@/lib/server/animal-search";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -61,9 +62,15 @@ export default async function SheepAnimalsPage({
     );
   }
 
+  // Issue #255 — sheep mirror of the cattle catalogue fix. The list now
+  // routes through `searchAnimals(..., includeDeceased: true)` so deceased
+  // sheep stay searchable for SARS / mortality lookups; the camp/mob reads
+  // and the cross-species reconciliation total are unchanged.
   const speciesPrisma = scoped(prisma, SPECIES);
-  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, speciesTotal, crossSpeciesTotal] = await Promise.all([
-    speciesPrisma.animal.findMany({
+  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, statusCounts, crossSpeciesTotal] = await Promise.all([
+    searchAnimals(prisma, {
+      mode: SPECIES,
+      includeDeceased: true,
       orderBy: cursor
         ? { animalId: "asc" }
         : [{ category: "asc" }, { animalId: "asc" }],
@@ -75,13 +82,15 @@ export default async function SheepAnimalsPage({
     getAnimalsInWithdrawal(prisma),
     // audit-allow-findmany: mob list is per-tenant and bounded; needed for table column map.
     speciesPrisma.mob.findMany({ orderBy: { name: "asc" } }),
-    speciesPrisma.animal.count({ where: { status: ACTIVE_STATUS } }),
+    countAnimalsByStatus(prisma, SPECIES),
     // cross-species by design: drives the reconciliation total in the header
     // for multi-species tenants ("X total Active across species"). Mirrors
     // the cattle admin/animals page behaviour.
     // audit-allow-species-where: dashboard reconciliation total spans species
     prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
+  const speciesTotal = statusCounts.active;
+  const deceasedTotal = statusCounts.deceased;
 
   const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
 
@@ -121,6 +130,7 @@ export default async function SheepAnimalsPage({
         initialNextCursor={nextCursor}
         species={SPECIES}
         speciesTotal={speciesTotal}
+        deceasedTotal={deceasedTotal}
         crossSpeciesActiveTotal={crossSpeciesTotal}
       />
       <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>

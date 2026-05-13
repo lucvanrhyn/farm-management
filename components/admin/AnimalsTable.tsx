@@ -42,6 +42,16 @@ interface Props {
    * Sourced from `getCachedFarmSummary().animalCount`. Issue #205.
    */
   crossSpeciesActiveTotal?: number;
+  /**
+   * Total Deceased rows for the current species mode (server-side count).
+   * Issue #255 — drives the Deceased tab badge so the count is accurate
+   * BEFORE the user clicks the tab and triggers the deceased-rows fetch.
+   * Pre-#255 the badge derived from a client-side filter over a hydrated
+   * array that contained zero deceased rows (because SSR injected
+   * status: "Active"), so the badge always read "0" — which is what made
+   * BB-C013 invisible after death.
+   */
+  deceasedTotal?: number;
 }
 
 const farmInput =
@@ -59,6 +69,7 @@ export default function AnimalsTable({
   species,
   speciesTotal,
   crossSpeciesActiveTotal,
+  deceasedTotal,
 }: Props) {
   const { mode } = useFarmModeSafe();
   const [tab, setTab] = useState<"active" | "deceased">("active");
@@ -88,6 +99,12 @@ export default function AnimalsTable({
       url.searchParams.set("limit", String(PAGE_SIZE));
       url.searchParams.set("cursor", nextCursor);
       if (species) url.searchParams.set("species", species);
+      // Issue #255 — catalogue table must include deceased rows so the
+      // Deceased tab and tag-search surface the full mortality history.
+      // The /api/animals route reads `?status=all` to opt out of the
+      // status:Active default, which is the wire-equivalent of
+      // `searchAnimals({ includeDeceased: true })`.
+      url.searchParams.set("status", "all");
       const res = await fetch(url.pathname + url.search);
       if (!res.ok) return;
       const data = (await res.json()) as {
@@ -223,7 +240,18 @@ export default function AnimalsTable({
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "#F0EBE4" }}>
         {(["active", "deceased"] as const).map((t) => {
-          const count = t === "active" ? activeAnimals.length : deceasedAnimals.length;
+          // Issue #255 — Deceased badge prefers the SSR-provided
+          // `deceasedTotal` (true count from the DB) and falls back to the
+          // hydrated-array filter only if a caller hasn't migrated yet.
+          // Active falls back to `speciesTotal` for the same reason.
+          const count =
+            t === "active"
+              ? typeof speciesTotal === "number"
+                ? speciesTotal
+                : activeAnimals.length
+              : typeof deceasedTotal === "number"
+                ? deceasedTotal
+                : deceasedAnimals.length;
           const isActive = tab === t;
           return (
             <button
