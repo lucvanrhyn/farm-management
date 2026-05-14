@@ -17,6 +17,7 @@ import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
+import { getAnimalPhotos } from "@/lib/server/animal-photos";
 import { BASE_TABS, PROGENY_TAB, type TabKey } from "./_components/tabs";
 import EditAnimalButton from "./_components/EditAnimalButton";
 import { OverviewTab } from "./_components/OverviewTab";
@@ -26,6 +27,7 @@ import { MovementTab } from "./_components/MovementTab";
 import { WeightTab } from "./_components/WeightTab";
 import { InvestmentTab } from "./_components/InvestmentTab";
 import { ProgenyTab } from "./_components/ProgenyTab";
+import { AnimalPhotosTab } from "@/components/admin/AnimalPhotosTab";
 
 export default async function AnimalDetailPage({
   params,
@@ -44,7 +46,7 @@ export default async function AnimalDetailPage({
 
   const isBull = animal.category === "Bull";
 
-  const [observations, camp, weightData, investmentData, offspring, allCamps] = await Promise.all([
+  const [observations, camp, weightData, investmentData, offspring, allCamps, photos] = await Promise.all([
     prisma.observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
@@ -61,6 +63,8 @@ export default async function AnimalDetailPage({
       : Promise.resolve([]),
     // audit-allow-findmany-no-select: per-tenant camp list (≤36 typical) for EditAnimalModal camp picker; modal uses full Camp type
     prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    // Wave 5a / #264 — photos aggregation for the new Photos tab.
+    getAnimalPhotos(prisma, id),
   ]);
 
   // Fetch calving observations for offspring birth weights & difficulty
@@ -161,6 +165,10 @@ export default async function AnimalDetailPage({
 
         {activeTab === "investment" && (
           <InvestmentTab investmentData={investmentData} weightData={weightData} />
+        )}
+
+        {activeTab === "photos" && (
+          <AnimalPhotosTab farmSlug={farmSlug} animalId={id} photos={photos} />
         )}
 
         {activeTab === "progeny" && isBull && (
