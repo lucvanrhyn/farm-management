@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 /**
  * Wave 3b / #254 (PRD #250) — Death modal: single-cause radio + required
@@ -173,28 +174,30 @@ export default function DeathModal({
           ))}
         </select>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="w-full font-bold py-4 rounded-2xl text-base mt-2 transition-opacity"
-          style={{
-            backgroundColor: "#B87333",
-            color: "#F5F0E8",
-            opacity: canSubmit ? 1 : 0.4,
-            cursor: canSubmit ? "pointer" : "not-allowed",
-          }}
-        >
-          Record Death
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm py-2"
-          style={{ color: "rgba(210, 180, 140, 0.5)" }}
-        >
-          Cancel
-        </button>
+        <StickySubmitBar className="-mx-6 px-6 mt-2">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-opacity"
+            style={{
+              backgroundColor: "#B87333",
+              color: "#F5F0E8",
+              opacity: canSubmit ? 1 : 0.4,
+              cursor: canSubmit ? "pointer" : "not-allowed",
+            }}
+          >
+            Record Death
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full text-sm py-2 mt-1"
+            style={{ color: "rgba(210, 180, 140, 0.5)" }}
+          >
+            Cancel
+          </button>
+        </StickySubmitBar>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 interface Props {
   animalTag: string;
@@ -98,18 +99,20 @@ export default function WeighingForm({ animalTag, onSubmit, onCancel }: Props) {
           <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
         )}
 
-        <button
-          onClick={submit}
-          disabled={!isValid || submitting}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={
-            !isValid || submitting
-              ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-              : { backgroundColor: '#B87333', color: '#F5F0E8' }
-          }
-        >
-          {submitting ? "Saving..." : "Submit Weight"}
-        </button>
+        <StickySubmitBar>
+          <button
+            onClick={submit}
+            disabled={!isValid || submitting}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
+            style={
+              !isValid || submitting
+                ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
+                : { backgroundColor: '#B87333', color: '#F5F0E8' }
+            }
+          >
+            {submitting ? "Saving..." : "Submit Weight"}
+          </button>
+        </StickySubmitBar>
       </div>
     </BottomSheet>
   );

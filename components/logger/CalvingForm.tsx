@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { AnimalSex, EaseOfBirth } from "@/lib/types";
 import { getCachedFarmSettings } from "@/lib/offline-store";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 interface Bull {
   animalId: string;
@@ -368,13 +369,15 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         {/* Photo */}
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
-        <button
-          onClick={submit}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
-        >
-          Record Birth
-        </button>
+        <StickySubmitBar>
+          <button
+            onClick={submit}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
+            style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+          >
+            Record Birth
+          </button>
+        </StickySubmitBar>
       </div>
     </BottomSheet>
   );
