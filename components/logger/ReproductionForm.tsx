@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving" | "body_condition_score" | "temperament_score" | "scrotal_circumference";
 
@@ -274,13 +275,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Heat
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Heat
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -322,13 +325,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Insemination
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Insemination
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -368,13 +373,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Scan Result
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Scan Result
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -416,13 +423,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Calving
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Calving
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -449,13 +458,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 );
               })}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record BCS
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record BCS
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -477,13 +488,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Temperament
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Temperament
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -514,13 +527,15 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Scrotal Circumference
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                className="w-full font-bold py-4 rounded-2xl text-base"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Scrotal Circumference
+              </button>
+            </StickySubmitBar>
           </>
         )}
 

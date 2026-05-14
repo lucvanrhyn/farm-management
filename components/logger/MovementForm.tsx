@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 interface Props {
   animalId: string;
@@ -98,18 +99,20 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
           </div>
         </div>
 
-        <button
-          onClick={submit}
-          disabled={!destCampId}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={
-            !destCampId
-              ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-              : { backgroundColor: '#B87333', color: '#F5F0E8' }
-          }
-        >
-          Confirm Move
-        </button>
+        <StickySubmitBar>
+          <button
+            onClick={submit}
+            disabled={!destCampId}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
+            style={
+              !destCampId
+                ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
+                : { backgroundColor: '#B87333', color: '#F5F0E8' }
+            }
+          >
+            Confirm Move
+          </button>
+        </StickySubmitBar>
       </div>
     </BottomSheet>
   );
