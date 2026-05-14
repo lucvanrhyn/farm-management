@@ -64,6 +64,8 @@ const READ_ONLY: ReadonlySet<string> = new Set([
   '[farmSlug]/map/task-pins/route.ts::GET',
   '[farmSlug]/map/water-points/route.ts::GET',
   'animals/[id]/route.ts::GET',
+  // Wave 5a (#264) — admin animal-detail Photos tab read aggregation.
+  'animals/[id]/photos/route.ts::GET',
   'camps/status/route.ts::GET',
   'farm-settings/map/route.ts::GET',
   'farm-settings/tasks/route.ts::GET',
@@ -175,6 +177,11 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   // photos/upload — any farm user may upload photos for observations; not
   // tenant config. Migrated to getFarmContext in Phase D/G.
   'photos/upload/route.ts::POST',
+  // Wave 5a (#264) — admin animal-detail Photos tab manual upload. Same
+  // contract as photos/upload + a follow-on Observation create. Any
+  // authenticated tenant member may upload (matches the existing
+  // photos/upload allowance — there is no admin-only photo channel today).
+  'animals/[id]/photos/route.ts::POST',
 
   // Wave H1 (#173) — proxy-matcher exclusions wrapped in `publicHandler`.
   // publicHandler is the no-auth adapter; these routes intentionally have no
