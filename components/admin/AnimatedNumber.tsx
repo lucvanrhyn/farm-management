@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useHasMounted } from "@/lib/hooks/use-client-time";
 
 interface Props {
   value: number;
@@ -13,7 +14,7 @@ interface Props {
  * Renders an integer that counts up from 0 → value on mount.
  * Falls back to instant render if prefers-reduced-motion is set.
  *
- * Hydration safety (issue #259):
+ * Hydration safety (issue #259, generalised in #283):
  *   - The initial render is ALWAYS "0" — independent of `window`,
  *     `matchMedia`, or `value`. This guarantees the SSR HTML matches the
  *     client's first render. The pre-fix component called
@@ -21,6 +22,12 @@ interface Props {
  *     "animate" branch (display = 0) while the client took the "skip
  *     animation, render value" branch when reduced-motion was set →
  *     server "0" vs client "103" → React #418.
+ *   - The "0 until mounted" guarantee is now owned by the shared
+ *     `useHasMounted()` mount-gate primitive (lib/hooks/use-client-time.ts)
+ *     rather than restated here with an ad-hoc `useState` guard. Before
+ *     mount the component renders the formatted ZERO regardless of `value`
+ *     or `display`; the rAF count-up only takes over post-mount. One
+ *     primitive, one place the SSR/first-render invariant lives.
  *   - `prefersReducedMotion` is read inside `useEffect`, never during
  *     render. After mount we either jump straight to `value` (reduced
  *     motion) or kick off the rAF count-up.
@@ -35,6 +42,12 @@ export default function AnimatedNumber({ value, className, style, duration = 700
   // Always start at 0 — same on SSR and client first render. No env probes
   // during render; that's what made the old version unsafe.
   const [display, setDisplay] = useState(0);
+  // Shared mount gate (issue #283). Until the client has mounted this is
+  // `false` on both server and client first render, so the rendered text is
+  // the formatted ZERO regardless of `value`/`display` — the hydration
+  // invariant is structurally enforced by the primitive, not by hoping
+  // `display` happens to still be 0.
+  const mounted = useHasMounted();
 
   useEffect(() => {
     // Read reduced-motion preference here (post-mount) — safe to touch
@@ -71,7 +84,7 @@ export default function AnimatedNumber({ value, className, style, duration = 700
 
   return (
     <span className={className} style={style}>
-      {NUMBER_FMT.format(display)}
+      {NUMBER_FMT.format(mounted ? display : 0)}
     </span>
   );
 }
