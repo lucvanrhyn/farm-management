@@ -9,6 +9,7 @@ import SchematicMap, { type FilterMode } from "./SchematicMap";
 import WeatherWidget from "./WeatherWidget";
 import type { Camp } from "@/lib/types";
 import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
+import { useClientTime } from "@/lib/hooks/use-client-time";
 
 // Wave A3 — labels for the per-species chip in the dashboard header.
 // Inlined rather than imported from `lib/species/registry` to keep the
@@ -62,9 +63,12 @@ export type ViewMode = "schematic" | "satellite";
 
 // ─── Date helper ──────────────────────────────────────────────────────────────
 
+// Pure `(now) => string` mappings. They are NEVER called in the render body
+// directly — only via `useClientTime`, which gates them behind mount so the
+// server (UTC) render and the client's first render agree. See issue #283 /
+// lib/hooks/use-client-time.ts for the hydration rationale.
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function getTodayShort(): string {
-  const now = new Date();
+function formatTodayShort(now: Date): string {
   return `${now.getDate()} ${MONTHS_SHORT[now.getMonth()]} ${now.getFullYear()}`;
 }
 
@@ -79,8 +83,8 @@ const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
 
 // ─── Morning briefing helper ──────────────────────────────────────────────────
 
-function getGreeting(): string {
-  const h = new Date().getHours();
+function computeGreeting(now: Date): string {
+  const h = now.getHours();
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
@@ -168,6 +172,17 @@ export default function DashboardClient({
   const router = useRouter();
   const { mode, isMultiMode } = useFarmModeSafe();
 
+  // Wall-clock derived header strings. Routed through useClientTime so the
+  // server (UTC) render and the client's first render are byte-identical —
+  // the real localized values appear only after mount. Closes the recurring
+  // React #418 on dashboard load (issue #283). Placeholders are stable,
+  // clock-independent, and visually inert until the post-mount value lands.
+  const greeting = useClientTime(computeGreeting, "Good day");
+  const todayShort = useClientTime(formatTodayShort, "");
+  // Empty string until mounted; once mounted it's the client's local
+  // `toDateString()`, used purely for same-day comparison below.
+  const today = useClientTime((now) => now.toDateString(), "");
+
   // Species-filtered counts — fall back to unfiltered totals
   const filteredTotal = totalBySpecies?.[mode] ?? totalAnimals;
   const filteredCampCounts = campCountsBySpecies?.[mode] ?? campAnimalCounts;
@@ -245,10 +260,15 @@ export default function DashboardClient({
 
   const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
-  const today = new Date().toDateString();
-  const inspectedToday = Object.values(liveConditions).filter(
-    (c) => new Date(c.last_inspected_at).toDateString() === today
-  ).length;
+  // `today` is "" until mount (placeholder), so before hydration completes
+  // no record matches and `inspectedToday` is 0 — consistent with the
+  // server render. After mount it's the client-local day and the count is
+  // accurate. The header already shows "—" while `conditionsLoading`.
+  const inspectedToday = today
+    ? Object.values(liveConditions).filter(
+        (c) => new Date(c.last_inspected_at).toDateString() === today,
+      ).length
+    : 0;
   const alertCount = Object.values(liveConditions).filter(
     (c) => c.grazing_quality === "Poor" || c.fence_status !== "Intact"
   ).length;
@@ -372,7 +392,7 @@ export default function DashboardClient({
               marginTop: 2,
             }}
           >
-            {`Map Center · ${getTodayShort()}`}
+            {todayShort ? `Map Center · ${todayShort}` : "Map Center"}
           </div>
         </div>
 
@@ -469,7 +489,7 @@ export default function DashboardClient({
         }}
       >
         <span style={{ fontSize: 12, color: "rgba(210,180,140,0.7)", fontFamily: "var(--font-sans)" }}>
-          {getGreeting()} — {getTodayShort()}
+          {todayShort ? `${greeting} — ${todayShort}` : greeting}
         </span>
         {alertCount > 0 && (
           <span style={{
