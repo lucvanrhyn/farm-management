@@ -1,6 +1,13 @@
--- 0022_farmsettings_parity.sql
+-- 0023_farmsettings_parity.sql
 --
 -- Issue #280 (parent PRD #279) — FarmSettings schema-parity backfill.
+-- DDL half of the pre-stamp split. See 0022_pre_stamp_farmsettings_parity.sql
+-- for the incident writeup (PR #298 post-merge promote jam, 2026-05-16) and
+-- why this file is renamed from 0022 and gated behind a pre-stamp. Tenants
+-- that already have the columns (the legacy `prisma db push` cohort AND every
+-- tenant provisioned from the post-#298 bootstrap DDL, which already declares
+-- all 21) get this migration pre-stamped as applied and skip the ALTERs
+-- entirely; only a genuinely column-less fresh DB ever runs the DDL below.
 --
 -- ROOT CAUSE (not symptom): 21 columns are declared on `model FarmSettings`
 -- in `prisma/schema.prisma` but were NEVER created by the canonical tenant
