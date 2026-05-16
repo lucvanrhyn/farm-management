@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 // usePathname is mutated per-test; stubs below read this variable at call-time.
@@ -269,6 +271,47 @@ describe("AdminNav", () => {
       // we keep it open to preserve orientation.
       breedingHeader.click();
       expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
+
+  // ─── #290: misleading "Calendar" nav entry removed ───────────────────────
+  //
+  // AdminNav previously rendered a "Calendar" child under Tasks linking to
+  // /admin/tasks?view=calendar. There is no calendar feature — that route
+  // silently rendered the Tasks list under a different name (the `view`
+  // query param was never read by app/[farmSlug]/admin/tasks/page.tsx). A
+  // real calendar view is explicit future scope (PRD #279). #290 removes the
+  // dead path: the "Calendar" entry and the inert ?view=calendar query param.
+  describe("#290 — no misleading Calendar nav entry", () => {
+    it("does NOT render a 'Calendar' nav entry in cattle mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in sheep mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "sheep" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in game mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "game" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("still renders the Tasks nav link pointing at /admin/tasks (unaffected)", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const tasks = getLink("Tasks");
+      expect(tasks).not.toBeNull();
+      expect(tasks!.getAttribute("href")).toBe("/farm-x/admin/tasks");
+    });
+
+    it("AdminNav source contains no `view=calendar` query param anywhere", () => {
+      const src = readFileSync(
+        join(process.cwd(), "components/admin/AdminNav.tsx"),
+        "utf8",
+      );
+      expect(src).not.toContain("view=calendar");
+      expect(src).not.toMatch(/label:\s*"Calendar"/);
     });
   });
 

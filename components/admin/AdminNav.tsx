@@ -119,7 +119,6 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -161,7 +160,6 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -202,7 +200,6 @@ const GAME_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -461,10 +458,10 @@ export default function AdminNav({
         const children = item.children
           ? item.children.map((c) => {
               const childHref = `/${farmSlug}${c.path}`;
-              // Child active if pathname matches the child's path portion
-              // (strip query). We compare ignoring any ?foo=bar so
-              // `/admin/tasks?view=calendar` still highlights when the
-              // current pathname is `/farm/admin/tasks`.
+              // Child active if pathname matches the child's path portion.
+              // We strip any ?foo=bar query string before comparing so a
+              // child path that carries a query still highlights when the
+              // current pathname matches its base route.
               const childPathOnly = c.path.split("?")[0];
               const childHrefNoQuery = `/${farmSlug}${childPathOnly}`;
               return {
