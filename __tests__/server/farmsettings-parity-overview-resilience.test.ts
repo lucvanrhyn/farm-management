@@ -288,8 +288,12 @@ describe("FarmSettings schema parity (issue #280)", () => {
 
     const migDir = join(__dirname, "..", "..", "migrations");
     const { readdir } = await import("node:fs/promises");
-    const parityFile = (await readdir(migDir)).find((f) =>
-      f.endsWith("_farmsettings_parity.sql"),
+    // The parity DDL was split into a pre-stamp (bookkeeping-only) + the
+    // renamed DDL file (2026-05-16 incident fix). This test exercises the
+    // DDL half, so exclude the pre_stamp file — running its
+    // `INSERT INTO "_migrations"` against this migrator-less DB would throw.
+    const parityFile = (await readdir(migDir)).find(
+      (f) => f.endsWith("_farmsettings_parity.sql") && !f.includes("pre_stamp"),
     );
     expect(parityFile).toBeDefined();
 
