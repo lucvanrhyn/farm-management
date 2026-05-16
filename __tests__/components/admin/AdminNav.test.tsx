@@ -272,6 +272,49 @@ describe("AdminNav", () => {
     });
   });
 
+  // ─── #290: misleading "Calendar" nav entry removed ───────────────────────
+  //
+  // AdminNav previously rendered a "Calendar" child under Tasks linking to
+  // /admin/tasks?view=calendar. There is no calendar feature — that route
+  // silently rendered the Tasks list under a different name (the `view`
+  // query param was never read by app/[farmSlug]/admin/tasks/page.tsx). A
+  // real calendar view is explicit future scope (PRD #279). #290 removes the
+  // dead path: the "Calendar" entry and the inert ?view=calendar query param.
+  describe("#290 — no misleading Calendar nav entry", () => {
+    it("does NOT render a 'Calendar' nav entry in cattle mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in sheep mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "sheep" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in game mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "game" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("still renders the Tasks nav link pointing at /admin/tasks (unaffected)", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const tasks = getLink("Tasks");
+      expect(tasks).not.toBeNull();
+      expect(tasks!.getAttribute("href")).toBe("/farm-x/admin/tasks");
+    });
+
+    it("AdminNav source contains no `view=calendar` query param anywhere", () => {
+      const fs = require("node:fs") as typeof import("node:fs");
+      const path = require("node:path") as typeof import("node:path");
+      const src = fs.readFileSync(
+        path.join(process.cwd(), "components/admin/AdminNav.tsx"),
+        "utf8",
+      );
+      expect(src).not.toContain("view=calendar");
+      expect(src).not.toMatch(/label:\s*"Calendar"/);
+    });
+  });
+
   // ─── #263: Species settings nav link visibility ──────────────────────────
   //
   // The "Species" link points at /admin/settings/species which only does
