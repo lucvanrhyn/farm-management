@@ -105,7 +105,30 @@ CREATE TABLE "FarmSettings" (
     "breedingSeasonEnd" TEXT,
     "weaningDate" TEXT,
     "openaiApiKey" TEXT,
-    "heroImageUrl" TEXT DEFAULT '/farm-hero.jpg'
+    "heroImageUrl" TEXT DEFAULT '/farm-hero.jpg',
+    "defaultRestDays" INTEGER NOT NULL DEFAULT 60,
+    "defaultMaxGrazingDays" INTEGER NOT NULL DEFAULT 7,
+    "rotationSeasonMode" TEXT NOT NULL DEFAULT 'auto',
+    "dormantSeasonMultiplier" REAL NOT NULL DEFAULT 1.4,
+    "ownerName" TEXT,
+    "ownerIdNumber" TEXT,
+    "taxReferenceNumber" TEXT,
+    "physicalAddress" TEXT,
+    "postalAddress" TEXT,
+    "contactPhone" TEXT,
+    "contactEmail" TEXT,
+    "propertyRegNumber" TEXT,
+    "aiaIdentificationMark" TEXT,
+    "farmRegion" TEXT,
+    "biomeType" TEXT,
+    "onboardingComplete" BOOLEAN NOT NULL DEFAULT false,
+    "quietHoursStart" TEXT DEFAULT '20:00',
+    "quietHoursEnd" TEXT DEFAULT '06:00',
+    "timezone" TEXT DEFAULT 'Africa/Johannesburg',
+    "speciesAlertThresholds" TEXT,
+    "taskSettings" TEXT,
+    "mapSettings" TEXT,
+    "aiSettings" TEXT
 );
 
 -- CreateTable
