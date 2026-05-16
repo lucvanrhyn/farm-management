@@ -138,25 +138,33 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
   const [selectedType, setSelectedType] = useState<ReproType | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
+  // #286 (PRD #279) — every scored / single-select sub-flow starts at an
+  // explicit UNSELECTED sentinel (`null`). A pre-filled default reads as
+  // the farmer's answer, so a tap-through used to persist a fabricated
+  // value. The submit button for each sub-flow is gated on a non-null
+  // selection, and the server validator
+  // (`lib/server/validators/reproductive-state.ts` → REPRO_FIELD_REQUIRED)
+  // independently rejects a missing required field from a stale client.
+
   // Heat detection
-  const [heatMethod, setHeatMethod] = useState<"visual" | "scratch_card">("visual");
+  const [heatMethod, setHeatMethod] = useState<"visual" | "scratch_card" | null>(null);
 
   // Insemination
-  const [insemMethod, setInsemMethod] = useState<"AI" | "natural">("AI");
+  const [insemMethod, setInsemMethod] = useState<"AI" | "natural" | null>(null);
   const [bullId, setBullId] = useState("");
 
   // Pregnancy scan
-  const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain">("pregnant");
+  const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain" | null>(null);
 
   // Calving
   const [calfStatus, setCalfStatus] = useState<"live" | "stillborn">("live");
   const [calfTag, setCalfTag] = useState("");
 
   // Body condition score
-  const [bcsScore, setBcsScore] = useState(5);
+  const [bcsScore, setBcsScore] = useState<number | null>(null);
 
   // Temperament score
-  const [temperamentScore, setTemperamentScore] = useState(1);
+  const [temperamentScore, setTemperamentScore] = useState<number | null>(null);
 
   // Scrotal circumference
   const [scrotalCm, setScrotalCm] = useState("");
@@ -171,36 +179,56 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
     setStep("details");
   }
 
+  // #286 — per-sub-flow submit gate. Each sub-flow's required value must be
+  // ACTIVELY chosen (non-null sentinel) before its submit enables. Mirrors
+  // the server contract in `lib/server/validators/reproductive-state.ts`.
+  function canSubmit(): boolean {
+    switch (selectedType) {
+      case "heat_detection":
+        return heatMethod !== null;
+      case "insemination":
+        return insemMethod !== null;
+      case "pregnancy_scan":
+        return scanResult !== null;
+      case "body_condition_score":
+        return bcsScore !== null;
+      case "temperament_score":
+        return temperamentScore !== null;
+      case "scrotal_circumference":
+        return scrotalCm.trim().length > 0;
+      case "calving":
+        return calfTag.trim().length > 0;
+      default:
+        return false;
+    }
+  }
+
   function handleSubmit() {
-    if (!selectedType) return;
+    if (!selectedType || !canSubmit()) return;
 
     let details: Record<string, string>;
     if (selectedType === "heat_detection") {
-      details = { method: heatMethod };
+      details = { method: heatMethod! };
     } else if (selectedType === "insemination") {
       details = {
-        method: insemMethod,
+        method: insemMethod!,
         ...(bullId.trim() ? { bullId: bullId.trim() } : {}),
       };
     } else if (selectedType === "pregnancy_scan") {
       details = {
-        result: scanResult,
+        result: scanResult!,
       };
     } else if (selectedType === "body_condition_score") {
       details = { score: String(bcsScore) };
     } else if (selectedType === "temperament_score") {
       details = { score: String(temperamentScore) };
     } else if (selectedType === "scrotal_circumference") {
-      if (!scrotalCm.trim()) {
-        alert("Scrotal circumference measurement is required.");
-        return;
-      }
       details = { measurement_cm: scrotalCm.trim() };
     } else {
       // calving
       details = {
         calf_status: calfStatus,
-        ...(calfTag.trim() ? { calf_tag: calfTag.trim() } : {}),
+        calf_tag: calfTag.trim(),
       };
     }
 
@@ -278,7 +306,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Heat
@@ -328,7 +357,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Insemination
@@ -376,7 +406,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Scan Result
@@ -426,7 +457,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Calving
@@ -461,7 +493,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record BCS
@@ -491,7 +524,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Temperament
@@ -530,7 +564,8 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
             <StickySubmitBar>
               <button
                 onClick={handleSubmit}
-                className="w-full font-bold py-4 rounded-2xl text-base"
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
                 Record Scrotal Circumference

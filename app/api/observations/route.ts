@@ -29,6 +29,7 @@ import {
   validateReproductiveState,
   ReproMultiStateError,
   ReproRequiredError,
+  ReproFieldRequiredError,
 } from "@/lib/server/validators/reproductive-state";
 import {
   validateDeathObservation,
@@ -102,10 +103,19 @@ export const POST = tenantWrite<CreateObservationBody>({
     // for non-reproductive `type`s, so death (Wave 2), weighing, treatment
     // etc. flow through unchanged. See `lib/server/validators/reproductive-state.ts`
     // for the full state-counting contract.
+    // Wave 285/286 (PRD #279) — the validator now also enforces per-type
+    // required fields for insemination / BCS / temperament / calving
+    // (mapped to 422 REPRO_FIELD_REQUIRED), closing the offline-queued /
+    // stale-client gap where a pre-filled UI default could persist as the
+    // farmer's answer.
     try {
       validateReproductiveState(body.type, body.details ?? null);
     } catch (err) {
-      if (err instanceof ReproMultiStateError || err instanceof ReproRequiredError) {
+      if (
+        err instanceof ReproMultiStateError ||
+        err instanceof ReproRequiredError ||
+        err instanceof ReproFieldRequiredError
+      ) {
         return routeError(err.code, err.message, 422);
       }
       throw err;
