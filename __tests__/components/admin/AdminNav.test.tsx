@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 // usePathname is mutated per-test; stubs below read this variable at call-time.
@@ -304,10 +306,8 @@ describe("AdminNav", () => {
     });
 
     it("AdminNav source contains no `view=calendar` query param anywhere", () => {
-      const fs = require("node:fs") as typeof import("node:fs");
-      const path = require("node:path") as typeof import("node:path");
-      const src = fs.readFileSync(
-        path.join(process.cwd(), "components/admin/AdminNav.tsx"),
+      const src = readFileSync(
+        join(process.cwd(), "components/admin/AdminNav.tsx"),
         "utf8",
       );
       expect(src).not.toContain("view=calendar");
