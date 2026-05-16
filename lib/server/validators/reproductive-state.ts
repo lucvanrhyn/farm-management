@@ -35,10 +35,55 @@
 /**
  * Reproductive observation types this validator gates on.
  *
- * Any other `type` (death, weighing, treatment, calving, …) is a no-op —
- * see the module docstring for the scope-discipline rationale.
+ * Wave 285/286 (PRD #279) extends the set beyond the original
+ * {heat_detection, pregnancy_scan} multi-state pair. The newly-covered
+ * types each carry a *required field* (not a multi-state) contract:
+ *
+ *   - body_condition_score → numeric `score` in [1..9]
+ *   - temperament_score    → numeric `score` in [1..5]
+ *   - insemination         → `method` ∈ {AI, natural}
+ *   - calving              → calf identity (`calf_tag` | `calfAnimalId`)
+ *
+ * Root cause closed: `ReproductionForm.tsx` pre-filled `useState` defaults
+ * that read as the farmer's answer, and `CalvingForm.tsx` enforced the
+ * required calf tag only via an `alert()`. A stale / offline-queued client
+ * could persist a fabricated default; this validator is the server-side
+ * backstop, mapped to `422 { error: REPRO_FIELD_REQUIRED }`.
+ *
+ * Any other `type` (death, weighing, treatment, …) is a no-op — see the
+ * module docstring for the scope-discipline rationale.
  */
-const REPRO_TYPES: ReadonlySet<string> = new Set(['heat_detection', 'pregnancy_scan']);
+const REPRO_STATE_TYPES: ReadonlySet<string> = new Set([
+  'heat_detection',
+  'pregnancy_scan',
+]);
+
+/**
+ * Per-type required-field specs for the Wave 285/286 sub-flows. Keyed by
+ * observation `type`; each entry describes what counts as a present,
+ * actively-chosen answer. Mirrors the death-observation validator's
+ * single-source-of-truth enum-lock discipline.
+ */
+const REPRO_REQUIRED_FIELD_TYPES: ReadonlySet<string> = new Set([
+  'insemination',
+  'body_condition_score',
+  'temperament_score',
+  'calving',
+]);
+
+const REPRO_TYPES: ReadonlySet<string> = new Set([
+  ...REPRO_STATE_TYPES,
+  ...REPRO_REQUIRED_FIELD_TYPES,
+]);
+
+/** Recognised insemination service methods (mirrors ReproductionForm). */
+const INSEM_METHODS: ReadonlySet<string> = new Set(['AI', 'natural']);
+
+/** Inclusive score bounds per scored observation type. */
+const SCORE_BOUNDS: Record<string, { min: number; max: number }> = {
+  body_condition_score: { min: 1, max: 9 },
+  temperament_score: { min: 1, max: 5 },
+};
 
 /** Typed error → mapped to `422 { error: "REPRO_MULTI_STATE" }` by the route. */
 export class ReproMultiStateError extends Error {
@@ -55,6 +100,24 @@ export class ReproRequiredError extends Error {
   constructor(message?: string) {
     super(message ?? 'Reproductive observation must assert exactly one state.');
     this.name = 'ReproRequiredError';
+  }
+}
+
+/**
+ * Typed error → mapped to `422 { error: "REPRO_FIELD_REQUIRED" }` by the
+ * route. Raised when a Wave 285/286 sub-flow (insemination, BCS,
+ * temperament, calving) is missing its required, actively-chosen field —
+ * the server-side half of the "no pre-filled default counts as an answer"
+ * contract.
+ */
+export class ReproFieldRequiredError extends Error {
+  readonly code = 'REPRO_FIELD_REQUIRED' as const;
+  constructor(message?: string) {
+    super(
+      message ??
+        'Reproductive observation is missing a required field that must be actively selected.',
+    );
+    this.name = 'ReproFieldRequiredError';
   }
 }
 
@@ -149,6 +212,66 @@ function countStateAssertions(
   return [inHeat, pregnant, open, uncertain].filter(Boolean).length;
 }
 
+/** Parse a `score`-like field into a finite number, or `null` if absent/NaN. */
+function parseScore(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** True when `value` is a non-empty, non-whitespace string. */
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Required-field validation for the Wave 285/286 sub-flows. Each type has
+ * exactly one actively-chosen answer that a pre-filled default must not be
+ * able to fabricate. Throws `ReproFieldRequiredError` (422
+ * REPRO_FIELD_REQUIRED) when the required field is absent or invalid.
+ */
+function validateRequiredField(
+  type: string,
+  details: Record<string, unknown> | null,
+): void {
+  if (type === 'insemination') {
+    const method = details?.method;
+    if (typeof method !== 'string' || !INSEM_METHODS.has(method)) {
+      throw new ReproFieldRequiredError(
+        'Insemination requires a service method of AI or natural.',
+      );
+    }
+    return;
+  }
+
+  if (type === 'calving') {
+    // #285 — calf identity is the required field. CalvingForm ships it as
+    // `calfAnimalId`; the ReproductionForm calving sub-flow ships
+    // `calf_tag`. Accept either so client & server agree on the contract.
+    if (!hasText(details?.calf_tag) && !hasText(details?.calfAnimalId)) {
+      throw new ReproFieldRequiredError(
+        'Calving observation requires a calf ear tag (calf identity).',
+      );
+    }
+    return;
+  }
+
+  // body_condition_score / temperament_score — bounded numeric score.
+  const bounds = SCORE_BOUNDS[type];
+  if (bounds) {
+    const score = parseScore(details?.score);
+    if (score === null || score < bounds.min || score > bounds.max) {
+      throw new ReproFieldRequiredError(
+        `${type} requires a score between ${bounds.min} and ${bounds.max}.`,
+      );
+    }
+    return;
+  }
+}
+
 /**
  * Validate a reproductive observation payload. Throws a typed error that
  * the route handler maps onto a 422 envelope.
@@ -156,6 +279,9 @@ function countStateAssertions(
  * - `type` not in `REPRO_TYPES` → no-op (returns silently). This is the
  *   discipline that keeps the validator from blast-radiusing into Death,
  *   weighing, treatment, etc.
+ * - Wave 285/286 required-field types (insemination, body_condition_score,
+ *   temperament_score, calving) → missing/invalid required field throws
+ *   `ReproFieldRequiredError` (422 REPRO_FIELD_REQUIRED).
  * - 0 state assertions → throw `ReproRequiredError` (422 REPRO_REQUIRED).
  * - >1 state assertions → throw `ReproMultiStateError` (422 REPRO_MULTI_STATE).
  * - Exactly 1 state assertion → return.
@@ -164,6 +290,12 @@ export function validateReproductiveState(type: string, details: unknown): void 
   if (!REPRO_TYPES.has(type)) return;
 
   const parsed = coerceDetails(details);
+
+  if (REPRO_REQUIRED_FIELD_TYPES.has(type)) {
+    validateRequiredField(type, parsed);
+    return;
+  }
+
   const count = countStateAssertions(type, parsed);
 
   if (count === 0) {
