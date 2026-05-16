@@ -120,8 +120,6 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
     }
   }
 
-  if (phase.tag === "idle") return null;
-
   return (
     <div style={PANEL_STYLE}>
       <div style={HEADER_STYLE}>
@@ -134,6 +132,14 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
       </div>
 
       <div style={BODY_STYLE}>
+        {/* Phase: idle — next-step instruction (#289). Superseded by the
+            source-selected / mob-selected guidance below as the flow advances. */}
+        {phase.tag === "idle" && (
+          <p style={{ color: "rgba(210,180,140,0.6)", fontSize: 11, lineHeight: 1.5 }}>
+            Tap a camp on the map to pick the mob&rsquo;s source.
+          </p>
+        )}
+
         {/* Phase: source selected — pick a mob */}
         {phase.tag === "source_selected" && (
           <>
