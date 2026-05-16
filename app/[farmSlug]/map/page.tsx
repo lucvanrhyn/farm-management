@@ -28,6 +28,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { CampData } from "@/components/map/layers/CampLayer";
+import CampsEmptyState from "@/components/camps/CampsEmptyState";
 import TenantMapClient from "./TenantMapClient";
 
 export default async function TenantMapPage({
@@ -100,11 +101,18 @@ export default async function TenantMapPage({
         </p>
       </div>
 
-      <TenantMapClient
-        campData={campData}
-        farmLat={settings?.latitude ?? null}
-        farmLng={settings?.longitude ?? null}
-      />
+      {campData.length === 0 ? (
+        // Zero camps for the active FarmMode → onboarding empty state instead
+        // of a blank map (#288). `mode` is the species axis so the guidance
+        // is species-correct (a sheep-mode user isn't shown cattle camps).
+        <CampsEmptyState farmSlug={farmSlug} speciesLabel={mode} variant="overlay" />
+      ) : (
+        <TenantMapClient
+          campData={campData}
+          farmLat={settings?.latitude ?? null}
+          farmLng={settings?.longitude ?? null}
+        />
+      )}
     </div>
   );
 }
