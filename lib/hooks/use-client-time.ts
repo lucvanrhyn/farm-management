@@ -36,7 +36,19 @@ import { useEffect, useState } from "react";
 export function useHasMounted(): boolean {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setMounted(true);
+    // Defer the flag flip off the effect body. The repo's
+    // `react-hooks` lint rule forbids calling setState synchronously
+    // inside an effect (cascading-render hazard) — the same reason
+    // `AnimatedNumber` schedules its post-mount state update via rAF.
+    // A microtask is the lightest scheduler that still lands before
+    // paint, so there's no visible placeholder flash.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setMounted(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   return mounted;
 }
