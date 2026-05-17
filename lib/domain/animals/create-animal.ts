@@ -23,6 +23,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { AnimalRoleForbiddenError } from "./errors";
+
 export const VALID_ANIMAL_SPECIES = ["cattle", "sheep", "game"] as const;
 export const VALID_ANIMAL_SEX = ["Male", "Female"] as const;
 export const VALID_ANIMAL_STATUS = ["Active", "Sold", "Dead", "Removed"] as const;
@@ -63,6 +65,19 @@ export interface CreateAnimalInput {
    * (server-side seed scripts, calving auto-create from observation flow).
    */
   clientLocalId?: string | null;
+  /**
+   * Wave 316b (#309) — the POST `/api/animals` role gate, relocated from
+   * the route into the domain op. The route always passes `role: ctx.role`.
+   *
+   * When supplied AND not `"ADMIN"`/`"LOGGER"`, `createAnimal` throws
+   * `AnimalRoleForbiddenError` (mapped to the byte-identical legacy 403
+   * `routeError("FORBIDDEN", "Forbidden", 403)` envelope). When OMITTED the
+   * gate is skipped — back-compat for the only non-route caller surface
+   * (server-side seed scripts / the documented future calving auto-create
+   * flow), which never had a role to check. Confirmed sole caller is the
+   * route via `git grep createAnimal`.
+   */
+  role?: string;
 }
 
 export interface CreateAnimalResult {
@@ -81,6 +96,19 @@ export async function createAnimal(
   prisma: PrismaClient,
   input: CreateAnimalInput,
 ): Promise<CreateAnimalResult> {
+  // Wave 316b (#309) — role gate, relocated verbatim from the POST route.
+  // Skipped when `role` is omitted (non-route callers had no role). When
+  // present it must precede field validation so a forbidden caller gets the
+  // 403 regardless of payload shape — byte-identical to the route, where the
+  // gate ran before the body unpack.
+  if (
+    input.role !== undefined &&
+    input.role !== "ADMIN" &&
+    input.role !== "LOGGER"
+  ) {
+    throw new AnimalRoleForbiddenError();
+  }
+
   // Required fields — must come first because the route's 400 messages depend
   // on this exact ordering (existing `__tests__/api/animals.test.ts` baseline).
   if (!input.animalId || !input.sex || !input.category || !input.currentCamp) {

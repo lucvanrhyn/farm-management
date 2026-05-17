@@ -21,6 +21,7 @@ import {
 import {
   AnimalFieldForbiddenError,
   AnimalNotFoundError,
+  AnimalRoleForbiddenError,
   InvalidAnimalFieldError,
   ParentNotFoundError,
   SpeciesScopedCampError,
@@ -156,6 +157,15 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     // Legacy route minted this via `routeError("FORBIDDEN", "Forbidden",
     // 403)` → body `{ error: "FORBIDDEN", message: "Forbidden" }`. Reuse
     // the exact same minter so the envelope stays byte-identical.
+    return routeError("FORBIDDEN", "Forbidden", 403);
+  }
+  // Wave 316b (ADR-0001 Wave B, #309) — the POST `/api/animals` collection
+  // role gate, relocated from the route into `createAnimal`. The legacy
+  // route minted a non-ADMIN/non-LOGGER rejection via the IDENTICAL
+  // `routeError("FORBIDDEN", "Forbidden", 403)` call → body
+  // `{ error: "FORBIDDEN", message: "Forbidden" }` at status 403. Re-mint
+  // through the exact same minter so the envelope stays byte-identical.
+  if (err instanceof AnimalRoleForbiddenError) {
     return routeError("FORBIDDEN", "Forbidden", 403);
   }
   if (err instanceof InvalidAnimalFieldError) {
