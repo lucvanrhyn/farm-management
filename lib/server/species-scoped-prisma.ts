@@ -114,8 +114,7 @@ import { ACTIVE_STATUS } from '@/lib/animals/active-species-filter';
 /**
  * Merge a facade-injected `where` predicate with the caller's args.
  * Caller-supplied keys WIN over the injected defaults. This is the
- * "default + override" merge pattern used elsewhere in the codebase
- * (see `lib/notification-generator.ts` for the same shape).
+ * "default + override" merge pattern used elsewhere in the codebase.
  */
 function mergeWhere<W extends object>(
   injected: Partial<W>,
