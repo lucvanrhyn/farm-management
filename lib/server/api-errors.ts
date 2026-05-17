@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { routeError } from "@/lib/server/route/envelope";
 import {
   CrossSpeciesBlockedError,
   MobNotFoundError,
@@ -15,6 +16,13 @@ import {
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
 import { CampHasActiveAnimalsError } from "@/lib/domain/camps/errors";
+import {
+  AnimalFieldForbiddenError,
+  AnimalNotFoundError,
+  InvalidAnimalFieldError,
+  ParentNotFoundError,
+  SpeciesScopedCampError,
+} from "@/lib/domain/animals/errors";
 import {
   InvalidDateFormatError,
   InvalidSaleTypeError,
@@ -81,6 +89,15 @@ import {
  * count-bearing message). All three are emitted by the new `lib/domain/mobs/*`
  * ops. Wire shape stays bare `{ error: CODE }` so the pre-Wave-B tests
  * (which compared by strict equality) keep passing without modification.
+ *
+ * Wave 309b (ADR-0001 Wave B, #309) extension — added the animals
+ * `[id]` GET/PATCH arms (`AnimalNotFoundError` → 404 `{error:"Not
+ * found"}`, `AnimalFieldForbiddenError` → the `routeError("FORBIDDEN",
+ * "Forbidden",403)` envelope, `InvalidAnimalFieldError` → 400 free-text,
+ * `ParentNotFoundError` → 422 `PARENT_NOT_FOUND`, `SpeciesScopedCampError`
+ * → 422 NOT_FOUND|WRONG_SPECIES). This route carries authorization +
+ * validation so every arm reproduces the PRE-extraction literal
+ * byte-identical — NOT the canonical SCREAMING_SNAKE direction.
  */
 export function mapApiDomainError(err: unknown): NextResponse | null {
   if (err instanceof MobNotFoundError) {
@@ -113,6 +130,33 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     // display the `error` field as a sentence — not migrated to a typed
     // code). Byte-identical to the pre-extraction route literal.
     return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  // Wave 309b (ADR-0001 Wave B, #309) — animals `[id]` GET/PATCH ops.
+  // This route carries authorization + validation; the wave is strictly
+  // behaviour-preserving so each arm reproduces the PRE-extraction wire
+  // literal byte-identical (NOT the canonical SCREAMING_SNAKE direction).
+  if (err instanceof AnimalNotFoundError) {
+    // Legacy GET 404 body was the free-text `{ error: "Not found" }`.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (err instanceof AnimalFieldForbiddenError) {
+    // Legacy route minted this via `routeError("FORBIDDEN", "Forbidden",
+    // 403)` → body `{ error: "FORBIDDEN", message: "Forbidden" }`. Reuse
+    // the exact same minter so the envelope stays byte-identical.
+    return routeError("FORBIDDEN", "Forbidden", 403);
+  }
+  if (err instanceof InvalidAnimalFieldError) {
+    // Legacy 400 body was the free-text enum sentence (`status must be
+    // one of: ...` / `sex must be one of: ...`) under the `error` key.
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+  if (err instanceof ParentNotFoundError) {
+    // Legacy 422 body literal `{ error: "PARENT_NOT_FOUND" }`.
+    return NextResponse.json({ error: err.code }, { status: 422 });
+  }
+  if (err instanceof SpeciesScopedCampError) {
+    // Legacy 422 body `{ error: result.reason }` (NOT_FOUND|WRONG_SPECIES).
+    return NextResponse.json({ error: err.reason }, { status: 422 });
   }
   if (err instanceof InvalidTypeError) {
     return NextResponse.json({ error: err.code }, { status: 422 });

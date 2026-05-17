@@ -1,20 +1,47 @@
+/**
+ * GET   /api/animals/[id] — fetch a single animal by its unique animalId.
+ * PATCH /api/animals/[id] — update an animal (role-gated field allowlist,
+ *                           #28 cross-species parent guard, #98
+ *                           cross-species camp guard).
+ *
+ * Wave 309b (ADR-0001 Wave B, #309) — adapter-only wiring. The business
+ * logic (authorization matrix, enum validation, field allowlist, the
+ * hoisted single child-species read shared by both guards) lives in
+ * `lib/domain/animals/{get-animal,update-animal}.ts`. The route keeps
+ * only its transport envelopes: `tenantRead` (GET), `tenantWrite` +
+ * `revalidateAnimalWrite` (PATCH).
+ *
+ * Wire shapes — BYTE-IDENTICAL to the pre-extraction handler (this route
+ * carries authorization; the wave is strictly behaviour-preserving):
+ *   - GET 200            → the animal row
+ *   - GET 404            → `{ error: "Not found" }`         (AnimalNotFoundError)
+ *   - PATCH 200          → the updated animal row
+ *   - PATCH 403          → `{ error: "FORBIDDEN", message: "Forbidden" }`
+ *                          (AnimalFieldForbiddenError — the exact
+ *                           `routeError("FORBIDDEN","Forbidden",403)`
+ *                           envelope, reproduced via the same minter)
+ *   - PATCH 400          → `{ error: "status must be one of: ..." }` /
+ *                          `{ error: "sex must be one of: ..." }`
+ *                          (InvalidAnimalFieldError — legacy free text)
+ *   - PATCH 422          → `{ error: "PARENT_NOT_FOUND" }`  (ParentNotFoundError)
+ *   - PATCH 422          → `{ error: "CROSS_SPECIES_BLOCKED" }`
+ *                          (CrossSpeciesBlockedError — reused from
+ *                           `@/lib/domain/mobs/move-mob`, already mapped)
+ *   - PATCH 422          → `{ error: "NOT_FOUND" | "WRONG_SPECIES" }`
+ *                          (SpeciesScopedCampError — the #98 camp guard)
+ *
+ * All non-2xx bodies are minted by `mapApiDomainError` (owned by the
+ * `tenantRead` / `tenantWrite` adapter try/catch); the route never calls
+ * `NextResponse.json({ error: ... })` for an error path itself.
+ */
 import { NextResponse } from "next/server";
-import { tenantRead, tenantWrite, routeError } from "@/lib/server/route";
-import { CrossSpeciesBlockedError } from "@/lib/domain/mobs/move-mob";
+import { tenantRead, tenantWrite } from "@/lib/server/route";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
-import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
-import type { SpeciesId } from "@/lib/species/types";
+import { getAnimal, updateAnimal } from "@/lib/domain/animals";
 
 export const GET = tenantRead<{ id: string }>({
   handle: async (ctx, _req, params) => {
-    const { prisma } = ctx;
-    const animal = await prisma.animal.findUnique({
-      where: { animalId: params.id },
-    });
-
-    if (!animal) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    const animal = await getAnimal(ctx.prisma, params.id);
     return NextResponse.json(animal);
   },
 });
@@ -22,123 +49,12 @@ export const GET = tenantRead<{ id: string }>({
 export const PATCH = tenantWrite<Record<string, unknown>, { id: string }>({
   revalidate: revalidateAnimalWrite,
   handle: async (ctx, body, _req, params) => {
-    const { prisma, role, slug } = ctx;
-    const { id } = params;
-
-    // LOGGER role may only update the fields needed for field logging:
-    // status + deceasedAt (death recording), currentCamp (movement recording).
-    const LOGGER_ALLOWED = new Set(["status", "deceasedAt", "currentCamp"]);
-    if (role === "LOGGER") {
-      const hasDisallowedKeys = Object.keys(body).some((k) => !LOGGER_ALLOWED.has(k));
-      if (hasDisallowedKeys) {
-        return routeError("FORBIDDEN", "Forbidden", 403);
-      }
-    } else if (role !== "ADMIN") {
-      return routeError("FORBIDDEN", "Forbidden", 403);
-    }
-
-    const VALID_STATUS = new Set(["Active", "Deceased", "Sold", "Culled"]);
-    const VALID_SEX = new Set(["Male", "Female", "Unknown"]);
-
-    if ("status" in body && !VALID_STATUS.has(body.status as string)) {
-      return NextResponse.json(
-        { error: `status must be one of: ${[...VALID_STATUS].join(", ")}` },
-        { status: 400 },
-      );
-    }
-    if ("sex" in body && !VALID_SEX.has(body.sex as string)) {
-      return NextResponse.json(
-        { error: `sex must be one of: ${[...VALID_SEX].join(", ")}` },
-        { status: 400 },
-      );
-    }
-
-    const allowed = [
-      "name",
-      "sex",
-      "dateOfBirth",
-      "breed",
-      "category",
-      "currentCamp",
-      "status",
-      "motherId",
-      "fatherId",
-      "registrationNumber",
-      "deceasedAt",
-      "tagNumber",
-      "brandSequence",
-    ];
-    const update: Record<string, unknown> = {};
-    for (const key of allowed) {
-      if (key in body) update[key] = body[key];
-    }
-
-    // #28 Phase B — cross-species parent guard. If the patch sets motherId or
-    // fatherId, the parent must (a) exist and (b) share the child's species.
-    // #98 — cross-species camp guard. If the patch sets currentCamp, the
-    // destination camp must (a) exist and (b) share the child's species.
-    // Edge case: NULL species on the child (legacy data) is treated as
-    // "unknown, allow" with a TODO so legacy tenants don't break in prod.
-    // TODO(#28): tighten once species backfill is verified across all tenants.
-    const parentFields: Array<"motherId" | "fatherId"> = [];
-    if ("motherId" in body && body.motherId) parentFields.push("motherId");
-    if ("fatherId" in body && body.fatherId) parentFields.push("fatherId");
-    const hasCampMove = "currentCamp" in body && Boolean(body.currentCamp);
-
-    // Hoisted child-species lookup: shared between parent-guard and camp-guard
-    // so we issue exactly one read regardless of how many guards must run.
-    if (parentFields.length > 0 || hasCampMove) {
-      const child = await prisma.animal.findUnique({
-        where: { animalId: id },
-        select: { species: true },
-      });
-
-      if (parentFields.length > 0) {
-        for (const field of parentFields) {
-          const parentAnimalId = body[field] as string;
-          const parent = await prisma.animal.findUnique({
-            where: { animalId: parentAnimalId },
-            select: { species: true },
-          });
-          if (!parent) {
-            return NextResponse.json(
-              { error: "PARENT_NOT_FOUND" },
-              { status: 422 },
-            );
-          }
-          // NULL species on either side = legacy/unknown, allow with TODO.
-          if (
-            child?.species &&
-            parent.species &&
-            child.species !== parent.species
-          ) {
-            // Throw — the adapter routes this through `mapApiDomainError`,
-            // which knows about CrossSpeciesBlockedError.
-            throw new CrossSpeciesBlockedError(child.species, parent.species);
-          }
-        }
-      }
-
-      // Camp-guard runs only when the child species is known. Legacy rows with
-      // species=null are allowed through, mirroring the parent-guard lenience.
-      // TODO(#28): tighten once species backfill is verified across all tenants.
-      if (hasCampMove && child?.species) {
-        const result = await requireSpeciesScopedCamp(prisma, {
-          species: child.species as SpeciesId,
-          farmSlug: slug,
-          campId: body.currentCamp as string,
-        });
-        if (!result.ok) {
-          return NextResponse.json({ error: result.reason }, { status: 422 });
-        }
-      }
-    }
-
-    const animal = await prisma.animal.update({
-      where: { animalId: id },
-      data: update,
+    const animal = await updateAnimal(ctx.prisma, {
+      animalId: params.id,
+      role: ctx.role,
+      slug: ctx.slug,
+      body,
     });
-
     return NextResponse.json(animal);
   },
 });
