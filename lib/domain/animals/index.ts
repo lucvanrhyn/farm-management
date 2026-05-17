@@ -39,6 +39,11 @@ export {
 } from "./create-animal";
 export { getAnimal, type AnimalRow } from "./get-animal";
 export {
+  listAnimals,
+  type ListAnimalsQuery,
+  type ListAnimalsResult,
+} from "./list-animals";
+export {
   updateAnimal,
   type UpdateAnimalInput,
   type UpdatedAnimal,
@@ -46,6 +51,7 @@ export {
 export {
   AnimalNotFoundError,
   AnimalFieldForbiddenError,
+  AnimalRoleForbiddenError,
   InvalidAnimalFieldError,
   ParentNotFoundError,
   SpeciesScopedCampError,

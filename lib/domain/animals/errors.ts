@@ -70,6 +70,25 @@ export class InvalidAnimalFieldError extends Error {
   }
 }
 
+/**
+ * Wave 316b (#309) — the POST `/api/animals` collection-route role gate,
+ * relocated from the route into `createAnimal`. The legacy route minted a
+ * non-ADMIN/non-LOGGER rejection via `routeError("FORBIDDEN", "Forbidden",
+ * 403)` → body `{ error: "FORBIDDEN", message: "Forbidden" }` at status
+ * 403. The `mapApiDomainError` arm reproduces that envelope byte-identical
+ * through the EXACT same `routeError` minter.
+ *
+ * Distinct from `AnimalFieldForbiddenError` (the `[id]` PATCH field gate):
+ * same wire, different business rule (create-role vs field-allowlist), so
+ * a separate class keeps the two gates independently evolvable.
+ */
+export class AnimalRoleForbiddenError extends Error {
+  constructor() {
+    super("Forbidden");
+    this.name = "AnimalRoleForbiddenError";
+  }
+}
+
 export const PARENT_NOT_FOUND = "PARENT_NOT_FOUND" as const;
 
 /**
