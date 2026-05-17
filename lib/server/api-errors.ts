@@ -14,6 +14,7 @@ import {
   InvalidTypeError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
+import { CampHasActiveAnimalsError } from "@/lib/domain/camps/errors";
 import {
   InvalidDateFormatError,
   InvalidSaleTypeError,
@@ -105,6 +106,13 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   }
   if (err instanceof CampNotFoundError) {
     return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  // Wave 309a (ADR-0001 Wave B, #309) — camps domain delete guard.
+  if (err instanceof CampHasActiveAnimalsError) {
+    // Wire shape preserves the count-bearing message (legacy clients
+    // display the `error` field as a sentence — not migrated to a typed
+    // code). Byte-identical to the pre-extraction route literal.
+    return NextResponse.json({ error: err.message }, { status: 409 });
   }
   if (err instanceof InvalidTypeError) {
     return NextResponse.json({ error: err.code }, { status: 422 });
