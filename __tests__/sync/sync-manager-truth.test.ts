@@ -47,6 +47,11 @@ vi.mock('@/lib/offline-store', () => ({
   setSyncMetadataValue: vi.fn(async (key: string, value: string) => {
     memMetadata.set(key, value);
   }),
+  // Issue #287 — the post-sync reconcile pass reads the failed-observation
+  // bucket and flips server-confirmed rows to synced. These cycles queue no
+  // failing rows, so the bucket is empty and reconcile is a no-op that does
+  // not perturb the SyncTruth invariant under test.
+  getFailedObservations: vi.fn(async () => [] as unknown[]),
   // Row-status mutators.
   markObservationSynced: vi.fn(async () => {}),
   markObservationFailed: vi.fn(async () => {}),

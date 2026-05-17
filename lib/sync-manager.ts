@@ -19,6 +19,8 @@ import {
   clearPendingAnimalUpdate,
   getFailedAnimals,
   getFailedCoverReadings,
+  getFailedObservations,
+  markObservationSynced,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
@@ -604,6 +606,87 @@ function describePendingObservation(o: PendingObservation): string {
   return `${typeLabel} on camp ${o.camp_id}`;
 }
 
+/**
+ * Issue #287 — post-sync failed-row reconciliation.
+ *
+ * Root cause this closes: Issue #208 made failed rows strict — once a row
+ * lands in `failed` it leaves the pending bucket and is never auto-retried.
+ * There was no mechanism to notice that a failed row's record actually DID
+ * reach the server (the idempotent `clientLocalId` upsert from #281, or a
+ * transient failure where the POST landed but the response was lost in
+ * transit). The Logger "Failed: N" indicator therefore stayed stuck forever
+ * even though the data was safely server-side.
+ *
+ * The fix is a SEPARATE post-sync pass — NOT a re-enablement of the #208
+ * auto-retry. It cross-references every IDB observation row still in
+ * `failed` state against the server's queue-status mirror
+ * (`GET /api/sync/queue/status`). Any failed row whose `clientLocalId` is
+ * present in the server mirror is provably persisted server-side, so it is
+ * flipped `failed → synced`.
+ *
+ * ADR-0002 safety: the queue-status route is the dedicated server mirror
+ * ("did the server actually receive the obs I queued?"), NOT a cache GET.
+ * Only a confirmed server mirror may flip failed → synced; a row whose
+ * `clientLocalId` is absent from the mirror (or a row with no
+ * `clientLocalId` at all, which cannot be matched) stays `failed`. This
+ * pass never ticks any sync-truth timestamp — `recordSyncAttempt` remains
+ * the single writer of `lastFullSuccessAt`.
+ *
+ * Idempotent: a row already flipped to `synced` no longer appears in
+ * `getFailedObservations()`, so a second pass is a no-op. Best-effort: a
+ * failed status fetch leaves every failed row untouched (we never clear a
+ * row we could not confirm).
+ *
+ * Scope: observations only. They are the kind that carries `clientLocalId`
+ * end-to-end AND the kind the server queue-status mirror reflects; they are
+ * also what the Logger "Failed: N" indicator counts in the #208/#281 stuck
+ * scenario this issue targets.
+ */
+interface QueueStatusMirror {
+  observations: Array<{ clientLocalId: string | null }>;
+}
+
+export async function reconcileFailedRows(): Promise<{ reconciled: number }> {
+  const failed = await getFailedObservations();
+  // Only rows with a clientLocalId can be safely matched against the
+  // server mirror. A legacy row with no key cannot be proven server-side
+  // and must stay failed (ADR-0002).
+  const matchable = failed.filter(
+    (o): o is PendingObservation & { clientLocalId: string; local_id: number } =>
+      typeof o.clientLocalId === 'string' &&
+      o.clientLocalId.length > 0 &&
+      typeof o.local_id === 'number',
+  );
+  if (matchable.length === 0) return { reconciled: 0 };
+
+  let serverConfirmed: Set<string>;
+  try {
+    const res = await fetch('/api/sync/queue/status');
+    if (!res.ok) {
+      console.warn('[sync] queue-status fetch failed:', res.status, res.statusText);
+      return { reconciled: 0 };
+    }
+    const body = (await res.json()) as QueueStatusMirror;
+    serverConfirmed = new Set(
+      (body.observations ?? [])
+        .map((o) => o.clientLocalId)
+        .filter((c): c is string => typeof c === 'string' && c.length > 0),
+    );
+  } catch (err) {
+    console.warn('[sync] queue-status reconcile threw:', err);
+    return { reconciled: 0 };
+  }
+
+  let reconciled = 0;
+  for (const row of matchable) {
+    if (serverConfirmed.has(row.clientLocalId)) {
+      await markObservationSynced(row.local_id);
+      reconciled++;
+    }
+  }
+  return { reconciled };
+}
+
 export async function syncAndRefresh(
   options: SyncAndRefreshOptions = {},
 ): Promise<{ synced: number; failed: number; syncedItems: SyncedItem[] }> {
@@ -707,6 +790,14 @@ export async function syncAndRefresh(
       photo: photoResult,
     },
   });
+
+  // Issue #287 — post-sync reconciliation. Failed rows whose record is
+  // provably server-side (confirmed via the queue-status mirror) flip
+  // failed → synced so the Logger "Failed: N" indicator clears itself
+  // instead of staying stuck forever. Best-effort: a failed reconcile
+  // never clears an unconfirmed row, and it does not move sync truth
+  // (`recordSyncAttempt` above is the single truth writer per ADR-0002).
+  await reconcileFailedRows();
 
   return { synced, failed, syncedItems };
 }
