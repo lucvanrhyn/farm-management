@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { LiveCampStatus } from "@/lib/server/camp-status";
+import { composeAlerts } from "@/lib/server/alerts/compose";
 import dynamic from "next/dynamic";
 import { SignOutButton } from "@/components/logger/SignOutButton";
 import SchematicMap, { type FilterMode } from "./SchematicMap";
@@ -60,6 +61,36 @@ const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ViewMode = "schematic" | "satellite";
+
+// ADR-0005 — the header badge is a *partial pass* of the single alert
+// composition core. Of the engine's eight sources only camp-conditions is
+// available offline (it's what `/api/camps/status` returns); the partial
+// pass therefore only ever surfaces poor-grazing / fence-damaged /
+// stale-inspections. stale-inspections needs the inspection-age threshold,
+// so we pass the documented engine defaults here. These mirror the
+// `DEFAULT_THRESHOLDS` already used by the server callers
+// (lib/server/notification-generator.ts, lib/server/alerts/legacy-dashboard.ts);
+// the header can't read FarmSettings offline, so defaults are correct for an
+// "at least N" prefix indicator. A future PR that wires real thresholds
+// through can only raise the count toward canonical — never contradict it.
+const HEADER_PARTIAL_THRESHOLDS = {
+  adgPoorDoerThreshold: 0.7,
+  calvingAlertDays: 14,
+  daysOpenLimit: 365,
+  campGrazingWarningDays: 7,
+  staleCampInspectionHours: 48,
+} as const;
+
+// Adapter: `/api/camps/status` returns a `Record<campId, LiveCampStatus>`
+// (the offline-available shape). composeAlerts wants a Map. Pinning the
+// conversion in one place is the ADR's "one adapter" requirement — the
+// offline shape and the engine's `LiveCampStatus` are identical field-wise,
+// so this is a pure container swap with no field remapping.
+function liveConditionsToCampConditions(
+  live: Record<string, LiveCampStatus>,
+): Map<string, LiveCampStatus> {
+  return new Map(Object.entries(live));
+}
 
 // ─── Date helper ──────────────────────────────────────────────────────────────
 
@@ -260,18 +291,36 @@ export default function DashboardClient({
 
   const panelOpen = selectedCampId !== null || selectedAnimalId !== null;
 
+  // ADR-0005 — the header is a *partial pass* of the single composition
+  // core, NOT a bespoke formula. We adapt the offline `liveConditions` into
+  // the engine's campConditions Map once and feed it to `composeAlerts`.
+  // `alertCount` is the partial pass's `.totalCount`; it is provably a
+  // prefix of the full server pass (`/admin/alerts`) for the same farm — it
+  // can only under-report toward the canonical number, never contradict it.
+  // `inspectedToday` is derived from that SAME adapted map (single source of
+  // truth for camp conditions) rather than a second copy of liveConditions.
+  const campConditions = liveConditionsToCampConditions(liveConditions);
+  const alerts = composeAlerts({
+    campConditions,
+    totalCamps: camps.length,
+    thresholds: HEADER_PARTIAL_THRESHOLDS,
+    farmSlug,
+    // Wall-clock here is intentional and matches the existing `daysSince`
+    // pattern below: `now` only feeds the stale-inspections age check, a
+    // days-granularity derived value that updates when `liveConditions`
+    // changes. The header already shows "—" until conditionsLoading clears.
+    now: new Date(),
+  });
+  const alertCount = alerts.totalCount;
   // `today` is "" until mount (placeholder), so before hydration completes
   // no record matches and `inspectedToday` is 0 — consistent with the
   // server render. After mount it's the client-local day and the count is
   // accurate. The header already shows "—" while `conditionsLoading`.
   const inspectedToday = today
-    ? Object.values(liveConditions).filter(
+    ? [...campConditions.values()].filter(
         (c) => new Date(c.last_inspected_at).toDateString() === today,
       ).length
     : 0;
-  const alertCount = Object.values(liveConditions).filter(
-    (c) => c.grazing_quality === "Poor" || c.fence_status !== "Intact"
-  ).length;
 
   const campData = camps.map((camp) => {
     const cond = liveConditions[camp.camp_id];
