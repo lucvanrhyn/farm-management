@@ -12,10 +12,22 @@
  * a generic, reusable error and nothing depended on the pre-extraction
  * free-text body for this route.
  *
+ * Wave 316a (#309) adds `createCamp` (POST /api/camps) — same contract:
+ * the route keeps its `createCampSchema` parse + `SPECIES_OMITTED`
+ * sentinel adapter, the op owns the business rules and throws
+ * `MissingSpeciesError` (422) / `DuplicateCampError` (409).
+ *
  * See `docs/adr/0001-route-handler-architecture.md`,
- * `tasks/wave-309a-camps-domain.md`, and
+ * `tasks/wave-309a-camps-domain.md`,
+ * `tasks/wave-316a-camps-create-domain.md`, and
  * `tasks/issue-309-adr-0001-waveB-triage.md`.
  */
+export {
+  createCamp,
+  SPECIES_OMITTED,
+  type CreateCampInput,
+  type CreateCampResult,
+} from "./create-camp";
 export {
   updateCamp,
   type PatchCampBody,
@@ -23,4 +35,11 @@ export {
   type UpdateCampResult,
 } from "./update-camp";
 export { deleteCamp, type DeleteCampResult } from "./delete-camp";
-export { CampHasActiveAnimalsError, CAMP_HAS_ACTIVE_ANIMALS } from "./errors";
+export {
+  CampHasActiveAnimalsError,
+  CAMP_HAS_ACTIVE_ANIMALS,
+  MissingSpeciesError,
+  MISSING_SPECIES,
+  DuplicateCampError,
+  DUPLICATE_CAMP,
+} from "./errors";

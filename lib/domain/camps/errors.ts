@@ -12,6 +12,12 @@
  * guard, modelled here mirroring `MobHasAnimalsError`: the count-bearing
  * message is preserved on the wire (legacy clients render the `error`
  * field as a sentence — not yet migrated to a typed code).
+ *
+ * Wave 316a (#309) appends the two POST /api/camps create-time failure
+ * modes: `MissingSpeciesError` (typed 422 `MISSING_SPECIES` per #232) and
+ * `DuplicateCampError` (409, message-preserving like
+ * `CampHasActiveAnimalsError` — the legacy admin form pattern-matches the
+ * free-text string).
  */
 
 export const CAMP_HAS_ACTIVE_ANIMALS = "CAMP_HAS_ACTIVE_ANIMALS" as const;
@@ -32,5 +38,40 @@ export class CampHasActiveAnimalsError extends Error {
     );
     this.name = "CampHasActiveAnimalsError";
     this.activeCount = activeCount;
+  }
+}
+
+export const MISSING_SPECIES = "MISSING_SPECIES" as const;
+
+/**
+ * Create attempted without choosing a species (issue #232). Distinct from
+ * schema VALIDATION_FAILED (400 with `details.fieldErrors.species`): this
+ * is a typed 422 `{ error: "MISSING_SPECIES" }` so clients can render a
+ * "please pick a species" UX without parsing the field-errors bag. The
+ * wire body is the bare code (no inherited Prisma column default).
+ */
+export class MissingSpeciesError extends Error {
+  readonly code = MISSING_SPECIES;
+  constructor() {
+    super(MISSING_SPECIES);
+    this.name = "MissingSpeciesError";
+  }
+}
+
+export const DUPLICATE_CAMP = "DUPLICATE_CAMP" as const;
+
+/**
+ * Create attempted with a (species, campId) pair that already exists
+ * (Phase A of #28: campId is no longer globally unique — the duplicate
+ * guard is species-scoped). Wire: 409 `{ error: "A camp with this ID
+ * already exists" }` — the message is preserved on the wire because the
+ * legacy admin form pattern-matches it directly. Byte-identical to the
+ * pre-extraction route literal.
+ */
+export class DuplicateCampError extends Error {
+  readonly code = DUPLICATE_CAMP;
+  constructor() {
+    super("A camp with this ID already exists");
+    this.name = "DuplicateCampError";
   }
 }
