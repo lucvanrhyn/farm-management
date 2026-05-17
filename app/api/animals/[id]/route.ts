@@ -26,7 +26,7 @@
  *   - PATCH 422          → `{ error: "PARENT_NOT_FOUND" }`  (ParentNotFoundError)
  *   - PATCH 422          → `{ error: "CROSS_SPECIES_BLOCKED" }`
  *                          (CrossSpeciesBlockedError — reused from
- *                           `@/lib/domain/mobs/move-mob`, already mapped)
+ *                           `@/lib/species/errors`, already mapped)
  *   - PATCH 422          → `{ error: "NOT_FOUND" | "WRONG_SPECIES" }`
  *                          (SpeciesScopedCampError — the #98 camp guard)
  *

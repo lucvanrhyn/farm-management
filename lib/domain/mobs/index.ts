@@ -7,6 +7,11 @@
  * these into HTTP route handlers; the typed errors map onto the wire
  * envelope via `mapApiDomainError`.
  *
+ * `CrossSpeciesBlockedError`/`CROSS_SPECIES_BLOCKED` are a shared
+ * species-isolation invariant (thrown by both the mobs camp-guard and the
+ * animals parent-guard), so they are defined in `@/lib/species/errors`
+ * (#315) and merely re-exported here as part of the mobs public surface.
+ *
  * See `docs/adr/0001-route-handler-architecture.md` and
  * `tasks/wave-151-mobs-domain-extraction.md`.
  */
@@ -35,8 +40,10 @@ export {
 export {
   performMobMove,
   MobNotFoundError,
-  CrossSpeciesBlockedError,
-  CROSS_SPECIES_BLOCKED,
   type PerformMobMoveArgs,
   type PerformMobMoveResult,
 } from "./move-mob";
+export {
+  CrossSpeciesBlockedError,
+  CROSS_SPECIES_BLOCKED,
+} from "@/lib/species/errors";

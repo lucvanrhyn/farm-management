@@ -27,10 +27,8 @@ vi.mock("@/lib/domain/mobs/move-mob", async () => {
 });
 
 import { updateMob } from "../update-mob";
-import {
-  CrossSpeciesBlockedError,
-  MobNotFoundError,
-} from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 
 describe("updateMob(prisma, input)", () => {
   const mobFindUnique = vi.fn();

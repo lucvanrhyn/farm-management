@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { routeError } from "@/lib/server/route/envelope";
-import {
-  CrossSpeciesBlockedError,
-  MobNotFoundError,
-} from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import {
   MobHasAnimalsError,
   NotFoundError,

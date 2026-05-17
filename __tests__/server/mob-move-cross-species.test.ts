@@ -58,11 +58,11 @@ const {
   };
 });
 
+import { performMobMove } from "@/lib/domain/mobs/move-mob";
 import {
-  performMobMove,
   CrossSpeciesBlockedError,
   CROSS_SPECIES_BLOCKED,
-} from "@/lib/domain/mobs/move-mob";
+} from "@/lib/species/errors";
 import type { PrismaClient } from "@prisma/client";
 
 const mob = (overrides: Partial<{ id: string; name: string; currentCamp: string; species: string }> = {}) => ({

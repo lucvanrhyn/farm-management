@@ -23,7 +23,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
-import { CrossSpeciesBlockedError } from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
 import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
 import type { SpeciesId } from "@/lib/species/types";
 
