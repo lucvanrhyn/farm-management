@@ -1,18 +1,33 @@
+/**
+ * PATCH  /api/camps/[campId] — update a camp (optional-field patch).
+ * DELETE /api/camps/[campId] — delete a camp (blocked when active animals
+ *                              still reference it).
+ *
+ * Wave 309a (ADR-0001 Wave B, #309) — adapter-only wiring. Business logic
+ * lives in `lib/domain/camps/{update-camp,delete-camp}.ts`. Validation
+ * stays in this route's `patchCampSchema` adapter parse; the typed-error
+ * envelope maps domain throws onto the existing wire shape via
+ * `mapApiDomainError` (owned by the `adminWrite` adapter).
+ *
+ * Wire shapes (unchanged except not-found, see note):
+ *   - PATCH 200  → `{ success: true }`
+ *   - PATCH 404  → `{ error: "CAMP_NOT_FOUND" }`   (CampNotFoundError)
+ *   - DELETE 200 → `{ success: true }`
+ *   - DELETE 404 → `{ error: "CAMP_NOT_FOUND" }`   (CampNotFoundError)
+ *   - DELETE 409 → `{ error: "Cannot delete camp with N active animal(s)..." }`
+ *                  (CampHasActiveAnimalsError — message preserved on wire)
+ *
+ * Not-found note: the pre-extraction free-text body was
+ * `{ error: "Camp not found" }` (404). Nothing depended on the literal
+ * (the client renders `error` as an opaque alert string; no test
+ * asserts it for this route), so this wave adopts the canonical
+ * `CAMP_NOT_FOUND` code per ADR-0001 / Wave C direction. Status (404) is
+ * unchanged; only the body string changes.
+ */
 import { NextResponse } from "next/server";
 import { adminWrite, RouteValidationError } from "@/lib/server/route";
 import { revalidateCampWrite } from "@/lib/server/revalidate";
-
-interface PatchCampBody {
-  campName?: string;
-  sizeHectares?: number | null;
-  waterSource?: string | null;
-  geojson?: string | null;
-  color?: string | null;
-  veldType?: string | null;
-  restDaysOverride?: number | null;
-  maxGrazingDaysOverride?: number | null;
-  rotationNotes?: string | null;
-}
+import { updateCamp, deleteCamp, type PatchCampBody } from "@/lib/domain/camps";
 
 const VELD_TYPES = new Set(["sweetveld", "sourveld", "mixedveld", "cultivated"]);
 
@@ -66,75 +81,18 @@ export const PATCH = adminWrite<PatchCampBody, { campId: string }>({
   schema: patchCampSchema,
   revalidate: revalidateCampWrite,
   handle: async (ctx, body, _req, params) => {
-    const { prisma } = ctx;
-    const { campId } = params;
-
-    // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-    // species+campId). findFirst is single-species-safe; Phase B will scope by
-    // species and use the compound key.
-    const camp = await prisma.camp.findFirst({ where: { campId } });
-    if (!camp) {
-      return NextResponse.json({ error: "Camp not found" }, { status: 404 });
-    }
-
-    // Phase A of #28: campId is no longer globally unique. Update via the
-    // CUID primary key resolved above; Phase B will switch to the compound
-    // key once the API layer carries a `species` discriminator.
-    await prisma.camp.update({
-      where: { id: camp.id },
-      data: {
-        ...(body.campName !== undefined && { campName: body.campName }),
-        ...(body.sizeHectares !== undefined && { sizeHectares: body.sizeHectares }),
-        ...(body.waterSource !== undefined && { waterSource: body.waterSource }),
-        ...(body.geojson !== undefined && { geojson: body.geojson }),
-        ...(body.color !== undefined && { color: body.color }),
-        ...(body.veldType !== undefined && { veldType: body.veldType }),
-        ...(body.restDaysOverride !== undefined && {
-          restDaysOverride: body.restDaysOverride,
-        }),
-        ...(body.maxGrazingDaysOverride !== undefined && {
-          maxGrazingDaysOverride: body.maxGrazingDaysOverride,
-        }),
-        ...(body.rotationNotes !== undefined && {
-          rotationNotes: body.rotationNotes,
-        }),
-      },
+    const result = await updateCamp(ctx.prisma, {
+      campId: params.campId,
+      patch: body,
     });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json(result);
   },
 });
 
 export const DELETE = adminWrite<unknown, { campId: string }>({
   revalidate: revalidateCampWrite,
   handle: async (ctx, _body, _req, params) => {
-    const { prisma } = ctx;
-    const { campId } = params;
-
-    // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-    // species+campId). findFirst is single-species-safe; Phase B will scope.
-    const camp = await prisma.camp.findFirst({ where: { campId } });
-    if (!camp) {
-      return NextResponse.json({ error: "Camp not found" }, { status: 404 });
-    }
-
-    // cross-species by design: deletion guard must block on any species in camp.
-    const activeAnimals = await prisma.animal.count({
-      where: { currentCamp: campId, status: "Active" },
-    });
-    if (activeAnimals > 0) {
-      return NextResponse.json(
-        {
-          error: `Cannot delete camp with ${activeAnimals} active animal(s). Move or remove them first.`,
-        },
-        { status: 409 },
-      );
-    }
-
-    // Phase A of #28: delete via the resolved CUID primary key (campId is no
-    // longer globally unique). Phase B will switch to the compound key.
-    await prisma.camp.delete({ where: { id: camp.id } });
-
-    return NextResponse.json({ success: true });
+    const result = await deleteCamp(ctx.prisma, params.campId);
+    return NextResponse.json(result);
   },
 });
