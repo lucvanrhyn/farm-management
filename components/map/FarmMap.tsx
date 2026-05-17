@@ -248,8 +248,8 @@ export default function FarmMap({
         interactiveLayerIds={layerState.campOverlay ? ["camp-fill"] : []}
         onClick={layerState.campOverlay ? handleCampClick : undefined}
       >
-        <GeolocateControl position="bottom-right" />
-        <NavigationControl position="bottom-right" />
+        <GeolocateControl position="top-right" />
+        <NavigationControl position="top-right" />
         <ScaleControl position="bottom-left" />
 
         {/* Layer mount dispatch — each layer is independent and mounts only when its toggle is on. */}
@@ -309,8 +309,11 @@ export default function FarmMap({
       {/* Overlay selector toolbar (camp overlay color ramp) */}
       <div
         style={{
-          position: "absolute", top: 12, right: 12, zIndex: 10,
-          display: "flex", gap: 4, padding: "4px 6px",
+          position: "absolute", top: 12, left: 12, zIndex: 10,
+          display: "flex", flexWrap: "wrap", gap: 4, padding: "4px 6px",
+          // Leave a right gutter so the wrapped row never slides under the
+          // top-right Mapbox nav/geolocate control column on narrow screens.
+          maxWidth: "calc(100% - 78px)",
           borderRadius: 10, background: "rgba(26,21,16,0.85)",
           backdropFilter: "blur(8px)", border: "1px solid rgba(140,100,60,0.25)",
         }}
@@ -350,12 +353,15 @@ export default function FarmMap({
         </div>
       )}
 
-      <div style={{ position: "absolute", bottom: 24, right: 200, zIndex: 10, display: "flex", gap: 8 }}>
+      {/* Bottom-left action cluster. A compact vertical stack keeps it narrow
+          so it never reaches the bottom-right Layers panel, even at ~390px. */}
+      <div style={{ position: "absolute", bottom: 36, left: 12, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
         <button
           onClick={moveModeActions.toggleActive}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px", borderRadius: 8, fontSize: 12,
+            padding: "6px 12px", borderRadius: 8, fontSize: 11,
+            whiteSpace: "nowrap",
             fontFamily: "var(--font-sans)", fontWeight: 500,
             background: moveMode.active ? "rgba(196,144,48,0.2)" : "rgba(36,28,20,0.88)",
             border: moveMode.active ? "1px solid rgba(196,144,48,0.5)" : "1px solid rgba(140,100,60,0.35)",
@@ -371,7 +377,8 @@ export default function FarmMap({
           onClick={() => setIsDrawing((v) => !v)}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px", borderRadius: 8, fontSize: 12,
+            padding: "6px 12px", borderRadius: 8, fontSize: 11,
+            whiteSpace: "nowrap",
             fontFamily: "var(--font-sans)", fontWeight: 500,
             background: isDrawing ? "rgba(34,197,94,0.2)" : "rgba(36,28,20,0.88)",
             border: isDrawing ? "1px solid rgba(34,197,94,0.5)" : "1px solid rgba(140,100,60,0.35)",
