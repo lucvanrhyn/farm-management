@@ -60,3 +60,39 @@ re-home its test. Separate plan at 309c dispatch time.
 - §promote-delegation **routine documented-issue path** applies (no ADR, no
   auth/payment/migration surface, behaviour-preserving) — NOT the arch-PR
   explicit-signoff exception. Ship through merge on green required CI.
+
+## Sub-wave status
+
+- **309a — camps domain** — ✅ SHIPPED (PR #312, merged into origin/main
+  @ 3b52376).
+- **309b — animals domain completion** — ✅ DONE.
+  `app/api/animals/[id]` GET+PATCH extracted into
+  `lib/domain/animals/{get-animal,update-animal}.ts` + `errors.ts`;
+  `index.ts` expanded to the full public surface (re-exports the existing
+  `createAnimal` + the new ops/errors, mirroring `lib/domain/mobs/index.ts`).
+  Route shrank to `tenantRead` / `tenantWrite` adapter wiring (kept
+  `revalidateAnimalWrite`). **Wire byte-identical** — incl. the LOGGER/ADMIN
+  authz 403 envelope (`{error:"FORBIDDEN",message:"Forbidden"}`, reproduced
+  via the same `routeError` minter), the legacy 404 `{error:"Not found"}`,
+  the free-text 400 enum messages, `PARENT_NOT_FOUND`/`NOT_FOUND`/
+  `WRONG_SPECIES` 422 literals, and the reused `CROSS_SPECIES_BLOCKED` 422 —
+  pinned by `__tests__/api/animals-id-wire-preservation.test.ts` and the
+  pre-existing `__tests__/api/animals-parent-cross-species.test.ts` (still
+  green through the new adapter). `audit-species-where`: 0 new offenders,
+  baseline UNCHANGED (the `[id]` calls are unique-key `findUnique`/`update`,
+  exempt by construction). `animals/[id]` was never in the
+  `route-handler-coverage` EXEMPT set → the "remove from EXEMPT" step was a
+  confirmed no-op.
+- **309c — profitability-by-animal** — pending (separate plan at dispatch).
+
+## Future optional cleanup (NOT actioned by 309b — explicitly out of scope)
+
+`CrossSpeciesBlockedError` lives in `lib/domain/mobs/move-mob.ts` and is
+consumed cross-domain (mobs, rotation, the animals `[id]` route +
+`mapApiDomainError`). Centralising it (e.g. to a shared
+`lib/domain/species/` or `lib/domain/errors/`) is a cross-cutting refactor
+with regression surface across mobs/rotation/observations and was
+deliberately deferred — 309b reuses it by importing from
+`@/lib/domain/mobs/move-mob` exactly as the pre-extraction route did. Log
+as a low-priority follow-up; it should be its own scoped wave, not folded
+into a behaviour-preserving extraction.
