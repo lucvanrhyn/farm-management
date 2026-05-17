@@ -88,8 +88,13 @@ export function composeAlerts(inputs: AlertInputs): DashboardAlerts {
     }
   }
 
-  // ── Camp grazing (camp-conditions source) ──────────────────────────────────
+  // ── Camp grazing + fence (camp-conditions source) ──────────────────────────
+  // Both derive from the SAME input class as each other (the offline-available
+  // camp-conditions map), so the fence alert stays offline-computable — that's
+  // why ADR-0005 §4 puts it here next to poor-grazing rather than as a
+  // server-only source.
   let poorGrazingCount = 0;
+  let fenceDamagedCount = 0;
   if (campConditions) {
     for (const status of campConditions.values()) {
       if (
@@ -97,6 +102,9 @@ export function composeAlerts(inputs: AlertInputs): DashboardAlerts {
         status.grazing_quality === "Overgrazed"
       ) {
         poorGrazingCount++;
+      }
+      if (status.fence_status !== "Intact") {
+        fenceDamagedCount++;
       }
     }
   }
@@ -142,6 +150,29 @@ export function composeAlerts(inputs: AlertInputs): DashboardAlerts {
           : `${poorGrazingCount} camps with poor or overgrazed pasture`,
       count: poorGrazingCount,
       href: `/${farmSlug}/admin/performance`,
+      species: "farm",
+    });
+  }
+
+  // Amber: damaged / open fences (farm-wide, camp-conditions source).
+  // ADR-0005 §4 — a camp with fence_status !== "Intact" is a real
+  // operational alert. It's derived from the same input class as
+  // poor-grazing, so it remains offline-computable: both the header badge
+  // and /admin/alerts gain it, preserving the header's pre-existing
+  // fence-awareness rather than dropping it. Icon `Tent` + the camps href
+  // match the sibling camp alert (poor-grazing) so AlertCard's ICON_MAP
+  // resolves it the same way and the row is visually consistent.
+  if (fenceDamagedCount > 0) {
+    amber.push({
+      id: "fence-damaged",
+      severity: "amber",
+      icon: "Tent",
+      message:
+        fenceDamagedCount === 1
+          ? "1 camp with a damaged or open fence"
+          : `${fenceDamagedCount} camps with a damaged or open fence`,
+      count: fenceDamagedCount,
+      href: `/${farmSlug}/admin/camps`,
       species: "farm",
     });
   }

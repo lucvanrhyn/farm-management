@@ -104,6 +104,50 @@ describe("composeAlerts — camp-conditions source", () => {
   });
 });
 
+describe("composeAlerts — fence (camp-conditions source, ADR-0005 §4)", () => {
+  it("non-Intact fence → amber fence-damaged, pluralised, camps href", () => {
+    const out = composeAlerts(
+      base({
+        campConditions: new Map([
+          ["c1", camp({ fence_status: "Damaged" })],
+          ["c2", camp({ fence_status: "Damaged" })],
+          ["c3", camp()], // Intact — no contribution
+        ]),
+        totalCamps: 3,
+      }),
+    );
+    const a = out.amber.find((x) => x.id === "fence-damaged");
+    expect(a).toBeDefined();
+    expect(a!.severity).toBe("amber");
+    expect(a!.count).toBe(2);
+    expect(a!.message).toBe("2 camps with a damaged or open fence");
+    expect(a!.href).toBe(`/${FARM}/admin/camps`);
+    expect(a!.species).toBe("farm");
+  });
+
+  it("single damaged fence → singular message", () => {
+    const out = composeAlerts(
+      base({
+        campConditions: new Map([["c1", camp({ fence_status: "Damaged" })]]),
+        totalCamps: 1,
+      }),
+    );
+    expect(
+      out.amber.find((x) => x.id === "fence-damaged")?.message,
+    ).toBe("1 camp with a damaged or open fence");
+  });
+
+  it("all-Intact fences → no fence alert", () => {
+    const out = composeAlerts(
+      base({
+        campConditions: new Map([["c1", camp()], ["c2", camp()]]),
+        totalCamps: 2,
+      }),
+    );
+    expect(out.amber.find((x) => x.id === "fence-damaged")).toBeUndefined();
+  });
+});
+
 describe("composeAlerts — withdrawal source", () => {
   it("withdrawal animals → red in-withdrawal, pluralised", () => {
     const out = composeAlerts(
