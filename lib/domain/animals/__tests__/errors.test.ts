@@ -20,8 +20,7 @@
  *   - SpeciesScopedCampError    → 422 `{ error: "NOT_FOUND" | "WRONG_SPECIES" }`
  *
  * Cross-species parent mismatch reuses `CrossSpeciesBlockedError` from
- * `@/lib/domain/mobs/move-mob` (already mapped — NOT re-declared here;
- * centralising it is explicitly out of scope for 309b).
+ * `@/lib/species/errors` (#315) (already mapped — NOT re-declared here).
  */
 import { describe, it, expect } from "vitest";
 

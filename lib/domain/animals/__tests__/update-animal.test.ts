@@ -39,7 +39,7 @@ import {
   ParentNotFoundError,
   SpeciesScopedCampError,
 } from "../errors";
-import { CrossSpeciesBlockedError } from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
 
 const animalFindUnique = vi.fn();
 const animalUpdate = vi.fn();

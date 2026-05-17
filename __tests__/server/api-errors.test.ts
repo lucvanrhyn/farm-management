@@ -20,10 +20,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  CrossSpeciesBlockedError,
-  MobNotFoundError,
-} from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 
 async function readBody(res: Response): Promise<unknown> {

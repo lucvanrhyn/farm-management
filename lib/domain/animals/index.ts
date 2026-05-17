@@ -19,10 +19,8 @@
  * `@/lib/domain/animals/create-animal` imports remain valid and are out
  * of scope for 309b.
  *
- * The cross-species *parent* mismatch reuses `CrossSpeciesBlockedError`
- * from `@/lib/domain/mobs/move-mob` (already mapped); centralising it is
- * explicitly out of scope for 309b (see
- * `tasks/issue-309-adr-0001-waveB-triage.md`).
+ * The cross-species *parent* mismatch reuses `CrossSpeciesBlockedError`,
+ * centralised in `@/lib/species/errors` (#315) and already mapped to 422.
  *
  * See `docs/adr/0001-route-handler-architecture.md` and
  * `tasks/wave-309b-animals-domain.md`.

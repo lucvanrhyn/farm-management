@@ -20,11 +20,9 @@
  *   - `SpeciesScopedCampError`    → 422 `{ error: reason }`
  *                                   (reason ∈ NOT_FOUND | WRONG_SPECIES)
  *
- * The cross-species *parent* mismatch reuses `CrossSpeciesBlockedError`
- * from `@/lib/domain/mobs/move-mob` (already mapped to 422
- * `{ error: "CROSS_SPECIES_BLOCKED" }`). Centralising that class is a
- * cross-cutting refactor and is explicitly OUT OF SCOPE for 309b — the
- * op imports it from its existing home exactly as the route did.
+ * The cross-species *parent* mismatch reuses `CrossSpeciesBlockedError`,
+ * centralised in `@/lib/species/errors` (#315) and already mapped to 422
+ * `{ error: "CROSS_SPECIES_BLOCKED" }`. The op imports it from there.
  */
 
 /**
