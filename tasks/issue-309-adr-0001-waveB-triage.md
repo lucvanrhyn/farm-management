@@ -83,7 +83,27 @@ re-home its test. Separate plan at 309c dispatch time.
   exempt by construction). `animals/[id]` was never in the
   `route-handler-coverage` EXEMPT set → the "remove from EXEMPT" step was a
   confirmed no-op.
-- **309c — profitability-by-animal** — pending (separate plan at dispatch).
+- **309c — profitability-by-animal** — ✅ DONE.
+  `lib/server/profitability-by-animal.ts` moved **verbatim** into
+  `lib/domain/transactions/profitability-by-animal.ts` (same Prisma
+  `transaction.findMany`/`animal.findMany` + selects, same tagged-vs-camp
+  partition, same `calcProfitabilityByAnimal` forward, same
+  `AnimalProfitabilityRow` return; "cross-species by design" comment kept);
+  re-exported from `lib/domain/transactions/index.ts`; old `lib/server/`
+  file deleted. Sole caller `app/api/[farmSlug]/profitability-by-animal/
+  route.ts` re-pointed to `@/lib/domain/transactions` (all bespoke route
+  logic — ADVANCED_TIERS gate, getFarmCreds 404, 403/400/500 envelopes,
+  force-dynamic — kept byte-identical; stale "many consumers" comment
+  corrected). grep re-confirmed the route is the only importer
+  (`multi-farm-overview.ts:55` is a comment). `audit-species-where`: the
+  single `animal::findMany::0` baseline entry relocated
+  `lib/server/profitability-by-animal.ts` →
+  `lib/domain/transactions/profitability-by-animal.ts` (surgical 1-add/
+  1-remove, alphabetical order preserved); local audit "no new offenders",
+  exit 0. New `lib/domain/transactions/__tests__/profitability-by-animal.test.ts`
+  (mocked Prisma) pins the partition/lowercase/tagNumber/dateRange contract
+  the shallow `lib/server/` module never had. **This closes the #309
+  program** (309a + 309b + 309c all shipped).
 
 ## Future optional cleanup (NOT actioned by 309b — explicitly out of scope)
 

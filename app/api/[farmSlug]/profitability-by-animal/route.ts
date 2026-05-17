@@ -4,9 +4,10 @@
  * Wave G4 (#168) — migrated onto `tenantReadSlug`.
  *
  * Wire-shape preservation (hybrid per Wave G4 spec):
- *   - 200 rows shape unchanged (delegates to `getProfitabilityByAnimal`
- *     from `lib/server/profitability-by-animal` — outside the wave's
- *     allow-list to extract; many other consumers reference it).
+ *   - 200 rows shape unchanged (delegates to `getProfitabilityByAnimal`,
+ *     now a transactions-domain op in `lib/domain/transactions` — Wave 309c
+ *     (ADR-0001 Wave B, #309) extracted it from the old `lib/server/`
+ *     module; this route is its sole caller).
  *   - 401 envelope migrates from `{ error: "Unauthorized" }` to the
  *     adapter's canonical `{ error: "AUTH_REQUIRED", message: "..." }`.
  *   - 404 (farm-not-found), 403 (not-advanced+), 400 (invalid-date),
@@ -22,7 +23,7 @@ import { NextResponse } from "next/server";
 
 import { tenantReadSlug } from "@/lib/server/route";
 import { getFarmCreds } from "@/lib/meta-db";
-import { getProfitabilityByAnimal } from "@/lib/server/profitability-by-animal";
+import { getProfitabilityByAnimal } from "@/lib/domain/transactions";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
