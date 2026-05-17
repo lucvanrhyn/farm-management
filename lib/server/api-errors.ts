@@ -13,7 +13,11 @@ import {
   InvalidTypeError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
-import { CampHasActiveAnimalsError } from "@/lib/domain/camps/errors";
+import {
+  CampHasActiveAnimalsError,
+  DuplicateCampError,
+  MissingSpeciesError,
+} from "@/lib/domain/camps/errors";
 import {
   AnimalFieldForbiddenError,
   AnimalNotFoundError,
@@ -127,6 +131,17 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     // Wire shape preserves the count-bearing message (legacy clients
     // display the `error` field as a sentence — not migrated to a typed
     // code). Byte-identical to the pre-extraction route literal.
+    return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  // Wave 316a (ADR-0001 Wave B, #309) — camps domain create guards.
+  if (err instanceof MissingSpeciesError) {
+    // Issue #232 — typed 422 (distinct from schema VALIDATION_FAILED 400).
+    return NextResponse.json({ error: "MISSING_SPECIES" }, { status: 422 });
+  }
+  if (err instanceof DuplicateCampError) {
+    // Wire shape preserves the free-text message (the legacy admin form
+    // pattern-matches it). Byte-identical to the pre-extraction route
+    // literal `{ error: "A camp with this ID already exists" }`.
     return NextResponse.json({ error: err.message }, { status: 409 });
   }
   // Wave 309b (ADR-0001 Wave B, #309) — animals `[id]` GET/PATCH ops.
