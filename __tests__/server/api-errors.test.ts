@@ -22,6 +22,7 @@
 import { describe, it, expect } from "vitest";
 import { CrossSpeciesBlockedError } from "@/lib/species/errors";
 import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
+import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 
 async function readBody(res: Response): Promise<unknown> {
@@ -52,6 +53,20 @@ describe("mapApiDomainError", () => {
     expect(mapApiDomainError(null)).toBeNull();
     expect(mapApiDomainError(undefined)).toBeNull();
     expect(mapApiDomainError({ code: "CROSS_SPECIES_BLOCKED" })).toBeNull();
+  });
+
+  it("maps CampConditionFieldRequiredError → 422 with { error: code, details: { field } } (#321)", async () => {
+    // Without this arm an incomplete camp_condition submit from a stale
+    // offline client falls through to Next.js' default 500 — the data hole
+    // is closed by createObservation throwing, but the wire shape must be a
+    // typed 422 so clients can surface "select grazing/water/fence".
+    const res = mapApiDomainError(new CampConditionFieldRequiredError("grazing"));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(422);
+    expect(await readBody(res!)).toEqual({
+      error: "CAMP_CONDITION_FIELD_REQUIRED",
+      details: { field: "grazing" },
+    });
   });
 
   it("uses the error's `code` field for CrossSpeciesBlockedError, not the string literal", async () => {
