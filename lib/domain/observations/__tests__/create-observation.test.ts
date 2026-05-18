@@ -17,7 +17,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 
-import { createObservation } from "../create-observation";
+import {
+  createObservation,
+  CampConditionFieldRequiredError,
+} from "../create-observation";
 import {
   CampNotFoundError,
   InvalidTimestampError,
@@ -123,6 +126,120 @@ describe("createObservation(prisma, input)", () => {
         species: null,
         details: "",
       }),
+    });
+  });
+
+  // Issue #321 (PRD #318, wave R4) — camp_condition required-field guard.
+  //
+  // Root cause: `CampConditionForm` pre-selected grazing="Good",
+  // water="Full", fence="Intact" and left Submit permanently enabled, so a
+  // zero-interaction (or stale offline) submit persisted those defaults as
+  // the farmer's *answer*, indistinguishable from a deliberate clean
+  // inspection. With the client now emitting unselected sentinels, a stale
+  // client could still POST a `camp_condition` whose `details` omits an
+  // explicit grazing/water/fence selection. The domain op rejects that at
+  // the write boundary instead of silently persisting an implicit reading.
+  describe("camp_condition required-field validation (#321)", () => {
+    beforeEach(() => {
+      campFindFirst.mockResolvedValue({ campId: "A" });
+    });
+
+    it("rejects a camp_condition whose details omits the grazing selection", async () => {
+      await expect(
+        createObservation(prisma, {
+          type: "camp_condition",
+          camp_id: "A",
+          details: JSON.stringify({ water: "Full", fence: "Intact" }),
+          loggedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(CampConditionFieldRequiredError);
+      expect(observationCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects when a selection is present but null/empty (implicit default)", async () => {
+      await expect(
+        createObservation(prisma, {
+          type: "camp_condition",
+          camp_id: "A",
+          details: JSON.stringify({
+            grazing: "Good",
+            water: null,
+            fence: "Intact",
+          }),
+          loggedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(CampConditionFieldRequiredError);
+      expect(observationCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects when details is empty (no payload at all)", async () => {
+      await expect(
+        createObservation(prisma, {
+          type: "camp_condition",
+          camp_id: "A",
+          details: "",
+          loggedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(CampConditionFieldRequiredError);
+      expect(observationCreate).not.toHaveBeenCalled();
+    });
+
+    it("names the first missing field on the thrown error", async () => {
+      await expect(
+        createObservation(prisma, {
+          type: "camp_condition",
+          camp_id: "A",
+          details: JSON.stringify({ grazing: "Good", water: "Low" }),
+          loggedBy: null,
+        }),
+      ).rejects.toMatchObject({
+        code: "CAMP_CONDITION_FIELD_REQUIRED",
+        field: "fence",
+      });
+    });
+
+    it("accepts a fully-specified camp_condition and writes the row", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-cc" });
+
+      const result = await createObservation(prisma, {
+        type: "camp_condition",
+        camp_id: "A",
+        details: JSON.stringify({
+          grazing: "Poor",
+          water: "Low",
+          fence: "Damaged",
+          logged_by: "u@x.co.za",
+        }),
+        loggedBy: "u@x.co.za",
+      });
+
+      expect(result).toEqual({ success: true, id: "obs-cc" });
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: "camp_condition",
+          campId: "A",
+          details: JSON.stringify({
+            grazing: "Poor",
+            water: "Low",
+            fence: "Damaged",
+            logged_by: "u@x.co.za",
+          }),
+        }),
+      });
+    });
+
+    it("leaves other observation types unaffected (no camp_condition guard)", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-cc2" });
+
+      // camp_check carries an unrelated details shape — must not be gated.
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        details: JSON.stringify({ status: "Normal" }),
+        loggedBy: null,
+      });
+
+      expect(observationCreate).toHaveBeenCalledTimes(1);
     });
   });
 
