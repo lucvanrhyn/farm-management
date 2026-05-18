@@ -33,6 +33,20 @@ afterEach(() => {
 // RFC 4122 v4 UUID shape — `crypto.randomUUID()` always produces this form.
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * #321 (PRD #318 wave R4) — "Submit Camp Report" is now gated until
+ * grazing/water/fence are each explicitly chosen (the pre-#321 form
+ * defaulted them and let a zero-interaction submit persist an implicit
+ * reading). This UUID-stability contract is orthogonal to that gating, so
+ * the cases below pick all three selections first, then submit. The
+ * idempotency-key invariant (#206) is otherwise unchanged.
+ */
+function answerAllConditions() {
+  fireEvent.click(screen.getByRole('button', { name: /good/i }));
+  fireEvent.click(screen.getByRole('button', { name: /full/i }));
+  fireEvent.click(screen.getByRole('button', { name: /intact/i }));
+}
+
 describe('CampConditionForm — clientLocalId (#206)', () => {
   it('emits a stable UUID in onSubmit payload (RFC 4122 v4 shape)', async () => {
     const { default: CampConditionForm } = await import(
@@ -48,6 +62,7 @@ describe('CampConditionForm — clientLocalId (#206)', () => {
       />,
     );
 
+    answerAllConditions();
     const submit = screen.getByText('Submit Camp Report');
     fireEvent.click(submit);
 
@@ -74,6 +89,7 @@ describe('CampConditionForm — clientLocalId (#206)', () => {
       />,
     );
 
+    answerAllConditions();
     const submit = screen.getByText('Submit Camp Report');
     fireEvent.click(submit);
     fireEvent.click(submit);
@@ -100,6 +116,7 @@ describe('CampConditionForm — clientLocalId (#206)', () => {
         onSubmit={onSubmit1}
       />,
     );
+    answerAllConditions();
     fireEvent.click(screen.getByText('Submit Camp Report'));
     const uuid1 = onSubmit1.mock.calls[0][0].clientLocalId;
 
@@ -115,6 +132,7 @@ describe('CampConditionForm — clientLocalId (#206)', () => {
         onSubmit={onSubmit2}
       />,
     );
+    answerAllConditions();
     fireEvent.click(screen.getByText('Submit Camp Report'));
     const uuid2 = onSubmit2.mock.calls[0][0].clientLocalId;
 

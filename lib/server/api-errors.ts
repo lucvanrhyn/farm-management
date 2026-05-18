@@ -13,6 +13,7 @@ import {
   InvalidTypeError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
+import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
 import {
   CampHasActiveAnimalsError,
   DuplicateCampError,
@@ -186,6 +187,12 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidTimestampError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof CampConditionFieldRequiredError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 422 },
+    );
   }
   // Wave D (#159) — transactions domain typed errors.
   if (err instanceof TransactionNotFoundError) {

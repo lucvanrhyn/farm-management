@@ -93,7 +93,13 @@ function CardGroup<T extends string>({
 }: {
   label: string;
   options: OptionCard<T>[];
-  value: T;
+  /**
+   * Issue #321 — `null` means "not yet answered". The pre-#321 form
+   * defaulted this to a real value ("Good"/"Full"/"Intact"), so an
+   * untouched group looked answered. Selection cards now render in the
+   * neutral (unselected) style until the farmer explicitly picks one.
+   */
+  value: T | null;
   onChange: (v: T) => void;
 }) {
   return (
@@ -142,9 +148,14 @@ const FENCE_OPTIONS: OptionCard<FenceStatus>[] = [
 ];
 
 export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }: Props) {
-  const [grazing, setGrazing] = useState<GrazingQuality>("Good");
-  const [water, setWater] = useState<WaterStatus>("Full");
-  const [fence, setFence] = useState<FenceStatus>("Intact");
+  // Issue #321 — start every selection unanswered. The pre-#321 defaults
+  // ("Good"/"Full"/"Intact") were used as BOTH placeholders and answers, so
+  // a zero-interaction (or stale-offline) submit recorded a clean inspection
+  // indistinguishable from a deliberate all-good one. `null` sentinels +
+  // a disabled Submit force an explicit choice for each field.
+  const [grazing, setGrazing] = useState<GrazingQuality | null>(null);
+  const [water, setWater] = useState<WaterStatus | null>(null);
+  const [fence, setFence] = useState<FenceStatus | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   // Issue #206 — mount-stable idempotency key. `useState(() => …)` runs the
   // initializer exactly once per mount, so accidental double-clicks (or any
@@ -153,7 +164,14 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
   // reload) gets a fresh UUID — each logging session is its own write.
   const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
+  // Issue #321 — every field must be explicitly answered before the report
+  // can be submitted. This gates the button structurally (not via a
+  // post-click `alert()`), so a stale client can't enqueue an implicit
+  // all-default reading offline.
+  const isComplete = grazing !== null && water !== null && fence !== null;
+
   function submit() {
+    if (grazing === null || water === null || fence === null) return;
     if (onSubmit) {
       onSubmit({ campId, grazing, water, fence, photoBlob, clientLocalId });
     } else {
@@ -173,8 +191,13 @@ export default function CampConditionForm({ campId, onClose, onSkip, onSubmit }:
 
         <button
           onClick={submit}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+          disabled={!isComplete}
+          className="w-full font-bold py-4 rounded-2xl text-base transition-colors disabled:cursor-not-allowed"
+          style={
+            isComplete
+              ? { backgroundColor: '#B87333', color: '#F5F0E8' }
+              : { backgroundColor: 'rgba(184, 115, 51, 0.35)', color: 'rgba(245, 240, 232, 0.55)' }
+          }
         >
           Submit Camp Report
         </button>
