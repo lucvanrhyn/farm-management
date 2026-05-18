@@ -21,6 +21,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { CampData } from "@/components/map/layers/CampLayer";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import CampPresenceFallback from "@/components/map/CampPresenceFallback";
 
 // Lazy-load FarmMap so mapbox-gl + react-map-gl land in a separate client
 // chunk and never reach the server bundle (matches DashboardClient pattern).
@@ -49,9 +50,15 @@ interface Props {
   campData: CampData[];
   farmLat: number | null;
   farmLng: number | null;
+  farmSlug: string;
 }
 
-export default function TenantMapClient({ campData, farmLat, farmLng }: Props) {
+export default function TenantMapClient({
+  campData,
+  farmLat,
+  farmLng,
+  farmSlug,
+}: Props) {
   const router = useRouter();
   const { mode } = useFarmModeSafe();
   const lastModeRef = useRef(mode);
@@ -70,24 +77,40 @@ export default function TenantMapClient({ campData, farmLat, farmLng }: Props) {
   const handleCampClick = useCallback((_campId: string) => {}, []);
 
   return (
-    <div
-      data-testid="tenant-map"
-      style={{
-        position: "relative",
-        width: "100%",
-        // Mobile-responsive height: subtract the page header + safe-area
-        // padding. `100dvh` honours the dynamic viewport on mobile (so
-        // the map doesn't extend below the address bar).
-        height: "calc(100dvh - 9rem)",
-        minHeight: "320px",
-      }}
-    >
-      <FarmMap
+    <>
+      <div
+        data-testid="tenant-map"
+        style={{
+          position: "relative",
+          width: "100%",
+          // Mobile-responsive height: subtract the page header + safe-area
+          // padding. `100dvh` honours the dynamic viewport on mobile (so
+          // the map doesn't extend below the address bar).
+          height: "calc(100dvh - 9rem)",
+          minHeight: "320px",
+        }}
+      >
+        <FarmMap
+          campData={campData}
+          onCampClick={handleCampClick}
+          latitude={farmLat}
+          longitude={farmLng}
+        />
+      </div>
+
+      {/*
+        Issue #322: camps without a drawn boundary are skipped by the GeoJSON
+        builder and would otherwise be unreachable on this surface. The
+        fallback list + setup-state CTA is a SIBLING to the map container (NOT
+        inside FarmMap.tsx — PR #305 owns that file), so it flows below the
+        map instead of overlaying the satellite view. It self-hides when every
+        camp already has geometry.
+      */}
+      <CampPresenceFallback
         campData={campData}
+        farmSlug={farmSlug}
         onCampClick={handleCampClick}
-        latitude={farmLat}
-        longitude={farmLng}
       />
-    </div>
+    </>
   );
 }
