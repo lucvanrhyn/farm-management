@@ -352,6 +352,50 @@ function applySuccessMeta<T extends PendingQueueFailureMeta>(row: T): T {
 }
 
 /**
+ * Issue #324 (PRD #318 wave R2) — terminal vs transient failure
+ * classification.
+ *
+ * Root cause this closes: the offline sync queue modelled EVERY failure as a
+ * transport retry. The #209 re-queue helpers (`markObservationPending` et al.)
+ * flipped ANY failed row back to `pending`, including rows the server rejected
+ * with a terminal 4xx. Such a row is a poison message — replaying the
+ * identical payload can never succeed — so "Retry all" looped forever
+ * ("Attempted N times · HTTP 422 · Stuck").
+ *
+ * `isTerminalStatus` is a pure classifier over the HTTP status of the most
+ * recent failure:
+ *
+ *   - 400 / 404 / 422 → TERMINAL. The request was understood and definitively
+ *     rejected (malformed body, not-found target, validation reject). The
+ *     exact same payload will be rejected the exact same way forever; blind
+ *     retry is futile and is what produced the perpetual-stuck loop.
+ *   - 5xx / `null` (fetch threw — network error) → TRANSIENT. A later attempt
+ *     can plausibly succeed once the server recovers / connectivity returns.
+ *   - 401 / 403 / 408 / 429 → TRANSIENT. Auth-expiry, request-timeout and
+ *     rate-limit windows clear without the payload changing, so these stay
+ *     retryable rather than being dead-lettered.
+ *
+ * The classification is DERIVED from the already-persisted `lastStatusCode`
+ * (set by `applyFailureMeta`) — no IDB schema bump, mirroring the
+ * `withDefaultedFailureMeta` no-migration philosophy.
+ */
+export function isTerminalStatus(statusCode: number | null): boolean {
+  return statusCode === 400 || statusCode === 404 || statusCode === 422;
+}
+
+/**
+ * Issue #324 — a failed queue row is "terminal" (a non-retryable poison
+ * message) iff its most-recent failure carried a terminal HTTP status. The
+ * dead-letter UI uses this to render terminal rows distinctly (no blind
+ * "Retry"), and the re-queue helpers use it to refuse to re-arm a poison row.
+ */
+export function isTerminalFailure(
+  row: Pick<PendingQueueFailureMeta, 'lastStatusCode'>,
+): boolean {
+  return isTerminalStatus(row.lastStatusCode ?? null);
+}
+
+/**
  * Issue #209 — apply a "re-queued for retry" transition. Flips status back to
  * `pending` so the next sync cycle picks the row up, but DELIBERATELY leaves
  * `attempts`, `firstFailedAt`, `lastError`, `lastStatusCode` untouched:
@@ -456,6 +500,15 @@ export async function markObservationPending(localId: number): Promise<void> {
   const db = await getDB();
   const obs = await db.get('pending_observations', localId);
   if (obs) {
+    // Issue #324 — refuse to re-arm a poison row. A terminal-4xx failure
+    // (400/404/422) is definitively non-retryable: replaying the identical
+    // payload reproduces the same rejection forever. "Retry all" iterates
+    // every failed row through here, so gating the transition at the
+    // single re-queue writer makes blind poison-message replay structurally
+    // impossible. The row stays in the failed bucket as a dead-letter.
+    if (isTerminalFailure(withDefaultedFailureMeta(obs as PendingObservation))) {
+      return;
+    }
     await db.put('pending_observations', applyPendingMeta(obs as PendingObservation));
   }
 }
@@ -721,6 +774,11 @@ export async function markAnimalCreatePending(localId: number): Promise<void> {
   const db = await getDB();
   const rec = await db.get('pending_animal_creates', localId);
   if (rec) {
+    // Issue #324 — see markObservationPending: terminal-4xx rows are poison
+    // and must not be re-armed by blind retry.
+    if (isTerminalFailure(withDefaultedFailureMeta(rec as PendingAnimalCreate))) {
+      return;
+    }
     await db.put(
       'pending_animal_creates',
       applyPendingMeta(rec as PendingAnimalCreate),
@@ -874,6 +932,11 @@ export async function markCoverReadingPending(localId: number): Promise<void> {
   const db = await getDB();
   const rec = await db.get('pending_cover_readings', localId);
   if (rec) {
+    // Issue #324 — see markObservationPending: terminal-4xx rows are poison
+    // and must not be re-armed by blind retry.
+    if (isTerminalFailure(withDefaultedFailureMeta(rec as PendingCoverReading))) {
+      return;
+    }
     await db.put(
       'pending_cover_readings',
       applyPendingMeta(rec as PendingCoverReading),
