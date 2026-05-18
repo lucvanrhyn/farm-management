@@ -56,6 +56,8 @@
     "app/api/animals/reset/route.ts::animal::deleteMany::0",
     "app/api/camps/reset/route.ts::animal::count::0",
     "app/api/camps/reset/route.ts::camp::deleteMany::0",
+    "app/api/farm/route.ts::animal::count::0",
+    "app/api/farm/route.ts::camp::count::0",
     "app/api/onboarding/map-columns/route.ts::camp::findMany::0",
     "components/admin/CampsTable.tsx::animal::groupBy::0",
     "components/admin/CampsTable.tsx::camp::findMany::0",
