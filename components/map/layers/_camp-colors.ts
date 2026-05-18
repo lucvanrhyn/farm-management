@@ -112,6 +112,24 @@ export function getOverlayColor(mode: OverlayMode, cd: CampData): string {
   }
 }
 
+/**
+ * Pure predicate (#322): the camps that lack a drawn boundary `geojson`.
+ *
+ * `buildCampGeoJSON` skips these (`if (!camp.geojson) continue;`), so on real
+ * tenants the MAJORITY of camps never become map features and have no other
+ * way to be reached. This selector is the single source of truth for the
+ * non-map fallback list + setup-state CTA; it intentionally mirrors the
+ * `!camp.geojson` falsiness used by the GeoJSON builder so empty-string and
+ * `undefined` geojson are both treated as "missing" (no divergence between
+ * what the map drops and what the fallback surfaces).
+ *
+ * Geometry-bearing camps are left untouched for the polygon layer — this
+ * helper does not mutate input and has no side-effects.
+ */
+export function selectCampsMissingGeometry(campData: CampData[]): CampData[] {
+  return campData.filter((cd) => !cd.camp.geojson);
+}
+
 export function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
 

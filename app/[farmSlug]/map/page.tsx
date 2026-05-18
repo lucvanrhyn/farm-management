@@ -71,9 +71,10 @@ export default async function TenantMapPage({
   ]);
 
   // CampData shape matches what FarmMap / CampLayer consume. Camps without
-  // a `geojson` boundary are skipped by CampLayer (the GeoJSON builder
-  // returns no features for them) — this is the documented v1 marker-
-  // fallback behaviour. Backfilling boundaries is tracked separately.
+  // a `geojson` boundary are skipped by the GeoJSON builder (no map feature)
+  // — issue #322: they are now surfaced via the non-map CampPresenceFallback
+  // list + setup-state CTA rendered as a sibling to <FarmMap> inside
+  // TenantMapClient, so they are never silently unreachable.
   const campData: CampData[] = camps.map((c) => ({
     camp: {
       camp_id: c.campId,
@@ -111,6 +112,7 @@ export default async function TenantMapPage({
           campData={campData}
           farmLat={settings?.latitude ?? null}
           farmLng={settings?.longitude ?? null}
+          farmSlug={farmSlug}
         />
       )}
     </div>
