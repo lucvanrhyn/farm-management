@@ -1,20 +1,28 @@
 /**
  * @vitest-environment node
  *
- * Wave 226 — GET /api/farm respects FarmMode (issue #226).
+ * Wave 320 (#320 / PRD #318) — GET /api/farm is a FARM-WIDE aggregate,
+ * decoupled from the ambient `farmtrack-mode` cookie.
  *
- * Contract:
- *   - The handler reads `getFarmMode(slug)` from the per-farm cookie and
- *     filters animalCount + campCount by `species: mode`.
- *   - Switching the cookie from cattle → sheep on the same tenant returns
- *     a different `animalCount` / `campCount` payload (the sheep counts).
- *   - The "cross-species by design" comment that documented the previous
- *     farm-wide aggregate is removed from the data-source (#28 AC).
+ * Regression context (Trio, 874 animals / 19 camps):
+ *   `/api/farm` is a farm-wide summary endpoint. Wave 226 (#226) routed its
+ *   `animalCount` / `campCount` through the species-scoped `scoped(prisma,
+ *   mode)` facade, reading the per-farm `farmtrack-mode-<slug>` cookie. A
+ *   client that visited under the Sheep toggle then saw 0/0 on a
+ *   cattle-heavy farm — a global UI species filter is NOT safe input for a
+ *   farm-wide aggregate. #320 reverses that broken assumption: the headline
+ *   counts must be true farm-wide totals regardless of the cookie, matching
+ *   the already-correct `getCachedFarmSummary` semantics in
+ *   `lib/server/cached.ts` (`animal.count({ status: "Active" })`,
+ *   `camp.count()` — "cross-species by design").
+ *
+ * Contract under test:
+ *   - animalCount / campCount are farm-wide (every species), independent of
+ *     the cookie value (cattle / sheep / game / unset).
+ *   - The underlying count queries are NOT scoped by `species`.
  *
  * Pattern: mock-based, per the existing `__tests__/api/` convention
- * (mobs-cross-species.test.ts, mobs-animals-species.test.ts). The seeded
- * Turso clone path would also work; the mock path proves the contract
- * end-to-end through the same code path with deterministic data.
+ * (mobs-cross-species.test.ts, mobs-animals-species.test.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -46,7 +54,8 @@ vi.mock("@/lib/server/farm-context", () => ({
 }));
 
 // Defer cookie value to a `let` we mutate per-test; vi.hoisted lifts the
-// getter ref above the import of route.ts.
+// getter ref above the import of route.ts. The whole point of #320 is that
+// this value MUST NOT influence the headline counts.
 const { cookieValueRef } = vi.hoisted(() => ({
   cookieValueRef: { current: "cattle" as string | undefined },
 }));
@@ -62,18 +71,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-// The cache wrapper sits in front of the underlying counts. The 30-second
-// `unstable_cache` window would interfere with per-test cookie flips, so we
-// route around it the same way the route handler should once #226 lands:
-// counts are computed directly in the handler via the species-scoped facade,
-// and `farmSettings.findFirst` stays cached-or-direct depending on shape.
 vi.mock("next/cache", () => ({
   unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
 }));
 
-describe("GET /api/farm — species-scoped counts (#226)", () => {
+describe("GET /api/farm — farm-wide aggregate, cookie-independent (#320)", () => {
   beforeEach(() => {
     animalCountMock.mockReset();
     campCountMock.mockReset();
@@ -86,82 +90,108 @@ describe("GET /api/farm — species-scoped counts (#226)", () => {
       heroImageUrl: "/farm-hero.jpg",
     });
 
-    // Counts are species-aware: the route must call `count({ where: { species }})`.
-    // We model that by inspecting the where clause when the mock is invoked.
-    animalCountMock.mockImplementation(async (args?: { where?: { species?: string } }) => {
-      const sp = args?.where?.species;
-      if (sp === "cattle") return 80;
-      if (sp === "sheep") return 30;
-      if (sp === "game") return 5;
-      // Fallback — caller did NOT pass species. This branch is the bug we are fixing.
-      return 115;
-    });
-    campCountMock.mockImplementation(async (args?: { where?: { species?: string } }) => {
-      const sp = args?.where?.species;
-      if (sp === "cattle") return 12;
-      if (sp === "sheep") return 4;
-      if (sp === "game") return 2;
-      return 18;
-    });
+    // Models a cattle-heavy multi-species tenant (cf. Trio). A
+    // species-scoped query returns the per-species slice; a farm-wide
+    // query (no `species` in the where clause) returns the true total.
+    animalCountMock.mockImplementation(
+      async (args?: { where?: { species?: string } }) => {
+        const sp = args?.where?.species;
+        if (sp === "cattle") return 80;
+        if (sp === "sheep") return 0; // cattle-heavy farm: no sheep
+        if (sp === "game") return 5;
+        // Farm-wide: caller did NOT scope by species. This is the
+        // correct path for /api/farm.
+        return 874;
+      },
+    );
+    campCountMock.mockImplementation(
+      async (args?: { where?: { species?: string } }) => {
+        const sp = args?.where?.species;
+        if (sp === "cattle") return 17;
+        if (sp === "sheep") return 0;
+        if (sp === "game") return 2;
+        return 19;
+      },
+    );
   });
 
-  it("returns cattle counts when the FarmMode cookie is cattle", async () => {
+  it("returns farm-wide totals when the cookie is cattle", async () => {
     cookieValueRef.current = "cattle";
 
     const { GET } = await import("@/app/api/farm/route");
     const res = await GET();
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { animalCount: number; campCount: number };
+    const body = (await res.json()) as {
+      animalCount: number;
+      campCount: number;
+    };
 
-    expect(body.animalCount).toBe(80);
-    expect(body.campCount).toBe(12);
+    expect(body.animalCount).toBe(874);
+    expect(body.campCount).toBe(19);
 
-    // Counts MUST be called with species: "cattle" so the audit and the
-    // per-species page see byte-identical numbers.
-    const animalCalls = animalCountMock.mock.calls;
-    expect(animalCalls.length).toBeGreaterThan(0);
-    expect(animalCalls[0][0]?.where).toMatchObject({ species: "cattle" });
+    // The count queries MUST NOT be scoped by species.
+    expect(animalCountMock.mock.calls[0][0]?.where).not.toHaveProperty(
+      "species",
+    );
+    expect(campCountMock.mock.calls[0][0]?.where ?? {}).not.toHaveProperty(
+      "species",
+    );
   });
 
-  it("returns sheep counts when the cookie is flipped to sheep", async () => {
+  it("returns the SAME farm-wide totals under the Sheep toggle (the Trio 0/0 regression)", async () => {
     cookieValueRef.current = "sheep";
 
     const { GET } = await import("@/app/api/farm/route");
     const res = await GET();
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { animalCount: number; campCount: number };
+    const body = (await res.json()) as {
+      animalCount: number;
+      campCount: number;
+    };
 
-    expect(body.animalCount).toBe(30);
-    expect(body.campCount).toBe(4);
+    // Pre-#320 this returned 0 / 0 because the sheep cookie scoped the
+    // count on a farm with no sheep. Farm-wide totals must be unchanged.
+    expect(body.animalCount).toBe(874);
+    expect(body.campCount).toBe(19);
 
-    expect(animalCountMock.mock.calls[0][0]?.where).toMatchObject({
-      species: "sheep",
-    });
-    expect(campCountMock.mock.calls[0][0]?.where).toMatchObject({
-      species: "sheep",
-    });
+    expect(animalCountMock.mock.calls[0][0]?.where).not.toHaveProperty(
+      "species",
+    );
   });
 
-  it("defaults to cattle when no cookie is set (getFarmMode fallback)", async () => {
+  it("returns the same farm-wide totals when no cookie is set", async () => {
     cookieValueRef.current = undefined;
 
     const { GET } = await import("@/app/api/farm/route");
     const res = await GET();
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { animalCount: number; campCount: number };
+    const body = (await res.json()) as {
+      animalCount: number;
+      campCount: number;
+    };
 
-    expect(body.animalCount).toBe(80);
-    expect(body.campCount).toBe(12);
+    expect(body.animalCount).toBe(874);
+    expect(body.campCount).toBe(19);
   });
 
-  it("cattle vs sheep payloads differ for the same tenant", async () => {
+  it("payload is identical regardless of the cookie species (cattle vs sheep vs game)", async () => {
+    const get = async () => {
+      const { GET } = await import("@/app/api/farm/route");
+      return (await (await GET()).json()) as {
+        animalCount: number;
+        campCount: number;
+      };
+    };
+
     cookieValueRef.current = "cattle";
-    const { GET } = await import("@/app/api/farm/route");
-    const cattleBody = (await (await GET()).json()) as { animalCount: number };
-
+    const cattle = await get();
     cookieValueRef.current = "sheep";
-    const sheepBody = (await (await GET()).json()) as { animalCount: number };
+    const sheep = await get();
+    cookieValueRef.current = "game";
+    const game = await get();
 
-    expect(cattleBody.animalCount).not.toBe(sheepBody.animalCount);
+    expect(cattle).toEqual(sheep);
+    expect(sheep).toEqual(game);
+    expect(cattle.animalCount).toBe(874);
   });
 });
