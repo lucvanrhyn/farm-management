@@ -3,8 +3,26 @@
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
+import type { ObservationType } from "@/lib/domain/observations/registry";
 
-type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving" | "body_condition_score" | "temperament_score" | "scrotal_circumference";
+/**
+ * #319 — the reproduction sub-flows the form can submit. Derived from the
+ * registry's `ObservationType` via `Extract` so every value here is provably
+ * a member of the single persistence allowlist. If one of these names is ever
+ * removed from `lib/domain/observations/registry.ts`, this `Extract` collapses
+ * and the build fails — the UI enum can no longer silently drift from the
+ * write boundary (the root cause of the 422 INVALID_TYPE persistence loss).
+ */
+type ReproType = Extract<
+  ObservationType,
+  | "heat_detection"
+  | "insemination"
+  | "pregnancy_scan"
+  | "calving"
+  | "body_condition_score"
+  | "temperament_score"
+  | "scrotal_circumference"
+>;
 
 export interface ReproSubmitData {
   type: ReproType;

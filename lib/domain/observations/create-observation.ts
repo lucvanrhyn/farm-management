@@ -21,30 +21,17 @@ import {
   InvalidTimestampError,
   InvalidTypeError,
 } from "./errors";
+import { OBSERVATION_TYPES } from "./registry";
 
-/** Allowlist of valid observation type strings. */
-export const VALID_OBSERVATION_TYPES: ReadonlySet<string> = new Set([
-  "camp_condition",
-  "camp_check",
-  "calving",
-  "pregnancy_scan",
-  "weighing",
-  "treatment",
-  "heat_detection",
-  "insemination",
-  "drying_off",
-  "weaning",
-  "death",
-  "mob_movement",
-  "animal_movement",
-  "health_issue",
-  "general",
-  "dosing",
-  "shearing",
-  "lambing",
-  "game_census",
-  "game_sighting",
-]);
+/**
+ * Allowlist of valid observation type strings.
+ *
+ * #319 — derived from the single source of truth in `./registry` so the
+ * persistence allowlist can never again drift from the UI enum / server
+ * validators. The original export name + `ReadonlySet<string>` shape is kept
+ * so every downstream importer compiles unchanged.
+ */
+export const VALID_OBSERVATION_TYPES: ReadonlySet<string> = OBSERVATION_TYPES;
 
 export interface CreateObservationInput {
   type: string;
