@@ -6,7 +6,7 @@ import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/util
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { useFarmModeSafe } from "@/lib/farm-mode";
-import { getSpeciesModule } from "@/lib/species/registry";
+import { getSpeciesModule, isValidSpecies } from "@/lib/species/registry";
 
 const PAGE_SIZE = 50;
 
@@ -186,7 +186,16 @@ export default function AnimalsTable({
     return m;
   }, [mobs]);
 
-  const categories: AnimalCategory[] = getSpeciesModule(mode).config.categories.map((c) => c.value);
+  // Issue #323 — taxonomy must follow the explicit route contract, not the
+  // ambient (localStorage/cookie-backed) FarmMode. /sheep/animals passes
+  // species="sheep"; if we read `mode` here a stale "cattle" cookie made the
+  // Sheep Catalogue show the cattle taxonomy. The route prop wins; ambient
+  // `mode` is only the fallback when no (or an unknown) species is supplied.
+  const taxonomySpecies =
+    species && isValidSpecies(species) ? species : mode;
+  const categories: AnimalCategory[] = getSpeciesModule(
+    taxonomySpecies,
+  ).config.categories.map((c) => c.value);
   const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
 
   // Issue #205 — header count text. SSR previously hard-coded `animals.length`
