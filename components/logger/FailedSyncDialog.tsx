@@ -33,6 +33,10 @@ import {
   markObservationPending,
   markAnimalCreatePending,
   markCoverReadingPending,
+  discardFailedObservation,
+  discardFailedAnimalCreate,
+  discardFailedCoverReading,
+  isTerminalFailure,
   type PendingObservation,
   type PendingAnimalCreate,
   type PendingCoverReading,
@@ -52,6 +56,12 @@ interface FailedRowView {
   lastStatusCode: number | null;
   attempts: number;
   firstFailedAt: number | null;
+  /**
+   * Issue #324 — a row whose most-recent failure was a terminal 4xx
+   * (400/404/422) is a poison message: the re-queue writers no-op on it, so
+   * "Retry" can never drain it. Terminal rows get a Discard control instead.
+   */
+  isTerminal: boolean;
 }
 
 const ERROR_DISPLAY_MAX_CHARS = 120;
@@ -115,6 +125,7 @@ function mapObservation(o: PendingObservation): FailedRowView {
     lastStatusCode: o.lastStatusCode,
     attempts: o.attempts,
     firstFailedAt: o.firstFailedAt,
+    isTerminal: isTerminalFailure(o),
   };
 }
 
@@ -129,6 +140,7 @@ function mapAnimal(a: PendingAnimalCreate): FailedRowView {
     lastStatusCode: a.lastStatusCode,
     attempts: a.attempts,
     firstFailedAt: a.firstFailedAt,
+    isTerminal: isTerminalFailure(a),
   };
 }
 
@@ -143,6 +155,7 @@ function mapCover(c: PendingCoverReading): FailedRowView {
     lastStatusCode: c.lastStatusCode,
     attempts: c.attempts,
     firstFailedAt: c.firstFailedAt,
+    isTerminal: isTerminalFailure(c),
   };
 }
 
@@ -168,6 +181,20 @@ async function retryRow(row: FailedRowView): Promise<void> {
       return;
     case 'cover-reading':
       await markCoverReadingPending(row.localId);
+      return;
+  }
+}
+
+async function discardRow(row: FailedRowView): Promise<void> {
+  switch (row.kind) {
+    case 'observation':
+      await discardFailedObservation(row.localId);
+      return;
+    case 'animal':
+      await discardFailedAnimalCreate(row.localId);
+      return;
+    case 'cover-reading':
+      await discardFailedCoverReading(row.localId);
       return;
   }
 }
@@ -231,7 +258,10 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       // Snapshot the current visible rows so we re-queue exactly what the user
       // saw — if a row were added between the click and the loop, it would be
       // out of scope for this batch.
-      const snapshot = rows;
+      // Issue #324 — skip terminal poison rows. The re-queue writers no-op
+      // on them anyway; iterating them here would falsely imply they were
+      // re-armed. They stay visible with their own Discard control.
+      const snapshot = rows.filter((r) => !r.isTerminal);
       for (const row of snapshot) {
         await retryRow(row);
       }
@@ -243,6 +273,25 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       setBusy(false);
     }
   }, [busy, rows, reload, syncNow, refreshPendingCount]);
+
+  const onDiscardOne = useCallback(
+    async (row: FailedRowView) => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        // Permanently drop a poison row. No sync cycle — the payload is
+        // server-rejected and unrecoverable; reload lets the list drain (and
+        // auto-close when empty) so the farmer escapes the dead-end.
+        await discardRow(row);
+        await reload();
+        await refreshPendingCount();
+        await reload();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, reload, refreshPendingCount],
+  );
 
   if (!isOpen) return null;
 
@@ -311,16 +360,39 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                     {row.subjectLabel}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRetryOne(row)}
-                  disabled={busy}
-                  className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
-                  style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
-                >
-                  Retry
-                </button>
+                {row.isTerminal ? (
+                  <button
+                    type="button"
+                    data-testid={`discard-row-${row.kind}-${row.localId}`}
+                    onClick={() => onDiscardOne(row)}
+                    disabled={busy}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
+                    style={{ backgroundColor: '#6B4226', color: '#F5F0E8' }}
+                  >
+                    Discard
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`retry-row-${row.kind}-${row.localId}`}
+                    onClick={() => onRetryOne(row)}
+                    disabled={busy}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
+                    style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
+              {row.isTerminal && (
+                <p
+                  className="text-[11px] font-medium"
+                  style={{ color: '#E0A050' }}
+                >
+                  Rejected by the server — won&apos;t retry. The data needs
+                  fixing on a fresh entry; discard this stuck copy.
+                </p>
+              )}
               <div
                 className="text-xs flex flex-wrap gap-x-3 gap-y-1"
                 style={{ color: 'rgba(210, 180, 140, 0.7)' }}

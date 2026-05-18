@@ -513,6 +513,30 @@ export async function markObservationPending(localId: number): Promise<void> {
   }
 }
 
+/**
+ * Issue #324 — poison-only discard escape hatch for the dead-letter UI.
+ *
+ * R2 made `markObservationPending` a no-op for a terminal-4xx poison row so
+ * blind "Retry all" can't loop forever. The side-effect was a dead-end: the
+ * farmer had no way to clear a poison row, so FailedSyncDialog never drained
+ * and "Retry" silently did nothing. This permanently deletes the row.
+ *
+ * Guarded to TERMINAL rows only — discard is the poison escape hatch, not a
+ * blanket delete. A transient (retryable) row must be retried, never silently
+ * dropped: dropping it would be irreversible data loss of a record the farmer
+ * can still get through once the transient condition clears.
+ */
+export async function discardFailedObservation(localId: number): Promise<void> {
+  const db = await getDB();
+  const obs = await db.get('pending_observations', localId);
+  if (
+    obs &&
+    isTerminalFailure(withDefaultedFailureMeta(obs as PendingObservation))
+  ) {
+    await db.delete('pending_observations', localId);
+  }
+}
+
 export async function getPendingCount(): Promise<number> {
   // Issue #208 — pendingCount tallies only rows in the strict pending bucket
   // (synced rows are excluded by getPendingX; failed rows are now excluded
@@ -786,6 +810,18 @@ export async function markAnimalCreatePending(localId: number): Promise<void> {
   }
 }
 
+/** Issue #324 — see discardFailedObservation. Poison-only escape hatch. */
+export async function discardFailedAnimalCreate(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_animal_creates', localId);
+  if (
+    rec &&
+    isTerminalFailure(withDefaultedFailureMeta(rec as PendingAnimalCreate))
+  ) {
+    await db.delete('pending_animal_creates', localId);
+  }
+}
+
 // ── Pending Photos (offline photo capture) ───────────────────────────────────
 
 export interface PendingPhoto {
@@ -941,6 +977,18 @@ export async function markCoverReadingPending(localId: number): Promise<void> {
       'pending_cover_readings',
       applyPendingMeta(rec as PendingCoverReading),
     );
+  }
+}
+
+/** Issue #324 — see discardFailedObservation. Poison-only escape hatch. */
+export async function discardFailedCoverReading(localId: number): Promise<void> {
+  const db = await getDB();
+  const rec = await db.get('pending_cover_readings', localId);
+  if (
+    rec &&
+    isTerminalFailure(withDefaultedFailureMeta(rec as PendingCoverReading))
+  ) {
+    await db.delete('pending_cover_readings', localId);
   }
 }
 
