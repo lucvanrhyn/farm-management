@@ -80,16 +80,17 @@ export interface HealthByCamp {
 }
 
 export async function getHealthIssuesByCamp(prisma: PrismaClient, days = 30): Promise<HealthByCamp[]> {
-  // NOTE (ADR-0005 Wave 2): the species-access door (frozen this wave)
-  // only exposes groupBy on its animal builder, not observation. This
-  // farm-wide health-issue roll-up therefore stays a raw, baselined
-  // prisma.observation.groupBy until the door gains observation.groupBy.
-  const rows = await prisma.observation.groupBy({
+  // cross-species by design: this farm-wide health-issue roll-up spans
+  // every species. crossSpecies() forwards args verbatim — no species/
+  // status injection. The facade returns Prisma's broadest groupBy shape
+  // (documented trade-off in species-scoped-prisma.ts); re-narrow to the
+  // row shape this query's `by`/`_count` selection produces.
+  const rows = (await crossSpecies(prisma, "analytics-rollup").observation.groupBy({
     by: ["campId"],
     where: { type: "health_issue", observedAt: { gte: daysAgo(days) } },
     _count: { id: true },
     orderBy: { _count: { id: "desc" } },
-  });
+  })) as unknown as Array<{ campId: string; _count: { id: number } }>;
   return rows.map((r) => ({ campId: r.campId, count: r._count.id }));
 }
 

@@ -160,6 +160,7 @@ interface CampBuilder {
   findMany(args?: Prisma.CampFindManyArgs): ReturnType<CampDelegate['findMany']>;
   findFirst(args?: Prisma.CampFindFirstArgs): ReturnType<CampDelegate['findFirst']>;
   count(args?: Prisma.CampCountArgs): ReturnType<CampDelegate['count']>;
+  groupBy(args: Prisma.CampGroupByArgs): ReturnType<CampDelegate['groupBy']>;
   updateMany(args: Prisma.CampUpdateManyArgs): ReturnType<CampDelegate['updateMany']>;
   deleteMany(args?: Prisma.CampDeleteManyArgs): ReturnType<CampDelegate['deleteMany']>;
 }
@@ -168,6 +169,7 @@ interface MobBuilder {
   findMany(args?: Prisma.MobFindManyArgs): ReturnType<MobDelegate['findMany']>;
   findFirst(args?: Prisma.MobFindFirstArgs): ReturnType<MobDelegate['findFirst']>;
   count(args?: Prisma.MobCountArgs): ReturnType<MobDelegate['count']>;
+  groupBy(args: Prisma.MobGroupByArgs): ReturnType<MobDelegate['groupBy']>;
   updateMany(args: Prisma.MobUpdateManyArgs): ReturnType<MobDelegate['updateMany']>;
   deleteMany(args?: Prisma.MobDeleteManyArgs): ReturnType<MobDelegate['deleteMany']>;
 }
@@ -176,6 +178,7 @@ interface ObservationBuilder {
   findMany(args?: Prisma.ObservationFindManyArgs): ReturnType<ObservationDelegate['findMany']>;
   findFirst(args?: Prisma.ObservationFindFirstArgs): ReturnType<ObservationDelegate['findFirst']>;
   count(args?: Prisma.ObservationCountArgs): ReturnType<ObservationDelegate['count']>;
+  groupBy(args: Prisma.ObservationGroupByArgs): ReturnType<ObservationDelegate['groupBy']>;
   updateMany(args: Prisma.ObservationUpdateManyArgs): ReturnType<ObservationDelegate['updateMany']>;
   deleteMany(args?: Prisma.ObservationDeleteManyArgs): ReturnType<ObservationDelegate['deleteMany']>;
 }
@@ -317,6 +320,12 @@ export function scoped(
         where: mergeWhere<Prisma.CampWhereInput>({ species: mode }, args),
       }) as ReturnType<CampDelegate['count']>;
     },
+    groupBy(args) {
+      return (prisma.camp.groupBy as (a: Prisma.CampGroupByArgs) => unknown)({
+        ...args,
+        where: mergeWhere<Prisma.CampWhereInput>({ species: mode }, args),
+      }) as ReturnType<CampDelegate['groupBy']>;
+    },
     updateMany(args) {
       return prisma.camp.updateMany({
         ...args,
@@ -351,6 +360,12 @@ export function scoped(
         where: mergeWhere<Prisma.MobWhereInput>({ species: mode }, args),
       }) as ReturnType<MobDelegate['count']>;
     },
+    groupBy(args) {
+      return (prisma.mob.groupBy as (a: Prisma.MobGroupByArgs) => unknown)({
+        ...args,
+        where: mergeWhere<Prisma.MobWhereInput>({ species: mode }, args),
+      }) as ReturnType<MobDelegate['groupBy']>;
+    },
     updateMany(args) {
       return prisma.mob.updateMany({
         ...args,
@@ -384,6 +399,12 @@ export function scoped(
         ...(args ?? {}),
         where: mergeWhere<Prisma.ObservationWhereInput>({ species: mode }, args),
       }) as ReturnType<ObservationDelegate['count']>;
+    },
+    groupBy(args) {
+      return (prisma.observation.groupBy as (a: Prisma.ObservationGroupByArgs) => unknown)({
+        ...args,
+        where: mergeWhere<Prisma.ObservationWhereInput>({ species: mode }, args),
+      }) as ReturnType<ObservationDelegate['groupBy']>;
     },
     updateMany(args) {
       return prisma.observation.updateMany({
@@ -457,6 +478,11 @@ export function crossSpecies(
     count(args) {
       return prisma.camp.count(args) as ReturnType<CampDelegate['count']>;
     },
+    groupBy(args) {
+      return (prisma.camp.groupBy as (a: Prisma.CampGroupByArgs) => unknown)(
+        args,
+      ) as ReturnType<CampDelegate['groupBy']>;
+    },
     updateMany(args) {
       return prisma.camp.updateMany(args) as ReturnType<CampDelegate['updateMany']>;
     },
@@ -476,6 +502,11 @@ export function crossSpecies(
     count(args) {
       return prisma.mob.count(args) as ReturnType<MobDelegate['count']>;
     },
+    groupBy(args) {
+      return (prisma.mob.groupBy as (a: Prisma.MobGroupByArgs) => unknown)(
+        args,
+      ) as ReturnType<MobDelegate['groupBy']>;
+    },
     updateMany(args) {
       return prisma.mob.updateMany(args) as ReturnType<MobDelegate['updateMany']>;
     },
@@ -494,6 +525,11 @@ export function crossSpecies(
     },
     count(args) {
       return prisma.observation.count(args) as ReturnType<ObservationDelegate['count']>;
+    },
+    groupBy(args) {
+      return (prisma.observation.groupBy as (a: Prisma.ObservationGroupByArgs) => unknown)(
+        args,
+      ) as ReturnType<ObservationDelegate['groupBy']>;
     },
     updateMany(args) {
       return prisma.observation.updateMany(args) as ReturnType<ObservationDelegate['updateMany']>;
