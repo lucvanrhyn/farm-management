@@ -1,5 +1,6 @@
 // lib/server/reproduction-analytics.ts
 import type { PrismaClient } from "@prisma/client";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 const GESTATION_DAYS = 285; // SA midpoint: Bonsmara/Brangus/Nguni 283–285d
 const VOLUNTARY_WAITING_PERIOD_DAYS = 45; // VWP after calving before cow is eligible
@@ -144,33 +145,34 @@ export async function getReproStats(
     details: true,
   } as const;
 
-  // Phase I.3 — scope via the denormalised `species` column on Observation
-  // instead of the old 874-ID IN-list. The index
-  // `idx_observation_species_animal` (migration 0003) serves the predicate.
-  const speciesFilter = options?.species
-    ? { species: options.species }
-    : {};
+  // Reproduction analytics are intrinsically cattle-grounded (285d
+  // gestation, calving/scan/insemination cattle semantics; the sheep
+  // reproduction surface is a separate module). ADR-0005 Wave 2 routes
+  // these reads through scoped(prisma, "cattle"), which injects
+  // { species: "cattle" } — superseding the old `options.species`
+  // branching for these calls. `options` is retained in the signature so
+  // callers don't break; it is intentionally no longer consulted here.
+  void options;
+  const db = scoped(prisma, "cattle");
 
   const [reproObs, calvingObs, allCamps] = await Promise.all([
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan"] },
         observedAt: { gte: twelveMonthsAgo },
-        ...speciesFilter,
       },
       orderBy: { observedAt: "desc" },
       select: selectFields,
     }),
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         type: "calving",
         observedAt: { gte: eighteenMonthsAgo },
-        ...speciesFilter,
       },
       orderBy: { observedAt: "asc" },
       select: selectFields,
     }),
-    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+    db.camp.findMany({ select: { campId: true, campName: true } }),
   ]);
 
   type ObsRow = (typeof reproObs)[0];
