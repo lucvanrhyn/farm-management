@@ -1,5 +1,0 @@
-{
-  "allowlist": [
-    "scripts/seed-camps.ts::camp::count::0"
-  ]
-}

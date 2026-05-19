@@ -61,7 +61,8 @@ export default async function TenantMapPage({
 
   // Camp markers honour the active species (PRD #222 / #224). The species-
   // scoped facade enforces the `where: { species: mode }` predicate at
-  // compile time — `audit-species-where` would fail CI without it.
+  // compile time — the structural arch test (ADR-0005) would fail CI
+  // on a raw unscoped read here.
   const mode = await getFarmMode(farmSlug);
   const [settings, camps] = await Promise.all([
     prisma.farmSettings.findFirst({

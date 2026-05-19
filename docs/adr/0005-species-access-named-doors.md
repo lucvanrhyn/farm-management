@@ -174,3 +174,46 @@ open PR, then present.**
 No code ships with this ADR — it documents the decision so the
 implementation waves cite it and future architecture reviews do not
 re-litigate two-doors vs one-accessor / typed-reason vs registry.
+
+## Clarification — final wave (#353), enforcement & invariant scope
+
+The multi-wave rollout is complete. The content-inspecting
+`scripts/audit-species-where.ts`, its unit test, the
+`.audit-species-where-baseline.json`, the
+`__tests__/architecture/audit-species-where-fixtures/`, the
+`audit-allow-species-where:` pragma, and `CROSS_SPECIES_ALLOWLIST_PATHS`
+are all **deleted**. Enforcement is now the single structural test
+`__tests__/architecture/species-access-no-direct-prisma.test.ts`
+(modelled on ADR-0002's `sync-truth-no-direct-callers.test.ts`): it
+walks every non-exempt `.ts`/`.tsx`, blanks comments + string literals,
+and fails CI on a raw
+`prisma.{animal,camp,mob,observation}.{findMany,findFirst,count,groupBy,updateMany,deleteMany}(`.
+The `audit-species-where` CI workflow filename and status-check context
+name are kept byte-identical (branch protection pins the context
+string); only the underlying command changed.
+
+**By-PK strict lookups are intentionally outside the door surface and
+the test excludes them by design.** `findUnique`, `findUniqueOrThrow`,
+and `findFirstOrThrow` are strict lookups (typically by primary key): a
+row either exists or it does not, so they cannot leak rows across
+species. The `scoped()` / `crossSpecies()` builders deliberately expose
+`findUnique` only on the `animal` builder and have **no** `findUnique`
+on the Camp/Mob/Observation builders (facade header ~lines 99–102).
+Excluding these three operations from the structural test is therefore
+a documented contract clarification, **not** a silent test hack.
+
+**Structural exemptions are by-path, not per-call.** Exempt: the
+two-door module `lib/server/species-scoped-prisma.ts`; `migrations/`;
+`prisma/`; `scripts/` (seed/maintenance); `docs/`; and any test file.
+One additional documented deep-module seam is exempt by path:
+`lib/server/animal-search.ts`. `searchAnimals()` is a per-species
+accessor that injects `species: mode` itself (its `composedWhere`) and
+requires an explicit `includeDeceased` flag by compile-time signature,
+but it cannot route through `scoped()` because the `scoped()` animal
+read path force-injects `status: ACTIVE_STATUS` — which would silently
+drop the Sold/Deceased rows SARS audit retention (issue #255) requires.
+It is therefore a structural door-module in spirit (it enforces the
+species axis, just not via the `scoped()` builder), exempted by path
+and recorded here so the exemption is a reviewable ADR decision rather
+than an invisible allowlist entry. This is the only such third-seam
+exemption; any future one requires its own ADR clarification.

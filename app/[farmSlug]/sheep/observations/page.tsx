@@ -26,9 +26,8 @@ import SheepObservationsTimeline from "./SheepObservationsTimeline";
  * pre-backfill, or where the owning animal was deleted) are
  * intentionally excluded from this feed. The cross-species follow-up
  * (a farm-wide audit log) is out of scope for this slice; if needed it
- * lives at a separate route with an explicit
- * `audit-allow-species-where:` pragma rather than relaxing the per-
- * species predicate here.
+ * lives at a separate route through the `crossSpecies()` door
+ * (ADR-0005) rather than relaxing the per-species predicate here.
  *
  * Server-rendered timeline rationale
  * ──────────────────────────────────
@@ -90,8 +89,7 @@ export default async function SheepObservationsPage({
   // SSR fetch the observation slice (sheep-only, paginated by observedAt
   // DESC), plus the animal/camp prefetches the create-observation modal
   // needs for its autocomplete. All three calls flow through the facade
-  // so the species axis is structurally enforced — the
-  // `audit-species-where` gate doesn't need to scan this file.
+  // so the species axis is structurally enforced (ADR-0005).
   const [observations, prismaAnimals, prismaCamps] = await Promise.all([
     speciesPrisma.observation.findMany({
       orderBy: { observedAt: "desc" },

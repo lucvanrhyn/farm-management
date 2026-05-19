@@ -1,7 +1,7 @@
 // lib/species/shared/repro-engine.ts — Parameterized reproduction analytics engine
 
 import type { PrismaClient } from "@prisma/client";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { SpeciesId, SpeciesReproStats, UpcomingBirth } from "../types";
 
 // ── Engine Config ──────────────────────────────────────────────────────────────
@@ -114,10 +114,13 @@ export async function getReproStatsForSpecies(
     details: true,
   } as const;
 
-  // Derive the set of animal IDs belonging to this species for observation filtering.
-  // We join via the Animal table to ensure species isolation.
-  const speciesAnimalIds = await prisma.animal
-    .findMany({
+  // Derive the set of animal IDs of this species for the observation join.
+  // crossSpecies (not scoped) because reproduction KPIs span a 12–18mo
+  // window and must include since-Sold/Deceased animals; scoped() would
+  // inject status:ACTIVE and silently drop their breeding history. Species
+  // correctness is held by the explicit where:{ species } predicate.
+  const speciesAnimalIds = await crossSpecies(prisma, "analytics-rollup")
+    .animal.findMany({
       where: { species },
       select: { id: true },
     })

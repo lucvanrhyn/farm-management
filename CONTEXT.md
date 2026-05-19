@@ -160,11 +160,18 @@ without a sanctioned reason is a design question, not a pragma.
 
 The four species models may be reached on a tenant code path ONLY via
 `scoped()` or `crossSpecies()`. Raw `prisma.{animal,camp,mob,observation}`
-is forbidden outside a small *structural* exemption (the two door
-modules themselves, `migrations/`, `scripts/` seed/maintenance, `prisma/`,
-test files). Enforced by a structural architecture test in the shape of
-`__tests__/architecture/sync-truth-no-direct-callers.test.ts`
-(ADR-0002's invariant) — presence of a named door, NOT presence of a
-`species:` key. There is no per-call baseline and no
-`audit-allow-species-where:` pragma; both are retired by ADR-0005's
-final rollout wave.
+`.{findMany,findFirst,count,groupBy,updateMany,deleteMany}` is forbidden
+outside a small *structural* exemption (the two-door module itself, the
+documented `lib/server/animal-search.ts` deep-module seam, `migrations/`,
+`scripts/` seed/maintenance, `prisma/`, `docs/`, test files). Enforced by
+the structural architecture test
+`__tests__/architecture/species-access-no-direct-prisma.test.ts`
+(modelled on ADR-0002's `sync-truth-no-direct-callers.test.ts`) —
+presence of a named door, NOT presence of a `species:` key. By-PK strict
+lookups (`findUnique`/`findUniqueOrThrow`/`findFirstOrThrow`) are
+intentionally outside the invariant — they cannot leak across species.
+The content-inspecting `audit-species-where` script + baseline +
+`audit-allow-species-where:` pragma + `CROSS_SPECIES_ALLOWLIST_PATHS`
+were retired by ADR-0005's final rollout wave (#353); the
+`audit-species-where` CI workflow now runs the structural test under an
+unchanged check-name.

@@ -15,8 +15,9 @@
  *
  * Both must (a) route camp reads through the facade so `where.species`
  * matches the active mode, and (b) hand the client a camps-list already
- * filtered by species. The CI guard at `scripts/audit-species-where.ts`
- * enforces the structural rule across the codebase.
+ * filtered by species. The structural arch test
+ * `__tests__/architecture/species-access-no-direct-prisma.test.ts`
+ * (ADR-0005) enforces the species-access invariant across the codebase.
  */
 import type React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

@@ -35,10 +35,13 @@
  *     const animals = await scoped(prisma, mode).animal.findMany({});
  *
  * `mode: SpeciesId` is a required positional argument — forgetting it is
- * a compile error, not a runtime bug. The sibling lint guard
- * (`scripts/audit-species-where.ts`) enforces the structural rule across
- * the codebase: any `prisma.animal.findMany` (and friends) that lacks
- * a top-level `species:` predicate fails CI.
+ * a compile error, not a runtime bug. The structural arch test
+ * (`__tests__/architecture/species-access-no-direct-prisma.test.ts`,
+ * ADR-0005) enforces the invariant across the codebase: any raw
+ * `prisma.{animal,camp,mob,observation}.{findMany,findFirst,count,
+ * groupBy,updateMany,deleteMany}` outside a structural door-module
+ * exemption fails CI. (As of ADR-0005's final wave this replaced the
+ * content-inspecting `audit-species-where` script + baseline + pragma.)
  *
  * ──────────────────────────────────────────────────────────────────────
  * Contract — what the facade injects
@@ -70,19 +73,19 @@
  *   added by migration 0003 (Phase I.3). The column is nullable to
  *   tolerate orphan rows (animalId references a deleted animal) and
  *   pre-backfill data — rows where `species IS NULL` are intentionally
- *   excluded from per-species feeds. A future cross-species observation
- *   feed (e.g. farm-wide audit log) goes through `prisma.observation`
- *   directly with an `audit-allow-species-where:` pragma.
+ *   excluded from per-species feeds. A cross-species observation feed
+ *   (e.g. farm-wide audit log) goes through the `crossSpecies(prisma,
+ *   'farm-wide-audit')` door (ADR-0005).
  *
  *   Note (per #224 brief): an earlier draft of the facade routed
  *   observation filtering through `where: { animal: { species: mode } }`
  *   (relation JOIN) because the column hadn't been backfilled. As of
  *   migration 0003 the column exists and is populated; we filter on it
  *   directly. The JOIN form is recoverable by writing the predicate
- *   explicitly outside the facade — `prisma.observation.findMany({
- *   where: { animal: { species: mode } } })` — with an
- *   `audit-allow-species-where: relation join needed for orphan rows`
- *   pragma if you genuinely need the JOIN semantics.
+ *   explicitly through the `crossSpecies()` door —
+ *   `crossSpecies(prisma, 'farm-wide-audit').observation.findMany({
+ *   where: { animal: { species: mode } } })` — if you genuinely need
+ *   the JOIN semantics.
  *
  * ──────────────────────────────────────────────────────────────────────
  * What the facade does NOT do
