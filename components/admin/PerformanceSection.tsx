@@ -34,11 +34,16 @@ export default async function PerformanceSection({
     crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campId: "asc" } }),
     // cross-species by design: per-camp performance groups by species + category
     // explicitly so the merged-LSU table can weight each bucket correctly.
+    // crossSpecies() forwards args verbatim; the facade returns Prisma's
+    // broadest groupBy shape (documented trade-off) so re-narrow to what
+    // this query's by/_count selection produces — behaviour-identical.
     crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; species: string; category: string; _count: { id: number } }>
+    >,
     crossSpecies(prisma, "analytics-rollup").observation.findMany({
       where: {
         type: "camp_condition",

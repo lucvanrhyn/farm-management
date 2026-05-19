@@ -14,11 +14,16 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
   const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
     getLatestCampConditions(prisma),
     // cross-species by design: camps overview totals every species per camp.
+    // crossSpecies() forwards args verbatim; the facade returns Prisma's
+    // broadest groupBy shape (documented trade-off) so re-narrow to what
+    // this query's by/_count selection produces — behaviour-identical.
     crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["currentCamp"],
       where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },
       _count: { _all: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; _count: { _all: number } }>
+    >,
     scoped(prisma, mode).camp.findMany({
       select: {
         campId: true,
