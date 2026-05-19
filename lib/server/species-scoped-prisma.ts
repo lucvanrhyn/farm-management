@@ -187,6 +187,26 @@ export interface SpeciesScopedPrisma {
   readonly observation: ObservationBuilder;
 }
 
+/**
+ * The closed set of reasons a query is allowed to span every species.
+ * Each literal is a documented, audited use case (ADR-0005). Adding a new
+ * cross-species surface means adding a literal here — a deliberate edit
+ * reviewers can see, not an ambient capability any callsite can reach for.
+ */
+export type CrossSpeciesReason =
+  | 'einstein-rag'
+  | 'analytics-rollup'
+  | 'notification-cron'
+  | 'farm-wide-audit'
+  | 'species-registry-internal';
+
+export interface CrossSpeciesPrisma {
+  readonly animal: AnimalBuilder;
+  readonly camp: CampBuilder;
+  readonly mob: MobBuilder;
+  readonly observation: ObservationBuilder;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────
 
 /**
@@ -200,6 +220,17 @@ export interface SpeciesScopedPrisma {
  * @param prisma — the underlying client (singleton or tx-bound)
  * @param mode   — the SpeciesId to filter by. Read from
  *                 `getFarmMode(farmSlug)` for cookie-driven surfaces.
+ *
+ * ── crossSpecies(prisma, reason) ──────────────────────────────────────
+ *
+ * `crossSpecies()` is the typed sibling of `scoped()` for queries that
+ * INTENTIONALLY span every species (RAG ingestion, analytics rollups,
+ * notification crons, farm-wide audits, species-registry internals). It
+ * shares the same builder shape but injects no `species` predicate and no
+ * `status` — every method is a transparent forwarder. The required
+ * `reason: CrossSpeciesReason` argument is a compile-time classification
+ * marker: it makes the "this query crosses species on purpose" decision
+ * live in the type system at the callsite, not in a code-review comment.
  */
 export function scoped(
   prisma: PrismaClient | Prisma.TransactionClient,
@@ -365,6 +396,110 @@ export function scoped(
         ...(args ?? {}),
         where: mergeWhere<Prisma.ObservationWhereInput>({ species: mode }, args),
       }) as ReturnType<ObservationDelegate['deleteMany']>;
+    },
+  };
+
+  return { animal, camp, mob, observation };
+}
+
+/**
+ * Wrap a PrismaClient (or tx client) for a query that INTENTIONALLY spans
+ * every species. Unlike `scoped()`, no `species` or `status` predicate is
+ * injected — every builder method forwards the caller's args verbatim.
+ *
+ * @param prisma — the underlying client (singleton or tx-bound)
+ * @param reason — the CrossSpeciesReason classifying this callsite.
+ */
+export function crossSpecies(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  reason: CrossSpeciesReason,
+): CrossSpeciesPrisma {
+  // `reason` is intentionally unused at runtime: it is a compile-time
+  // classification marker (ADR-0005), not behaviour. `void` it so the
+  // contract stays a required positional arg without an eslint-disable.
+  void reason;
+
+  const animal: AnimalBuilder = {
+    findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
+      return prisma.animal.findMany(args) as ReturnType<AnimalDelegate['findMany']>;
+    },
+    findFirst(args) {
+      return prisma.animal.findFirst(args) as ReturnType<AnimalDelegate['findFirst']>;
+    },
+    findUnique(args) {
+      return prisma.animal.findUnique(args) as ReturnType<AnimalDelegate['findUnique']>;
+    },
+    count(args) {
+      return prisma.animal.count(args) as ReturnType<AnimalDelegate['count']>;
+    },
+    groupBy(args) {
+      return (prisma.animal.groupBy as (a: Prisma.AnimalGroupByArgs) => unknown)(
+        args,
+      ) as ReturnType<AnimalDelegate['groupBy']>;
+    },
+    updateMany(args) {
+      return prisma.animal.updateMany(args) as ReturnType<AnimalDelegate['updateMany']>;
+    },
+    deleteMany(args) {
+      return prisma.animal.deleteMany(args) as ReturnType<AnimalDelegate['deleteMany']>;
+    },
+  };
+
+  const camp: CampBuilder = {
+    findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
+      return prisma.camp.findMany(args) as ReturnType<CampDelegate['findMany']>;
+    },
+    findFirst(args) {
+      return prisma.camp.findFirst(args) as ReturnType<CampDelegate['findFirst']>;
+    },
+    count(args) {
+      return prisma.camp.count(args) as ReturnType<CampDelegate['count']>;
+    },
+    updateMany(args) {
+      return prisma.camp.updateMany(args) as ReturnType<CampDelegate['updateMany']>;
+    },
+    deleteMany(args) {
+      return prisma.camp.deleteMany(args) as ReturnType<CampDelegate['deleteMany']>;
+    },
+  };
+
+  const mob: MobBuilder = {
+    findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
+      return prisma.mob.findMany(args) as ReturnType<MobDelegate['findMany']>;
+    },
+    findFirst(args) {
+      return prisma.mob.findFirst(args) as ReturnType<MobDelegate['findFirst']>;
+    },
+    count(args) {
+      return prisma.mob.count(args) as ReturnType<MobDelegate['count']>;
+    },
+    updateMany(args) {
+      return prisma.mob.updateMany(args) as ReturnType<MobDelegate['updateMany']>;
+    },
+    deleteMany(args) {
+      return prisma.mob.deleteMany(args) as ReturnType<MobDelegate['deleteMany']>;
+    },
+  };
+
+  const observation: ObservationBuilder = {
+    findMany(args) {
+      // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
+      return prisma.observation.findMany(args) as ReturnType<ObservationDelegate['findMany']>;
+    },
+    findFirst(args) {
+      return prisma.observation.findFirst(args) as ReturnType<ObservationDelegate['findFirst']>;
+    },
+    count(args) {
+      return prisma.observation.count(args) as ReturnType<ObservationDelegate['count']>;
+    },
+    updateMany(args) {
+      return prisma.observation.updateMany(args) as ReturnType<ObservationDelegate['updateMany']>;
+    },
+    deleteMany(args) {
+      return prisma.observation.deleteMany(args) as ReturnType<ObservationDelegate['deleteMany']>;
     },
   };
 
