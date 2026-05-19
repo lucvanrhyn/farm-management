@@ -30,6 +30,7 @@ const ALL_SPECIES_MODULES: Record<SpeciesId, SpeciesModule> = {
 // DashboardAlert / DashboardAlerts) back from this file — that direction is
 // types-only, so the cycle is erased at runtime.
 import { composeAlerts } from "@/lib/server/alerts/compose";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 export { composeAlerts };
 export type { AlertInputs } from "@/lib/server/alerts/compose";
 
@@ -158,7 +159,9 @@ export async function getDashboardAlerts(
       ),
       getAnimalsInWithdrawal(prisma),
       preFetched.campConditions ?? getLatestCampConditions(prisma),
-      prisma.camp.count(),
+      // Farm-wide camp total (drives stale-inspection ratio) — not
+      // species-scoped. crossSpecies() forwards args verbatim.
+      crossSpecies(prisma, "analytics-rollup").camp.count(),
       getRotationStatusByCamp(prisma, now).catch(() => null),
       getVeldSummary(prisma, now).catch(() => null),
       getFarmFeedOnOfferPayload(prisma, now).catch(() => null),

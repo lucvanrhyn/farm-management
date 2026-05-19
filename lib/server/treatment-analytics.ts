@@ -1,5 +1,10 @@
 // lib/server/treatment-analytics.ts
 import type { PrismaClient } from "@prisma/client";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
+// ADR-0005 Wave 2: withdrawal tracking spans every treated species
+// (withdrawal periods are drug-driven, not species-driven).
+// crossSpecies() forwards args verbatim — behaviour is identical.
 
 // Default withdrawal periods in days per treatment type
 const DEFAULT_WITHDRAWAL_DAYS: Record<string, number> = {
@@ -40,7 +45,7 @@ export async function getAnimalsInWithdrawal(
   const now = new Date();
 
   // Fetch all treatment observations that have an associated animal
-  const treatmentObs = await prisma.observation.findMany({
+  const treatmentObs = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: "treatment",
       animalId: { not: null },
@@ -60,8 +65,9 @@ export async function getAnimalsInWithdrawal(
   // Get unique animal IDs and look up only active animals
   const animalIds = [...new Set(treatmentObs.map((o) => o.animalId as string))];
 
-  // cross-species by design: withdrawal periods apply to any treated species.
-  const activeAnimals = await prisma.animal.findMany({
+  // cross-species by design: withdrawal periods apply to any treated
+  // species. crossSpecies() forwards args verbatim (no injection).
+  const activeAnimals = await crossSpecies(prisma, "analytics-rollup").animal.findMany({
     where: {
       animalId: { in: animalIds },
       status: "Active",
