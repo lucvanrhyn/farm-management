@@ -28,6 +28,7 @@ import {
   type ElectionRecord,
 } from "@/lib/calculators/sars-livestock-values";
 import { reconstructStockSnapshots } from "@/lib/server/inventory-replay";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 /**
  * Prisma `select` shape for transactions consumed by `getIt3Payload`.
@@ -151,12 +152,15 @@ async function buildInventorySnapshot(
   // reconstruct historical stock-at-period-end — that would require replaying
   // every movement/sale observation across the year, which deserves its own
   // design pass. Farmers can compare against their own stock sheet.
-  // cross-species by design: SARS IT3 inventory covers all livestock by category.
-  const grouped = await prisma.animal.groupBy({
+  // cross-species by design: SARS IT3 inventory covers all livestock by
+  // category. Facade returns Prisma's broadest groupBy shape (documented
+  // trade-off in species-scoped-prisma.ts); re-narrow to this query's
+  // `by`/`_count` selection — behaviour-identical.
+  const grouped = (await crossSpecies(prisma, "farm-wide-audit").animal.groupBy({
     by: ["category"],
     where: { status: "Active" },
     _count: { id: true },
-  });
+  })) as unknown as Array<{ category: string; _count: { id: number } }>;
   const byCategory = grouped
     .map((g) => ({ category: g.category, count: g._count.id }))
     .sort((a, b) => b.count - a.count);

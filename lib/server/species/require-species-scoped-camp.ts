@@ -36,6 +36,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import type { SpeciesId } from '@/lib/species/types';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 
 // ── Public Types ──────────────────────────────────────────────────────────────
 
@@ -103,8 +104,12 @@ export async function requireSpeciesScopedCamp(
   }
 
   // Step 2: The (species, campId) pair does not exist.
-  // Distinguish between "campId unknown" vs "campId exists under another species".
-  const anyRow = await prisma.camp.findFirst({
+  // Distinguish between "campId unknown" vs "campId exists under another
+  // species". This lookup deliberately reasons ACROSS the species
+  // partition (that is the whole point of returning WRONG_SPECIES), so it
+  // goes through the crossSpecies() door — the campId-only where clause
+  // is forwarded verbatim (no species/status injection).
+  const anyRow = await crossSpecies(prisma, 'species-registry-internal').camp.findFirst({
     where: { campId },
     select: { id: true, species: true },
   });

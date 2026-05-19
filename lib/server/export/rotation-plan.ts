@@ -5,6 +5,7 @@ import { rotationPlanToCSV, type RotationPlanExportStep } from "@/lib/server/exp
 import type { ExportArtifact, ExportContext } from "./types";
 import { ExportRequestError } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export async function exportRotationPlan(ctx: ExportContext): Promise<ExportArtifact> {
   const planId = ctx.url.searchParams.get("planId");
@@ -24,12 +25,15 @@ export async function exportRotationPlan(ctx: ExportContext): Promise<ExportArti
   const campIds = [...new Set(plan.steps.map((s) => s.campId))];
   const mobIds = [...new Set(plan.steps.map((s) => s.mobId).filter(Boolean))] as string[];
 
+  // Rotation-plan export is farm-wide — crossSpecies() forwards the
+  // existing id-IN predicates verbatim (no species/status injection).
+  const xs = crossSpecies(ctx.prisma, "farm-wide-audit");
   const [camps, mobs] = await Promise.all([
     campIds.length > 0
-      ? ctx.prisma.camp.findMany({ where: { campId: { in: campIds } }, select: { campId: true, campName: true } })
+      ? xs.camp.findMany({ where: { campId: { in: campIds } }, select: { campId: true, campName: true } })
       : [],
     mobIds.length > 0
-      ? ctx.prisma.mob.findMany({ where: { id: { in: mobIds } }, select: { id: true, name: true } })
+      ? xs.mob.findMany({ where: { id: { in: mobIds } }, select: { id: true, name: true } })
       : [],
   ]);
 

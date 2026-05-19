@@ -9,15 +9,24 @@ import { getMergedLsuValues } from "@/lib/species/registry";
 import { performanceToCSV, type PerformanceRow } from "@/lib/server/export-csv";
 import type { ExportArtifact, ExportContext } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export async function exportPerformance(ctx: ExportContext): Promise<ExportArtifact> {
-  const camps = await ctx.prisma.camp.findMany();
+  const xs = crossSpecies(ctx.prisma, "farm-wide-audit");
+  const camps = await xs.camp.findMany();
   // cross-species by design: performance export uses merged-LSU values.
-  const animalsByCamp = await ctx.prisma.animal.groupBy({
+  // Facade returns Prisma's broadest groupBy shape (documented
+  // trade-off in species-scoped-prisma.ts); re-narrow to this query's
+  // `by`/`_count` selection — behaviour-identical.
+  const animalsByCamp = (await xs.animal.groupBy({
     by: ["currentCamp", "category"],
     where: { status: "Active" },
     _count: { id: true },
-  });
+  })) as unknown as Array<{
+    currentCamp: string;
+    category: string;
+    _count: { id: number };
+  }>;
 
   const coverReadings = await ctx.prisma.campCoverReading.findMany({
     orderBy: { recordedAt: "desc" },

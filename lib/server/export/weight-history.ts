@@ -5,6 +5,7 @@
 import { weightHistoryToCSV, type WeightHistoryRow } from "@/lib/server/export-csv";
 import type { ExportArtifact, ExportContext } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export async function exportWeightHistory(ctx: ExportContext): Promise<ExportArtifact> {
   const weighingWhere: Record<string, unknown> = { type: "weighing" };
@@ -14,7 +15,10 @@ export async function exportWeightHistory(ctx: ExportContext): Promise<ExportArt
     if (ctx.to) dateFilter.lte = new Date(ctx.to);
     weighingWhere.observedAt = dateFilter;
   }
-  const obs = await ctx.prisma.observation.findMany({
+  // Farm-wide weight-history export — crossSpecies() forwards the
+  // existing date/id predicates verbatim (no species/status injection).
+  const xs = crossSpecies(ctx.prisma, "farm-wide-audit");
+  const obs = await xs.observation.findMany({
     where: weighingWhere,
     orderBy: { observedAt: "desc" },
     select: { animalId: true, observedAt: true, details: true },
@@ -24,7 +28,7 @@ export async function exportWeightHistory(ctx: ExportContext): Promise<ExportArt
   const animalIds = [...new Set(obs.map((o) => o.animalId).filter(Boolean))] as string[];
   // cross-species by design: weight-history rows are looked up by id only.
   const animals = animalIds.length > 0
-    ? await ctx.prisma.animal.findMany({
+    ? await xs.animal.findMany({
         where: { id: { in: animalIds } },
         select: { id: true, animalId: true, name: true, currentCamp: true },
       })

@@ -23,10 +23,12 @@
  *     mirror deaths.
  */
 
+import type { PrismaClient } from "@prisma/client";
 import {
   mapFarmTrackCategoryToSarsClass,
   type AnimalSnapshot,
 } from "@/lib/calculators/sars-stock";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import {
   UnknownLivestockClassError,
 } from "@/lib/calculators/sars-livestock-values";
@@ -123,8 +125,13 @@ export async function reconstructStockSnapshots(
   // First Schedule paragraph 5(1) requires opening + closing snapshots that
   // include every animal alive at any point in the tax year. Bounding by
   // `take` would silently truncate the return and falsify the tax filing.
+  // This is a farm-wide audit (every species, every lifecycle) — route
+  // through crossSpecies(). The module's structural InventoryReplayPrisma
+  // contract is a subset of PrismaClient; the cast is safe because
+  // crossSpecies() is a transparent verbatim forwarder.
   // audit-allow-findmany: full-tenant scan required by tax-law contract
-  const animals = await prisma.animal.findMany({
+  const xs = crossSpecies(prisma as unknown as PrismaClient, "farm-wide-audit");
+  const animals = (await xs.animal.findMany({
     select: {
       id: true,
       animalId: true,
@@ -135,7 +142,7 @@ export async function reconstructStockSnapshots(
       dateOfBirth: true,
       deceasedAt: true,
     },
-  });
+  })) as unknown as AnimalRow[];
 
   // Pull all exit-event observations for these animals within the tax-year
   // window. Used to time-anchor sales/dispatches that don't carry a deceasedAt.
@@ -161,14 +168,14 @@ export async function reconstructStockSnapshots(
     // tax-year window — full population is required to reproduce paragraph
     // 5(1) opening/closing reconciliation faithfully.
     // audit-allow-findmany: bounded by animalIds + tax-year date window
-    exitObsRaw = await prisma.observation.findMany({
+    exitObsRaw = (await xs.observation.findMany({
       where: {
         type: { in: exitTypes },
         animalId: { in: animalIds },
         observedAt: { gte: observedAtGte, lte: observedAtLte },
       },
       select: { id: true, type: true, animalId: true, observedAt: true, details: true },
-    });
+    })) as unknown as ObservationRow[];
   }
 
   // Map: animalId -> earliest exit date (ISO YYYY-MM-DD) within the year.

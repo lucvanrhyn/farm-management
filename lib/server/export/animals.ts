@@ -6,6 +6,7 @@ import type { ExportArtifact, ExportContext } from "./types";
 import { ExportRequestError } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
 import type { SpeciesId } from "@/lib/species/types";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const VALID_SPECIES: readonly SpeciesId[] = ["cattle", "sheep", "game"];
 
@@ -31,7 +32,10 @@ export async function exportAnimals(ctx: ExportContext): Promise<ExportArtifact>
     speciesFilter = speciesParam;
   }
 
-  const animals = await ctx.prisma.animal.findMany({
+  // Farm-wide audit export. The optional ?species= predicate stays in the
+  // caller's where verbatim — crossSpecies() injects nothing, so the
+  // existing filter (or its absence) is preserved bit-identically.
+  const animals = await crossSpecies(ctx.prisma, "farm-wide-audit").animal.findMany({
     where: {
       status: "Active",
       ...(speciesFilter !== undefined ? { species: speciesFilter } : {}),
