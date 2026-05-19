@@ -16,6 +16,7 @@ import {
   calcDaysGrazingRemaining,
 } from "@/lib/server/analytics";
 import { getHerdAdgTrend } from "@/lib/server/weight-analytics";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 // ── Re-exported types (formerly in GrafiekeClient) ────────────────────────────
 
@@ -107,7 +108,9 @@ export async function fetchCampAnalyticsData(prisma: PrismaClient, lookbackDays 
     getCalvingTrend(prisma, lookbackMonths),
     getDeathsAndSales(prisma, lookbackMonths),
     getWithdrawalTracker(prisma),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    // Chart data is a farm-wide analytics roll-up — crossSpecies()
+    // forwards args verbatim (no species/status injection).
+    crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
   const herdAdgTrend = await getHerdAdgTrend(
@@ -149,11 +152,14 @@ export async function fetchFinancialAnalyticsData(
       select: { type: true, amount: true, date: true },
     }),
     // cross-species by design: financial herd composition is farm-wide.
-    prisma.animal.groupBy({
+    // Facade returns Prisma's broadest groupBy shape (documented
+    // trade-off in species-scoped-prisma.ts); re-narrow to this query's
+    // `by`/`_count` selection — behaviour-identical.
+    crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["category"],
       where: { status: "Active" },
       _count: { id: true },
-    }),
+    }) as unknown as Promise<Array<{ category: string; _count: { id: number } }>>,
     prisma.campCoverReading.findMany({
       orderBy: { recordedAt: "desc" },
     }),

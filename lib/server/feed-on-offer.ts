@@ -8,6 +8,7 @@ import {
   type FarmFeedOnOfferSummary,
   type FeedOnOfferTrendPoint,
 } from '@/lib/calculators/feed-on-offer';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,9 @@ export async function getFarmFeedOnOfferPayload(
   now: Date = new Date(),
 ): Promise<FarmFeedOnOfferPayload> {
   const [camps, allReadings] = await Promise.all([
-    prisma.camp.findMany({
+    // Feed-on-offer is a farm-wide veld roll-up — crossSpecies()
+    // forwards args verbatim (no species/status injection).
+    crossSpecies(prisma, "analytics-rollup").camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
     }),
     prisma.campCoverReading.findMany({

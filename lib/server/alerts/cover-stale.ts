@@ -7,6 +7,7 @@
 import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, diffDays, toIsoWeek } from "./helpers";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const STALE_DAYS = 21;
 
@@ -26,7 +27,9 @@ export async function evaluate(
   _settings: FarmSettings,
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
-  const camps = (await prisma.camp.findMany({
+  // Cover-staleness is a farm-wide notification cron — every camp across
+  // every species is in scope. crossSpecies() forwards args verbatim.
+  const camps = (await crossSpecies(prisma, "notification-cron").camp.findMany({
     select: { id: true, campId: true, campName: true },
   })) as CampRow[];
   if (camps.length === 0) return [];

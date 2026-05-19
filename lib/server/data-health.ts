@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export interface DataHealthScore {
   overall: number;
@@ -27,9 +28,14 @@ export async function getDataHealthScore(
     assignedCount,
     txThisMonth,
   ] = await Promise.all([
-    // cross-species by design: data hygiene metric covers every active animal.
-    prisma.animal.count({ where: { status: "Active" } }),
-    prisma.camp.count(),
+    // cross-species by design: data hygiene metric covers every active
+    // animal. crossSpecies() forwards args verbatim (no injection).
+    crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
+    crossSpecies(prisma, "analytics-rollup").camp.count(),
+    // NOTE (ADR-0005 Wave 2): the species-access door (frozen this wave)
+    // only exposes groupBy on its animal builder, not observation. These
+    // two farm-wide observation roll-ups therefore stay raw, baselined
+    // prisma.observation.groupBy until the door gains observation.groupBy.
     prisma.observation.groupBy({
       by: ["animalId"],
       where: {
@@ -47,7 +53,7 @@ export async function getDataHealthScore(
       },
     }),
     // cross-species by design: "% of animals with a camp" is farm-wide.
-    prisma.animal.count({
+    crossSpecies(prisma, "analytics-rollup").animal.count({
       where: { status: "Active", currentCamp: { not: "" } },
     }),
     prisma.transaction.count({

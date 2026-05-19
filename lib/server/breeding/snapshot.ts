@@ -12,6 +12,7 @@ import type { BreedingSnapshot } from "./types";
 import { addDays, daysFromNow, parseDetails } from "./utils";
 import { getBreedingConstants } from "@/lib/species/breeding-constants";
 import type { SpeciesId } from "@/lib/species/types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 export async function getBreedingSnapshot(
   prisma: PrismaClient,
@@ -27,9 +28,13 @@ export async function getBreedingSnapshot(
   const sixtyDaysFromNow = new Date(Date.now() + 60 * 86_400_000);
   const thirtyDaysFromNow = new Date(Date.now() + 30 * 86_400_000);
 
+  const db = scoped(prisma, species);
+
   const [allAnimals, recentPregnancyScans, recentInseminations] = await Promise.all([
-    prisma.animal.findMany({
-      where: { status: "Active", species },
+    // scoped() injects { species, status: "Active" }; status kept explicit
+    // so the deceased-flag axis stays a deliberate, visible choice.
+    db.animal.findMany({
+      where: { status: "Active" },
       select: {
         id: true,
         animalId: true,
@@ -40,20 +45,18 @@ export async function getBreedingSnapshot(
         fatherId: true,
       },
     }),
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         type: "pregnancy_scan",
-        species,
         observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
       orderBy: { observedAt: "desc" },
       select: { animalId: true, details: true, observedAt: true },
     }),
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         type: "insemination",
-        species,
         observedAt: { gte: ninetyDaysAgo },
         animalId: { not: null },
       },

@@ -3,6 +3,12 @@ import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 import { getTenantDayStart } from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
+// ADR-0005 Wave 2: camp-status reads are farm-wide analytics roll-ups
+// (latest camp conditions, recent health obs, LSU grazing math). The
+// existing `...(mode ? { species: mode } : {})` spreads are KEPT verbatim
+// — crossSpecies() injects nothing, so behaviour is bit-identical.
 
 export interface LiveCampStatus {
   grazing_quality: GrazingQuality;
@@ -23,7 +29,7 @@ export interface HealthObservation {
 export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map<string, LiveCampStatus>> {
   // Use distinct on campId with descending observedAt to get only the latest
   // observation per camp — avoids fetching the entire historical table.
-  const observations = await prisma.observation.findMany({
+  const observations = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: { in: ["camp_condition", "camp_check"] } },
     orderBy: { observedAt: "desc" },
     distinct: ["campId"],
@@ -65,7 +71,7 @@ export async function getRecentHealthObservations(
   limit = 8,
   mode?: SpeciesId,
 ): Promise<HealthObservation[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: "health_issue",
       // Per-species when `mode` is provided (admin dashboard #225); cross-species
@@ -99,7 +105,7 @@ export async function countHealthIssuesSince(
   since: Date,
   mode?: SpeciesId,
 ): Promise<number> {
-  return prisma.observation.count({
+  return crossSpecies(prisma, "analytics-rollup").observation.count({
     where: {
       type: "health_issue",
       observedAt: { gte: since },
@@ -113,15 +119,21 @@ export async function countHealthIssuesSince(
  * Uses 3 batched queries — safe to call on the admin home page.
  */
 export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays = 7): Promise<number> {
+  const xs = crossSpecies(prisma, "analytics-rollup");
   const [camps, allCoverReadings, allAnimals] = await Promise.all([
-    prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
+    xs.camp.findMany({ select: { campId: true, sizeHectares: true } }),
     prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
     // cross-species by design: low-grazing math sums LSU across all species.
-    prisma.animal.groupBy({
+    // Facade returns Prisma's broadest groupBy shape (documented
+    // trade-off in species-scoped-prisma.ts); re-narrow to this query's
+    // `by`/`_count` selection — behaviour-identical.
+    xs.animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; category: string; _count: { id: number } }>
+    >,
   ]);
 
   const latestCover = new Map<string, { kgDmPerHa: number; useFactor: number }>();
@@ -167,7 +179,7 @@ export async function countInspectedToday(
   // fall back to "Africa/Johannesburg" — the FarmSettings.timezone default.
   const todayStart = getTenantDayStart(tz ?? "Africa/Johannesburg");
 
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: { in: ["camp_condition", "camp_check"] },
       observedAt: { gte: todayStart },

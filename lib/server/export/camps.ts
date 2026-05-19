@@ -5,10 +5,12 @@ import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { campsToCSV, type CampRow } from "@/lib/server/export-csv";
 import type { ExportArtifact, ExportContext } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export async function exportCamps(ctx: ExportContext): Promise<ExportArtifact> {
   const [rawCamps, conditionMap] = await Promise.all([
-    ctx.prisma.camp.findMany(),
+    // Farm-wide camp summary export — crossSpecies() forwards verbatim.
+    crossSpecies(ctx.prisma, "farm-wide-audit").camp.findMany(),
     getLatestCampConditions(ctx.prisma),
   ]);
 

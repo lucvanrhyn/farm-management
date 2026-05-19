@@ -7,6 +7,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { TraitProfile } from "./types";
 import { parseDetails } from "./utils";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export type TraitObsRow = { animalId: string | null; type: string; details: string };
 export type CalvingObsRow = { details: string };
@@ -26,8 +27,12 @@ export async function getAnimalTraitProfile(
     offspringCount: 0,
   };
 
-  // Query all relevant observations for this animal
-  const observations = await prisma.observation.findMany({
+  // Query all relevant observations for this animal. This builder reasons
+  // across the species partition (it locates an animal's own + offspring
+  // calving records by animalId / details substring, which legitimately
+  // span species — see line ~70). crossSpecies() forwards args verbatim.
+  const db = crossSpecies(prisma, "analytics-rollup");
+  const observations = await db.observation.findMany({
     where: {
       animalId,
       type: {
@@ -66,7 +71,7 @@ export async function getAnimalTraitProfile(
     // For bulls: average calving difficulty of their calves
     // Find calving observations where the bull is the father.
     // Filter by `details LIKE %animalId%` to avoid a full table scan.
-    const calvingObs = await prisma.observation.findMany({
+    const calvingObs = await db.observation.findMany({
       where: { type: "calving", details: { contains: animalId } },
       select: { details: true },
     });
@@ -97,7 +102,7 @@ export async function getAnimalTraitProfile(
     }
   } else {
     // For cows: their own calving difficulty history
-    const ownCalvings = await prisma.observation.findMany({
+    const ownCalvings = await db.observation.findMany({
       where: { type: "calving", animalId },
       select: { details: true },
     });

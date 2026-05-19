@@ -5,6 +5,7 @@ import {
   type BiomeType,
   type TrendPoint,
 } from '@/lib/calculators/veld-score';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 
 export interface CampVeldSummary {
   readonly campId: string;
@@ -88,7 +89,8 @@ export async function getFarmSummary(
   now: Date = new Date(),
 ): Promise<FarmVeldSummary> {
   const [camps, settings, allRows] = await Promise.all([
-    prisma.camp.findMany({ select: { campId: true } }),
+    // Veld state is farm-wide — crossSpecies() forwards args verbatim.
+    crossSpecies(prisma, "analytics-rollup").camp.findMany({ select: { campId: true } }),
     prisma.farmSettings.findUnique({ where: { id: 'singleton' }, select: { biomeType: true } }),
     prisma.veldAssessment.findMany({
       orderBy: { assessmentDate: 'asc' },
