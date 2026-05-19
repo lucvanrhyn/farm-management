@@ -23,6 +23,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 import type { GeoJsonFeatureCollection } from "./types";
 
 export type TaskPinStatusFilter = "today" | "open" | "all";
@@ -137,7 +139,7 @@ export async function listTaskPins(
         lng: true,
       },
     }),
-    prisma.camp.findMany({
+    crossSpecies(prisma, "analytics-rollup").camp.findMany({
       select: { campId: true, geojson: true },
       where: { geojson: { not: null } },
     }),

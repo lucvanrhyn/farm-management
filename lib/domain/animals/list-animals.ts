@@ -28,6 +28,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { timeAsync } from "@/lib/server/server-timing";
 
 /**
@@ -95,7 +96,7 @@ export async function listAnimals(
     // (see baseWhere construction above). Callers that want a single
     // species pass it explicitly; legacy callers stay multi-species.
     const animals = await timeAsync("query", () =>
-      prisma.animal.findMany({
+      crossSpecies(prisma, "analytics-rollup").animal.findMany({
         where: baseWhere,
         orderBy: [{ category: "asc" }, { animalId: "asc" }],
       }),
@@ -111,7 +112,7 @@ export async function listAnimals(
   // detect "has more" without a second COUNT round-trip.
   // cross-species by design: species filter is opt-in via baseWhere above.
   const items = await timeAsync("query", () =>
-    prisma.animal.findMany({
+    crossSpecies(prisma, "analytics-rollup").animal.findMany({
       where: {
         ...baseWhere,
         ...(cursor ? { animalId: { gt: cursor } } : {}),

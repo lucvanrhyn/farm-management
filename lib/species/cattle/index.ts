@@ -7,6 +7,7 @@ import type {
   SpeciesReproStats,
   SpeciesAlert,
 } from "../types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { CATTLE_CONFIG } from "./config";
 import { getReproStatsForSpecies } from "../shared/repro-engine";
 
@@ -98,7 +99,7 @@ export const cattleModule: SpeciesModule = {
     ).length;
 
     // ── Poor doers (weighing) ────────────────────────────────────────────────
-    const weighingObs = await prisma.observation.findMany({
+    const weighingObs = await scoped(prisma, "cattle").observation.findMany({
       where: { type: "weighing", animalId: { not: null } },
       select: { animalId: true, observedAt: true, details: true },
       orderBy: { observedAt: "asc" },

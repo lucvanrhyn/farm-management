@@ -18,6 +18,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { CAMP_COLOR_PALETTE } from "@/lib/camp-colors";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { SpeciesId } from "@/lib/species/types";
 
 import { DuplicateCampError, MissingSpeciesError } from "./errors";
@@ -71,11 +72,19 @@ export async function createCamp(
     throw new MissingSpeciesError();
   }
 
+  // After the SPECIES_OMITTED guard above, `species` is a real SpeciesId. TS
+  // can't narrow the branded sentinel out of the union, so cast explicitly.
+  const speciesId = species as SpeciesId;
+
   // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
   // species+campId). The duplicate check MUST be species-scoped so the same
   // campId can exist across species (cattle's NORTH-01 vs sheep's NORTH-01
-  // are distinct rows).
-  const existing = await prisma.camp.findFirst({ where: { campId, species } });
+  // are distinct rows). The species-scoped facade injects `species: speciesId`
+  // — identical to the previously-explicit `species` key, so the now-redundant
+  // literal is dropped.
+  const existing = await scoped(prisma, speciesId).camp.findFirst({
+    where: { campId },
+  });
   if (existing) {
     throw new DuplicateCampError();
   }
@@ -83,7 +92,7 @@ export async function createCamp(
   // Auto-assign a color from the palette if not provided.
   let assignedColor = color as string | undefined | null;
   if (!assignedColor) {
-    const campCount = await prisma.camp.count();
+    const campCount = await scoped(prisma, speciesId).camp.count();
     assignedColor = CAMP_COLOR_PALETTE[campCount % CAMP_COLOR_PALETTE.length];
   }
 

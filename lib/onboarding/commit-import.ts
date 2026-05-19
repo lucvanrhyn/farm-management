@@ -24,6 +24,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -353,7 +354,10 @@ export async function commitImport(
   let existingByTag = new Map<string, string>();
   if (parentTags.size > 0) {
     // cross-species by design: ear-tag uniqueness is farm-wide, not per-species.
-    const existing = await prisma.animal.findMany({
+    const existing = await crossSpecies(
+      prisma,
+      "species-registry-internal",
+    ).animal.findMany({
       where: { animalId: { in: Array.from(parentTags) } },
       select: { animalId: true },
     });

@@ -9,6 +9,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 export interface ResetObservationsResult {
   success: true;
   count: number;
@@ -17,6 +19,9 @@ export interface ResetObservationsResult {
 export async function resetObservations(
   prisma: PrismaClient,
 ): Promise<ResetObservationsResult> {
-  const { count } = await prisma.observation.deleteMany({});
+  const { count } = await crossSpecies(
+    prisma,
+    "farm-wide-audit",
+  ).observation.deleteMany({});
   return { success: true, count };
 }
