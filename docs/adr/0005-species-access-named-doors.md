@@ -1,6 +1,6 @@
 # Species access: two named doors, no raw prisma on the four species models
 
-**Status:** proposed (2026-05-18)
+**Status:** accepted (2026-05-19)
 
 ## Context
 
