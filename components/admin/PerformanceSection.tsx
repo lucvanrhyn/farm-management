@@ -3,6 +3,7 @@ import PerformanceTable from "@/components/admin/PerformanceTable";
 import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 import { getMergedLsuValues } from "@/lib/species/registry";
 import type { PerfRow } from "@/components/admin/PerformanceTable";
@@ -30,15 +31,15 @@ export default async function PerformanceSection({
   const hasDateFilter = fromDate || toDate;
 
   const [camps, animalsByCategory, allConditions, allCoverReadings] = await Promise.all([
-    prisma.camp.findMany({ orderBy: { campId: "asc" } }),
+    crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campId: "asc" } }),
     // cross-species by design: per-camp performance groups by species + category
     // explicitly so the merged-LSU table can weight each bucket correctly.
-    prisma.animal.groupBy({
+    crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
     }),
-    prisma.observation.findMany({
+    crossSpecies(prisma, "analytics-rollup").observation.findMany({
       where: {
         type: "camp_condition",
         ...(hasDateFilter && { observedAt: observedAtFilter }),

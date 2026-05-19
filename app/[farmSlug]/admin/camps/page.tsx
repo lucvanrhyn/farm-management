@@ -9,6 +9,8 @@ import RotationSection from "@/components/admin/rotation/RotationSection";
 import CampsTabBar from "@/components/admin/CampsTabBar";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { Camp } from "@/lib/types";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
@@ -52,6 +54,8 @@ export default async function AdminCampsPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   const creds = await getFarmCreds(farmSlug);
   const tier = creds?.tier ?? "basic";
   const isBasic = tier === "basic";
@@ -63,7 +67,7 @@ export default async function AdminCampsPage({
   const needsFeedOnOffer = !gatedFeature && activeTab === "feed-on-offer";
 
   const [prismaCampsRaw, veldSummary, feedOnOfferPayload] = await Promise.all([
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
     needsVeldSummary ? getVeldSummary(prisma) : Promise.resolve(null),
     needsFeedOnOffer ? getFarmFeedOnOfferPayload(prisma) : Promise.resolve(null),
   ]);

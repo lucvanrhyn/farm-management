@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { OnboardingProvider } from "@/components/onboarding/OnboardingProvider";
 import { StepperFromPathname } from "@/components/onboarding/Stepper";
 import { ONBOARDING_GLOW } from "@/components/onboarding/theme";
@@ -219,7 +220,7 @@ export default async function OnboardingLayout({
 
   // 3. Empty-farm guard.
   // cross-species by design: onboarding wizard is "first animal of any kind"
-  const animalCount = await prisma.animal.count();
+  const animalCount = await crossSpecies(prisma, "species-registry-internal").animal.count();
   if (animalCount > 0) {
     redirect(`/${farmSlug}/admin`);
   }
