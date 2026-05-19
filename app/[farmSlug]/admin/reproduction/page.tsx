@@ -126,11 +126,10 @@ export default async function ReproductionPage({
     mode === "sheep" ? ["lambing"] : mode === "game" ? ["fawning"] : ["calving"];
 
   const [recentEvents, allCamps] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, mode).observation.findMany({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan", ...birthEventTypes] },
         observedAt: observedAtFilter,
-        species: mode,
       },
       orderBy: { observedAt: "desc" },
       take: 15,

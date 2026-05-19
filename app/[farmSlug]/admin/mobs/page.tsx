@@ -34,14 +34,20 @@ export default async function AdminMobsPage({
   // as the picker's data source.
   const [prismaMobs, animalGroups, prismaCamps, mobMembers] = await Promise.all([
     scoped(prisma, mode).mob.findMany({ orderBy: { name: "asc" } }),
-    prisma.animal.groupBy({
+    // scoped() forwards args verbatim; the facade returns Prisma's broadest
+    // groupBy shape (documented trade-off) so re-narrow to what this query's
+    // by/_count selection produces — behaviour-identical. scoped() injects
+    // `{ species: mode }`; status stays caller-controlled.
+    scoped(prisma, mode).animal.groupBy({
       by: ["mobId"],
-      where: { status: "Active", mobId: { not: null }, species: mode },
+      where: { status: "Active", mobId: { not: null } },
       _count: { _all: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ mobId: string | null; _count: { _all: number } }>
+    >,
     scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
-    prisma.animal.findMany({
-      where: { status: "Active", species: mode, mobId: { not: null } },
+    scoped(prisma, mode).animal.findMany({
+      where: { status: "Active", mobId: { not: null } },
       select: { animalId: true, name: true, mobId: true },
       orderBy: { animalId: "asc" },
     }),

@@ -36,8 +36,8 @@ export default async function CampDetailPage({
 
   const [camp, animals, liveConditions] = await Promise.all([
     scoped(prisma, mode).camp.findFirst({ where: { campId: decodedId } }),
-    prisma.animal.findMany({
-      where: { currentCamp: decodedId, status: "Active", species: mode },
+    scoped(prisma, mode).animal.findMany({
+      where: { currentCamp: decodedId, status: "Active" },
       orderBy: [{ category: "asc" }, { animalId: "asc" }],
       select: { animalId: true, category: true },
     }),

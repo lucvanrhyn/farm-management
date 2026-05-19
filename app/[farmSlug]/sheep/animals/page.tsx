@@ -8,7 +8,7 @@ import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { searchAnimals, countAnimalsByStatus } from "@/lib/server/animal-search";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
@@ -87,7 +87,7 @@ export default async function SheepAnimalsPage({
     // for multi-species tenants ("X total Active across species"). Mirrors
     // the cattle admin/animals page behaviour.
     // audit-allow-species-where: dashboard reconciliation total spans species
-    prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
+    crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
   const speciesTotal = statusCounts.active;
   const deceasedTotal = statusCounts.deceased;

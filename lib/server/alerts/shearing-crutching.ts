@@ -27,8 +27,12 @@ export async function evaluate(
   _settings: FarmSettings,
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
-  const ewes = await prisma.animal.findMany({
-    where: { species: "sheep", status: "Active", sex: "Female" },
+  // SHEARING/CRUTCHING is sheep-only — route through the scoped() door so
+  // species: "sheep" is injected structurally. The explicit status:
+  // "Active" is preserved (mergeWhere lets the caller's status win over
+  // the door's injected ACTIVE_STATUS — byte-identical here).
+  const ewes = await scoped(prisma, "sheep").animal.findMany({
+    where: { status: "Active", sex: "Female" },
     select: { id: true, animalId: true },
   });
   if (ewes.length === 0) return [];

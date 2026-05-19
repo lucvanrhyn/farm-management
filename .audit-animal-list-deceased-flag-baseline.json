@@ -1,6 +1,3 @@
 {
-  "allowlist": [
-    "app/[farmSlug]/admin/animals/[id]/page.tsx::raw::findMany::0",
-    "lib/server/financial-analytics.ts::raw::findMany::2"
-  ]
+  "allowlist": []
 }

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { SpeciesId } from "@/lib/species/types";
 import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
@@ -58,7 +58,12 @@ export default async function AnimalDetailPage({
     getAnimalWeightData(prisma, id),
     getCostPerAnimal(prisma, id),
     isBull
-      ? prisma.animal.findMany({
+      ? // Offspring lineage must include Sold/Deceased progeny — `scoped()`
+        // would inject status: "Active" and silently hide them (the issue
+        // #255 status-trap class). Route through crossSpecies() keeping the
+        // explicit species filter so the species axis stays correct without
+        // a status injection.
+        crossSpecies(prisma, "species-registry-internal").animal.findMany({
           where: { fatherId: animal.animalId, species: animal.species },
           orderBy: { createdAt: "desc" },
         })

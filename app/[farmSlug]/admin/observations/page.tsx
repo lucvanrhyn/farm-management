@@ -50,8 +50,8 @@ export default async function AdminObservationsPage({
   const [prismaCamps, prismaAnimals] = await Promise.all([
     // audit-allow-findmany: camps are bounded per tenant (trio-b ≈ 36); dropdown needs full list.
     scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" }, select: { campId: true, campName: true } }),
-    prisma.animal.findMany({
-      where: { status: "Active", species: mode },
+    scoped(prisma, mode).animal.findMany({
+      where: { status: "Active" },
       orderBy: { animalId: "asc" },
       take: PAGE_SIZE,
       select: { animalId: true, currentCamp: true },

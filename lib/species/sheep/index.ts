@@ -33,17 +33,25 @@ function daysAgo(days: number): Date {
 async function getDashboardData(
   prisma: PrismaClient,
 ): Promise<SpeciesDashboardData> {
+  // scoped() forwards args verbatim; the facade returns Prisma's broadest
+  // groupBy shape (documented trade-off) so re-narrow to what this query's
+  // by/_count selection produces — behaviour-identical. `scoped()` injects
+  // `{ species: "sheep" }`; status stays caller-controlled.
   const [categoryRows, campRows] = await Promise.all([
-    prisma.animal.groupBy({
+    scoped(prisma, SPECIES).animal.groupBy({
       by: ["category"],
-      where: { status: "Active", species: SPECIES },
+      where: { status: "Active" },
       _count: { id: true },
-    }),
-    prisma.animal.groupBy({
+    }) as unknown as Promise<
+      Array<{ category: string; _count: { id: number } }>
+    >,
+    scoped(prisma, SPECIES).animal.groupBy({
       by: ["currentCamp"],
-      where: { status: "Active", species: SPECIES },
+      where: { status: "Active" },
       _count: { id: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string; _count: { id: number } }>
+    >,
   ]);
 
   const byCategory: Record<string, number> = {};
@@ -148,9 +156,8 @@ async function getAlerts(
         orderBy: { observedAt: "desc" },
         take: 1,
       }),
-      prisma.animal.count({
+      scoped(prisma, SPECIES).animal.count({
         where: {
-          species: SPECIES,
           status: "Active",
           category: { in: ["Ewe", "Maiden Ewe"] },
         },
