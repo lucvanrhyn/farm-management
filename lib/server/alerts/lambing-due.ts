@@ -15,6 +15,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { addDays, defaultExpiry, diffDays, toIsoWeek } from "./helpers";
 import { logger } from "@/lib/logger";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 const DEFAULT_GESTATION_DAYS = 147;
 const LEAD_DAYS = 7;
@@ -56,8 +57,9 @@ export async function evaluate(
   const eweIds = ewes.map((e) => e.id);
 
   // Pull heat/insemination/joining/pregnancy_scan observations for these ewes
-  // in one query, then reduce per-animal.
-  const obs = (await prisma.observation.findMany({
+  // in one query, then reduce per-animal. LAMBING_DUE is sheep-only — route
+  // through the scoped() door so species: "sheep" is injected structurally.
+  const obs = (await scoped(prisma, "sheep").observation.findMany({
     where: {
       animalId: { in: eweIds },
       type: { in: ["insemination", "heat_detection", "joining", "pregnancy_scan"] },

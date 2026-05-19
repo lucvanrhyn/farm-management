@@ -10,6 +10,7 @@
 import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { addDays, defaultExpiry, diffDays, toIsoWeek } from "./helpers";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 const SHEAR_INTERVAL_DAYS = 240; // ~8 months
 const CRUTCH_PRELAMBING_DAYS = 30;
@@ -34,7 +35,9 @@ export async function evaluate(
 
   const eweIds = ewes.map((e) => e.id);
 
-  const obs = (await prisma.observation.findMany({
+  // SHEARING/CRUTCHING is sheep-only — route through the scoped() door so
+  // species: "sheep" is injected structurally (ADR-0005 Wave 2).
+  const obs = (await scoped(prisma, "sheep").observation.findMany({
     where: {
       animalId: { in: eweIds },
       type: { in: ["shearing", "insemination", "joining", "heat_detection"] },
