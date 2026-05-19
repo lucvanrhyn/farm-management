@@ -1,7 +1,8 @@
 // lib/species/shared/repro-engine.ts — Parameterized reproduction analytics engine
 
 import type { PrismaClient } from "@prisma/client";
-import type { SpeciesReproStats, UpcomingBirth } from "../types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId, SpeciesReproStats, UpcomingBirth } from "../types";
 
 // ── Engine Config ──────────────────────────────────────────────────────────────
 
@@ -125,8 +126,9 @@ export async function getReproStatsForSpecies(
   const animalIdFilter =
     speciesAnimalIds.length > 0 ? { in: speciesAnimalIds } : { in: [] as string[] };
 
+  const speciesScoped = scoped(prisma, species as SpeciesId);
   const [reproObs, birthObs, allCamps] = await Promise.all([
-    prisma.observation.findMany({
+    speciesScoped.observation.findMany({
       where: {
         type: { in: [heatObsType, inseminationObsType, pregnancyScanObsType] },
         observedAt: { gte: twelveMonthsAgo },
@@ -135,7 +137,7 @@ export async function getReproStatsForSpecies(
       orderBy: { observedAt: "desc" },
       select: selectFields,
     }),
-    prisma.observation.findMany({
+    speciesScoped.observation.findMany({
       where: {
         type: birthObsType,
         observedAt: { gte: eighteenMonthsAgo },
@@ -144,7 +146,7 @@ export async function getReproStatsForSpecies(
       orderBy: { observedAt: "asc" },
       select: selectFields,
     }),
-    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+    speciesScoped.camp.findMany({ select: { campId: true, campName: true } }),
   ]);
 
   type ObsRow = (typeof reproObs)[0];

@@ -7,6 +7,7 @@ import type {
   SpeciesReproStats,
   SpeciesAlert,
 } from "../types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { SHEEP_CONFIG } from "./config";
 import {
   getUpcomingLambings,
@@ -79,15 +80,17 @@ async function getReproStats(prisma: PrismaClient): Promise<SpeciesReproStats> {
   const cutoff12m = daysAgo(365);
 
   const [joiningObs, lambingObs, camps] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, SPECIES).observation.findMany({
       where: { type: "joining", observedAt: { gte: cutoff18m } },
       select: { animalId: true, campId: true, observedAt: true, details: true },
     }),
-    prisma.observation.findMany({
+    scoped(prisma, SPECIES).observation.findMany({
       where: { type: "lambing", observedAt: { gte: cutoff18m } },
       select: { animalId: true, campId: true, observedAt: true },
     }),
-    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+    scoped(prisma, SPECIES).camp.findMany({
+      select: { campId: true, campName: true },
+    }),
   ]);
 
   const campMap = new Map(camps.map((c) => [c.campId, c.campName]));
@@ -127,19 +130,19 @@ async function getAlerts(
 
   const [joiningObs, lambingObs, dosingObs, shearingObs, ewesCount] =
     await Promise.all([
-      prisma.observation.findMany({
+      scoped(prisma, SPECIES).observation.findMany({
         where: { type: "joining", observedAt: { gte: cutoff18m } },
         select: { animalId: true, campId: true, observedAt: true, details: true },
       }),
-      prisma.observation.findMany({
+      scoped(prisma, SPECIES).observation.findMany({
         where: { type: "lambing", observedAt: { gte: cutoff18m } },
         select: { animalId: true, observedAt: true },
       }),
-      prisma.observation.findMany({
+      scoped(prisma, SPECIES).observation.findMany({
         where: { type: "dosing" },
         select: { animalId: true, observedAt: true },
       }),
-      prisma.observation.findMany({
+      scoped(prisma, SPECIES).observation.findMany({
         where: { type: "shearing" },
         select: { observedAt: true },
         orderBy: { observedAt: "desc" },

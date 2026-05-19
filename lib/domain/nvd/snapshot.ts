@@ -12,6 +12,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SellerSnapshot {
@@ -162,7 +164,7 @@ export async function buildAnimalSnapshot(
   if (animalIds.length === 0) return [];
 
   // cross-species by design: NVD movement docs cover every species per SA regs.
-  const animals = await prisma.animal.findMany({
+  const animals = await crossSpecies(prisma, "farm-wide-audit").animal.findMany({
     where: { animalId: { in: animalIds }, status: "Active" },
     select: {
       animalId: true,
@@ -177,7 +179,10 @@ export async function buildAnimalSnapshot(
     },
   });
 
-  const movements = await prisma.observation.findMany({
+  const movements = await crossSpecies(
+    prisma,
+    "farm-wide-audit",
+  ).observation.findMany({
     where: {
       type: "animal_movement",
       animalId: { in: animalIds },

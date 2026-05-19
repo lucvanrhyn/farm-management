@@ -11,6 +11,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { CampNotFoundError } from "@/lib/domain/observations/errors";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 /**
  * The already-validated optional-field patch (mirrors the route's
@@ -47,7 +48,9 @@ export async function updateCamp(
   // Phase A of #28: campId is no longer globally unique (composite UNIQUE
   // on species+campId). findFirst is single-species-safe; Phase B will
   // scope by species and use the compound key.
-  const camp = await prisma.camp.findFirst({ where: { campId } });
+  const camp = await crossSpecies(prisma, "species-registry-internal").camp.findFirst({
+    where: { campId },
+  });
   if (!camp) {
     throw new CampNotFoundError(campId);
   }

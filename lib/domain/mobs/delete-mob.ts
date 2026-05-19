@@ -7,6 +7,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 import { MobNotFoundError } from "./move-mob";
 
 import { MobHasAnimalsError } from "./errors";
@@ -23,7 +25,10 @@ export async function deleteMob(
   if (!mob) throw new MobNotFoundError(mobId);
 
   // cross-species by design: mobId is already the per-species scope key.
-  const assignedCount = await prisma.animal.count({
+  const assignedCount = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).animal.count({
     where: { mobId, status: "Active" },
   });
   if (assignedCount > 0) {

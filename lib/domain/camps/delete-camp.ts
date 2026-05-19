@@ -10,6 +10,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { CampNotFoundError } from "@/lib/domain/observations/errors";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 import { CampHasActiveAnimalsError } from "./errors";
 
@@ -24,14 +25,19 @@ export async function deleteCamp(
   // Phase A of #28: campId is no longer globally unique (composite UNIQUE
   // on species+campId). findFirst is single-species-safe; Phase B will
   // scope.
-  const camp = await prisma.camp.findFirst({ where: { campId } });
+  const camp = await crossSpecies(prisma, "species-registry-internal").camp.findFirst({
+    where: { campId },
+  });
   if (!camp) {
     throw new CampNotFoundError(campId);
   }
 
   // cross-species by design: deletion guard must block on any species in
   // camp.
-  const activeAnimals = await prisma.animal.count({
+  const activeAnimals = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).animal.count({
     where: { currentCamp: campId, status: "Active" },
   });
   if (activeAnimals > 0) {

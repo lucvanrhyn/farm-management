@@ -16,6 +16,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 import {
   CampNotFoundError,
   InvalidTimestampError,
@@ -151,7 +153,10 @@ export async function createObservation(
     observedAt = new Date();
   }
 
-  const campExists = await prisma.camp.findFirst({
+  const campExists = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).camp.findFirst({
     where: { campId: input.camp_id },
     select: { campId: true },
   });
