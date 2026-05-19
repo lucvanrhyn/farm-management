@@ -21,6 +21,8 @@ import { NextResponse } from 'next/server';
 import { tenantReadSlug, tenantWriteSlug } from '@/lib/server/route';
 import { calcVeldScore, calcGrazingCapacity, type BiomeType } from '@/lib/calculators/veld-score';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
+import { getFarmMode } from '@/lib/server/get-farm-mode';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 
 interface PostBody {
   campId: string;
@@ -56,10 +58,12 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
 
 export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
   revalidate: revalidateObservationWrite,
-  handle: async (ctx, body) => {
+  handle: async (ctx, body, _req, { farmSlug }) => {
     if (ctx.role !== 'ADMIN' && ctx.role !== 'MANAGER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const mode = await getFarmMode(farmSlug);
 
     const input = (body ?? {}) as Partial<PostBody>;
 
@@ -95,7 +99,7 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
 
     // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
     // species+campId). findFirst is single-species-safe; Phase B will scope by species.
-    const camp = await ctx.prisma.camp.findFirst({
+    const camp = await scoped(ctx.prisma, mode).camp.findFirst({
       where: { campId: input.campId },
       select: { campId: true },
     });

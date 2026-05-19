@@ -3,6 +3,7 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 /**
  * GET /api/farm — current farm summary (FARM-WIDE aggregate).
@@ -42,8 +43,10 @@ export async function GET() {
           // Farm-wide, cross-species by design (#320): NOT scoped by the
           // `farmtrack-mode` cookie. `status: ACTIVE_STATUS` keeps this to
           // live head only.
-          ctx.prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
-          ctx.prisma.camp.count(),
+          crossSpecies(ctx.prisma, "farm-wide-audit").animal.count({
+            where: { status: ACTIVE_STATUS },
+          }),
+          crossSpecies(ctx.prisma, "farm-wide-audit").camp.count(),
         ]);
         return {
           farmName: settings?.farmName ?? "My Farm",

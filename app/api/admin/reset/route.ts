@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export async function DELETE(req: NextRequest) {
   const ctx = await getFarmContext(req);
@@ -24,8 +25,8 @@ export async function DELETE(req: NextRequest) {
 
   await prisma.transaction.deleteMany({});
   await prisma.transactionCategory.deleteMany({});
-  await prisma.observation.deleteMany({});
-  await prisma.animal.deleteMany({});
+  await crossSpecies(prisma, "farm-wide-audit").observation.deleteMany({});
+  await crossSpecies(prisma, "farm-wide-audit").animal.deleteMany({});
 
   revalidatePath("/admin");
   revalidatePath("/admin/animals");
