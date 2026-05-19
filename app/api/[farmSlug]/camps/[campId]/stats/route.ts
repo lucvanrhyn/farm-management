@@ -17,16 +17,19 @@
 import { NextResponse } from "next/server";
 import { tenantReadSlug } from "@/lib/server/route";
 import type { AnimalCategory } from "@/lib/types";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export const dynamic = "force-dynamic";
 
 export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
-  handle: async (ctx, _req, { campId }) => {
+  handle: async (ctx, _req, { farmSlug, campId }) => {
     const { prisma } = ctx;
+    const mode = await getFarmMode(farmSlug);
 
     // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
     // species+campId). findFirst is single-species-safe; Phase B will tighten.
-    const camp = await prisma.camp.findFirst({ where: { campId } });
+    const camp = await scoped(prisma, mode).camp.findFirst({ where: { campId } });
     if (!camp) {
       return NextResponse.json({ error: "Camp not found" }, { status: 404 });
     }
@@ -49,16 +52,16 @@ export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
     ] = await Promise.all([
       // Active animals in this camp.
       // cross-species by design: physical camp stats roll up every species.
-      prisma.animal.findMany({
+      crossSpecies(prisma, "farm-wide-audit").animal.findMany({
         where: { currentCamp: campId, status: "Active" },
         select: { category: true },
       }),
       // Health events (last 30 days)
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: { campId, type: "health_issue", observedAt: { gte: thirtyDaysAgo } },
       }),
       // Calving / reproduction events (this month)
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["reproduction", "calving"] as string[] },
@@ -66,7 +69,7 @@ export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
         },
       }),
       // Camp visits (last 30 days) — both check-ins and condition records
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["camp_check", "camp_condition"] },
@@ -74,13 +77,13 @@ export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
         },
       }),
       // Latest inspection (any camp_check or camp_condition)
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: { in: ["camp_check", "camp_condition"] } },
         orderBy: { observedAt: "desc" },
         select: { observedAt: true, loggedBy: true },
       }),
       // Latest camp condition record (grazing/water/fence)
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: "camp_condition" },
         orderBy: { observedAt: "desc" },
         select: { details: true, observedAt: true },
