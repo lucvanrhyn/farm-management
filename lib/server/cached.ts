@@ -283,7 +283,9 @@ export async function getCachedDashboardOverview(
           settle("animal.count", 0, () =>
             speciesPrisma.animal.count({ where: { status: "Active" } }),
           ),
-          // audit-allow-species-where: camp total is the same on every per-species view; not species-scoped because every camp serves some species at some point.
+          // Camp total is the same on every per-species view — not
+          // species-scoped because every camp serves some species at
+          // some point.
           settle("camp.count", 0, () => crossSpecies(prisma, "analytics-rollup").camp.count()),
           settle("getReproStats", EMPTY_REPRO_STATS, () =>
             getReproStats(prisma, { species: currentMode }),

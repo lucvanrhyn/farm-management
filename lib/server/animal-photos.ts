@@ -10,11 +10,13 @@
  * every observation tied to the animal that carries a non-null
  * `attachmentUrl`, ordered by capture timestamp descending.
  *
- * Per the audit-species-where contract (ADR-0003): this query filters
- * by `animalId` (single-animal axis), which is intrinsically scoped on
- * a per-tenant DB. Sibling animal-id observation reads on the same page
- * (`app/[farmSlug]/admin/animals/[id]/page.tsx`) are listed in
- * `.audit-species-where-baseline.json` for the same reason.
+ * Per the species-access invariant (ADR-0003 / ADR-0005): this query
+ * filters by `animalId` (single-animal axis), which is intrinsically
+ * scoped on a per-tenant DB, and goes through the `crossSpecies()`
+ * door so the structural arch test recognises it. Sibling animal-id
+ * observation reads on the same page
+ * (`app/[farmSlug]/admin/animals/[id]/page.tsx`) use the door for the
+ * same reason.
  *
  * Per audit-findmany-no-select: the query projects exactly the four
  * columns the photo tile renders (`id`, `type`, `observedAt`,
@@ -49,10 +51,7 @@ export async function getAnimalPhotos(
 ): Promise<AnimalPhotoRow[]> {
   // The animal row itself carries the species axis; aggregating photos by
   // animalId is intrinsically scoped (a single animal belongs to one
-  // species). Sibling animal-id observation reads on the animal detail
-  // page are baselined for the same reason — see
-  // `app/[farmSlug]/admin/animals/[id]/page.tsx`.
-  // audit-allow-species-where: animalId-scoped per-tenant lookup
+  // species), so this goes through the cross-species door.
   const rows = await crossSpecies(
     prisma,
     'species-registry-internal',

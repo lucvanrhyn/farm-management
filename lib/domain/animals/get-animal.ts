@@ -7,8 +7,10 @@
  * when it does not exist.
  *
  * `prisma.animal.findUnique({ where: { animalId } })` is a unique-key
- * lookup → exempt from `audit-species-where` by construction (the audit
- * only covers `findMany|findFirst|count|groupBy|updateMany|deleteMany`).
+ * lookup → outside the species-access invariant by construction (the
+ * structural arch test, ADR-0005, only covers
+ * `findMany|findFirst|count|groupBy|updateMany|deleteMany`; by-PK
+ * strict lookups cannot leak across species).
  */
 import type { PrismaClient } from "@prisma/client";
 

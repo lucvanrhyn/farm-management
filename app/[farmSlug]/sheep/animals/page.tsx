@@ -86,7 +86,6 @@ export default async function SheepAnimalsPage({
     // cross-species by design: drives the reconciliation total in the header
     // for multi-species tenants ("X total Active across species"). Mirrors
     // the cattle admin/animals page behaviour.
-    // audit-allow-species-where: dashboard reconciliation total spans species
     crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
   const speciesTotal = statusCounts.active;

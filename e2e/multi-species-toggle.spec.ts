@@ -25,8 +25,8 @@ import { applyAuth } from './fixtures/auth';
  * Cross-species deliberate-span assertions:
  *   A. Notifications bell: opens panel without crashing, renders the
  *      "Notifications" heading (the panel spans ALL species by documented
- *      design — `// audit-allow-species-where: cross-species deliberate span`
- *      in the notifications query).
+ *      design — the notifications query goes through the `crossSpecies()`
+ *      door, ADR-0005).
  *   B. Einstein chat (Advanced tier only): submitting "how many animals do I
  *      have?" receives a response containing both a cattle count and a sheep
  *      count as separate numbers. Skipped when tier is not Advanced.

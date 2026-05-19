@@ -19,7 +19,10 @@
  * preserved exactly as in the pre-extraction handler.
  *
  * `prisma.animal.findUnique` / `prisma.animal.update` are unique-key
- * ops → exempt from `audit-species-where` by construction.
+ * ops → outside the species-access invariant by construction (the
+ * structural arch test, ADR-0005, only covers find{Many,First}/count/
+ * groupBy/updateMany/deleteMany — by-PK strict lookups cannot leak
+ * across species).
  */
 import type { PrismaClient } from "@prisma/client";
 
