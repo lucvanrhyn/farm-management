@@ -109,3 +109,62 @@ re-implemented formula. `getDashboardAlerts(prisma, farmSlug, thresholds,
 …)` is the full pass — it fetches all eight sources then calls
 `composeAlerts`; its signature is unchanged so its five server callers are
 untouched.
+
+---
+
+## Species scoping
+
+ADR-0005 makes the species axis on the four species-bearing models
+(`Animal`, `Camp`, `Mob`, `Observation`) reachable only through two
+*named doors*, so the type system can distinguish the two opposite
+intents the old `audit-species-where` baseline could not. The terms
+below pin that contract.
+
+### Per-species surface
+
+A read or set-spanning mutation whose result MUST be limited to the
+active FarmMode species (the `farmtrack-mode-<slug>` cookie resolved via
+`getFarmMode(slug)`). Admin tables, dashboards, mob pickers, the logger
+camp tiles. An unscoped query on a per-species surface is the
+"silently leak every species onto the cattle dashboard" bug class —
+the reason the `scoped()` facade (#224) exists.
+
+### Cross-species access
+
+A read that MUST intentionally span every species — Farm Einstein RAG,
+farm-wide analytics roll-ups, notification crons, the `lib/species`
+registry's own internals. Scoping a cross-species access to one mode is
+the *inverse* bug (a farm-wide audit log that silently drops sheep).
+"Per-species surface" and "cross-species access" are mutually
+exclusive and exhaustive for any tenant read of the four models.
+
+### Species scope (`scoped`)
+
+The named door for per-species surfaces: `scoped(prisma, mode)`
+(`lib/server/species-scoped-prisma.ts`). `mode: SpeciesId` is a required
+positional argument — omitting it is a compile error. Injects
+`{ species: mode }` (plus `status: ACTIVE_STATUS` on animal reads) with
+caller keys winning the merge.
+
+### Cross-species door (`crossSpecies`)
+
+The named door for cross-species access: `crossSpecies(prisma, reason)`.
+`reason` is a typed union of sanctioned purposes (e.g.
+`'einstein-rag' | 'analytics-rollup' | 'notification-cron' |
+'farm-wide-audit' | 'species-registry-internal'`) — NOT a free string —
+so the classification lives in the type system, not in a JSON baseline.
+Injects no species predicate. A site that needs cross-species access
+without a sanctioned reason is a design question, not a pragma.
+
+### Species access invariant
+
+The four species models may be reached on a tenant code path ONLY via
+`scoped()` or `crossSpecies()`. Raw `prisma.{animal,camp,mob,observation}`
+is forbidden outside a small *structural* exemption (the two door
+modules themselves, `migrations/`, `scripts/` seed/maintenance, `prisma/`,
+test files). Enforced by a structural architecture test in the shape of
+`__tests__/architecture/sync-truth-no-direct-callers.test.ts`
+(ADR-0002's invariant) — presence of a named door, NOT presence of a
+`species:` key. There is no per-call baseline and no
+`audit-allow-species-where:` pragma; both are retired by ADR-0005's
+final rollout wave.
