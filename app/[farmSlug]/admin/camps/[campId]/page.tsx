@@ -9,6 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { AnimalCategory } from "@/lib/types";
 
 
@@ -59,13 +60,13 @@ export default async function CampDetailPage({
     );
   }
 
-  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-  // species+campId). findFirst is a single-species-safe drop-in; Phase B
-  // threads species into this read at the route layer.
-  const camp = await prisma.camp.findFirst({ where: { campId } });
-  if (!camp) notFound();
-
   const mode = await getFarmMode(farmSlug);
+
+  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
+  // species+campId). The species-scoped door pins this read to the active
+  // mode so the composite key resolves to a single row.
+  const camp = await scoped(prisma, mode).camp.findFirst({ where: { campId } });
+  if (!camp) notFound();
 
   // Capture wall-clock once so every derived value in this render uses a
   // consistent "now". Server components render once per request and never
@@ -88,29 +89,29 @@ export default async function CampDetailPage({
         where: { currentCamp: campId, status: "Active", species: mode },
         select: { category: true },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: { campId, type: "health_issue", observedAt: { gte: thirtyDaysAgo } },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["reproduction", "calving"] as string[] },
           observedAt: { gte: thisMonthStart },
         },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["camp_check", "camp_condition"] },
           observedAt: { gte: thirtyDaysAgo },
         },
       }),
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: { in: ["camp_check", "camp_condition"] } },
         orderBy: { observedAt: "desc" },
         select: { observedAt: true, loggedBy: true },
       }),
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: "camp_condition" },
         orderBy: { observedAt: "desc" },
         select: { details: true, observedAt: true },
@@ -160,7 +161,7 @@ export default async function CampDetailPage({
   ]);
 
   // Recent observations for timeline (last 10)
-  const recentObs = await prisma.observation.findMany({
+  const recentObs = await scoped(prisma, mode).observation.findMany({
     where: { campId },
     orderBy: { observedAt: "desc" },
     take: 10,
@@ -169,7 +170,7 @@ export default async function CampDetailPage({
 
   // Rotation history + current status
   const [rotationMovements, rotationPayload] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, mode).observation.findMany({
       where: { campId, type: "mob_movement" },
       orderBy: { observedAt: "desc" },
       take: 30,

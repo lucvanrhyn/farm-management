@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth-options";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import RotationPlannerClient from "@/components/rotation/RotationPlannerClient";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
@@ -28,14 +30,16 @@ export default async function RotationPlannerPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) redirect("/login");
 
+  const mode = await getFarmMode(farmSlug);
+
   const [rawPlans, rotationPayload, camps, mobs] = await Promise.all([
     prisma.rotationPlan.findMany({
       include: { steps: { orderBy: { sequence: "asc" } } },
       orderBy: { updatedAt: "desc" },
     }),
     getRotationStatusByCamp(prisma),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-    prisma.mob.findMany({ orderBy: { name: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).mob.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   // Serialize Prisma Date objects to ISO strings for client components

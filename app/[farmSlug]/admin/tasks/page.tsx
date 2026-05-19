@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { TaskBoard } from "@/components/admin/TaskBoard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -53,6 +55,8 @@ export default async function TasksPage({
   const decodedCursor = cursor ? decodeTaskCursor(cursor) : null;
   const cursorWhere = decodedCursor ? tupleGtWhere(decodedCursor) : {};
 
+  const mode = await getFarmMode(farmSlug);
+
   // Fetch PAGE_SIZE + 1 rows so we can cheaply detect "more available"
   // without a second COUNT round-trip.
   const [taskRows, camps] = await Promise.all([
@@ -63,7 +67,7 @@ export default async function TasksPage({
     }),
     // audit-allow-findmany: camp list is per-tenant and bounded (~40 camps);
     // needed for the create-task form dropdown.
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
   const hasMore = taskRows.length > PAGE_SIZE;

@@ -9,7 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { searchAnimals, countAnimalsByStatus } from "@/lib/server/animal-search";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
@@ -91,8 +91,7 @@ export default async function AdminAnimalsPage({
     countAnimalsByStatus(prisma, mode),
     // cross-species by design: drives the reconciliation total in the header
     // on multi-species tenants. Matches `getCachedFarmSummary` (lib/server/cached.ts).
-    // audit-allow-species-where: dashboard reconciliation total spans species
-    prisma.animal.count({ where: { status: ACTIVE_STATUS } }),
+    crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: ACTIVE_STATUS } }),
   ]);
   const speciesTotal = statusCounts.active;
   const deceasedTotal = statusCounts.deceased;

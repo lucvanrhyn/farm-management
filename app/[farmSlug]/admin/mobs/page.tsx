@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import MobsManager from "@/components/admin/MobsManager";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp, Mob } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -32,13 +33,13 @@ export default async function AdminMobsPage({
   // KB JSON on trio-b) into the RSC payload because MobsManager also served
   // as the picker's data source.
   const [prismaMobs, animalGroups, prismaCamps, mobMembers] = await Promise.all([
-    prisma.mob.findMany({ orderBy: { name: "asc" } }),
+    scoped(prisma, mode).mob.findMany({ orderBy: { name: "asc" } }),
     prisma.animal.groupBy({
       by: ["mobId"],
       where: { status: "Active", mobId: { not: null }, species: mode },
       _count: { _all: true },
     }),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
     prisma.animal.findMany({
       where: { status: "Active", species: mode, mobId: { not: null } },
       select: { animalId: true, name: true, mobId: true },

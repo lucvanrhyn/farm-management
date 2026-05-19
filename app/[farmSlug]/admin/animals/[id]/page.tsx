@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
@@ -47,12 +49,12 @@ export default async function AnimalDetailPage({
   const isBull = animal.category === "Bull";
 
   const [observations, camp, weightData, investmentData, offspring, allCamps, photos] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, animal.species as SpeciesId).observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
       take: 200,
     }),
-    prisma.camp.findFirst({ where: { campId: animal.currentCamp } }),
+    scoped(prisma, animal.species as SpeciesId).camp.findFirst({ where: { campId: animal.currentCamp } }),
     getAnimalWeightData(prisma, id),
     getCostPerAnimal(prisma, id),
     isBull
@@ -62,14 +64,14 @@ export default async function AnimalDetailPage({
         })
       : Promise.resolve([]),
     // audit-allow-findmany-no-select: per-tenant camp list (≤36 typical) for EditAnimalModal camp picker; modal uses full Camp type
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, animal.species as SpeciesId).camp.findMany({ orderBy: { campName: "asc" } }),
     // Wave 5a / #264 — photos aggregation for the new Photos tab.
     getAnimalPhotos(prisma, id),
   ]);
 
   // Fetch calving observations for offspring birth weights & difficulty
   const offspringCalvingObs = isBull && offspring.length > 0
-    ? await prisma.observation.findMany({
+    ? await scoped(prisma, animal.species as SpeciesId).observation.findMany({
         where: {
           type: "calving",
           animalId: { in: offspring.map((o) => o.animalId) },
