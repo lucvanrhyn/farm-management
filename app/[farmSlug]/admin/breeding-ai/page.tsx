@@ -11,6 +11,7 @@ import NoPedigreeEmptyState from "@/components/admin/breeding/NoPedigreeEmptySta
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 export default async function BreedingAIPage({
   params,
@@ -40,8 +41,8 @@ export default async function BreedingAIPage({
   const [snapshot, pairingResult, allAnimals] = await Promise.all([
     getBreedingSnapshot(prisma, farmSlug, species),
     suggestPairings(prisma, farmSlug, species),
-    prisma.animal.findMany({
-      where: { status: "Active", species },
+    scoped(prisma, species).animal.findMany({
+      where: { status: "Active" },
       select: {
         id: true,
         animalId: true,
