@@ -87,6 +87,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { SpeciesId } from '@/lib/species/types';
 import { ACTIVE_STATUS } from '@/lib/animals/active-species-filter';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 
 /**
  * Parameters for `searchAnimals`.
@@ -221,15 +222,16 @@ export async function countAnimalsByStatus(
   prisma: PrismaClient | Prisma.TransactionClient,
   mode: SpeciesId,
 ): Promise<{ active: number; sold: number; deceased: number }> {
-  // Three counts run in parallel; each carries its own literal
-  // `species:` + `status:` predicate so both the species-where audit
-  // and the lifecycle audit see compliant inline shapes (no pragmas
-  // needed). Index `idx_animal_species_status` keeps each round-trip
-  // cheap on large herds.
+  // Three counts run in parallel. Routed through `scoped(prisma, mode)`
+  // — its `count()` injects `{ species: mode }` only (status stays
+  // caller-controlled per the facade contract), so each round-trip
+  // keeps its explicit `status:` predicate and the species axis is
+  // structurally enforced. Index `idx_animal_species_status` keeps each
+  // round-trip cheap on large herds.
   const [active, sold, deceased] = await Promise.all([
-    prisma.animal.count({ where: { species: mode, status: 'Active' } }),
-    prisma.animal.count({ where: { species: mode, status: 'Sold' } }),
-    prisma.animal.count({ where: { species: mode, status: 'Deceased' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Active' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Sold' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Deceased' } }),
   ]);
   return { active, sold, deceased };
 }

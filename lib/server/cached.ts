@@ -34,7 +34,7 @@ import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
 import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/rotation-engine";
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import {
   getTenantDayStart,
   getTenantMonthYYYYMM,
@@ -284,7 +284,7 @@ export async function getCachedDashboardOverview(
             speciesPrisma.animal.count({ where: { status: "Active" } }),
           ),
           // audit-allow-species-where: camp total is the same on every per-species view; not species-scoped because every camp serves some species at some point.
-          settle("camp.count", 0, () => prisma.camp.count()),
+          settle("camp.count", 0, () => crossSpecies(prisma, "analytics-rollup").camp.count()),
           settle("getReproStats", EMPTY_REPRO_STATS, () =>
             getReproStats(prisma, { species: currentMode }),
           ),
@@ -461,17 +461,22 @@ export async function getCachedCampList(
     async (slug: string, sp: string): Promise<CachedCamp[]> => {
       return withFarmPrisma(slug, async (prisma) => {
         const [camps, animalGroups] = await Promise.all([
-          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campName: "asc" } }),
           // cross-species by design when `sp` is empty: callers opt in to
           // species filter via the `species` parameter on getCachedCampList.
-          prisma.animal.groupBy({
+          // crossSpecies() forwards args verbatim; the facade returns Prisma's
+          // broadest groupBy shape (documented trade-off) so re-narrow to what
+          // this query's by/_count selection produces — behaviour-identical.
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["currentCamp"],
             where: {
               status: "Active",
               ...(sp ? { species: sp } : {}),
             },
             _count: { _all: true },
-          }),
+          }) as unknown as Promise<
+            Array<{ currentCamp: string; _count: { _all: number } }>
+          >,
         ]);
         const countByCamp: Record<string, number> = {};
         for (const g of animalGroups) {
@@ -521,8 +526,8 @@ export async function getCachedFarmSummary(
         const [settings, animalCount, campCount] = await Promise.all([
           prisma.farmSettings.findFirst(),
           // cross-species by design: /api/farm header counts whole farm.
-          prisma.animal.count({ where: { status: "Active" } }),
-          prisma.camp.count(),
+          crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
+          crossSpecies(prisma, "analytics-rollup").camp.count(),
         ]);
         return {
           farmName: settings?.farmName ?? "My Farm",
@@ -668,17 +673,24 @@ export async function getCachedDashboardData(
         ] = await Promise.all([
           // cross-species by design: dashboard groups by species explicitly
           // so the UI can render per-species totals AND a combined headline.
-          prisma.animal.groupBy({
+          // crossSpecies() forwards args verbatim; the facade returns Prisma's
+          // broadest groupBy shape (documented trade-off) so re-narrow to what
+          // this query's by/_count selection produces — behaviour-identical.
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["species"],
             where: { status: "Active" },
             _count: { _all: true },
-          }),
-          prisma.animal.groupBy({
+          }) as unknown as Promise<
+            Array<{ species: string | null; _count: { _all: number } }>
+          >,
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["species", "currentCamp"],
             where: { status: "Active" },
             _count: { _all: true },
-          }),
-          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          }) as unknown as Promise<
+            Array<{ species: string | null; currentCamp: string; _count: { _all: number } }>
+          >,
+          crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campName: "asc" } }),
           prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }),
           getCensusPopulationByCamp(prisma),
           getRotationStatusByCamp(prisma),

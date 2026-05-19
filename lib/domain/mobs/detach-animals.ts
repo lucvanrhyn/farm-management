@@ -10,6 +10,8 @@ import type { PrismaClient } from "@prisma/client";
 
 import { MobNotFoundError } from "./move-mob";
 import { RouteValidationError } from "@/lib/server/route";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 
 export interface DetachAnimalsInput {
   mobId: string;
@@ -48,11 +50,15 @@ export async function detachAnimalsFromMob(
     });
   }
 
-  const { count } = await prisma.animal.updateMany({
+  // Defensive species filter — routed through scoped(prisma, mob.species)
+  // so the cross-species guard is injected structurally instead of inline.
+  const { count } = await scoped(
+    prisma,
+    mob.species as SpeciesId,
+  ).animal.updateMany({
     where: {
       animalId: { in: input.animalIds },
       mobId: input.mobId,
-      species: mob.species,
     },
     data: { mobId: null },
   });

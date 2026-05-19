@@ -12,6 +12,8 @@ import type { PrismaClient } from "@prisma/client";
 
 import { MobNotFoundError } from "./move-mob";
 import { RouteValidationError } from "@/lib/server/route";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 
 export interface AttachAnimalsInput {
   mobId: string;
@@ -52,12 +54,16 @@ export async function attachAnimalsToMob(
 
   // #28 Phase B / Wave 4 A3 — hard-block cross-species mob assignment by
   // filtering on mob.species. Without this clause a sheep could be silently
-  // attached to a cattle mob.
-  const { count } = await prisma.animal.updateMany({
+  // attached to a cattle mob. Routed through scoped(prisma, mob.species)
+  // so the species predicate is injected structurally; updateMany injects
+  // species only (no status), so the explicit status: "Active" is kept.
+  const { count } = await scoped(
+    prisma,
+    mob.species as SpeciesId,
+  ).animal.updateMany({
     where: {
       animalId: { in: input.animalIds },
       status: "Active",
-      species: mob.species,
     },
     data: { mobId: input.mobId, currentCamp: mob.currentCamp },
   });

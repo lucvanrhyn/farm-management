@@ -85,8 +85,8 @@ export default async function CampDetailPage({
   // Parallel data fetching
   const [activeAnimals, healthCount, calvingCount, visitCount, latestInspection, latestCondition, latestCoverReading] =
     await Promise.all([
-      prisma.animal.findMany({
-        where: { currentCamp: campId, status: "Active", species: mode },
+      scoped(prisma, mode).animal.findMany({
+        where: { currentCamp: campId, status: "Active" },
         select: { category: true },
       }),
       scoped(prisma, mode).observation.count({

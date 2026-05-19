@@ -21,6 +21,7 @@
  * `attachmentUrl`) — no wasteful `details` / `editHistory` reads.
  */
 import type { PrismaClient } from '@prisma/client';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 
 /** Hard cap on photos returned per animal. Realistic upper bound for an
  * animal lifetime is ~50 photos (one per Health/Treatment/Calving
@@ -52,7 +53,10 @@ export async function getAnimalPhotos(
   // page are baselined for the same reason — see
   // `app/[farmSlug]/admin/animals/[id]/page.tsx`.
   // audit-allow-species-where: animalId-scoped per-tenant lookup
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(
+    prisma,
+    'species-registry-internal',
+  ).observation.findMany({
     where: {
       animalId,
       attachmentUrl: { not: null },
