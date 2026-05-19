@@ -48,6 +48,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('camp.findMany')),
       findFirst: vi.fn(record('camp.findFirst')),
       count: vi.fn(record('camp.count')),
+      groupBy: vi.fn(record('camp.groupBy')),
       updateMany: vi.fn(record('camp.updateMany')),
       deleteMany: vi.fn(record('camp.deleteMany')),
     },
@@ -55,6 +56,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('mob.findMany')),
       findFirst: vi.fn(record('mob.findFirst')),
       count: vi.fn(record('mob.count')),
+      groupBy: vi.fn(record('mob.groupBy')),
       updateMany: vi.fn(record('mob.updateMany')),
       deleteMany: vi.fn(record('mob.deleteMany')),
     },
@@ -62,6 +64,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('observation.findMany')),
       findFirst: vi.fn(record('observation.findFirst')),
       count: vi.fn(record('observation.count')),
+      groupBy: vi.fn(record('observation.groupBy')),
       updateMany: vi.fn(record('observation.updateMany')),
       deleteMany: vi.fn(record('observation.deleteMany')),
     },
@@ -187,6 +190,24 @@ describe('crossSpecies() — cross-species Prisma door', () => {
     });
   });
 
+  describe('camp/mob groupBy', () => {
+    it('forwards camp.groupBy and mob.groupBy verbatim — no species injected', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await crossSpecies(prisma, 'analytics-rollup').camp.groupBy({
+        by: ['campId'],
+        where: { campId: { not: '' } },
+      } as never);
+      await crossSpecies(prisma, 'analytics-rollup').mob.groupBy({
+        by: ['name'],
+        where: { name: { not: '' } },
+      } as never);
+      expect(calls['camp.groupBy'][0].where).toEqual({ campId: { not: '' } });
+      expect(calls['camp.groupBy'][0].where).not.toHaveProperty('species');
+      expect(calls['mob.groupBy'][0].where).toEqual({ name: { not: '' } });
+      expect(calls['mob.groupBy'][0].where).not.toHaveProperty('species');
+    });
+  });
+
   describe('mob builder', () => {
     it('forwards every method verbatim — no species injected', async () => {
       const { prisma, calls } = makeSpyPrisma();
@@ -220,6 +241,21 @@ describe('crossSpecies() — cross-species Prisma door', () => {
   });
 
   describe('observation builder', () => {
+    it('forwards groupBy args verbatim — no species injected', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await crossSpecies(prisma, 'analytics-rollup').observation.groupBy({
+        by: ['campId'],
+        where: { type: 'health_issue' },
+        _count: { id: true },
+      } as never);
+      expect(calls['observation.groupBy'][0].where).toEqual({
+        type: 'health_issue',
+      });
+      expect(calls['observation.groupBy'][0].by).toEqual(['campId']);
+      expect(calls['observation.groupBy'][0]._count).toEqual({ id: true });
+      expect(calls['observation.groupBy'][0].where).not.toHaveProperty('species');
+    });
+
     it('forwards every method verbatim — no species injected', async () => {
       const { prisma, calls } = makeSpyPrisma();
       await crossSpecies(prisma, 'notification-cron').observation.findMany({

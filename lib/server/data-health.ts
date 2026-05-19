@@ -32,26 +32,27 @@ export async function getDataHealthScore(
     // animal. crossSpecies() forwards args verbatim (no injection).
     crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
     crossSpecies(prisma, "analytics-rollup").camp.count(),
-    // NOTE (ADR-0005 Wave 2): the species-access door (frozen this wave)
-    // only exposes groupBy on its animal builder, not observation. These
-    // two farm-wide observation roll-ups therefore stay raw, baselined
-    // prisma.observation.groupBy until the door gains observation.groupBy.
-    prisma.observation.groupBy({
+    // cross-species by design: these two farm-wide observation roll-ups
+    // span every species. crossSpecies() forwards args verbatim — no
+    // species/status injection. The facade returns Prisma's broadest
+    // groupBy shape; re-narrow to a length-only array (callers below only
+    // read `.length`).
+    crossSpecies(prisma, "analytics-rollup").observation.groupBy({
       by: ["animalId"],
       where: {
         type: "weighing",
         observedAt: { gte: thirtyDaysAgo },
         animalId: { not: null },
       },
-    }),
-    prisma.observation.groupBy({
+    }) as unknown as Promise<unknown[]>,
+    crossSpecies(prisma, "analytics-rollup").observation.groupBy({
       by: ["campId"],
       where: {
         type: "camp_condition",
         observedAt: { gte: sevenDaysAgo },
         campId: { not: "" },
       },
-    }),
+    }) as unknown as Promise<unknown[]>,
     // cross-species by design: "% of animals with a camp" is farm-wide.
     crossSpecies(prisma, "analytics-rollup").animal.count({
       where: { status: "Active", currentCamp: { not: "" } },
