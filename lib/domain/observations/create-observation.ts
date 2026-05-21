@@ -10,20 +10,67 @@
  *     `findFirst` is single-species-safe — Phase B will scope when the
  *     route surface gets the species context).
  *
- * Phase I.3 — when `animal_id` is supplied, denormalises `Animal.species`
- * onto the observation row so admin filters can scope by species
- * without a join. Orphaned/camp-only observations carry `species: null`.
+ * Phase I.3 / ADR-0004 — denormalises species onto the row at write time
+ * so admin filters can scope by species without a join.
+ *
+ * ADR-0006 — this is THE write door. Raw `<writer>.observation.create`
+ * is forbidden on any tenant code path (enforced by the structural test
+ * `__tests__/architecture/observation-write-no-direct-callers.test.ts`).
+ *
+ *   - `client` is an `ObservationWriter` (PrismaClient OR the
+ *     transaction-callback client returned by `prisma.$transaction`),
+ *     so the door works both inline AND inside a `$transaction` block
+ *     — the load-bearing case for `lib/domain/mobs/move-mob.ts` and
+ *     `lib/domain/tasks/update-task.ts`, which both need the
+ *     observation create to be atomic with their sibling mutations.
+ *
+ *   - Species-stamping waterfall (most-specific source wins):
+ *       1. `animal_id` given → animal's species; throws
+ *          `AnimalNotFoundError` on FK miss.
+ *       2. Else `mob_id` given → mob's species; throws
+ *          `MobNotFoundError` on FK miss.
+ *       3. Else if the resolved camp carries a species → camp's species.
+ *       4. Else → `null`.
+ *
+ *     The throws on FK miss replace the pre-ADR-0006
+ *     `animal?.species ?? null` fallback — a missing animal/mob now
+ *     surfaces as a typed error instead of silently producing a
+ *     NULL-species row.
+ *
+ *   - `mob_id` is an INPUT-ONLY field used to drive the waterfall;
+ *     `Observation` has no `mobId` column, so it is not persisted on
+ *     the row (mob-level provenance lives in the `details` JSON of
+ *     mob-typed observations).
  */
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 import {
+  AnimalNotFoundError,
   CampNotFoundError,
   InvalidTimestampError,
   InvalidTypeError,
+  MobNotFoundError,
 } from "./errors";
 import { OBSERVATION_TYPES } from "./registry";
+
+/**
+ * ADR-0006 — the writer client accepted by {@link createObservation}.
+ *
+ * `PrismaClient` covers inline writes (route handlers, cron jobs).
+ * `Prisma.TransactionClient` is the type Prisma's interactive
+ * transaction callback receives — an `Omit<PrismaClient, ...>` with
+ * `$transaction`, `$connect`, etc. stripped. Accepting the union lets
+ * call sites inside `prisma.$transaction(async (tx) => { ... })` pass
+ * `tx` so the observation create stays atomic with sibling mutations.
+ *
+ * This matches the shape `crossSpecies()` accepts in
+ * `lib/server/species-scoped-prisma.ts`, so the internal
+ * `crossSpecies(client, ...).camp.findFirst(...)` call below works
+ * transparently with either input.
+ */
+export type ObservationWriter = PrismaClient | Prisma.TransactionClient;
 
 /**
  * Allowlist of valid observation type strings.
@@ -108,10 +155,27 @@ export interface CreateObservationInput {
   type: string;
   camp_id: string;
   animal_id?: string | null;
+  /**
+   * ADR-0006 — drives the species-stamping waterfall when no
+   * `animal_id` is in scope (e.g. mob-movement observations). NOT
+   * persisted on the row (the `Observation` schema has no `mobId`
+   * column); mob provenance lives in the `details` JSON of mob-typed
+   * observations. The door looks the mob up to read its species and
+   * throws {@link MobNotFoundError} on FK miss.
+   */
+  mob_id?: string | null;
   details?: string | null;
   created_at?: string | null;
   /** Email of the actor — captured on the audit trail. */
   loggedBy: string | null;
+  /**
+   * ADR-0006 — when an `attachmentUrl` belongs on the row (e.g. an
+   * admin photo upload), pass it through here. The pre-ADR-0006
+   * photos route called `prisma.observation.create` directly to set
+   * this field; lifting it into the door's input keeps the bypass
+   * closed.
+   */
+  attachmentUrl?: string | null;
   /**
    * Issue #206 — client-generated UUID for idempotent retries. The Logger
    * forms generate this at mount via `crypto.randomUUID()`; the offline-sync
@@ -129,7 +193,7 @@ export interface CreateObservationResult {
 }
 
 export async function createObservation(
-  prisma: PrismaClient,
+  client: ObservationWriter,
   input: CreateObservationInput,
 ): Promise<CreateObservationResult> {
   if (!VALID_OBSERVATION_TYPES.has(input.type)) {
@@ -153,27 +217,47 @@ export async function createObservation(
     observedAt = new Date();
   }
 
+  // Load the camp once with both its existence (for the NotFound guard)
+  // and its species (for the waterfall's step-3 fallback when neither
+  // animal_id nor mob_id is in scope).
   const campExists = await crossSpecies(
-    prisma,
+    client,
     "species-registry-internal",
   ).camp.findFirst({
     where: { campId: input.camp_id },
-    select: { campId: true },
+    select: { campId: true, species: true },
   });
   if (!campExists) {
     throw new CampNotFoundError(input.camp_id);
   }
 
-  // Phase I.3 — denormalise species onto Observation at write time so
-  // /admin/reproduction can filter `species: mode` directly (no animalId-IN
-  // prefetch). Nullable: orphan/camp-only observations have no species.
+  // ADR-0006 species-stamping waterfall (most-specific source wins).
+  // Pre-ADR-0006 the door used `animal?.species ?? null` — silently
+  // wrote NULL on FK miss, hiding referential-integrity violations as
+  // legitimate "orphan" rows that the read side's NULL-tolerant
+  // predicate then silently included in every per-species query. The
+  // throws on miss close that hole at the call site.
   let species: string | null = null;
   if (input.animal_id) {
-    const animal = await prisma.animal.findUnique({
+    const animal = await client.animal.findUnique({
       where: { animalId: input.animal_id },
       select: { species: true },
     });
-    species = animal?.species ?? null;
+    if (!animal) {
+      throw new AnimalNotFoundError(input.animal_id);
+    }
+    species = animal.species;
+  } else if (input.mob_id) {
+    const mob = await client.mob.findUnique({
+      where: { id: input.mob_id },
+      select: { species: true },
+    });
+    if (!mob) {
+      throw new MobNotFoundError(input.mob_id);
+    }
+    species = mob.species;
+  } else if (campExists.species) {
+    species = campExists.species;
   }
 
   // Issue #206 — idempotent write path. When the client supplies a UUID, route
@@ -185,7 +269,7 @@ export async function createObservation(
   // (`idx_observation_client_local_id`, migration 0019) collapses concurrent
   // retries down to a single row at the DB layer.
   if (input.clientLocalId) {
-    const record = await prisma.observation.upsert({
+    const record = await client.observation.upsert({
       where: { clientLocalId: input.clientLocalId },
       update: {},
       create: {
@@ -196,6 +280,7 @@ export async function createObservation(
         observedAt,
         loggedBy: input.loggedBy,
         species,
+        attachmentUrl: input.attachmentUrl ?? null,
         clientLocalId: input.clientLocalId,
       },
     });
@@ -205,7 +290,7 @@ export async function createObservation(
   // Legacy fallback (no idempotency promise). Callers that pre-date #206 —
   // including the back-compat path for any server-side create that has no
   // client UUID in scope — keep the original behaviour.
-  const record = await prisma.observation.create({
+  const record = await client.observation.create({
     data: {
       type: input.type,
       campId: input.camp_id,
@@ -214,6 +299,7 @@ export async function createObservation(
       observedAt,
       loggedBy: input.loggedBy,
       species,
+      attachmentUrl: input.attachmentUrl ?? null,
     },
   });
 
