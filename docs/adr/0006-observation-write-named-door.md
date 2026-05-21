@@ -1,6 +1,6 @@
 # Observation writes: one named door, no raw `prisma.observation.create`
 
-**Status:** proposed (2026-05-21)
+**Status:** accepted (2026-05-21)
 
 ## Context
 

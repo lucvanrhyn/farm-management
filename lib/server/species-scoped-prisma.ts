@@ -383,6 +383,20 @@ export function scoped(
     },
   };
 
+  // ADR-0006 §5 closure note: ADR-0004 §5 declared the per-species
+  // observation read predicate would temporarily tolerate NULL species
+  // (`OR: [{ species: mode }, { species: null }]`) until the backfill
+  // landed. The OR-branch was never actually committed to this builder
+  // — every op below has always been the clean `{ species: mode }` —
+  // but the contract sat exposed: as long as the write seam was
+  // opt-in (the three bypassers ADR-0006 closes) every mob movement
+  // produced two NULL-species rows that this builder silently
+  // dropped from /admin/reproduction and /sheep/observations.
+  // ADR-0006 closes the write seam AND ships the 0024 backfill, so
+  // the predicate-side §5 is now locked: every op below is and stays
+  // `{ species: mode }`. Re-introducing a NULL-tolerant OR-branch
+  // here would re-open the silent-leak class ADR-0005 fixed for
+  // reads.
   const observation: ObservationBuilder = {
     findMany(args) {
       // audit-allow-findmany-no-select: facade forwarder; row bound (take/where) and column projection (select/omit) are enforced at the scoped() callsite, not here. (`audit-allow-findmany-no-select` is recognised by both the no-take and no-select audits — the no-take pragma regex matches `audit-allow-findmany\b` so the longer no-select pragma satisfies both, keeping us to a single comment per forwarder.)
