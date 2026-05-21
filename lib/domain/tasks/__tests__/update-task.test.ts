@@ -60,11 +60,21 @@ describe("updateTask(prisma, id, input, completionPayload?)", () => {
   const update = vi.fn();
   const observationCreate = vi.fn();
   const animalFindUnique = vi.fn();
+  // ADR-0006 — updateTask now writes observations through
+  // `createObservation`, which consults `crossSpecies(client,
+  // 'species-registry-internal').camp.findFirst` for camp existence
+  // and (step-3) species. The mock must surface these symbols or the
+  // door throws on `prisma.camp.findFirst`. Same goes for `mob.findUnique`
+  // — defensive stub, currently unused on the task-completion path.
+  const campFindFirst = vi.fn();
+  const mobFindUnique = vi.fn();
   const $transaction = vi.fn();
   const prisma = {
     task: { findUnique, update },
     observation: { create: observationCreate },
     animal: { findUnique: animalFindUnique },
+    camp: { findFirst: campFindFirst },
+    mob: { findUnique: mobFindUnique },
     $transaction,
   } as unknown as PrismaClient;
 
@@ -73,8 +83,14 @@ describe("updateTask(prisma, id, input, completionPayload?)", () => {
     update.mockReset();
     observationCreate.mockReset();
     animalFindUnique.mockReset();
+    campFindFirst.mockReset();
+    mobFindUnique.mockReset();
     $transaction.mockReset();
     findUnique.mockResolvedValue({ ...BASE_TASK });
+    // ADR-0006 — default the camp lookup to "exists, species null" so
+    // the door's CampNotFoundError path is not the default outcome.
+    // Tests that assert on species pass their own animal/mob mocks.
+    campFindFirst.mockResolvedValue({ campId: "camp-north", species: null });
     // $transaction by default runs the callback with `prisma` as the tx client
     // so the inner ops resolve through the same mock vi.fns.
     $transaction.mockImplementation(

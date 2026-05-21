@@ -22,25 +22,34 @@ import {
   CampConditionFieldRequiredError,
 } from "../create-observation";
 import {
+  AnimalNotFoundError,
   CampNotFoundError,
   InvalidTimestampError,
   InvalidTypeError,
+  MobNotFoundError,
 } from "../errors";
 
 describe("createObservation(prisma, input)", () => {
   const observationCreate = vi.fn();
+  const observationUpsert = vi.fn();
   const campFindFirst = vi.fn();
   const animalFindUnique = vi.fn();
+  const mobFindUnique = vi.fn();
+  // Cast through `unknown` — the mock only stubs the surface
+  // `createObservation` touches, not the full PrismaClient API.
   const prisma = {
-    observation: { create: observationCreate },
+    observation: { create: observationCreate, upsert: observationUpsert },
     camp: { findFirst: campFindFirst },
     animal: { findUnique: animalFindUnique },
+    mob: { findUnique: mobFindUnique },
   } as unknown as PrismaClient;
 
   beforeEach(() => {
     observationCreate.mockReset();
+    observationUpsert.mockReset();
     campFindFirst.mockReset();
     animalFindUnique.mockReset();
+    mobFindUnique.mockReset();
   });
 
   it("throws InvalidTypeError when the type is not in the allowlist", async () => {
@@ -80,7 +89,7 @@ describe("createObservation(prisma, input)", () => {
   });
 
   it("creates the row with denormalised species when animal_id is supplied", async () => {
-    campFindFirst.mockResolvedValue({ campId: "A" });
+    campFindFirst.mockResolvedValue({ campId: "A", species: null });
     animalFindUnique.mockResolvedValue({ species: "cattle" });
     observationCreate.mockResolvedValue({ id: "obs-1" });
 
@@ -95,7 +104,7 @@ describe("createObservation(prisma, input)", () => {
 
     expect(result).toEqual({ success: true, id: "obs-1" });
     expect(observationCreate).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         type: "weighing",
         campId: "A",
         animalId: "BR-001",
@@ -103,12 +112,14 @@ describe("createObservation(prisma, input)", () => {
         observedAt: new Date("2026-05-01T08:00:00.000Z"),
         loggedBy: "u@x.co.za",
         species: "cattle",
-      },
+      }),
     });
   });
 
-  it("creates the row with species=null when animal_id is absent", async () => {
-    campFindFirst.mockResolvedValue({ campId: "A" });
+  it("creates the row with species=null when neither animal_id nor mob_id nor camp species is in scope", async () => {
+    // ADR-0006 step 4 of the waterfall: camp has no species and no
+    // animal/mob context → null is the explicit back-compat outcome.
+    campFindFirst.mockResolvedValue({ campId: "A", species: null });
     observationCreate.mockResolvedValue({ id: "obs-2" });
 
     await createObservation(prisma, {
@@ -118,6 +129,7 @@ describe("createObservation(prisma, input)", () => {
     });
 
     expect(animalFindUnique).not.toHaveBeenCalled();
+    expect(mobFindUnique).not.toHaveBeenCalled();
     expect(observationCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         type: "camp_check",
@@ -126,6 +138,135 @@ describe("createObservation(prisma, input)", () => {
         species: null,
         details: "",
       }),
+    });
+  });
+
+  // ── ADR-0006 waterfall ────────────────────────────────────────────────
+  describe("species-stamping waterfall (ADR-0006)", () => {
+    it("throws AnimalNotFoundError when animal_id resolves to no row", async () => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
+      animalFindUnique.mockResolvedValue(null);
+
+      await expect(
+        createObservation(prisma, {
+          type: "weighing",
+          camp_id: "A",
+          animal_id: "DELETED",
+          details: JSON.stringify({ weightKg: 100 }),
+          loggedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(AnimalNotFoundError);
+      expect(observationCreate).not.toHaveBeenCalled();
+    });
+
+    it("throws MobNotFoundError when mob_id resolves to no row", async () => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
+      mobFindUnique.mockResolvedValue(null);
+
+      await expect(
+        createObservation(prisma, {
+          type: "mob_movement",
+          camp_id: "A",
+          mob_id: "DELETED",
+          loggedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(MobNotFoundError);
+      expect(observationCreate).not.toHaveBeenCalled();
+    });
+
+    it("stamps species from mob when only mob_id is given", async () => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
+      mobFindUnique.mockResolvedValue({ species: "sheep" });
+      observationCreate.mockResolvedValue({ id: "obs-mob" });
+
+      await createObservation(prisma, {
+        type: "mob_movement",
+        camp_id: "A",
+        mob_id: "mob-1",
+        loggedBy: null,
+      });
+
+      expect(animalFindUnique).not.toHaveBeenCalled();
+      expect(mobFindUnique).toHaveBeenCalledWith({
+        where: { id: "mob-1" },
+        select: { species: true },
+      });
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: "mob_movement",
+          campId: "A",
+          species: "sheep",
+        }),
+      });
+    });
+
+    it("stamps species from camp when neither animal_id nor mob_id is given", async () => {
+      // Step 3 — the resolved camp carries a species.
+      campFindFirst.mockResolvedValue({ campId: "A", species: "game" });
+      observationCreate.mockResolvedValue({ id: "obs-camp" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+      });
+
+      expect(animalFindUnique).not.toHaveBeenCalled();
+      expect(mobFindUnique).not.toHaveBeenCalled();
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          campId: "A",
+          species: "game",
+        }),
+      });
+    });
+
+    it("prefers animal species over mob species when both are supplied (most-specific-source-wins)", async () => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: "sheep" });
+      animalFindUnique.mockResolvedValue({ species: "cattle" });
+      observationCreate.mockResolvedValue({ id: "obs-prio" });
+
+      await createObservation(prisma, {
+        type: "weighing",
+        camp_id: "A",
+        animal_id: "BR-001",
+        mob_id: "mob-X",
+        loggedBy: null,
+      });
+
+      // Step 1 of the waterfall: animal_id wins; mob/camp lookups not
+      // consulted for species.
+      expect(animalFindUnique).toHaveBeenCalledTimes(1);
+      expect(mobFindUnique).not.toHaveBeenCalled();
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ species: "cattle" }),
+      });
+    });
+
+    it("works when passed a tx-client (ObservationWriter union)", async () => {
+      // Smoke test for the inside-$transaction case: pass the prisma
+      // mock cast as `unknown` — the door must not depend on
+      // `$transaction` being present on its `client` arg.
+      const txClient = {
+        observation: { create: observationCreate, upsert: observationUpsert },
+        camp: { findFirst: campFindFirst },
+        animal: { findUnique: animalFindUnique },
+        mob: { findUnique: mobFindUnique },
+      } as unknown as Parameters<typeof createObservation>[0];
+
+      campFindFirst.mockResolvedValue({ campId: "A", species: "cattle" });
+      observationCreate.mockResolvedValue({ id: "obs-tx" });
+
+      const result = await createObservation(txClient, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+      });
+
+      expect(result).toEqual({ success: true, id: "obs-tx" });
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ species: "cattle" }),
+      });
     });
   });
 
@@ -141,7 +282,7 @@ describe("createObservation(prisma, input)", () => {
   // the write boundary instead of silently persisting an implicit reading.
   describe("camp_condition required-field validation (#321)", () => {
     beforeEach(() => {
-      campFindFirst.mockResolvedValue({ campId: "A" });
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
     });
 
     it("rejects a camp_condition whose details omits the grazing selection", async () => {

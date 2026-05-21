@@ -63,55 +63,6 @@ stores; wave 2 (issue #196) wires it in and migrates UI consumers.
 
 ---
 
-## Alerts (dashboard alert engine)
-
-These terms pin the single canonical definition of "what counts as an
-alert," so the header badge and the `/admin/alerts` page can never again
-report different numbers for the same farm (the divergence found
-2026-05-17: the header used a bespoke
-`grazing_quality === "Poor" || fence_status !== "Intact"` formula while
-the engine used eight unrelated sources and never inspected fence status).
-
-### Alert
-
-A `DashboardAlert` — `{ id, severity, icon, message, count, href, species }`.
-Severity is `red | amber`. `species` is an `AlertSource` (a `SpeciesId` or
-`"farm"` for farm-wide alerts).
-
-### Alert source
-
-One independent contributor of alerts. The eight sources: species-module
-alerts, animals-in-withdrawal, camp-conditions, rotation status, veld
-summary, feed-on-offer, drought, and camp count (drives stale-inspection).
-The **camp-conditions** source alone yields poor-grazing, stale-inspection,
-and fence (non-intact) alerts — these three are the only sources derivable
-from offline `liveConditions`.
-
-### Alert composition
-
-The single pure function `composeAlerts(inputs)` that derives
-`{ red, amber, totalCount }` from a bag of **independently-optional** source
-inputs plus required config (`thresholds`, `farmSlug`, `now`). It is the
-ONLY place alert severity/messages/counts are decided. An absent source
-contributes nothing (it does not emit a zero — "we didn't fetch rotation"
-and "rotation is clean" are indistinguishable in the output, by design).
-This is the same caller-must-not-re-derive discipline ADR-0002 applies to
-`SyncTruth`.
-
-### Partial alert pass
-
-A `composeAlerts` invocation over a subset of sources — the offline header
-path, which supplies only the camp-conditions source. Its result is a
-**monotone prefix** of the full server pass: every alert id it emits also
-appears in the full pass, and `partial.totalCount <= full.totalCount`.
-The header badge MUST be a partial pass through `composeAlerts`, never a
-re-implemented formula. `getDashboardAlerts(prisma, farmSlug, thresholds,
-…)` is the full pass — it fetches all eight sources then calls
-`composeAlerts`; its signature is unchanged so its five server callers are
-untouched.
-
----
-
 ## Species scoping
 
 ADR-0005 makes the species axis on the four species-bearing models
@@ -160,18 +111,67 @@ without a sanctioned reason is a design question, not a pragma.
 
 The four species models may be reached on a tenant code path ONLY via
 `scoped()` or `crossSpecies()`. Raw `prisma.{animal,camp,mob,observation}`
-`.{findMany,findFirst,count,groupBy,updateMany,deleteMany}` is forbidden
-outside a small *structural* exemption (the two-door module itself, the
-documented `lib/server/animal-search.ts` deep-module seam, `migrations/`,
-`scripts/` seed/maintenance, `prisma/`, `docs/`, test files). Enforced by
-the structural architecture test
-`__tests__/architecture/species-access-no-direct-prisma.test.ts`
-(modelled on ADR-0002's `sync-truth-no-direct-callers.test.ts`) —
-presence of a named door, NOT presence of a `species:` key. By-PK strict
-lookups (`findUnique`/`findUniqueOrThrow`/`findFirstOrThrow`) are
-intentionally outside the invariant — they cannot leak across species.
-The content-inspecting `audit-species-where` script + baseline +
-`audit-allow-species-where:` pragma + `CROSS_SPECIES_ALLOWLIST_PATHS`
-were retired by ADR-0005's final rollout wave (#353); the
-`audit-species-where` CI workflow now runs the structural test under an
-unchanged check-name.
+is forbidden outside a small *structural* exemption (the two door
+modules themselves, `migrations/`, `scripts/` seed/maintenance, `prisma/`,
+test files). Enforced by a structural architecture test in the shape of
+`__tests__/architecture/sync-truth-no-direct-callers.test.ts`
+(ADR-0002's invariant) — presence of a named door, NOT presence of a
+`species:` key. There is no per-call baseline and no
+`audit-allow-species-where:` pragma; both are retired by ADR-0005's
+final rollout wave.
+
+---
+
+## Observation writes
+
+ADR-0006 makes `Observation` creation reachable only through a single
+named door so the species-stamping invariant ADR-0004 §4 declares cannot
+be re-broken at a new write site. The terms below pin that contract.
+The door is the *write* counterpart to ADR-0005's two *read* doors;
+they cite each other and stay distinct so the filter/data confusion the
+species-scoped facade header warns about is never reintroduced.
+
+### Observation write door (`createObservation`)
+
+The single named door for observation creation:
+`createObservation(client, input)` (`lib/domain/observations/create-observation.ts`).
+`client` is typed as `ObservationWriter` — the union of `PrismaClient`
+and the transaction-callback client returned by `prisma.$transaction`'s
+inner type — so the door is callable both inline and inside a
+`$transaction` block (the load-bearing case for mob-movement and
+task-completion writes, which must be atomic with their sibling
+mutations).
+
+### Observation write invariant
+
+`Observation` may be created on a tenant code path ONLY via
+`createObservation`. Raw `prisma.observation.create` /
+`tx.observation.create` is forbidden outside a *structural* exemption
+(the door module itself, `migrations/`, `prisma/`, `scripts/` seed and
+maintenance, test files). Enforced by an architecture test in the same
+shape as ADR-0002's `sync-truth-no-direct-callers.test.ts` and
+ADR-0005's `species-access-no-direct-prisma.test.ts` — presence of the
+door, not presence of a `species:` key on the call.
+
+### Species-stamping waterfall
+
+The rule the door uses to populate `Observation.species` (ADR-0004 §4 —
+species is denormalised onto the row at write time so per-species
+filters hit the covering index without a JOIN):
+
+1. `animal_id` supplied → animal's species. Throws `AnimalNotFoundError`
+   if the lookup fails (an FK violation, not a legitimate null).
+2. Else `mob_id` supplied → mob's species. Throws `MobNotFoundError`
+   on lookup miss.
+3. Else if the resolved camp carries a species → camp's species.
+4. Else → `null`. Back-compat for legacy camp-only observations on
+   single-species data; once the backfill audit (`scripts/audit-observation-species.ts`)
+   confirms zero NULL rows in prod the read side drops its
+   NULL-tolerant predicate (ADR-0004 §5 closure).
+
+The waterfall is "most-specific source wins." Disagreement between
+layers (e.g. an animal's species ≠ its mob's species) is a schema
+invariant, enforced by tests — not a runtime cost on every write. The
+pre-ADR-0006 fallback (`animal?.species ?? null` on a missing-animal
+read) silently wrote NULLs that the species-scoped read predicate's
+OR-branch had to tolerate; the throw closes that hole.

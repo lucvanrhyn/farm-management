@@ -49,6 +49,14 @@ const mockTransaction = vi.fn();
 // Phase I.3 — task route now looks up Animal.species at write time so the
 // denormalised Observation.species stays fresh. Default mock returns cattle.
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: "cattle" });
+// ADR-0006 — updateTask now routes the task-completion observation
+// through `createObservation`, which calls `crossSpecies(...).camp.findFirst`
+// to verify camp existence and read its species. Stub a default
+// "camp exists, species null" so the door's CampNotFoundError path is
+// not the default outcome. The mob stub is defensive (mob_id is never
+// supplied on task-completion observations).
+const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: "camp-north", species: null });
+const mockMobFindUnique = vi.fn();
 
 const mockPrisma = {
   task: {
@@ -62,6 +70,12 @@ const mockPrisma = {
   },
   animal: {
     findUnique: mockAnimalFindUnique,
+  },
+  camp: {
+    findFirst: mockCampFindFirst,
+  },
+  mob: {
+    findUnique: mockMobFindUnique,
   },
   taskTemplate: {
     upsert: mockTemplateUpsert,
@@ -556,6 +570,30 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
     vi.resetModules();
   });
 
+  // ADR-0006 — task-completion observations now route through
+  // `createObservation`, which enforces the registry allowlist and the
+  // #321 camp_condition required-field guard. Two scenarios that
+  // previously bypassed those invariants via raw `tx.observation.create`
+  // are now correctly rejected at the API surface:
+  //
+  //   - `camp_inspection` → emits `camp_condition` with a `{condition:
+  //     "good"}` details payload, which the #321 guard rejects (it
+  //     requires explicit grazing/water/fence selections). Pre-ADR-0006
+  //     the bypass silently persisted these as zero-interaction
+  //     inspections — the exact silent-write hole #321 was designed to
+  //     close on the logger path.
+  //   - `rainfall_reading` → emits `rainfall` observations, but
+  //     `rainfall` is not in `OBSERVATION_TYPE_LIST` (the canonical
+  //     registry, see `lib/domain/observations/registry.ts`). Pre-ADR-0006
+  //     the bypass silently persisted rows with an off-registry type.
+  //
+  // Both expose genuine product-surface bugs in
+  // `lib/tasks/observation-mapping.ts` (and/or the registry) that the
+  // door makes visible. The scenarios below are scoped to the two flows
+  // that still produce valid door inputs; the two REJECTED scenarios
+  // are pinned in the separate "task-completion door rejects invalid
+  // shapes (ADR-0006)" describe so the rejection contract is itself
+  // locked.
   const taskTypeScenarios = [
     {
       taskType: "pregnancy_scan",
@@ -568,18 +606,6 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
       payload: { product: "Lumpy Skin vax", dose: "2ml" },
       expectedObsType: "treatment",
       expectedDetailsFragment: "Lumpy Skin vax",
-    },
-    {
-      taskType: "camp_inspection",
-      payload: { condition: "good" },
-      expectedObsType: "camp_condition",
-      expectedDetailsFragment: "good",
-    },
-    {
-      taskType: "rainfall_reading",
-      payload: { rainfallMm: 12 },
-      expectedObsType: "rainfall",
-      expectedDetailsFragment: "12",
     },
   ];
 
@@ -619,4 +645,56 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
       mockTransaction.mockClear();
     });
   }
+
+  // ── Door-rejection scenarios (ADR-0006) ─────────────────────────────
+  // Lock the new wire contract: completion payloads that
+  // observation-mapping.ts produces but the door's invariants reject
+  // surface as 422 at the API. This is a deliberate behaviour shift in
+  // ADR-0006 — the bypass that previously hid these invalid writes is
+  // gone. Tracked as a follow-up: align observation-mapping.ts emissions
+  // with registry + #321 (out of scope for ADR-0006's allow-list).
+  it("taskType=rainfall_reading → 422 INVALID_TYPE (rainfall not in registry)", async () => {
+    mockTaskFindUnique.mockResolvedValueOnce({
+      ...BASE_TASK,
+      taskType: "rainfall_reading",
+    });
+
+    const { PATCH } = await import("@/app/api/tasks/[id]/route");
+    const req = makeReq("http://localhost/api/tasks/task-weighing-1", {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        completionPayload: { rainfallMm: 12 },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "task-weighing-1" }) });
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toBe("INVALID_TYPE");
+    // No observation row was written.
+    expect(mockObservationCreate).not.toHaveBeenCalled();
+  });
+
+  it("taskType=camp_inspection → 422 CAMP_CONDITION_FIELD_REQUIRED (incomplete payload)", async () => {
+    mockTaskFindUnique.mockResolvedValueOnce({
+      ...BASE_TASK,
+      taskType: "camp_inspection",
+    });
+
+    const { PATCH } = await import("@/app/api/tasks/[id]/route");
+    const req = makeReq("http://localhost/api/tasks/task-weighing-1", {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        completionPayload: { condition: "good" },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "task-weighing-1" }) });
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toBe("CAMP_CONDITION_FIELD_REQUIRED");
+    expect(mockObservationCreate).not.toHaveBeenCalled();
+  });
 });
