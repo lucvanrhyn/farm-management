@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
+import ModalHeader from "@/components/ui/ModalHeader";
 
 /**
  * Wave 3b / #254 (PRD #250) — Death modal: single-cause radio + required
@@ -93,12 +94,12 @@ export default function DeathModal({
             style={{ backgroundColor: "rgba(139, 105, 20, 0.4)" }}
           />
         </div>
-        <h2
-          className="font-bold text-lg"
-          style={{ fontFamily: "var(--font-display)", color: "#F5F0E8" }}
-        >
-          Record Death — {animalId}
-        </h2>
+        <ModalHeader
+          title={`Record Death — ${animalId}`}
+          onClose={onClose}
+          titleStyle={{ fontFamily: "var(--font-display)", color: "#F5F0E8" }}
+          closeStyle={{ color: "#D2B48C" }}
+        />
         <p className="text-sm" style={{ color: "#D2B48C" }}>
           Confirm that animal{" "}
           <span className="font-bold" style={{ color: "#F5F0E8" }}>

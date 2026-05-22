@@ -1,6 +1,7 @@
 "use client";
 
 import type { Camp } from "@/lib/types";
+import ModalHeader from "@/components/ui/ModalHeader";
 
 interface MobInfo {
   readonly id: string;
@@ -46,12 +47,12 @@ export default function MobMoveModal({
             style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
           />
         </div>
-        <h2
-          className="font-bold text-lg"
-          style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
-        >
-          Move Mob: {mob.name}
-        </h2>
+        <ModalHeader
+          title={`Move Mob: ${mob.name}`}
+          onClose={onClose}
+          titleStyle={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+          closeStyle={{ color: '#D2B48C' }}
+        />
         <p className="text-sm" style={{ color: '#D2B48C' }}>
           {mob.animal_count} animal{mob.animal_count !== 1 ? 's' : ''} will move together.
         </p>
