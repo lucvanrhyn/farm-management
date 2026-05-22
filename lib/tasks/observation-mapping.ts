@@ -4,9 +4,10 @@
  * Pure function — maps a completed task + payload into an Observation create
  * payload, or null if the mapping is not applicable / required fields are absent.
  *
- * The "null" path is intentional and not an error — pure maintenance tasks
- * (water_point_service, fence_repair, fire_break_maintenance, generic) produce
- * no observation. Callers should treat null as "no observation to write".
+ * The "null" path is intentional and not an error — reminder-only tasks
+ * (water_point_service, fence_repair, fire_break_maintenance, generic,
+ * camp_inspection, camp_move, rainfall_reading) produce no observation.
+ * Callers should treat null as "no observation to write".
  *
  * Per MEMORY.md silent-failure-pattern cure: every error branch returns null
  * (not a generic error) so callers can surface `observationCreated: false`
@@ -54,7 +55,7 @@ function isNumber(v: unknown): v is number {
  *
  * Returns null when:
  *  - taskType is null or unrecognised
- *  - taskType maps to a pure maintenance action (no observation)
+ *  - taskType is reminder-only (no observation — see the case group below)
  *  - required payload keys are missing or wrong type
  */
 export function observationFromTaskCompletion(
@@ -155,34 +156,27 @@ export function observationFromTaskCompletion(
       };
     }
 
-    case "camp_inspection": {
-      if (!isString(payload.condition)) return null;
-      return {
-        ...base,
-        type: "camp_condition",
-        details: JSON.stringify({ condition: payload.condition }),
-      };
-    }
-
-    case "camp_move": {
-      if (!isString(payload.toCampId)) return null;
-      return {
-        ...base,
-        type: "camp_move",
-        details: JSON.stringify({ toCampId: payload.toCampId }),
-      };
-    }
-
-    case "rainfall_reading": {
-      if (!isNumber(payload.rainfallMm)) return null;
-      return {
-        ...base,
-        type: "rainfall",
-        details: JSON.stringify({ rainfallMm: payload.rainfallMm }),
-      };
-    }
-
-    // Pure maintenance — no observation produced
+    // Reminder-only task types — no observation produced (issue #360).
+    // Each has a dedicated capture surface elsewhere, so the task is a
+    // recurring reminder rather than an observation source:
+    //   - camp_inspection → the logger's CampConditionForm records the
+    //     real grazing/water/fence camp_condition. A {condition} stub
+    //     here would fail the #321 required-field guard, and emitting
+    //     camp_check would persist a silent "all-good" default — the
+    //     exact silent-write class #321 was designed to close.
+    //   - camp_move → animal/mob camp reassignment is recorded by the
+    //     move-mob flow as animal_movement / mob_movement observations
+    //     through the door; a task completion must not double-record.
+    //   - rainfall_reading → readings live in the dedicated
+    //     RainfallRecord model (/api/[farmSlug]/rainfall); a `rainfall`
+    //     Observation would be a split-brain second home for the data.
+    // Folding them in with the pure-maintenance types keeps this mapper
+    // structurally incapable of emitting a payload the ADR-0006
+    // createObservation door would reject (off-registry type / #321
+    // guard).
+    case "camp_inspection":
+    case "camp_move":
+    case "rainfall_reading":
     case "water_point_service":
     case "fence_repair":
     case "fire_break_maintenance":
