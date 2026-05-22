@@ -2,22 +2,24 @@
 /**
  * __tests__/admin/map-species-filter.test.tsx
  *
- * Wave 233 — Map page filters camp markers by FarmMode.
+ * FarmMode behaviour of the map surfaces.
  *
- * Mirrors `species-filter-pages.test.tsx` for the two map surfaces:
- *   - `/[farmSlug]/dashboard`        → DashboardClient receives camps via
- *                                       `getCachedDashboardData`, with a
- *                                       species-scoped override pulled from
- *                                       the facade in the page wrapper.
- *   - `/[farmSlug]/admin/map`         → camp.findMany goes through the
- *                                       `scoped(prisma, mode).camp` facade
- *                                       directly.
+ *   - `/[farmSlug]/dashboard`   → DashboardClient receives camps via
+ *                                  `getCachedDashboardData`, cut to the
+ *                                  active species in-memory.
+ *   - `/[farmSlug]/admin/map`   → camp.findMany goes through the
+ *                                  `crossSpecies(prisma, ...)` door — the
+ *                                  admin map shows EVERY camp regardless of
+ *                                  FarmMode (issue #364: a physical camp
+ *                                  grazes whatever species is on it; camps
+ *                                  are not a per-species concept). Wave 233
+ *                                  originally routed this through `scoped()`
+ *                                  and #364 reclassified it.
  *
- * Both must (a) route camp reads through the facade so `where.species`
- * matches the active mode, and (b) hand the client a camps-list already
- * filtered by species. The structural arch test
+ * The structural arch test
  * `__tests__/architecture/species-access-no-direct-prisma.test.ts`
- * (ADR-0005) enforces the species-access invariant across the codebase.
+ * (ADR-0005) enforces that camp reads use a named door — either door is
+ * compliant; the choice between them is a domain decision.
  */
 import type React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -186,8 +188,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Wave 233 — admin/map page filters camps by FarmMode", () => {
-  it("cattle mode → only the 10 cattle camps are rendered on the admin map", async () => {
+describe("#364 — admin/map page shows every camp regardless of FarmMode", () => {
+  it("cattle mode → all 15 camps are rendered on the admin map", async () => {
     getFarmModeMock.mockResolvedValue("cattle");
     const { default: AdminMapPage } = await import(
       "@/app/[farmSlug]/admin/map/page"
@@ -197,24 +199,20 @@ describe("Wave 233 — admin/map page filters camps by FarmMode", () => {
     });
     render(tree as React.ReactElement);
 
-    // Every camp.findMany invocation in this page must inject species: cattle
-    // (the facade contract).
+    // The camp read goes through the cross-species door — no `where.species`
+    // predicate is injected (issue #364).
     expect(campFindManyMock.mock.calls.length).toBeGreaterThan(0);
     for (const call of campFindManyMock.mock.calls) {
       const where = (call[0] as { where?: { species?: string } })?.where;
-      expect(where?.species).toBe("cattle");
+      expect(where?.species).toBeUndefined();
     }
 
-    // The client receives 10 cattle camps, 0 sheep.
+    // The client receives every camp — both cattle and sheep.
     expect(adminMapClientCalls.length).toBe(1);
-    const campData = adminMapClientCalls[0].campData;
-    expect(campData.length).toBe(10);
-    expect(campData.every((c) => c.camp.camp_id.startsWith("cattle-"))).toBe(
-      true,
-    );
+    expect(adminMapClientCalls[0].campData.length).toBe(15);
   });
 
-  it("sheep mode → only the 5 sheep camps are rendered on the admin map", async () => {
+  it("sheep mode → all 15 camps are still rendered on the admin map", async () => {
     getFarmModeMock.mockResolvedValue("sheep");
     const { default: AdminMapPage } = await import(
       "@/app/[farmSlug]/admin/map/page"
@@ -226,15 +224,12 @@ describe("Wave 233 — admin/map page filters camps by FarmMode", () => {
 
     for (const call of campFindManyMock.mock.calls) {
       const where = (call[0] as { where?: { species?: string } })?.where;
-      expect(where?.species).toBe("sheep");
+      expect(where?.species).toBeUndefined();
     }
 
+    // Sheep mode must NOT hide the cattle camps — this is the #364 bug.
     expect(adminMapClientCalls.length).toBe(1);
-    const campData = adminMapClientCalls[0].campData;
-    expect(campData.length).toBe(5);
-    expect(campData.every((c) => c.camp.camp_id.startsWith("sheep-"))).toBe(
-      true,
-    );
+    expect(adminMapClientCalls[0].campData.length).toBe(15);
   });
 });
 
