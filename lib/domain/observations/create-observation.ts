@@ -189,10 +189,22 @@ async function assertNotDuplicateCampCondition(
     clientLocalId: string | null | undefined;
   },
 ): Promise<void> {
-  const { dayStart, dayEnd } = getTenantDayRange(
-    "Africa/Johannesburg",
-    input.observedAt,
-  );
+  // Issue #378 — resolve the tenant's stored timezone so the day-bucket
+  // agrees with every other day-bucketing call site in the codebase.
+  // A drift-resilient try/catch is used instead of `settle()` (cached.ts-local)
+  // so that a legacy tenant DB missing the `timezone` column never causes the
+  // camp-condition write to fail — it falls back to SAST and continues.
+  let tenantTz: string = "Africa/Johannesburg";
+  try {
+    const settingsRow = await client.farmSettings.findFirst();
+    if (settingsRow?.timezone) {
+      tenantTz = settingsRow.timezone;
+    }
+  } catch {
+    // Schema drift: `no such column: timezone` on legacy tenant DBs.
+    // Fall back to Africa/Johannesburg — harmless for SA-only tenants.
+  }
+  const { dayStart, dayEnd } = getTenantDayRange(tenantTz, input.observedAt);
   const existing = await client.observation.findFirst({
     where: {
       type: "camp_condition",
