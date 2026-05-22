@@ -235,22 +235,30 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
     expect(lastCall?.[1]).toMatchObject({ species: "sheep" });
   });
 
-  it("threads `mode` through to countHealthIssuesSince and countInspectedToday", async () => {
+  it("threads `mode` through to countHealthIssuesSince", async () => {
     const { getCachedDashboardOverview } = await import("@/lib/server/cached");
     await getCachedDashboardOverview("farm-x", "sheep");
 
     // The bug class this guards: pre-fix the dashboard counted health
-    // issues across every species. Post-fix the helpers accept `mode`
-    // and only count rows for the active species.
+    // issues across every species. Post-fix the helper accepts `mode`
+    // and only counts rows for the active species.
     expect(_countHealthIssuesSinceMock).toHaveBeenCalled();
     const healthCall = _countHealthIssuesSinceMock.mock.calls.at(-1);
     // signature: countHealthIssuesSince(prisma, since, mode?)
     expect(healthCall?.[2]).toBe("sheep");
+  });
 
+  it("does NOT thread `mode` into countInspectedToday (issue #363)", async () => {
+    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
+    await getCachedDashboardOverview("farm-x", "sheep");
+
+    // Issue #363: camp inspections are NULL-species observations, so the
+    // "Inspections Today" tile is mode-independent. countInspectedToday's
+    // signature is countInspectedToday(prisma, tz?) — `mode` is gone.
+    // Arg [1] is the tenant TZ string (or undefined), never a SpeciesId.
     expect(_countInspectedTodayMock).toHaveBeenCalled();
     const inspectedCall = _countInspectedTodayMock.mock.calls.at(-1);
-    // signature: countInspectedToday(prisma, mode?)
-    expect(inspectedCall?.[1]).toBe("sheep");
+    expect(inspectedCall?.[1]).not.toBe("sheep");
   });
 
   it("threads `mode` through to getRecentHealthObservations", async () => {

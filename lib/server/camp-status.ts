@@ -168,7 +168,6 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
 
 export async function countInspectedToday(
   prisma: PrismaClient,
-  mode?: SpeciesId,
   tz?: string | null,
 ): Promise<number> {
   // Issue #258: bucket "today" against the tenant's stored TZ
@@ -179,16 +178,17 @@ export async function countInspectedToday(
   // fall back to "Africa/Johannesburg" — the FarmSettings.timezone default.
   const todayStart = getTenantDayStart(tz ?? "Africa/Johannesburg");
 
+  // Issue #363: a camp inspection is a NULL-species `camp_condition` /
+  // `camp_check` observation logged against a camp — it is NOT a per-species
+  // concept. The previous `...(mode ? { species: mode } : {})` predicate
+  // dropped every NULL-species row whenever a FarmMode was active, so the
+  // "Inspections Today" tile read 0/N on every per-species dashboard. This
+  // query is intentionally cross-species: it counts the distinct camps
+  // inspected today regardless of which species the dashboard is filtered to.
   const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: { in: ["camp_condition", "camp_check"] },
       observedAt: { gte: todayStart },
-      // Camp-condition observations log against a campId AND now carry a
-      // denormalised species (migration 0003). On a per-mode dashboard,
-      // only count inspections logged for the active species. When `mode`
-      // is omitted, fall back to cross-species (legacy callers / farm-wide
-      // metric).
-      ...(mode ? { species: mode } : {}),
     },
     select: { campId: true },
   });
