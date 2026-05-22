@@ -86,10 +86,14 @@ function CampEmptyState({ speciesLabel }: { speciesLabel: string }) {
           className="text-lg font-bold"
           style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
         >
-          No {speciesLabel} camps yet
+          {/* #382: pin the space with {" "} — a bare literal space after an
+              {expression} is stripped by the build-time SWC transform. */}
+          No {speciesLabel}{" "}camps yet
         </h2>
         <p className="text-sm" style={{ color: 'rgba(245, 230, 200, 0.75)', lineHeight: 1.5 }}>
-          Add a {speciesLabel} camp to start logging. Camps for other species
+          {/* #382: same {" "} pin — this is the line that glued in prod
+              ("Add a sheepcamp to start logging."). */}
+          Add a {speciesLabel}{" "}camp to start logging. Camps for other species
           are kept separate and won&apos;t show here.
         </p>
       </div>
