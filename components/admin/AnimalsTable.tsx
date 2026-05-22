@@ -211,7 +211,17 @@ export default function AnimalsTable({
   // + 20 other-species Active rows reads
   //   Showing 50 of 81 cattle (101 total Active across species)
   // so the farmer can see the 20 non-cattle rows are accounted for, not lost.
-  const loaded = animals.length;
+  //
+  // Issue #367 — the SSR batch is hydrated via `searchAnimals(...,
+  // includeDeceased: true)` so the Deceased / All tabs have rows. That batch
+  // therefore contains deceased animals. The header numerator must be scoped
+  // to the SAME subset the "N found" label counts (`filtered`, derived from
+  // `activeAnimals` / `deceasedAnimals`): otherwise the Active tab rendered
+  // "Showing 50 of 874" (raw batch) next to "49 animals found" (active subset)
+  // — two label scopes contradicting each other. Counting the tab-scoped
+  // hydrated subset keeps both numbers in agreement.
+  const loaded =
+    tab === "deceased" ? deceasedAnimals.length : activeAnimals.length;
   const showReconciliation =
     typeof crossSpeciesActiveTotal === "number" &&
     typeof speciesTotal === "number" &&
