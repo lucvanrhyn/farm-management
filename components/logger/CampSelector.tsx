@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useOffline } from "./OfflineProvider";
 import { getGrazingDot, relativeTime } from "@/lib/utils";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import { getSpeciesModule } from "@/lib/species/registry";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
 
 // CampSelector sits on the logger's critical path. Previously it imported
@@ -24,6 +25,74 @@ function CampSkeleton() {
       <div className="h-4 w-3/4 rounded-md" style={{ backgroundColor: 'rgba(255,248,235,0.12)' }} />
       <div className="h-3 w-1/2 rounded-md" style={{ backgroundColor: 'rgba(255,248,235,0.08)' }} />
       <div className="h-5 w-1/3 rounded-full mt-auto" style={{ backgroundColor: 'rgba(255,248,235,0.08)' }} />
+    </div>
+  );
+}
+
+/**
+ * Issue #370 — species-aware empty state.
+ *
+ * Distinct from `CampSkeleton`: the skeleton is the LOADING state (IDB
+ * cache not hydrated, `camps.length === 0`). This is the EMPTY state —
+ * the farm HAS camps in IDB, but the FarmMode / `allowedCampIds` filter
+ * leaves none visible for the active species. Pre-fix this rendered a
+ * blank tile grid that looked like broken data on a sheep farm with no
+ * sheep camps.
+ *
+ * `speciesLabel` is lower-cased so the copy reads naturally ("No sheep
+ * camps yet"). Styled for the logger's dark-glass surface — the white
+ * admin-themed `components/camps/CampsEmptyState.tsx` would clash here.
+ */
+function CampEmptyState({ speciesLabel }: { speciesLabel: string }) {
+  return (
+    <div className="flex justify-center p-4">
+      <div
+        data-testid="camp-selector-empty-state"
+        className="flex flex-col items-center gap-3 rounded-2xl px-8 py-12 text-center w-full max-w-sm"
+        style={{
+          backgroundColor: 'rgba(250, 240, 220, 0.10)',
+          border: '1px solid rgba(210, 180, 140, 0.28)',
+          boxShadow: 'inset 0 1px 0 rgba(255,248,235,0.10)',
+        }}
+      >
+        <div
+          aria-hidden="true"
+          className="flex size-14 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: 'rgba(255, 248, 235, 0.10)',
+            border: '1px solid rgba(210, 180, 140, 0.35)',
+            color: '#F5E6C8',
+          }}
+        >
+          {/* Inline paddock / fenced-area glyph, pure CSS — no new asset.
+              Matches CampsEmptyState's camp glyph for visual consistency. */}
+          <svg
+            width="26"
+            height="26"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M9 5v14" />
+            <path d="M15 5v14" />
+          </svg>
+        </div>
+        <h2
+          className="text-lg font-bold"
+          style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+        >
+          No {speciesLabel} camps yet
+        </h2>
+        <p className="text-sm" style={{ color: 'rgba(245, 230, 200, 0.75)', lineHeight: 1.5 }}>
+          Add a {speciesLabel} camp to start logging. Camps for other species
+          are kept separate and won&apos;t show here.
+        </p>
+      </div>
     </div>
   );
 }
@@ -69,12 +138,14 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
   const router = useRouter();
   const params = useParams<{ farmSlug: string }>();
   const { camps } = useOffline();
-  const { isMultiMode } = useFarmModeSafe();
+  const { isMultiMode, mode } = useFarmModeSafe();
 
   const visibleCamps = allowedCampIds
     ? camps.filter((c) => allowedCampIds.has(c.camp_id))
     : camps;
 
+  // State 1 — LOADING. The IDB cache has not hydrated yet, so we cannot
+  // know whether the active species has zero camps. Unchanged by #370.
   if (camps.length === 0) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
@@ -85,6 +156,9 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
     );
   }
 
+  // Species label for the active FarmMode, e.g. "sheep" / "cattle" / "game".
+  const speciesLabel = getSpeciesModule(mode).config.label.toLowerCase();
+
   return (
     <div>
       {/* Mode switcher for logger — only shown when multi-species */}
@@ -93,6 +167,12 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
           <ModeSwitcher variant="glass" />
         </div>
       )}
+      {/* State 2 — EMPTY. Camps exist in IDB but none are visible for the
+          active species (filtered out by `allowedCampIds`). Issue #370:
+          show an explicit species-aware empty state, not a blank grid. */}
+      {visibleCamps.length === 0 ? (
+        <CampEmptyState speciesLabel={speciesLabel} />
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
       {visibleCamps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
@@ -143,7 +223,8 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
           </button>
         );
       })}
-    </div>
+      </div>
+      )}
     </div>
   );
 }
