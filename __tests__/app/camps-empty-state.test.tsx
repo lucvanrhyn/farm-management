@@ -13,9 +13,10 @@
  *  3. The camp query stays species-scoped (`where.species === "sheep"`)
  *     in both the empty and non-empty cases — no FarmMode/species
  *     semantic change.
- *  4. The tenant map page (`/[slug]/map`) with zero camps for the active
- *     FarmMode renders an onboarding empty state instead of mounting the
- *     map client.
+ *  4. The tenant map page (`/[slug]/map`) with zero camps renders an
+ *     onboarding empty state instead of mounting the map client. The map
+ *     camp read is cross-species (issue #364), so this branch is reached
+ *     only when the tenant has no camps at all.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
@@ -138,7 +139,7 @@ describe("/sheep/camps empty state (#288)", () => {
 });
 
 describe("/[slug]/map empty state (#288)", () => {
-  it("renders an onboarding empty state instead of the map when zero camps exist for the active FarmMode", async () => {
+  it("renders an onboarding empty state instead of the map when the tenant has zero camps", async () => {
     campFindManyMock.mockResolvedValue([]);
 
     await renderTenantMap();
@@ -146,12 +147,13 @@ describe("/[slug]/map empty state (#288)", () => {
     expect(screen.queryByTestId("tenant-map-client")).toBeNull();
     expect(screen.getByTestId("map-empty-state")).toBeTruthy();
     expect(screen.getByText(/no.*camps.*yet/i)).toBeTruthy();
+    // The map camp read is cross-species (#364) — no species predicate.
     for (const call of campFindManyMock.mock.calls) {
-      expect(call[0]?.where?.species).toBe("sheep");
+      expect(call[0]?.where?.species).toBeUndefined();
     }
   });
 
-  it("mounts the map client when camps exist for the active FarmMode", async () => {
+  it("mounts the map client when the tenant has camps", async () => {
     campFindManyMock.mockResolvedValue([
       {
         campId: "C2",
