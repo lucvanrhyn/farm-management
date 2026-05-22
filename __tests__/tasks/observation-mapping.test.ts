@@ -261,101 +261,57 @@ describe("observationFromTaskCompletion — brucellosis_test", () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// camp_inspection
+// Reminder-only task types — all return null (issue #360)
+//
+// rainfall_reading, camp_inspection, and camp_move are reminder-only:
+// completing the task marks the reminder done but produces no
+// Observation. Each has a dedicated capture surface elsewhere —
+//   - rainfall_reading → the RainfallRecord model + the
+//     /api/[farmSlug]/rainfall admin page (a `rainfall` Observation
+//     would be a split-brain second home for the same data)
+//   - camp_inspection → the logger's CampConditionForm, which records
+//     real grazing/water/fence values (a {condition} stub here would
+//     be the silent "all-good" default write #321 closed)
+//   - camp_move → the move-mob flow, which records animal_movement /
+//     mob_movement observations through the door
+//
+// They join water_point_service / fence_repair / fire_break_maintenance
+// / generic. observation-mapping.ts therefore never emits a payload the
+// ADR-0006 createObservation door would reject.
 // ────────────────────────────────────────────────────────────────
-describe("observationFromTaskCompletion — camp_inspection", () => {
-  it("maps camp_inspection to camp_condition observation", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "camp_inspection" },
-      { condition: "good" },
-    );
-    expect(result).not.toBeNull();
-    expect(result!.type).toBe("camp_condition");
-    const details = JSON.parse(result!.details);
-    expect(details.condition).toBe("good");
-  });
-
-  it("returns null when camp_inspection condition is missing", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "camp_inspection" },
-      {},
-    );
-    expect(result).toBeNull();
-  });
-});
-
-// ────────────────────────────────────────────────────────────────
-// camp_move
-// ────────────────────────────────────────────────────────────────
-describe("observationFromTaskCompletion — camp_move", () => {
-  it("maps camp_move to camp_move observation with toCampId", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "camp_move" },
-      { toCampId: "camp-B" },
-    );
-    expect(result).not.toBeNull();
-    expect(result!.type).toBe("camp_move");
-    const details = JSON.parse(result!.details);
-    expect(details.toCampId).toBe("camp-B");
-  });
-
-  it("returns null when toCampId is missing", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "camp_move" },
-      {},
-    );
-    expect(result).toBeNull();
-  });
-});
-
-// ────────────────────────────────────────────────────────────────
-// rainfall_reading
-// ────────────────────────────────────────────────────────────────
-describe("observationFromTaskCompletion — rainfall_reading", () => {
-  it("maps rainfall_reading to rainfall observation", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "rainfall_reading" },
-      { rainfallMm: 12.5 },
-    );
-    expect(result).not.toBeNull();
-    expect(result!.type).toBe("rainfall");
-    const details = JSON.parse(result!.details);
-    expect(details.rainfallMm).toBe(12.5);
-  });
-
-  it("returns null when rainfallMm is missing", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "rainfall_reading" },
-      {},
-    );
-    expect(result).toBeNull();
-  });
-
-  it("returns null when rainfallMm is not a number", () => {
-    const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "rainfall_reading" },
-      { rainfallMm: "lots" },
-    );
-    expect(result).toBeNull();
-  });
-});
-
-// ────────────────────────────────────────────────────────────────
-// Pure maintenance types — all return null
-// ────────────────────────────────────────────────────────────────
-describe("observationFromTaskCompletion — pure maintenance types return null", () => {
-  const maintenanceTypes = [
+describe("observationFromTaskCompletion — reminder-only task types return null", () => {
+  const reminderOnlyTypes = [
+    "rainfall_reading",
+    "camp_inspection",
+    "camp_move",
     "water_point_service",
     "fence_repair",
     "fire_break_maintenance",
     "generic",
   ] as const;
 
-  for (const taskType of maintenanceTypes) {
-    it(`returns null for taskType=${taskType} regardless of payload`, () => {
+  for (const taskType of reminderOnlyTypes) {
+    it(`returns null for taskType=${taskType} with a populated payload`, () => {
+      // Includes rainfallMm / condition / toCampId — the exact keys that
+      // used to drive the off-spec rainfall / camp_condition / camp_move
+      // emissions — to prove the reminder-only contract holds.
       const result = observationFromTaskCompletion(
         { ...baseTask, taskType },
-        { product: "anything", condition: "good", weightKg: 100 },
+        {
+          product: "anything",
+          condition: "good",
+          weightKg: 100,
+          rainfallMm: 12.5,
+          toCampId: "camp-B",
+        },
+      );
+      expect(result).toBeNull();
+    });
+
+    it(`returns null for taskType=${taskType} with an empty payload`, () => {
+      const result = observationFromTaskCompletion(
+        { ...baseTask, taskType },
+        {},
       );
       expect(result).toBeNull();
     });
@@ -389,8 +345,8 @@ describe("observationFromTaskCompletion — null and unknown taskType", () => {
 describe("observationFromTaskCompletion — field passthrough", () => {
   it("passes null animalId when task has no animalId", () => {
     const result = observationFromTaskCompletion(
-      { ...baseTask, taskType: "camp_inspection", animalId: null },
-      { condition: "fair" },
+      { ...baseTask, taskType: "weighing", animalId: null },
+      { weightKg: 275 },
     );
     expect(result).not.toBeNull();
     expect(result!.animalId).toBeNull();
