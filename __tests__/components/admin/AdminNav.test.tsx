@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -248,15 +248,24 @@ describe("AdminNav", () => {
       expect(parsed).toContain("Finance");
     });
 
-    it("restores expanded groups from localStorage on mount", () => {
+    it("restores expanded groups from localStorage on mount", async () => {
+      // The stored preference is applied AFTER mount via a queueMicrotask
+      // inside useEffect (issue #387 hydration fix). We must flush the
+      // microtask queue before asserting the expanded state.
       window.localStorage.setItem(
         "farmtrack-nav-expanded-farm-x",
         JSON.stringify(["Finance", "Compliance"]),
       );
-      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
-      expect(
-        screen.getByRole("button", { name: /^Finance$/i }).getAttribute("aria-expanded"),
-      ).toBe("true");
+      await act(async () => {
+        renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+        // Flush pending microtasks (the queueMicrotask inside useEffect).
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /^Finance$/i }).getAttribute("aria-expanded"),
+        ).toBe("true");
+      });
       expect(
         screen.getByRole("button", { name: /^Compliance$/i }).getAttribute("aria-expanded"),
       ).toBe("true");
