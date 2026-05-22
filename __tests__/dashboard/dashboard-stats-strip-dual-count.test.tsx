@@ -20,10 +20,18 @@
  *     cattle-only / sheep-only / game-only tenants that make up the
  *     majority of the install base.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
 import { FarmModeProvider } from "@/lib/farm-mode";
 import DashboardStatsStrip from "@/components/dashboard/DashboardStatsStrip";
+
+// FarmModeProvider calls `useRouter()` (#365 — `setMode` triggers
+// `router.refresh()` so server components re-fetch on a species toggle).
+// Mock it so the provider can mount outside a Next router context.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/test-farm/dashboard",
+}));
 
 afterEach(() => {
   cleanup();

@@ -9,6 +9,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import type { SpeciesId } from "./species/types";
 
 // ============================================================
@@ -145,14 +146,38 @@ export function FarmModeProvider({
     setStoredMode(farmSlug, mode);
   }, [farmSlug, mode, lastFarmSlug]);
 
-  // Persist mode changes to localStorage
+  // Issue #365 — server components (admin overview "Total Animals", the
+  // camp/map pages, `DashboardContent`) read the active species from the
+  // `farmtrack-mode-<slug>` cookie via `getFarmMode`. Writing that cookie
+  // alone is not enough: the Next App Router serves a CACHED RSC payload
+  // until the cache is explicitly invalidated, so the pre-toggle
+  // species-scoped render keeps showing (e.g. "Total Animals" frozen at the
+  // old count) until a hard reload.
+  //
+  // `router.refresh()` re-fetches the current route's RSC tree WITHOUT a
+  // full page reload — the client tree (and this provider) stay mounted.
+  // Wiring it into `setMode`, right beside the cookie write, makes every
+  // server-rendered page re-fetch with the new species by construction.
+  // This supersedes the per-consumer `useEffect` mode-watchers in
+  // DashboardClient / AdminMapClient / TenantMapClient (those become
+  // redundant; `router.refresh()` is idempotent so they remain harmless).
+  const router = useRouter();
+
+  // Persist mode changes to localStorage + cookie, then invalidate the RSC
+  // cache so server-rendered species-scoped data re-fetches immediately.
   const setMode = useCallback(
     (newMode: FarmMode) => {
       if (!enabledModes.includes(newMode)) return;
+      // No-op guard: re-selecting the active mode must not burn an RSC
+      // re-fetch. `rawMode` is the source of truth the cookie was written
+      // from; comparing against it (not the clamped `mode`) keeps the
+      // guard correct even mid-clamp.
+      if (newMode === rawMode) return;
       setModeState(newMode);
       setStoredMode(farmSlug, newMode);
+      router.refresh();
     },
-    [farmSlug, enabledModes],
+    [farmSlug, enabledModes, rawMode, router],
   );
 
   const value: FarmModeContextValue = {

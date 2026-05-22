@@ -18,10 +18,18 @@
  * Hard requirement: do NOT add `key={farmSlug}` to the provider as a
  * workaround. The fix lives inside the provider.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import { FarmModeProvider, useFarmMode } from "@/lib/farm-mode";
+
+// FarmModeProvider calls `useRouter()` (issue #365 — `setMode` triggers
+// `router.refresh()` so server components re-fetch on a species toggle).
+// Mock it so the provider can mount outside a Next router context.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/farm-a/admin",
+}));
 
 const STORAGE_KEY = (slug: string) => `farmtrack-mode-${slug}`;
 
