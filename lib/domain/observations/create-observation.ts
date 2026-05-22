@@ -45,10 +45,12 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
 
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { getTenantDayRange } from "@/lib/server/tenant-day";
 
 import {
   AnimalNotFoundError,
   CampNotFoundError,
+  DuplicateObservationError,
   InvalidTimestampError,
   InvalidTypeError,
   MobNotFoundError,
@@ -151,6 +153,66 @@ function assertCampConditionComplete(details: string | null | undefined): void {
   }
 }
 
+/**
+ * Issue #366 — rejects a byte-identical duplicate `camp_condition` write.
+ *
+ * Root cause: the only dedup mechanism is the `clientLocalId` upsert
+ * (#206). `clientLocalId` is minted PER FORM MOUNT (`crypto.randomUUID()`
+ * in `CampConditionForm`), so the upsert only collapses retries of ONE
+ * submission. Two separate camp-condition form mounts submitting identical
+ * readings for the same camp on the same day carry two distinct UUIDs —
+ * the upsert sees two keys and writes two byte-identical "Camp condition"
+ * rows. This guard closes that gap.
+ *
+ * Rejects when an existing row has the same camp, the same tenant calendar
+ * day (bucketed via {@link getTenantDayRange} — consistent with the rest
+ * of the codebase's day-bucketing, e.g. `countInspectedToday`), AND a
+ * byte-identical `details` payload.
+ *
+ * The lookup EXCLUDES the new write's own `clientLocalId`: a genuine
+ * offline-sync retry replays the same UUID, so without this exclusion the
+ * retry would find its own first-attempt row and be wrongly rejected —
+ * breaking the #206 idempotency contract. Excluding it means a retry finds
+ * only its own row (filtered out) → falls through to the upsert, which
+ * returns the existing id; a SECOND MOUNT carries a different UUID, so it
+ * sees the first mount's row and is correctly rejected.
+ *
+ * A same-day re-inspection with *different* `details` is a legitimate
+ * second reading: the `details` equality predicate lets it through.
+ */
+async function assertNotDuplicateCampCondition(
+  client: ObservationWriter,
+  input: {
+    camp_id: string;
+    details: string;
+    observedAt: Date;
+    clientLocalId: string | null | undefined;
+  },
+): Promise<void> {
+  const { dayStart, dayEnd } = getTenantDayRange(
+    "Africa/Johannesburg",
+    input.observedAt,
+  );
+  const existing = await client.observation.findFirst({
+    where: {
+      type: "camp_condition",
+      campId: input.camp_id,
+      details: input.details,
+      observedAt: { gte: dayStart, lt: dayEnd },
+      // Retry-safety: never match the new write's own first-attempt row
+      // (a `clientLocalId` retry replays the same UUID). A bare `create`
+      // with no UUID still matches every other row, which is correct.
+      ...(input.clientLocalId
+        ? { clientLocalId: { not: input.clientLocalId } }
+        : {}),
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new DuplicateObservationError(existing.id);
+  }
+}
+
 export interface CreateObservationInput {
   type: string;
   camp_id: string;
@@ -215,6 +277,20 @@ export async function createObservation(
     observedAt = parsed;
   } else {
     observedAt = new Date();
+  }
+
+  // Issue #366 — byte-identical duplicate guard for camp_condition. Runs
+  // BEFORE the upsert/create paths so a second form mount with identical
+  // readings is rejected before any row is written. The lookup excludes
+  // the write's own `clientLocalId`, so a genuine #206 retry still falls
+  // through to the upsert and collapses unchanged.
+  if (input.type === "camp_condition") {
+    await assertNotDuplicateCampCondition(client, {
+      camp_id: input.camp_id,
+      details: input.details ?? "",
+      observedAt,
+      clientLocalId: input.clientLocalId,
+    });
   }
 
   // Load the camp once with both its existence (for the NotFound guard)

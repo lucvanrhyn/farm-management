@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/mobs/errors";
 import {
   CampNotFoundError,
+  DuplicateObservationError,
   InvalidTimestampError,
   InvalidTypeError,
   ObservationNotFoundError,
@@ -191,6 +192,20 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   if (err instanceof CampConditionFieldRequiredError) {
     return NextResponse.json(
       { error: err.code, details: { field: err.field } },
+      { status: 422 },
+    );
+  }
+  // Issue #366 — byte-identical duplicate camp_condition. 422: per the
+  // offline-sync terminal-status contract (`isTerminalStatus`), a payload
+  // the server "understood and definitively rejected" is a poison message
+  // — a duplicate's identical payload re-rejects identically forever, so a
+  // blind retry is futile and the row must be discardable, not looped. The
+  // body carries `existingId` + the typed code so `FailedSyncDialog`
+  // surfaces a clear "already logged" message rather than a generic
+  // poison-row notice.
+  if (err instanceof DuplicateObservationError) {
+    return NextResponse.json(
+      { error: err.code, details: { existingId: err.existingId } },
       { status: 422 },
     );
   }

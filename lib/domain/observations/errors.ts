@@ -23,6 +23,7 @@ export const ANIMAL_NOT_FOUND = "ANIMAL_NOT_FOUND" as const;
 export const MOB_NOT_FOUND = "MOB_NOT_FOUND" as const;
 export const INVALID_TYPE = "INVALID_TYPE" as const;
 export const INVALID_TIMESTAMP = "INVALID_TIMESTAMP" as const;
+export const DUPLICATE_OBSERVATION = "DUPLICATE_OBSERVATION" as const;
 
 /**
  * No observation with the given id exists in the tenant. Wire: 404
@@ -127,5 +128,41 @@ export class InvalidTimestampError extends Error {
     super(`Invalid created_at timestamp: ${received}`);
     this.name = "InvalidTimestampError";
     this.received = received;
+  }
+}
+
+/**
+ * Issue #366 — a `camp_condition` write is a byte-identical duplicate of
+ * an observation already on the row for the same camp on the same tenant
+ * calendar day.
+ *
+ * The `clientLocalId` upsert (#206) only collapses retries of ONE
+ * submission — it mints a fresh UUID per form mount, so two separate
+ * camp-condition form mounts submitting identical readings carry two
+ * distinct keys and produce two byte-identical "Camp condition" rows.
+ * This error is thrown by `createObservation` after a same camp + same
+ * day + identical `details` row is found (excluding the new write's own
+ * `clientLocalId`, so a genuine retry is never self-rejected). A same-day
+ * re-inspection with *different* `details` is a legitimate second reading
+ * and is NOT rejected.
+ *
+ * Wire: 422 `{ error: "DUPLICATE_OBSERVATION", details: { existingId } }`.
+ * 422 (not 409) because the offline-sync `isTerminalStatus` classifier
+ * treats a definitively-rejected payload as a terminal poison message —
+ * and a duplicate's identical payload re-rejects identically forever, so
+ * a blind retry is futile and the failed row must be discardable. The
+ * logger UI keys off the typed code to show a clear "already logged"
+ * message instead of the generic poison-row notice.
+ */
+export class DuplicateObservationError extends Error {
+  readonly code = DUPLICATE_OBSERVATION;
+  /** The id of the observation already on the row. */
+  readonly existingId: string;
+  constructor(existingId: string) {
+    super(
+      `Duplicate observation: an identical camp_condition was already logged today (${existingId})`,
+    );
+    this.name = "DuplicateObservationError";
+    this.existingId = existingId;
   }
 }

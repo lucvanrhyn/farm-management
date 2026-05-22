@@ -62,9 +62,61 @@ interface FailedRowView {
    * "Retry" can never drain it. Terminal rows get a Discard control instead.
    */
   isTerminal: boolean;
+  /**
+   * Issue #366 — the row failed because `createObservation` rejected it as a
+   * byte-identical duplicate camp_condition (409 DUPLICATE_OBSERVATION).
+   * Surfaced with a clear "already logged" message + a Discard control: the
+   * row holds the identical payload so a blind retry is futile.
+   */
+  isDuplicate: boolean;
+  /** Issue #366 — the "already logged" copy when `isDuplicate` is true. */
+  duplicateMessage: string;
 }
 
 const ERROR_DISPLAY_MAX_CHARS = 120;
+
+/**
+ * Issue #366 — recognise a byte-identical duplicate camp_condition
+ * rejection in a failed row's diagnostics.
+ *
+ * `createObservation` rejects a second-mount duplicate by throwing
+ * `DuplicateObservationError`; the API mapper renders it as
+ * `422 { error: "DUPLICATE_OBSERVATION", details: { existingId } }`, and
+ * the sync manager records that response body verbatim in `lastError`.
+ *
+ * 422 already makes the row terminal under `isTerminalStatus` (a duplicate
+ * is a poison message — its identical payload re-rejects identically
+ * forever), so the existing Discard machinery handles it. This helper only
+ * REFINES the message: a generic terminal poison row says "the data needs
+ * fixing on a fresh entry", which is wrong for a duplicate — the data was
+ * already saved. The duplicate copy: a clear "already logged" notice.
+ *
+ * Pure + exported so the camp_condition duplicate-display contract is
+ * unit-testable without mounting the IDB-bound dialog.
+ */
+export function describeDuplicateFailure(row: {
+  lastError: string | null;
+  lastStatusCode: number | null;
+}): { isDuplicate: boolean; message: string } {
+  const NOT_DUP = { isDuplicate: false, message: '' };
+  if (row.lastStatusCode !== 422 || !row.lastError) return NOT_DUP;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.lastError);
+  } catch {
+    return NOT_DUP;
+  }
+  const code =
+    parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>).error
+      : undefined;
+  if (code !== 'DUPLICATE_OBSERVATION') return NOT_DUP;
+  return {
+    isDuplicate: true,
+    message:
+      'This camp condition was already logged today — the duplicate copy was not saved. Discard this stuck entry.',
+  };
+}
 
 function truncateForDisplay(s: string | null): string {
   if (!s) return '';
@@ -115,6 +167,13 @@ function observationTypeLabel(type: string): string {
 }
 
 function mapObservation(o: PendingObservation): FailedRowView {
+  // Issue #366 — a 409 DUPLICATE_OBSERVATION rejection is non-retryable in
+  // practice (the row holds the identical payload). Surface it with the
+  // "already logged" message and route it through the Discard control.
+  const dup = describeDuplicateFailure({
+    lastError: o.lastError,
+    lastStatusCode: o.lastStatusCode,
+  });
   return {
     kind: 'observation',
     localId: o.local_id!,
@@ -126,6 +185,8 @@ function mapObservation(o: PendingObservation): FailedRowView {
     attempts: o.attempts,
     firstFailedAt: o.firstFailedAt,
     isTerminal: isTerminalFailure(o),
+    isDuplicate: dup.isDuplicate,
+    duplicateMessage: dup.message,
   };
 }
 
@@ -141,6 +202,8 @@ function mapAnimal(a: PendingAnimalCreate): FailedRowView {
     attempts: a.attempts,
     firstFailedAt: a.firstFailedAt,
     isTerminal: isTerminalFailure(a),
+    isDuplicate: false,
+    duplicateMessage: '',
   };
 }
 
@@ -156,6 +219,8 @@ function mapCover(c: PendingCoverReading): FailedRowView {
     attempts: c.attempts,
     firstFailedAt: c.firstFailedAt,
     isTerminal: isTerminalFailure(c),
+    isDuplicate: false,
+    duplicateMessage: '',
   };
 }
 
@@ -261,7 +326,9 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       // Issue #324 — skip terminal poison rows. The re-queue writers no-op
       // on them anyway; iterating them here would falsely imply they were
       // re-armed. They stay visible with their own Discard control.
-      const snapshot = rows.filter((r) => !r.isTerminal);
+      // Issue #366 — also skip duplicate-rejected rows: the row holds the
+      // identical payload, so a re-POST is rejected as a duplicate again.
+      const snapshot = rows.filter((r) => !r.isTerminal && !r.isDuplicate);
       for (const row of snapshot) {
         await retryRow(row);
       }
@@ -360,7 +427,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                     {row.subjectLabel}
                   </span>
                 </div>
-                {row.isTerminal ? (
+                {row.isTerminal || row.isDuplicate ? (
                   <button
                     type="button"
                     data-testid={`discard-row-${row.kind}-${row.localId}`}
@@ -384,14 +451,27 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                   </button>
                 )}
               </div>
-              {row.isTerminal && (
+              {/* Issue #366 — a byte-identical duplicate gets its own clear
+                  "already logged" copy; the generic terminal message is for
+                  the malformed-payload poison-row case. */}
+              {row.isDuplicate ? (
                 <p
+                  data-testid={`duplicate-msg-${row.kind}-${row.localId}`}
                   className="text-[11px] font-medium"
                   style={{ color: '#E0A050' }}
                 >
-                  Rejected by the server — won&apos;t retry. The data needs
-                  fixing on a fresh entry; discard this stuck copy.
+                  {row.duplicateMessage}
                 </p>
+              ) : (
+                row.isTerminal && (
+                  <p
+                    className="text-[11px] font-medium"
+                    style={{ color: '#E0A050' }}
+                  >
+                    Rejected by the server — won&apos;t retry. The data needs
+                    fixing on a fresh entry; discard this stuck copy.
+                  </p>
+                )
               )}
               <div
                 className="text-xs flex flex-wrap gap-x-3 gap-y-1"
