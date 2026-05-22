@@ -299,8 +299,11 @@ export async function getCachedDashboardOverview(
             countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
           ),
           // Issue #258: pass tenant TZ so "today" matches every other tile.
+          // Issue #363: camp inspections are NULL-species observations —
+          // countInspectedToday is intentionally mode-independent, so
+          // `currentMode` is no longer threaded through.
           settle("countInspectedToday", 0, () =>
-            countInspectedToday(prisma, currentMode, tz),
+            countInspectedToday(prisma, tz),
           ),
           settle("getRecentHealthObservations", [], () =>
             getRecentHealthObservations(prisma, 8, currentMode),
