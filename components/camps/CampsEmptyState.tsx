@@ -69,14 +69,18 @@ export default function CampsEmptyState({
       </div>
 
       <h2 className="text-lg font-semibold" style={{ color: "#1C1815" }}>
-        No {speciesLabel} camps yet
+        {/* #384: pin the space with {" "} — a bare literal space after an
+            {expression} is stripped by the build-time SWC transform (same
+            class as #369 / #382). */}
+        No {speciesLabel}{" "}camps yet
       </h2>
       <p
         className="text-sm max-w-md"
         style={{ color: "#6A4E30", lineHeight: 1.55 }}
       >
-        You haven&apos;t added any {speciesLabel} camps. Camps are the grazing
-        paddocks your {speciesLabel} rotate through — add your first one to
+        {/* #384: two more {" "} pins — same SWC strip risk. */}
+        You haven&apos;t added any {speciesLabel}{" "}camps. Camps are the grazing
+        paddocks your {speciesLabel}{" "}rotate through — add your first one to
         start mapping boundaries, logging conditions and planning rotations.
       </p>
 
@@ -111,7 +115,8 @@ export default function CampsEmptyState({
           boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
         }}
       >
-        Add your first {speciesLabel} camp
+        {/* #384: CTA button — same {" "} pin. */}
+        Add your first {speciesLabel}{" "}camp
         <span aria-hidden="true">→</span>
       </Link>
     </div>
