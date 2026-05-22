@@ -24,6 +24,7 @@ import {
 import {
   AnimalNotFoundError,
   CampNotFoundError,
+  DuplicateObservationError,
   InvalidTimestampError,
   InvalidTypeError,
   MobNotFoundError,
@@ -32,13 +33,18 @@ import {
 describe("createObservation(prisma, input)", () => {
   const observationCreate = vi.fn();
   const observationUpsert = vi.fn();
+  const observationFindFirst = vi.fn();
   const campFindFirst = vi.fn();
   const animalFindUnique = vi.fn();
   const mobFindUnique = vi.fn();
   // Cast through `unknown` — the mock only stubs the surface
   // `createObservation` touches, not the full PrismaClient API.
   const prisma = {
-    observation: { create: observationCreate, upsert: observationUpsert },
+    observation: {
+      create: observationCreate,
+      upsert: observationUpsert,
+      findFirst: observationFindFirst,
+    },
     camp: { findFirst: campFindFirst },
     animal: { findUnique: animalFindUnique },
     mob: { findUnique: mobFindUnique },
@@ -47,9 +53,13 @@ describe("createObservation(prisma, input)", () => {
   beforeEach(() => {
     observationCreate.mockReset();
     observationUpsert.mockReset();
+    observationFindFirst.mockReset();
     campFindFirst.mockReset();
     animalFindUnique.mockReset();
     mobFindUnique.mockReset();
+    // Default: no pre-existing duplicate. Tests that exercise the #366
+    // duplicate guard override this per-case.
+    observationFindFirst.mockResolvedValue(null);
   });
 
   it("throws InvalidTypeError when the type is not in the allowlist", async () => {
@@ -381,6 +391,154 @@ describe("createObservation(prisma, input)", () => {
       });
 
       expect(observationCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Issue #366 — byte-identical duplicate camp_condition guard.
+  //
+  // Root cause: the only dedup mechanism is the `clientLocalId` upsert
+  // (#206). `clientLocalId` is minted per FORM MOUNT, so two separate
+  // mounts of the camp-condition form submitting identical readings carry
+  // two distinct UUIDs — the upsert sees two keys and writes two
+  // byte-identical "Camp condition" rows for the same camp on the same day.
+  // The guard rejects a write when an existing row has the same camp, the
+  // same observation day, AND an identical `details` payload — while a
+  // same-day re-inspection with *different* details (a legitimate second
+  // reading) and a genuine `clientLocalId` retry both still go through.
+  describe("camp_condition byte-identical duplicate guard (#366)", () => {
+    const DETAILS = JSON.stringify({
+      grazing: "Good",
+      water: "Full",
+      fence: "Intact",
+      logged_by: "u@x.co.za",
+    });
+    const DAY = "2026-05-22T09:00:00.000Z";
+
+    beforeEach(() => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
+      observationCreate.mockResolvedValue({ id: "obs-new" });
+      observationUpsert.mockResolvedValue({ id: "obs-new" });
+    });
+
+    type DupCase = {
+      name: string;
+      /** The row `observation.findFirst` resolves to (null = no match). */
+      existing: { id: string; clientLocalId: string | null } | null;
+      input: {
+        details: string;
+        created_at: string;
+        clientLocalId?: string | null;
+      };
+      expect: "reject" | "accept";
+    };
+
+    const cases: DupCase[] = [
+      {
+        name: "rejects same camp + same day + identical details (second mount)",
+        existing: { id: "obs-1", clientLocalId: "mount-1" },
+        input: { details: DETAILS, created_at: DAY, clientLocalId: "mount-2" },
+        expect: "reject",
+      },
+      {
+        name: "accepts same camp + same day with DIFFERENT details (legit re-reading)",
+        existing: null,
+        input: {
+          details: JSON.stringify({
+            grazing: "Poor",
+            water: "Low",
+            fence: "Damaged",
+            logged_by: "u@x.co.za",
+          }),
+          created_at: DAY,
+          clientLocalId: "mount-2",
+        },
+        expect: "accept",
+      },
+      {
+        name: "accepts identical details on a DIFFERENT day",
+        existing: null,
+        input: {
+          details: DETAILS,
+          created_at: "2026-05-23T09:00:00.000Z",
+          clientLocalId: "mount-2",
+        },
+        expect: "accept",
+      },
+      {
+        name: "accepts a clientLocalId retry — findFirst excludes the row's own clientLocalId",
+        existing: null,
+        input: { details: DETAILS, created_at: DAY, clientLocalId: "mount-1" },
+        expect: "accept",
+      },
+    ];
+
+    for (const c of cases) {
+      it(c.name, async () => {
+        observationFindFirst.mockResolvedValue(c.existing);
+
+        const call = createObservation(prisma, {
+          type: "camp_condition",
+          camp_id: "A",
+          details: c.input.details,
+          created_at: c.input.created_at,
+          loggedBy: "u@x.co.za",
+          clientLocalId: c.input.clientLocalId ?? null,
+        });
+
+        if (c.expect === "reject") {
+          await expect(call).rejects.toBeInstanceOf(DuplicateObservationError);
+          expect(observationCreate).not.toHaveBeenCalled();
+          expect(observationUpsert).not.toHaveBeenCalled();
+        } else {
+          await expect(call).resolves.toEqual({
+            success: true,
+            id: "obs-new",
+          });
+        }
+      });
+    }
+
+    it("buckets the duplicate query by the tenant calendar day of observedAt", async () => {
+      observationFindFirst.mockResolvedValue(null);
+
+      await createObservation(prisma, {
+        type: "camp_condition",
+        camp_id: "A",
+        details: DETAILS,
+        created_at: DAY,
+        loggedBy: "u@x.co.za",
+        clientLocalId: "mount-2",
+      });
+
+      // The guard must scope the lookup to: this camp, this exact details
+      // payload, the day-bucket window, the camp_condition type, and must
+      // exclude the row's own clientLocalId so a genuine retry is not
+      // self-rejected.
+      expect(observationFindFirst).toHaveBeenCalledTimes(1);
+      const where = observationFindFirst.mock.calls[0][0].where;
+      expect(where.type).toBe("camp_condition");
+      expect(where.campId).toBe("A");
+      expect(where.details).toBe(DETAILS);
+      expect(where.observedAt.gte).toBeInstanceOf(Date);
+      expect(where.observedAt.lt).toBeInstanceOf(Date);
+      expect(where.observedAt.lt.getTime()).toBeGreaterThan(
+        where.observedAt.gte.getTime(),
+      );
+      // Retry-safety: the new submission's own clientLocalId is filtered out.
+      expect(where.clientLocalId).toEqual({ not: "mount-2" });
+    });
+
+    it("does not run the duplicate guard for non-camp_condition types", async () => {
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        details: JSON.stringify({ status: "Normal" }),
+        created_at: DAY,
+        loggedBy: "u@x.co.za",
+        clientLocalId: "mount-2",
+      });
+
+      expect(observationFindFirst).not.toHaveBeenCalled();
     });
   });
 
