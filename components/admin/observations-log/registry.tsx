@@ -527,12 +527,6 @@ export const OBSERVATION_REGISTRY: { readonly [T in ObservationType]: RegistryEn
     detailsForm: ScrotalCircumferenceForm,
     editable: true,
   },
-  reproduction: {
-    label: "Reproduction",
-    parseDetails: (raw) => parseReproduction(safeParse(raw)),
-    detailsForm: ReproductionFields,
-    editable: true,
-  },
   drying_off: {
     label: "Drying Off",
     parseDetails: (raw) => parseDryingOff(safeParse(raw)),
@@ -607,16 +601,52 @@ export const OBSERVATION_REGISTRY: { readonly [T in ObservationType]: RegistryEn
   },
 };
 
+/**
+ * Legacy / non-persistence-canonical observation types that still surface
+ * in the admin timeline from historical tenant data or the legacy
+ * `lib/types.ts` UI union. These keys are NOT in
+ * `OBSERVATION_TYPE_LIST`, so the mapped-type structural lock excludes
+ * them. They live here so the timeline + EditModal can still resolve a
+ * label / summary / form without falling back to the dead
+ * `"Details recorded"` placeholder.
+ *
+ * Adding a new persistence-canonical type goes in `OBSERVATION_REGISTRY`
+ * above. Only put a type here if it is genuinely historical and cannot
+ * be promoted into the canonical list (e.g. it has no `createObservation`
+ * write path).
+ */
+export const LEGACY_OBSERVATION_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
+  reproduction: {
+    label: "Reproduction",
+    parseDetails: (raw) => parseReproduction(safeParse(raw)),
+    detailsForm: ReproductionFields,
+    editable: true,
+  },
+};
+
 // ── Public helpers ──────────────────────────────────────────────────────────
 
 /**
+ * Look up a registry entry by raw type string. Checks the canonical
+ * `OBSERVATION_REGISTRY` first, then falls back to
+ * `LEGACY_OBSERVATION_REGISTRY` for historical types not in the
+ * persistence allowlist. Returns `undefined` for genuinely unknown
+ * types.
+ */
+function lookupEntry(type: string): RegistryEntry | undefined {
+  const canonical = (OBSERVATION_REGISTRY as Record<string, RegistryEntry | undefined>)[type];
+  if (canonical) return canonical;
+  return LEGACY_OBSERVATION_REGISTRY[type];
+}
+
+/**
  * Friendly label for the type badge. Returns the raw type string for
- * any value not in the registry — that path is locked closed by the
- * arch test, so it only fires for unknown legacy data (where the raw
- * identifier IS the most useful UI signal).
+ * any value not in either registry — that path is locked closed by the
+ * arch test for canonical types, so it only fires for unknown legacy
+ * data (where the raw identifier IS the most useful UI signal).
  */
 export function getObservationTypeLabel(type: string): string {
-  const entry = (OBSERVATION_REGISTRY as Record<string, RegistryEntry | undefined>)[type];
+  const entry = lookupEntry(type);
   return entry?.label ?? type;
 }
 
@@ -626,7 +656,7 @@ export function getObservationTypeLabel(type: string): string {
  * the `"Details recorded"` placeholder.
  */
 export function parseObservationDetails(type: string, raw: string): string {
-  const entry = (OBSERVATION_REGISTRY as Record<string, RegistryEntry | undefined>)[type];
+  const entry = lookupEntry(type);
   if (entry) return entry.parseDetails(raw);
   // Fallback for legacy types not in the canonical list — summarise any
   // recognisable keys but never emit the dead "Details recorded" string.
@@ -657,13 +687,13 @@ export function parseObservationDetails(type: string, raw: string): string {
  * Returns `ReadOnlyDetails` for unknown legacy types.
  */
 export function getObservationDetailsForm(type: string): ComponentType<FieldProps> {
-  const entry = (OBSERVATION_REGISTRY as Record<string, RegistryEntry | undefined>)[type];
+  const entry = lookupEntry(type);
   return (entry?.detailsForm ?? ReadOnlyDetails) as ComponentType<FieldProps>;
 }
 
 /** Whether the modal exposes Save (true) or is read-only (false). */
 export function isObservationEditable(type: string): boolean {
-  const entry = (OBSERVATION_REGISTRY as Record<string, RegistryEntry | undefined>)[type];
+  const entry = lookupEntry(type);
   return Boolean(entry?.editable);
 }
 
