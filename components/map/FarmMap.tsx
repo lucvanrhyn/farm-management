@@ -15,13 +15,19 @@
  *   - Long-press handler STUB (desktop contextmenu + mobile 600ms timer);
  *     Wave 3E wires the Create-Task sheet onto `onLongPress`.
  *
+ * Shell state model (issue #392 / PRD #389 Module 2):
+ *   A single `FarmMapMode` discriminated union (`./farm-map-mode.ts`) drives
+ *   every overlay/panel visibility check. Mutual exclusion is enforced at
+ *   the reducer level — only one of `drawing-boundary`, `naming-boundary`,
+ *   or `moving-mob` can be active at a time. The legacy independent
+ *   booleans (`isDrawing`, `showDrawModal`, `moveMode.active`) are gone.
+ *
  * Hard constraints:
- *   - ≤ 400 LOC.
  *   - No cross-layer imports.
  *   - No behaviour regression when all non-camp layers are toggled off.
  */
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useReducer, useCallback, useMemo } from "react";
 import Map, {
   GeolocateControl,
   NavigationControl,
@@ -41,7 +47,8 @@ import DrawControl from "./DrawControl";
 import MoveModePanel from "./MoveModePanel";
 import CampPopupContent from "./CampPopupContent";
 import { useLongPress } from "./useLongPress";
-import { useMoveMode } from "./useMoveMode";
+import type { MobInfo, MoveModeActions } from "./useMoveMode";
+import { farmMapModeReducer, IDLE, type MobMovePhase } from "./farm-map-mode";
 
 import LayerToggle, { useLayerState } from "./LayerToggle";
 import CampLayer, {
@@ -74,11 +81,6 @@ interface PopupInfo {
   daysSinceInspection: number | null;
   longitude: number;
   latitude: number;
-}
-
-interface DrawnBoundary {
-  geojson: string;
-  hectares: number;
 }
 
 interface Props {
@@ -123,12 +125,62 @@ export default function FarmMap({
   const mapRef = useRef<MapRef>(null);
   const [mapReady, setMapReady] = useState(false);
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [drawnBoundary, setDrawnBoundary] = useState<DrawnBoundary | null>(null);
-  const [showDrawModal, setShowDrawModal] = useState(false);
   const [localOverlay, setLocalOverlay] = useState<OverlayMode>("grazing");
   const [layerState, updateLayers] = useLayerState();
-  const [moveMode, moveModeActions] = useMoveMode();
+
+  // Single discriminated-union state for the FarmMap shell. The reducer
+  // enforces mutual exclusion — only one of (drawing-boundary,
+  // naming-boundary, moving-mob) can be active at a time, so the panel
+  // overlap from issue #392 is impossible to render.
+  const [mode, dispatch] = useReducer(farmMapModeReducer, IDLE);
+  const isDrawing = mode.kind === "drawing-boundary";
+  const isMovingMob = mode.kind === "moving-mob";
+  const mobPhase: MobMovePhase = isMovingMob ? mode.phase : { tag: "idle" };
+  const sourceCampId: string | null =
+    isMovingMob && mobPhase.tag !== "idle" ? mobPhase.campId : null;
+
+  // Stable MoveModeActions facade so MoveModePanel's interface contract
+  // doesn't have to change. All actions route through the unified reducer.
+  const moveModeActions: MoveModeActions = useMemo(
+    () => ({
+      toggleActive: () => dispatch({ type: "startMobMove" }),
+      selectSourceCamp: (campId: string) =>
+        dispatch({
+          type: "updateMobPhase",
+          phase: { tag: "source_selected", campId },
+        }),
+      selectMob: (mob: MobInfo) =>
+        dispatch({
+          type: "updateMobPhase",
+          phase: { tag: "mob_selected", campId: mob.current_camp, mob },
+        }),
+      selectDestCamp: (destCampId: string) => {
+        // Only valid mid-flow; the reducer ignores updates from idle, but
+        // we want the type-narrow available here.
+        if (mobPhase.tag === "mob_selected" && destCampId !== mobPhase.campId) {
+          dispatch({
+            type: "updateMobPhase",
+            phase: {
+              tag: "dest_selected",
+              campId: mobPhase.campId,
+              mob: mobPhase.mob,
+              destCampId,
+            },
+          });
+        }
+      },
+      cancelMove: () => dispatch({ type: "cancel" }),
+      resetToSourceSelect: () => {
+        if (mobPhase.tag !== "idle") {
+          dispatch({
+            type: "updateMobPhase",
+            phase: { tag: "source_selected", campId: mobPhase.campId },
+          });
+        }
+      },
+    }),
+    [mobPhase]
+  );
 
   useLongPress(mapRef, onLongPress);
 
@@ -183,14 +235,13 @@ export default function FarmMap({
       const payload = extractCampClickPayload(e);
       if (!payload) return;
 
-      if (moveMode.active) {
-        const { phase } = moveMode;
-        if (phase.tag === "idle") {
+      if (isMovingMob) {
+        if (mobPhase.tag === "idle") {
           moveModeActions.selectSourceCamp(payload.campId);
-        } else if (phase.tag === "source_selected") {
-          if (payload.campId !== phase.campId) moveModeActions.selectSourceCamp(payload.campId);
-        } else if (phase.tag === "mob_selected") {
-          if (payload.campId !== phase.campId) moveModeActions.selectDestCamp(payload.campId);
+        } else if (mobPhase.tag === "source_selected") {
+          if (payload.campId !== mobPhase.campId) moveModeActions.selectSourceCamp(payload.campId);
+        } else if (mobPhase.tag === "mob_selected") {
+          if (payload.campId !== mobPhase.campId) moveModeActions.selectDestCamp(payload.campId);
         }
         return;
       }
@@ -198,7 +249,7 @@ export default function FarmMap({
       setPopupInfo(payload);
       onCampClick(payload.campId);
     },
-    [onCampClick, moveMode, moveModeActions]
+    [onCampClick, isMovingMob, mobPhase, moveModeActions]
   );
 
   // ── Draw handlers ─────────────────────────────────────────────────────────
@@ -208,29 +259,29 @@ export default function FarmMap({
     if (!feature || !feature.geometry) return;
     const fc: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [feature] };
     const hectares = parseFloat((area(fc) / 10000).toFixed(2));
-    setDrawnBoundary({ geojson: JSON.stringify(feature.geometry), hectares });
-    setIsDrawing(false);
-    setShowDrawModal(true);
+    dispatch({
+      type: "boundaryDrawn",
+      geojson: JSON.stringify(feature.geometry),
+      hectares,
+    });
   }, []);
 
   const handleDrawDelete = useCallback(() => {
-    setDrawnBoundary(null);
-    setShowDrawModal(false);
+    dispatch({ type: "cancel" });
   }, []);
 
   const handleModalConfirm = useCallback(
     (campId: string | null, campName?: string) => {
-      if (!drawnBoundary) return;
-      setShowDrawModal(false);
-      setDrawnBoundary(null);
-      onBoundaryDrawn?.(campId, drawnBoundary.geojson, drawnBoundary.hectares, campName);
+      if (mode.kind !== "naming-boundary") return;
+      const { geojson, hectares } = mode;
+      dispatch({ type: "completeBoundary", geojson, hectares });
+      onBoundaryDrawn?.(campId, geojson, hectares, campName);
     },
-    [drawnBoundary, onBoundaryDrawn]
+    [mode, onBoundaryDrawn]
   );
 
   const handleModalCancel = useCallback(() => {
-    setShowDrawModal(false);
-    setDrawnBoundary(null);
+    dispatch({ type: "cancel" });
   }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -257,7 +308,7 @@ export default function FarmMap({
           <CampLayer
             campData={campData}
             overlayMode={activeOverlay}
-            highlightedCampId={moveMode.sourceCampId ?? null}
+            highlightedCampId={sourceCampId}
           />
         )}
         {mapReady && layerState.taskPins && farmSlug && (
@@ -297,9 +348,9 @@ export default function FarmMap({
       {/* Eskom banner (not a Mapbox layer — absolutely positioned above map). */}
       {layerState.eskomBanner && <EskomBannerLayer areaId={eskomAreaId} />}
 
-      {moveMode.active && (
+      {isMovingMob && (
         <MoveModePanel
-          phase={moveMode.phase}
+          phase={mobPhase}
           campNameMap={campNameMap}
           actions={moveModeActions}
           onMoveDone={moveModeActions.cancelMove}
@@ -352,23 +403,23 @@ export default function FarmMap({
 
       <div style={{ position: "absolute", bottom: 24, right: 200, zIndex: 10, display: "flex", gap: 8 }}>
         <button
-          onClick={moveModeActions.toggleActive}
+          onClick={() => dispatch({ type: "startMobMove" })}
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "8px 14px", borderRadius: 8, fontSize: 12,
             fontFamily: "var(--font-sans)", fontWeight: 500,
-            background: moveMode.active ? "rgba(196,144,48,0.2)" : "rgba(36,28,20,0.88)",
-            border: moveMode.active ? "1px solid rgba(196,144,48,0.5)" : "1px solid rgba(140,100,60,0.35)",
-            color: moveMode.active ? "#C49030" : "#D2B48C",
+            background: isMovingMob ? "rgba(196,144,48,0.2)" : "rgba(36,28,20,0.88)",
+            border: isMovingMob ? "1px solid rgba(196,144,48,0.5)" : "1px solid rgba(140,100,60,0.35)",
+            color: isMovingMob ? "#C49030" : "#D2B48C",
             cursor: "pointer", backdropFilter: "blur(6px)", transition: "all 0.2s",
           }}
         >
           <span style={{ fontSize: 14 }}>⇄</span>
-          {moveMode.active ? "Exit Move" : "Move Mob"}
+          {isMovingMob ? "Exit Move" : "Move Mob"}
         </button>
 
         <button
-          onClick={() => setIsDrawing((v) => !v)}
+          onClick={() => dispatch({ type: "startDrawing" })}
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "8px 14px", borderRadius: 8, fontSize: 12,
@@ -384,9 +435,9 @@ export default function FarmMap({
         </button>
       </div>
 
-      {showDrawModal && drawnBoundary && (
+      {mode.kind === "naming-boundary" && (
         <DrawCampModal
-          hectares={drawnBoundary.hectares}
+          hectares={mode.hectares}
           campsWithoutBoundary={campsWithoutBoundary}
           onConfirm={handleModalConfirm}
           onCancel={handleModalCancel}
