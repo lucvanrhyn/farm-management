@@ -13,8 +13,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
-import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { CampData } from "@/components/map/layers/CampLayer";
 import AdminMapClient from "./AdminMapClient";
 
@@ -46,17 +45,18 @@ export default async function AdminMapPage({
     );
   }
 
-  // Wave 233: camp markers are filtered by FarmMode (PRD #222 / issue #224).
-  // Route the camp read through the species-scoped facade so a sheep-mode
-  // tenant sees only sheep paddocks on the map (and vice versa). Cookie is
-  // written by FarmModeProvider; AdminMapClient calls `router.refresh()` on
-  // mode flips so this server fetch re-runs without a full page reload.
-  const mode = await getFarmMode(farmSlug);
+  // A physical camp grazes whatever species is on it — camps are NOT a
+  // per-species concept (issue #364). The admin map must show every camp
+  // in every FarmMode, so the camp list is read through the cross-species
+  // door. (Wave 233 originally routed this through `scoped(prisma, mode)`,
+  // which made a sheep-mode tenant see "0 camps" on a cattle-tagged farm.)
   const [settings, camps] = await Promise.all([
     prisma.farmSettings.findFirst({
       select: { latitude: true, longitude: true },
     }),
-    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({
+      orderBy: { campName: "asc" },
+    }),
   ]);
 
   const campData: CampData[] = camps.map((c) => ({

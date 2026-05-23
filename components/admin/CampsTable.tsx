@@ -1,5 +1,7 @@
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { Camp } from "@/lib/types";
 import CampsTableClient, { type CampRow } from "./CampsTableClient";
 
@@ -7,15 +9,22 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
 
+  const mode = await getFarmMode(farmSlug);
+
   const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
     getLatestCampConditions(prisma),
     // cross-species by design: camps overview totals every species per camp.
-    prisma.animal.groupBy({
+    // crossSpecies() forwards args verbatim; the facade returns Prisma's
+    // broadest groupBy shape (documented trade-off) so re-narrow to what
+    // this query's by/_count selection produces — behaviour-identical.
+    crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["currentCamp"],
       where: { currentCamp: { in: camps.map((c) => c.camp_id) }, status: "Active" },
       _count: { _all: true },
-    }),
-    prisma.camp.findMany({
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; _count: { _all: number } }>
+    >,
+    scoped(prisma, mode).camp.findMany({
       select: {
         campId: true,
         veldType: true,

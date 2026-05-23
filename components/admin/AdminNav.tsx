@@ -489,12 +489,40 @@ export default function AdminNav({
   const activeGroupLabel: string =
     groups.find((g) => g.links.some((l) => l.isActive))?.label ?? "Overview";
 
-  // User's collapsed/expanded preferences. Lazy initializer reads localStorage
-  // on first client render (SSR-safe — readStoredExpanded returns null on the server).
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const stored = readStoredExpanded(farmSlug);
-    return new Set<string>(stored ?? [activeGroupLabel]);
-  });
+  // React #418 hydration fix (issue #387):
+  // The initializer MUST produce the same value as the server render so that
+  // the client's first render (before any effect runs) matches the server HTML
+  // byte-for-byte. On the server `readStoredExpanded` returns null (no `window`),
+  // so the server always renders `new Set([activeGroupLabel])`. Previously the
+  // client's first render called `readStoredExpanded` synchronously here and
+  // could produce a *different* set when the user had stored a preference —
+  // different panels were MOUNTED (structural DOM divergence) → React #418.
+  //
+  // Fix: seed with the server-equivalent value; apply the stored preference
+  // AFTER mount in the effect below (using queueMicrotask per the repo's
+  // no-sync-setState-in-effect lint rule, mirroring useHasMounted in
+  // lib/hooks/use-client-time.ts).
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set<string>([activeGroupLabel]),
+  );
+
+  // Apply the persisted preference after mount. queueMicrotask defers the
+  // setState off the synchronous effect body (lint rule: no synchronous
+  // setState inside useEffect — cascading-render hazard). The microtask
+  // lands before paint so there is no visible placeholder flash; framer-motion
+  // AnimatePresence will play its normal enter animation when the preference
+  // causes groups to open/close.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const stored = readStoredExpanded(farmSlug);
+      if (stored) setExpanded(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [farmSlug]);
 
   // Ensure the active group is always visible — derived in render, no effect needed.
   // This avoids any synchronous setState in an effect body (lint rule violation).

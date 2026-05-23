@@ -23,6 +23,9 @@ import React from 'react';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/trio-b/logger',
+  // FarmModeProvider calls `useRouter()` (#365 — `setMode` triggers
+  // `router.refresh()` so server components re-fetch on a species toggle).
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 // Capture every refreshCachedData call so we can verify the species arg.

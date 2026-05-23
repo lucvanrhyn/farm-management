@@ -5,12 +5,25 @@
  * helper at `lib/server/api-errors.ts` maps these onto canonical HTTP
  * responses so the wire shape stays backward-compatible with the
  * pre-Wave-C consumers (offline-sync queue, admin UI, audit walker).
+ *
+ * ADR-0006 — `AnimalNotFoundError` / `MobNotFoundError` (added in this
+ * wave) are *FK-violation* errors thrown by the species-stamping
+ * waterfall inside `createObservation` when an `animal_id` / `mob_id`
+ * input does not resolve. They are intentionally "fail loud" — a
+ * referential-integrity violation has no graceful degradation path, and
+ * the pre-ADR-0006 silent `species: null` coercion was the hole this
+ * wave closes. The api-errors mapper does NOT special-case them; an
+ * uncaught throw surfaces a 500 with the typed `code` in logs, which
+ * is the correct behaviour for a "this should never happen" rail.
  */
 
 export const OBSERVATION_NOT_FOUND = "OBSERVATION_NOT_FOUND" as const;
 export const CAMP_NOT_FOUND = "CAMP_NOT_FOUND" as const;
+export const ANIMAL_NOT_FOUND = "ANIMAL_NOT_FOUND" as const;
+export const MOB_NOT_FOUND = "MOB_NOT_FOUND" as const;
 export const INVALID_TYPE = "INVALID_TYPE" as const;
 export const INVALID_TIMESTAMP = "INVALID_TIMESTAMP" as const;
+export const DUPLICATE_OBSERVATION = "DUPLICATE_OBSERVATION" as const;
 
 /**
  * No observation with the given id exists in the tenant. Wire: 404
@@ -37,6 +50,53 @@ export class CampNotFoundError extends Error {
     super(`Camp not found: ${campId}`);
     this.name = "CampNotFoundError";
     this.campId = campId;
+  }
+}
+
+/**
+ * ADR-0006 — the `animal_id` supplied to `createObservation` resolves to
+ * no row. The Observation FK on `animalId` means this can only happen on
+ * a referential-integrity violation (deleted animal, FK loosened in the
+ * schema, race with a concurrent delete). Pre-ADR-0006 the door
+ * silently coerced the missing-animal case to `species: null`, hiding
+ * the violation as a normal "orphan" observation that the read side's
+ * NULL-tolerant predicate then silently included in every per-species
+ * query. The throw closes that hole.
+ *
+ * Distinct from the same-named class in `lib/domain/animals/errors`
+ * (which guards the animal CRUD routes' `findUnique` miss): this one
+ * is thrown from the observation-write door, lives in the observations
+ * domain, and carries the SCREAMING_SNAKE wire `code`. Tests
+ * discriminate by importing from this module.
+ */
+export class AnimalNotFoundError extends Error {
+  readonly code = ANIMAL_NOT_FOUND;
+  readonly animalId: string;
+  constructor(animalId: string) {
+    super(`Animal not found: ${animalId}`);
+    this.name = "AnimalNotFoundError";
+    this.animalId = animalId;
+  }
+}
+
+/**
+ * ADR-0006 — the `mob_id` supplied to `createObservation` resolves to no
+ * row. Symmetric with {@link AnimalNotFoundError}: a missing mob is an
+ * FK violation, not a legitimate "no species" case.
+ *
+ * Note: `lib/domain/mobs/move-mob.ts` defines its own `MobNotFoundError`
+ * for the outer mob-move op (the mob being moved doesn't exist). The
+ * two are conceptually adjacent but live in different domains: the
+ * mob-move version is the caller's mob-not-found; this one is the
+ * observation door's mob-lookup-during-species-stamping.
+ */
+export class MobNotFoundError extends Error {
+  readonly code = MOB_NOT_FOUND;
+  readonly mobId: string;
+  constructor(mobId: string) {
+    super(`Mob not found: ${mobId}`);
+    this.name = "MobNotFoundError";
+    this.mobId = mobId;
   }
 }
 
@@ -68,5 +128,41 @@ export class InvalidTimestampError extends Error {
     super(`Invalid created_at timestamp: ${received}`);
     this.name = "InvalidTimestampError";
     this.received = received;
+  }
+}
+
+/**
+ * Issue #366 — a `camp_condition` write is a byte-identical duplicate of
+ * an observation already on the row for the same camp on the same tenant
+ * calendar day.
+ *
+ * The `clientLocalId` upsert (#206) only collapses retries of ONE
+ * submission — it mints a fresh UUID per form mount, so two separate
+ * camp-condition form mounts submitting identical readings carry two
+ * distinct keys and produce two byte-identical "Camp condition" rows.
+ * This error is thrown by `createObservation` after a same camp + same
+ * day + identical `details` row is found (excluding the new write's own
+ * `clientLocalId`, so a genuine retry is never self-rejected). A same-day
+ * re-inspection with *different* `details` is a legitimate second reading
+ * and is NOT rejected.
+ *
+ * Wire: 422 `{ error: "DUPLICATE_OBSERVATION", details: { existingId } }`.
+ * 422 (not 409) because the offline-sync `isTerminalStatus` classifier
+ * treats a definitively-rejected payload as a terminal poison message —
+ * and a duplicate's identical payload re-rejects identically forever, so
+ * a blind retry is futile and the failed row must be discardable. The
+ * logger UI keys off the typed code to show a clear "already logged"
+ * message instead of the generic poison-row notice.
+ */
+export class DuplicateObservationError extends Error {
+  readonly code = DUPLICATE_OBSERVATION;
+  /** The id of the observation already on the row. */
+  readonly existingId: string;
+  constructor(existingId: string) {
+    super(
+      `Duplicate observation: an identical camp_condition was already logged today (${existingId})`,
+    );
+    this.name = "DuplicateObservationError";
+    this.existingId = existingId;
   }
 }

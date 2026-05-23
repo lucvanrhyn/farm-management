@@ -9,6 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { crossSpecies, scoped } from "@/lib/server/species-scoped-prisma";
 import type { AnimalCategory } from "@/lib/types";
 
 
@@ -59,13 +60,19 @@ export default async function CampDetailPage({
     );
   }
 
-  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-  // species+campId). findFirst is a single-species-safe drop-in; Phase B
-  // threads species into this read at the route layer.
-  const camp = await prisma.camp.findFirst({ where: { campId } });
-  if (!camp) notFound();
-
   const mode = await getFarmMode(farmSlug);
+
+  // Camps are cross-species infrastructure — a physical camp grazes
+  // whatever species is on it, regardless of the user's active FarmMode.
+  // Phase A of #28 made `(species, campId)` the composite UNIQUE, but the
+  // admin camp detail page wants the row by-id from anywhere on the farm,
+  // not pinned to the active mode. Routing through `scoped()` here would
+  // 404 cross-species camps (same bug PR #373 / #364 fixed on the camp
+  // map). On a multi-species tenant where two species share a `campId`
+  // (rare — Phase A campaign was to retire that collision), the first row
+  // returned is single-species-safe by composite-UNIQUE construction.
+  const camp = await crossSpecies(prisma, "farm-wide-audit").camp.findFirst({ where: { campId } });
+  if (!camp) notFound();
 
   // Capture wall-clock once so every derived value in this render uses a
   // consistent "now". Server components render once per request and never
@@ -84,33 +91,33 @@ export default async function CampDetailPage({
   // Parallel data fetching
   const [activeAnimals, healthCount, calvingCount, visitCount, latestInspection, latestCondition, latestCoverReading] =
     await Promise.all([
-      prisma.animal.findMany({
-        where: { currentCamp: campId, status: "Active", species: mode },
+      scoped(prisma, mode).animal.findMany({
+        where: { currentCamp: campId, status: "Active" },
         select: { category: true },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: { campId, type: "health_issue", observedAt: { gte: thirtyDaysAgo } },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["reproduction", "calving"] as string[] },
           observedAt: { gte: thisMonthStart },
         },
       }),
-      prisma.observation.count({
+      scoped(prisma, mode).observation.count({
         where: {
           campId,
           type: { in: ["camp_check", "camp_condition"] },
           observedAt: { gte: thirtyDaysAgo },
         },
       }),
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: { in: ["camp_check", "camp_condition"] } },
         orderBy: { observedAt: "desc" },
         select: { observedAt: true, loggedBy: true },
       }),
-      prisma.observation.findFirst({
+      scoped(prisma, mode).observation.findFirst({
         where: { campId, type: "camp_condition" },
         orderBy: { observedAt: "desc" },
         select: { details: true, observedAt: true },
@@ -160,7 +167,7 @@ export default async function CampDetailPage({
   ]);
 
   // Recent observations for timeline (last 10)
-  const recentObs = await prisma.observation.findMany({
+  const recentObs = await scoped(prisma, mode).observation.findMany({
     where: { campId },
     orderBy: { observedAt: "desc" },
     take: 10,
@@ -169,7 +176,7 @@ export default async function CampDetailPage({
 
   // Rotation history + current status
   const [rotationMovements, rotationPayload] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, mode).observation.findMany({
       where: { campId, type: "mob_movement" },
       orderBy: { observedAt: "desc" },
       take: 30,

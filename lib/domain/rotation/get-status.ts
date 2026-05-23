@@ -30,6 +30,7 @@ import {
 } from "@/lib/calculators/rotation";
 import { getMergedLsuValues } from "@/lib/species/registry";
 import { calcLsu } from "@/lib/species/shared/lsu";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getLatestByCamp as getLatestVeldByCamp } from "@/lib/server/veld-score";
 
 export interface RotationMobSummary {
@@ -126,7 +127,7 @@ async function getLatestMovesByCamp(
   prisma: PrismaClient,
 ): Promise<Map<string, LatestMoveForCamp>> {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: "mob_movement",
       observedAt: { gte: ninetyDaysAgo },
@@ -210,7 +211,7 @@ export async function getRotationStatusByCamp(
   const [settings, camps, mobs, animals, coverReadings, moves, veldByCamp] =
     await Promise.all([
       loadRotationSettings(prisma),
-      prisma.camp.findMany({
+      crossSpecies(prisma, "analytics-rollup").camp.findMany({
         select: {
           campId: true,
           campName: true,
@@ -221,10 +222,12 @@ export async function getRotationStatusByCamp(
           rotationNotes: true,
         },
       }),
-      prisma.mob.findMany({ select: { id: true, name: true } }),
+      crossSpecies(prisma, "analytics-rollup").mob.findMany({
+        select: { id: true, name: true },
+      }),
       // cross-species by design: rotation buckets are keyed on (mobId, species)
       // so a sheep mob and a cattle mob in the same camp don't collide.
-      prisma.animal.findMany({
+      crossSpecies(prisma, "analytics-rollup").animal.findMany({
         where: { status: "Active" },
         select: {
           currentCamp: true,

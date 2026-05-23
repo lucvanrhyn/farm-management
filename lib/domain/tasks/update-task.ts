@@ -39,6 +39,7 @@ import {
   observationFromTaskCompletion,
   type TaskCompletionPayload,
 } from "@/lib/tasks/observation-mapping";
+import { createObservation } from "@/lib/domain/observations/create-observation";
 
 import { TaskNotFoundError } from "./errors";
 import { parseTaskArrayFields } from "./list-tasks";
@@ -129,33 +130,22 @@ export async function updateTask(
     );
 
     if (obsPayload !== null) {
-      // Execute task update + observation create atomically. Prisma's
-      // interactive transaction callback receives an Omit<PrismaClient, ...>
-      // not the full PrismaClient — derive TxClient from the callsite to
-      // avoid pulling a type from a wrong place.
-      type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+      // ADR-0006 — execute task update + observation create atomically
+      // through the named door. The door accepts the tx-client (its
+      // `client` parameter is `ObservationWriter = PrismaClient |
+      // Prisma.TransactionClient`) so the species-stamping waterfall
+      // and the task update share one transaction. The inline
+      // animal-lookup + species denorm + raw `tx.observation.create`
+      // that used to live here is now the door's body — removing it
+      // closes the bypass the ADR-0006 structural test enforces.
       const [updatedTask, createdObs] = await prisma.$transaction(
-        async (tx: TxClient) => {
-          // Phase I.3 — denormalise species onto Observation at write time
-          // so species-scoped repro queries hit the composite index.
-          let species: string | null = null;
-          if (obsPayload.animalId) {
-            const animal = await tx.animal.findUnique({
-              where: { animalId: obsPayload.animalId },
-              select: { species: true },
-            });
-            species = animal?.species ?? null;
-          }
-          const obs = await tx.observation.create({
-            data: {
-              type: obsPayload.type,
-              details: obsPayload.details,
-              campId: obsPayload.campId ?? existing.campId ?? "unknown",
-              animalId: obsPayload.animalId ?? null,
-              observedAt: new Date(),
-              loggedBy: obsPayload.loggedBy,
-              species,
-            },
+        async (tx) => {
+          const obs = await createObservation(tx, {
+            type: obsPayload.type,
+            camp_id: obsPayload.campId ?? existing.campId ?? "unknown",
+            animal_id: obsPayload.animalId ?? null,
+            details: obsPayload.details,
+            loggedBy: obsPayload.loggedBy,
           });
 
           const task = await tx.task.update({

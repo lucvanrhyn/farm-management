@@ -48,6 +48,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('camp.findMany')),
       findFirst: vi.fn(record('camp.findFirst')),
       count: vi.fn(record('camp.count')),
+      groupBy: vi.fn(record('camp.groupBy')),
       updateMany: vi.fn(record('camp.updateMany')),
       deleteMany: vi.fn(record('camp.deleteMany')),
     },
@@ -55,6 +56,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('mob.findMany')),
       findFirst: vi.fn(record('mob.findFirst')),
       count: vi.fn(record('mob.count')),
+      groupBy: vi.fn(record('mob.groupBy')),
       updateMany: vi.fn(record('mob.updateMany')),
       deleteMany: vi.fn(record('mob.deleteMany')),
     },
@@ -62,6 +64,7 @@ function makeSpyPrisma() {
       findMany: vi.fn(record('observation.findMany')),
       findFirst: vi.fn(record('observation.findFirst')),
       count: vi.fn(record('observation.count')),
+      groupBy: vi.fn(record('observation.groupBy')),
       updateMany: vi.fn(record('observation.updateMany')),
       deleteMany: vi.fn(record('observation.deleteMany')),
     },
@@ -156,6 +159,29 @@ describe('scoped() — species-scoped Prisma facade', () => {
       await scoped(prisma, 'game').camp.count();
       expect(calls['camp.count'][0].where).toEqual({ species: 'game' });
     });
+
+    it('injects species-only on camp.groupBy (no status — mirrors animal.groupBy)', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await scoped(prisma, 'sheep').camp.groupBy({
+        by: ['campId'],
+        where: { campId: { not: '' } },
+      } as never);
+      expect(calls['camp.groupBy'][0].where).toEqual({
+        campId: { not: '' },
+        species: 'sheep',
+      });
+      expect(calls['camp.groupBy'][0].by).toEqual(['campId']);
+      expect(calls['camp.groupBy'][0].where).not.toHaveProperty('status');
+    });
+
+    it('caller-supplied species wins on camp.groupBy', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await scoped(prisma, 'cattle').camp.groupBy({
+        by: ['campId'],
+        where: { species: 'game' },
+      } as never);
+      expect(calls['camp.groupBy'][0].where).toEqual({ species: 'game' });
+    });
   });
 
   describe('mob builder', () => {
@@ -163,6 +189,20 @@ describe('scoped() — species-scoped Prisma facade', () => {
       const { prisma, calls } = makeSpyPrisma();
       await scoped(prisma, 'cattle').mob.findMany({});
       expect(calls['mob.findMany'][0].where).toEqual({ species: 'cattle' });
+    });
+
+    it('injects species-only on mob.groupBy (no status)', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await scoped(prisma, 'cattle').mob.groupBy({
+        by: ['name'],
+        where: { name: { not: '' } },
+      } as never);
+      expect(calls['mob.groupBy'][0].where).toEqual({
+        name: { not: '' },
+        species: 'cattle',
+      });
+      expect(calls['mob.groupBy'][0].by).toEqual(['name']);
+      expect(calls['mob.groupBy'][0].where).not.toHaveProperty('status');
     });
   });
 
@@ -181,6 +221,22 @@ describe('scoped() — species-scoped Prisma facade', () => {
         type: 'weighing',
         species: 'cattle',
       });
+    });
+
+    it('injects species-only on observation.groupBy (no status — mirrors animal.groupBy)', async () => {
+      const { prisma, calls } = makeSpyPrisma();
+      await scoped(prisma, 'game').observation.groupBy({
+        by: ['campId'],
+        where: { type: 'health_issue' },
+        _count: { id: true },
+      } as never);
+      expect(calls['observation.groupBy'][0].where).toEqual({
+        type: 'health_issue',
+        species: 'game',
+      });
+      expect(calls['observation.groupBy'][0].by).toEqual(['campId']);
+      expect(calls['observation.groupBy'][0]._count).toEqual({ id: true });
+      expect(calls['observation.groupBy'][0].where).not.toHaveProperty('status');
     });
   });
 

@@ -6,7 +6,7 @@ import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/util
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { useFarmModeSafe } from "@/lib/farm-mode";
-import { getSpeciesModule } from "@/lib/species/registry";
+import { getSpeciesModule, isValidSpecies } from "@/lib/species/registry";
 
 const PAGE_SIZE = 50;
 
@@ -186,7 +186,16 @@ export default function AnimalsTable({
     return m;
   }, [mobs]);
 
-  const categories: AnimalCategory[] = getSpeciesModule(mode).config.categories.map((c) => c.value);
+  // Issue #323 — taxonomy must follow the explicit route contract, not the
+  // ambient (localStorage/cookie-backed) FarmMode. /sheep/animals passes
+  // species="sheep"; if we read `mode` here a stale "cattle" cookie made the
+  // Sheep Catalogue show the cattle taxonomy. The route prop wins; ambient
+  // `mode` is only the fallback when no (or an unknown) species is supplied.
+  const taxonomySpecies =
+    species && isValidSpecies(species) ? species : mode;
+  const categories: AnimalCategory[] = getSpeciesModule(
+    taxonomySpecies,
+  ).config.categories.map((c) => c.value);
   const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
 
   // Issue #205 — header count text. SSR previously hard-coded `animals.length`
@@ -202,7 +211,17 @@ export default function AnimalsTable({
   // + 20 other-species Active rows reads
   //   Showing 50 of 81 cattle (101 total Active across species)
   // so the farmer can see the 20 non-cattle rows are accounted for, not lost.
-  const loaded = animals.length;
+  //
+  // Issue #367 — the SSR batch is hydrated via `searchAnimals(...,
+  // includeDeceased: true)` so the Deceased / All tabs have rows. That batch
+  // therefore contains deceased animals. The header numerator must be scoped
+  // to the SAME subset the "N found" label counts (`filtered`, derived from
+  // `activeAnimals` / `deceasedAnimals`): otherwise the Active tab rendered
+  // "Showing 50 of 874" (raw batch) next to "49 animals found" (active subset)
+  // — two label scopes contradicting each other. Counting the tab-scoped
+  // hydrated subset keeps both numbers in agreement.
+  const loaded =
+    tab === "deceased" ? deceasedAnimals.length : activeAnimals.length;
   const showReconciliation =
     typeof crossSpeciesActiveTotal === "number" &&
     typeof speciesTotal === "number" &&

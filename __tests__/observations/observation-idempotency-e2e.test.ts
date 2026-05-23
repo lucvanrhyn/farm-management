@@ -24,6 +24,14 @@
  *     server's upsert on `clientLocalId` is the safety net.
  *
  * If any of Cycles 1–3 regresses, this test fails.
+ *
+ * #321 note: the queued observation uses `camp_check` as an arbitrary
+ * valid type. It previously used `camp_condition`; #321 (PRD #318 wave R4)
+ * added a required grazing/water/fence guard to `camp_condition` in
+ * `createObservation`, so the partial `{ grazing: 'Good' }` details these
+ * idempotency cases carry would now (correctly) be rejected by that guard.
+ * `camp_check` has no required-field contract — the idempotency invariant
+ * under test is unchanged.
  */
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -139,7 +147,7 @@ describe('Observation idempotency — end-to-end (#206 Cycle 4)', () => {
 
     // 1. Form-time queue: the row lands in IDB with the mount-stable UUID.
     await queueObservation({
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       details: JSON.stringify({ grazing: 'Good' }),
       created_at: '2026-05-11T10:00:00.000Z',
@@ -238,7 +246,7 @@ describe('Observation idempotency — end-to-end (#206 Cycle 4)', () => {
     //    a different device replaying its offline buffer, or a user clicking
     //    Submit twice across a tab close) and run sync again.
     await queueObservation({
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       details: JSON.stringify({ grazing: 'Good' }),
       created_at: '2026-05-11T10:00:00.000Z',

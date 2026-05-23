@@ -1,32 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { createObservation } from "@/lib/domain/observations/create-observation";
+
 export class MobNotFoundError extends Error {
   constructor(mobId: string) {
     super(`Mob not found: ${mobId}`);
     this.name = "MobNotFoundError";
-  }
-}
-
-/**
- * Typed error code for #28 Phase B cross-species hard-block. The API layer
- * maps this onto an HTTP 422 with `{ error: "CROSS_SPECIES_BLOCKED" }`.
- *
- * Spec: each species (cattle/sheep/game) is a fully-isolated workspace inside
- * one tenant. A cattle mob may never sit in a sheep camp; an animal's parent
- * must always be the same species as the child.
- */
-export const CROSS_SPECIES_BLOCKED = "CROSS_SPECIES_BLOCKED";
-
-export class CrossSpeciesBlockedError extends Error {
-  readonly code = CROSS_SPECIES_BLOCKED;
-  readonly mobSpecies: string | null;
-  readonly campSpecies: string | null;
-
-  constructor(mobSpecies: string | null, campSpecies: string | null) {
-    super(CROSS_SPECIES_BLOCKED);
-    this.name = "CrossSpeciesBlockedError";
-    this.mobSpecies = mobSpecies;
-    this.campSpecies = campSpecies;
   }
 }
 
@@ -124,14 +104,30 @@ export async function performMobMove(
       animalIds: affectedAnimals.map((a) => a.animalId),
     });
 
-    // Two sequential creates to capture both observation IDs
-    const sourceObs = await tx.observation.create({
-      data: { type: "mob_movement", campId: sourceCamp, details: sharedDetails, observedAt, loggedBy },
-      select: { id: true },
+    // ADR-0006 — route both mob_movement rows through the named door
+    // so the species-stamping waterfall (step 2 — mob_id lookup) fills
+    // in `species`. Pre-ADR-0006 both rows wrote NULL species; every
+    // mob movement since the column landed produced two NULL-species
+    // rows on `Observation_species_observedAt_idx`. The door receives
+    // the tx-client so both creates stay atomic with the sibling
+    // mob/animal updates above. `created_at` is passed through so the
+    // two rows share the single `observedAt` we already computed.
+    const observedAtIso = observedAt.toISOString();
+    const sourceObs = await createObservation(tx, {
+      type: "mob_movement",
+      camp_id: sourceCamp,
+      mob_id: mob.id,
+      details: sharedDetails,
+      created_at: observedAtIso,
+      loggedBy,
     });
-    const destObs = await tx.observation.create({
-      data: { type: "mob_movement", campId: toCampId, details: sharedDetails, observedAt, loggedBy },
-      select: { id: true },
+    const destObs = await createObservation(tx, {
+      type: "mob_movement",
+      camp_id: toCampId,
+      mob_id: mob.id,
+      details: sharedDetails,
+      created_at: observedAtIso,
+      loggedBy,
     });
 
     return {

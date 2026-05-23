@@ -3,6 +3,12 @@ import {
   calcDaysGrazingRemaining as _calcDaysGrazingRemaining,
 } from "@/lib/species/shared/lsu";
 import { getMergedLsuValues } from "@/lib/species/registry";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
+// ADR-0005 Wave 2: these analytics roll-ups are farm-wide by definition
+// (camp-condition trend, headcount-by-camp, attrition, withdrawal tracker
+// all span every species). crossSpecies() forwards args verbatim — the
+// existing predicates are preserved bit-identically.
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -43,7 +49,7 @@ export interface ConditionTrendPoint {
 }
 
 export async function getCampConditionTrend(prisma: PrismaClient, days = 30): Promise<ConditionTrendPoint[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: "camp_condition", observedAt: { gte: daysAgo(days) } },
     select: { observedAt: true, details: true },
     orderBy: { observedAt: "asc" },
@@ -74,12 +80,17 @@ export interface HealthByCamp {
 }
 
 export async function getHealthIssuesByCamp(prisma: PrismaClient, days = 30): Promise<HealthByCamp[]> {
-  const rows = await prisma.observation.groupBy({
+  // cross-species by design: this farm-wide health-issue roll-up spans
+  // every species. crossSpecies() forwards args verbatim — no species/
+  // status injection. The facade returns Prisma's broadest groupBy shape
+  // (documented trade-off in species-scoped-prisma.ts); re-narrow to the
+  // row shape this query's `by`/`_count` selection produces.
+  const rows = (await crossSpecies(prisma, "analytics-rollup").observation.groupBy({
     by: ["campId"],
     where: { type: "health_issue", observedAt: { gte: daysAgo(days) } },
     _count: { id: true },
     orderBy: { _count: { id: "desc" } },
-  });
+  })) as unknown as Array<{ campId: string; _count: { id: number } }>;
   return rows.map((r) => ({ campId: r.campId, count: r._count.id }));
 }
 
@@ -94,11 +105,20 @@ export interface HeadcountByCamp {
 
 export async function getHeadcountByCamp(prisma: PrismaClient): Promise<HeadcountByCamp[]> {
   // cross-species by design: headcount is grouped by species explicitly.
-  const rows = await prisma.animal.groupBy({
+  // crossSpecies() forwards args verbatim — no species/status injection.
+  // The facade returns Prisma's broadest groupBy shape (documented
+  // trade-off in species-scoped-prisma.ts); re-narrow to the row shape
+  // this query's `by`/`_count` selection produces — behaviour-identical.
+  const rows = (await crossSpecies(prisma, "analytics-rollup").animal.groupBy({
     by: ["currentCamp", "species", "category"],
     where: { status: "Active" },
     _count: { id: true },
-  });
+  })) as unknown as Array<{
+    currentCamp: string | null;
+    species: string;
+    category: string;
+    _count: { id: number };
+  }>;
   return rows.map((r) => ({
     campId: r.currentCamp ?? "Onbekend",
     species: r.species,
@@ -116,7 +136,7 @@ export interface HeatmapCell {
 }
 
 export async function getInspectionHeatmap(prisma: PrismaClient, days = 30): Promise<HeatmapCell[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: { in: ["camp_check", "camp_condition"] },
       observedAt: { gte: daysAgo(days) },
@@ -148,7 +168,7 @@ export interface MovementRecord {
 }
 
 export async function getAnimalMovements(prisma: PrismaClient, days = 30): Promise<MovementRecord[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: "animal_movement", observedAt: { gte: daysAgo(days) } },
     orderBy: { observedAt: "desc" },
     take: 100,
@@ -176,7 +196,7 @@ export interface CalvingPoint {
 }
 
 export async function getCalvingTrend(prisma: PrismaClient, months = 12): Promise<CalvingPoint[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: "calving", observedAt: { gte: monthsAgo(months) } },
     select: { observedAt: true },
     orderBy: { observedAt: "asc" },
@@ -200,13 +220,14 @@ export interface AttritionPoint {
 }
 
 export async function getDeathsAndSales(prisma: PrismaClient, months = 12): Promise<AttritionPoint[]> {
-  const deathObs = await prisma.observation.findMany({
+  const xs = crossSpecies(prisma, "analytics-rollup");
+  const deathObs = await xs.observation.findMany({
     where: { type: "death", observedAt: { gte: monthsAgo(months) } },
     select: { observedAt: true },
   });
 
   // cross-species by design: deaths/sales trend is farm-wide.
-  const soldAnimals = await prisma.animal.findMany({
+  const soldAnimals = await xs.animal.findMany({
     where: { status: "Sold" },
     select: { dateAdded: true },
   });
@@ -340,7 +361,7 @@ export interface WithdrawalRecord {
 }
 
 export async function getWithdrawalTracker(prisma: PrismaClient): Promise<WithdrawalRecord[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: "treatment" },
     orderBy: { observedAt: "desc" },
   });

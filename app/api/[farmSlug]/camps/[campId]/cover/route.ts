@@ -26,6 +26,8 @@ import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateCampWrite } from "@/lib/server/revalidate";
 import type { FarmContext } from "@/lib/server/farm-context";
 import { createCoverReading } from "@/lib/domain/cover/create-cover-reading";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,8 @@ async function denyIfNotFreshAdmin(ctx: FarmContext): Promise<NextResponse | nul
 }
 
 export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
-  handle: async (ctx, _req, { campId }) => {
+  handle: async (ctx, _req, { farmSlug, campId }) => {
+    const mode = await getFarmMode(farmSlug);
     // Fire all three independent queries in parallel (~3 Turso round-trips → 1)
     const [readings, camp, animalCount] = await Promise.all([
       ctx.prisma.campCoverReading.findMany({
@@ -77,13 +80,13 @@ export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
       }),
       // Phase A of #28: campId is no longer globally unique. findFirst is
       // single-species-safe; Phase B will scope by species.
-      ctx.prisma.camp.findFirst({
+      scoped(ctx.prisma, mode).camp.findFirst({
         where: { campId },
         select: { sizeHectares: true },
       }),
       // cross-species by design: cover/days-remaining math counts every animal
       // grazing the camp regardless of species (LSU is computed elsewhere).
-      ctx.prisma.animal.count({
+      crossSpecies(ctx.prisma, "farm-wide-audit").animal.count({
         where: { currentCamp: campId, status: "Active" },
       }),
     ]);
@@ -111,9 +114,11 @@ export const GET = tenantReadSlug<{ farmSlug: string; campId: string }>({
 
 export const POST = tenantWriteSlug<unknown, { farmSlug: string; campId: string }>({
   revalidate: revalidateCampWrite,
-  handle: async (ctx, body, _req, { campId }) => {
+  handle: async (ctx, body, _req, { farmSlug, campId }) => {
     const denied = await denyIfNotFreshAdmin(ctx);
     if (denied) return denied;
+
+    const mode = await getFarmMode(farmSlug);
 
     const { coverCategory, kgDmPerHaOverride, clientLocalId } = (body ?? {}) as {
       coverCategory?: unknown;
@@ -144,13 +149,13 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string; campId: string 
     const [camp, animalCount] = await Promise.all([
       // Phase A of #28: campId is no longer globally unique. findFirst is
       // single-species-safe; Phase B will scope by species.
-      ctx.prisma.camp.findFirst({
+      scoped(ctx.prisma, mode).camp.findFirst({
         where: { campId },
         select: { sizeHectares: true },
       }),
       // cross-species by design: cover/days-remaining math counts every animal
       // grazing the camp regardless of species (LSU is computed elsewhere).
-      ctx.prisma.animal.count({
+      crossSpecies(ctx.prisma, "farm-wide-audit").animal.count({
         where: { currentCamp: campId, status: "Active" },
       }),
     ]);

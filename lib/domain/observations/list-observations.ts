@@ -15,6 +15,8 @@
  */
 import type { Observation, PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
@@ -49,7 +51,7 @@ export async function listObservations(
   if (filters.type) where.type = filters.type;
   if (filters.animalId) where.animalId = filters.animalId;
 
-  return prisma.observation.findMany({
+  return crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where,
     orderBy: { observedAt: "desc" },
     take: clampLimit(filters.limit),

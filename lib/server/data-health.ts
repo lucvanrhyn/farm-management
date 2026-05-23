@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export interface DataHealthScore {
   overall: number;
@@ -27,27 +28,33 @@ export async function getDataHealthScore(
     assignedCount,
     txThisMonth,
   ] = await Promise.all([
-    // cross-species by design: data hygiene metric covers every active animal.
-    prisma.animal.count({ where: { status: "Active" } }),
-    prisma.camp.count(),
-    prisma.observation.groupBy({
+    // cross-species by design: data hygiene metric covers every active
+    // animal. crossSpecies() forwards args verbatim (no injection).
+    crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
+    crossSpecies(prisma, "analytics-rollup").camp.count(),
+    // cross-species by design: these two farm-wide observation roll-ups
+    // span every species. crossSpecies() forwards args verbatim — no
+    // species/status injection. The facade returns Prisma's broadest
+    // groupBy shape; re-narrow to a length-only array (callers below only
+    // read `.length`).
+    crossSpecies(prisma, "analytics-rollup").observation.groupBy({
       by: ["animalId"],
       where: {
         type: "weighing",
         observedAt: { gte: thirtyDaysAgo },
         animalId: { not: null },
       },
-    }),
-    prisma.observation.groupBy({
+    }) as unknown as Promise<unknown[]>,
+    crossSpecies(prisma, "analytics-rollup").observation.groupBy({
       by: ["campId"],
       where: {
         type: "camp_condition",
         observedAt: { gte: sevenDaysAgo },
         campId: { not: "" },
       },
-    }),
+    }) as unknown as Promise<unknown[]>,
     // cross-species by design: "% of animals with a camp" is farm-wide.
-    prisma.animal.count({
+    crossSpecies(prisma, "analytics-rollup").animal.count({
       where: { status: "Active", currentCamp: { not: "" } },
     }),
     prisma.transaction.count({

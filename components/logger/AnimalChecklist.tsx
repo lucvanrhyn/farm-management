@@ -1,8 +1,12 @@
 import { getCategoryLabel } from "@/lib/utils";
 import { Animal, AnimalCategory } from "@/lib/types";
 import type { FarmMode } from "@/lib/farm-mode";
+import {
+  canPerformLoggerAction,
+  type LoggerAction,
+} from "@/lib/logger/canPerformAction";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "weigh" | "treat";
+type ModalType = LoggerAction;
 
 interface AnimalChecklistProps {
   campId: string;
@@ -137,17 +141,35 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, 
               data-animal-actions
               className="flex items-center gap-1 shrink-0 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible"
             >
-              {actionButtons.map((btn) => (
-                <button
-                  key={btn.type}
-                  onClick={() => onFlag(animal.animal_id, btn.type)}
-                  aria-label={btn.label}
-                  className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className}`}
-                >
-                  <span className="text-base leading-none">{btn.icon}</span>
-                  <span className="text-[10px] leading-none">{btn.label}</span>
-                </button>
-              ))}
+              {actionButtons.map((btn) => {
+                // Issue #391 — pure predicate gates invalid (animal, action)
+                // pairs at the UI layer so the farmer cannot tick something
+                // the server will reject (e.g. calving on a bull, reproduction
+                // on a lamb). The reason string doubles as the tooltip +
+                // aria-description so the disabled state is self-explanatory.
+                const eligibility = canPerformLoggerAction(
+                  { sex: animal.sex, category: animal.category },
+                  btn.type,
+                );
+                const disabled = !eligibility.allowed;
+                const reason = eligibility.allowed ? undefined : eligibility.reason;
+                return (
+                  <button
+                    key={btn.type}
+                    onClick={() => onFlag(animal.animal_id, btn.type)}
+                    aria-label={btn.label}
+                    aria-disabled={disabled}
+                    aria-description={reason}
+                    title={reason}
+                    disabled={disabled}
+                    data-action-disabled-reason={reason}
+                    className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className} disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none`}
+                  >
+                    <span className="text-base leading-none">{btn.icon}</span>
+                    <span className="text-[10px] leading-none">{btn.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         );

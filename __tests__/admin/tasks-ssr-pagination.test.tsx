@@ -17,6 +17,7 @@ const campFindManyMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
 const getFarmCredsMock = vi.fn();
 const getSessionMock = vi.fn();
+const getFarmModeMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/auth", () => ({ getSession: getSessionMock }));
 
 vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
+vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 
 // Capture props passed to TaskBoard without needing to mount its UI.
@@ -77,8 +79,10 @@ beforeEach(() => {
   getPrismaForFarmMock.mockReset();
   getFarmCredsMock.mockReset();
   getSessionMock.mockReset();
+  getFarmModeMock.mockReset();
   taskBoardProps.length = 0;
 
+  getFarmModeMock.mockResolvedValue("cattle");
   getSessionMock.mockResolvedValue({ user: { email: "admin@farm.com" } });
   getFarmCredsMock.mockResolvedValue({ tier: "advanced" });
   campFindManyMock.mockResolvedValue([

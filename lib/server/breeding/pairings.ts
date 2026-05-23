@@ -20,6 +20,7 @@ import {
 } from "./trait-profile";
 import { getBreedingConstants } from "@/lib/species/breeding-constants";
 import type { SpeciesId } from "@/lib/species/types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 export async function suggestPairings(
   prisma: PrismaClient,
@@ -32,9 +33,13 @@ export async function suggestPairings(
 
   const oneYearAgo = new Date(Date.now() - 365 * 86_400_000);
 
+  const db = scoped(prisma, species);
+
   const [allAnimals, recentScans] = await Promise.all([
-    prisma.animal.findMany({
-      where: { status: "Active", species },
+    // scoped() injects { species, status: "Active" }; status kept explicit
+    // so the deceased-flag axis stays a deliberate, visible choice.
+    db.animal.findMany({
+      where: { status: "Active" },
       select: {
         id: true,
         animalId: true,
@@ -45,10 +50,9 @@ export async function suggestPairings(
         fatherId: true,
       },
     }),
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         type: "pregnancy_scan",
-        species,
         observedAt: { gte: oneYearAgo },
         animalId: { not: null },
       },
@@ -106,23 +110,22 @@ export async function suggestPairings(
 
   const [traitObs, cowCalvingObs, bullCalvingObs] = await Promise.all([
     // Trait observations (BCS, temperament, scrotal circumference) for all bulls + cows
-    prisma.observation.findMany({
+    db.observation.findMany({
       where: {
         animalId: { in: allAnimalIds },
-        species,
         type: { in: ["body_condition_score", "temperament_score", "scrotal_circumference"] },
       },
       orderBy: { observedAt: "desc" },
       select: { animalId: true, type: true, details: true },
     }),
     // Calving observations linked to cows (by animalId)
-    prisma.observation.findMany({
-      where: { animalId: { in: openCows.map((c) => c.id) }, species, type: "calving" },
+    db.observation.findMany({
+      where: { animalId: { in: openCows.map((c) => c.id) }, type: "calving" },
       select: { animalId: true, details: true },
     }),
     // Calving observations for bull offspring detection (time-bounded, filtered in memory)
-    prisma.observation.findMany({
-      where: { type: "calving", species, observedAt: { gte: threeYearsAgo } },
+    db.observation.findMany({
+      where: { type: "calving", observedAt: { gte: threeYearsAgo } },
       select: { details: true },
     }),
   ]);

@@ -45,7 +45,7 @@
  *   - Required: `mode: SpeciesId`. The species axis is always injected;
  *     this module is per-species by construction. Cross-species lookups
  *     belong elsewhere (admin reconciliation, dashboard summaries) and
- *     have their own audit-allow pragma.
+ *     go through the `crossSpecies()` door (ADR-0005).
  *   - Required: `includeDeceased: boolean`. NOT defaulted, NOT optional.
  *     - `true`  → no `status` filter is added; rows of every status
  *                 (Active / Sold / Deceased) are returned. Use for
@@ -87,6 +87,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { SpeciesId } from '@/lib/species/types';
 import { ACTIVE_STATUS } from '@/lib/animals/active-species-filter';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 
 /**
  * Parameters for `searchAnimals`.
@@ -175,18 +176,22 @@ export function searchAnimals(
   // and silently exclude deceased rows (the exact bug class issue #255
   // exists to cure).
   //
-  // Audit-pragma stack — order matters because each sibling audit walks
-  // the preceding lines differently. `audit-allow-species-where` MUST be
-  // the immediately preceding line (the species-where audit checks only
-  // the first non-blank preceding line, no sibling-skip). The other audits
-  // either skip siblings (`audit-allow-deceased-flag` per line 258 of its
-  // audit script) or are satisfied by a literal token in the args body
-  // below: `audit-findmany-no-take` matches `take\s*:` (spread emits the
-  // literal `take:` token); `audit-findmany-no-select` matches `select\s*:`
-  // at depth 1 (the unconditional `select: select` line below provides it,
-  // and Prisma treats `select: undefined` as no projection).
+  // Per ADR-0005 this module is a documented STRUCTURAL door-module
+  // exemption from the species-access invariant: like the two named
+  // doors, it enforces `species: mode` itself (composedWhere above) — it
+  // simply cannot route through `scoped()` without losing the deceased
+  // rows SARS requires. The structural arch test
+  // (`__tests__/architecture/species-access-no-direct-prisma.test.ts`)
+  // exempts this file by path for that reason, recorded in the ADR.
+  //
+  // Audit-pragma stack — order matters because the sibling deceased-flag
+  // audit walks the preceding lines. `audit-allow-deceased-flag` is read
+  // first; `audit-findmany-no-take` matches `take\s*:` (spread emits the
+  // literal `take:` token); `audit-findmany-no-select` matches
+  // `select\s*:` at depth 1 (the unconditional `select: select` line
+  // below provides it, and Prisma treats `select: undefined` as no
+  // projection).
   // audit-allow-deceased-flag: deep module enforces flag by signature
-  // audit-allow-species-where: deep module injects species via composedWhere
   return prisma.animal.findMany({
     where: composedWhere,
     ...(orderBy ? { orderBy } : {}),
@@ -200,10 +205,9 @@ export function searchAnimals(
     ...(typeof skip === 'number' ? { skip } : {}),
     // Unconditional `select:` (not the conditional spread) so a static read
     // of the call's arg body sees the literal `select:` token at depth 1,
-    // satisfying `audit-findmany-no-select` without a third allow-pragma
-    // (which would conflict with the immediately-preceding-line requirement
-    // of `audit-allow-species-where` above). Prisma treats `select: undefined`
-    // identically to omitting the key — full-record projection.
+    // satisfying `audit-findmany-no-select` without an allow-pragma.
+    // Prisma treats `select: undefined` identically to omitting the key
+    // — full-record projection.
     select: select,
   }) as ReturnType<PrismaClient['animal']['findMany']>;
 }
@@ -221,15 +225,16 @@ export async function countAnimalsByStatus(
   prisma: PrismaClient | Prisma.TransactionClient,
   mode: SpeciesId,
 ): Promise<{ active: number; sold: number; deceased: number }> {
-  // Three counts run in parallel; each carries its own literal
-  // `species:` + `status:` predicate so both the species-where audit
-  // and the lifecycle audit see compliant inline shapes (no pragmas
-  // needed). Index `idx_animal_species_status` keeps each round-trip
-  // cheap on large herds.
+  // Three counts run in parallel. Routed through `scoped(prisma, mode)`
+  // — its `count()` injects `{ species: mode }` only (status stays
+  // caller-controlled per the facade contract), so each round-trip
+  // keeps its explicit `status:` predicate and the species axis is
+  // structurally enforced. Index `idx_animal_species_status` keeps each
+  // round-trip cheap on large herds.
   const [active, sold, deceased] = await Promise.all([
-    prisma.animal.count({ where: { species: mode, status: 'Active' } }),
-    prisma.animal.count({ where: { species: mode, status: 'Sold' } }),
-    prisma.animal.count({ where: { species: mode, status: 'Deceased' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Active' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Sold' } }),
+    scoped(prisma, mode).animal.count({ where: { status: 'Deceased' } }),
   ]);
   return { active, sold, deceased };
 }

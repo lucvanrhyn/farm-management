@@ -3,6 +3,7 @@ import { adminWrite } from "@/lib/server/route";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { readWorkbook, readSheetAsObjects } from "@/lib/xlsx-shim";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
 
@@ -153,7 +154,10 @@ export const POST = adminWrite({
         // UNIQUE on species+campId). findFirst is single-species-safe — bulk
         // imports currently target the tenant's primary species and Phase
         // B/D will wire species into the import wizard.
-        const existing = await prisma.camp.findFirst({
+        const existing = await crossSpecies(
+          prisma,
+          "species-registry-internal",
+        ).camp.findFirst({
           where: { campId: campName },
         });
         if (!existing) {
@@ -179,7 +183,10 @@ export const POST = adminWrite({
 
     // Add all existing DB camps to the valid set (covers both new-format and
     // old-format uploads).
-    const existingCamps = await prisma.camp.findMany({
+    const existingCamps = await crossSpecies(
+      prisma,
+      "species-registry-internal",
+    ).camp.findMany({
       select: { campId: true, campName: true },
     });
     for (const camp of existingCamps) {

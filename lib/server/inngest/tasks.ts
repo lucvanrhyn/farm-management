@@ -31,6 +31,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { inngest } from "./client";
 import { getAllFarmSlugs } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 // TODO(wave-2A): this module is created by Wave 2A (lib/tasks/recurrence.ts).
 // If 2A has not landed when 2B typechecks, this import will fail — retry once
 // Wave 2A's commit is on the branch. Signature contract:
@@ -244,7 +245,10 @@ async function buildExpandContext(
   const events: ExpandContext["events"] = [];
   if (task.animalId) {
     const since = new Date(Date.now() - OBSERVATION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-    const observations = await prisma.observation.findMany({
+    const observations = await crossSpecies(
+      prisma,
+      "notification-cron",
+    ).observation.findMany({
       where: {
         animalId: task.animalId,
         observedAt: { gte: since },

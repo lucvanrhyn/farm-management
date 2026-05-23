@@ -26,7 +26,7 @@ import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { CampData } from "@/components/map/layers/CampLayer";
 import CampsEmptyState from "@/components/camps/CampsEmptyState";
 import TenantMapClient from "./TenantMapClient";
@@ -59,21 +59,26 @@ export default async function TenantMapPage({
     );
   }
 
-  // Camp markers honour the active species (PRD #222 / #224). The species-
-  // scoped facade enforces the `where: { species: mode }` predicate at
-  // compile time — `audit-species-where` would fail CI without it.
+  // A physical camp grazes whatever species is on it — camps are NOT a
+  // per-species concept (issue #364). The map must show every camp in
+  // every FarmMode, so the camp list is read through the cross-species
+  // door, not the species-scoped one. `mode` is still read below to give
+  // the zero-camps empty state species-correct onboarding copy.
   const mode = await getFarmMode(farmSlug);
   const [settings, camps] = await Promise.all([
     prisma.farmSettings.findFirst({
       select: { latitude: true, longitude: true },
     }),
-    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({
+      orderBy: { campName: "asc" },
+    }),
   ]);
 
   // CampData shape matches what FarmMap / CampLayer consume. Camps without
-  // a `geojson` boundary are skipped by CampLayer (the GeoJSON builder
-  // returns no features for them) — this is the documented v1 marker-
-  // fallback behaviour. Backfilling boundaries is tracked separately.
+  // a `geojson` boundary are skipped by the GeoJSON builder (no map feature)
+  // — issue #322: they are now surfaced via the non-map CampPresenceFallback
+  // list + setup-state CTA rendered as a sibling to <FarmMap> inside
+  // TenantMapClient, so they are never silently unreachable.
   const campData: CampData[] = camps.map((c) => ({
     camp: {
       camp_id: c.campId,
@@ -102,15 +107,17 @@ export default async function TenantMapPage({
       </div>
 
       {campData.length === 0 ? (
-        // Zero camps for the active FarmMode → onboarding empty state instead
-        // of a blank map (#288). `mode` is the species axis so the guidance
-        // is species-correct (a sheep-mode user isn't shown cattle camps).
+        // The farm has no camps at all → onboarding empty state instead of a
+        // blank map (#288). The camp read is cross-species (#364), so this
+        // branch is reached only when the tenant has zero camps full stop;
+        // `mode` is passed through purely for species-flavoured copy.
         <CampsEmptyState farmSlug={farmSlug} speciesLabel={mode} variant="overlay" />
       ) : (
         <TenantMapClient
           campData={campData}
           farmLat={settings?.latitude ?? null}
           farmLng={settings?.longitude ?? null}
+          farmSlug={farmSlug}
         />
       )}
     </div>

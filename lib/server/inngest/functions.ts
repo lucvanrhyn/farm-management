@@ -33,6 +33,7 @@ import { getAllFarmSlugs } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { evaluateAllAlerts, persistNotifications } from "@/lib/server/alerts";
 import { dispatchChannels } from "@/lib/server/alerts/dispatch";
+import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 import {
   serializeCandidates,
   deserializeCandidates,
@@ -98,6 +99,17 @@ export const evaluateTenantAlerts = inngest.createFunction(
         if (!prisma) throw new Error(`No farm credentials for tenant "${slug}"`);
         const hydrated = deserializeCandidates(candidates);
         const rows = await persistNotifications(prisma, hydrated);
+        // Restore the Phase-4 cron-write cache contract on the live path:
+        // bust the cached /api/notifications feed for this tenant so the
+        // NotificationBell surfaces fresh alerts before the feed-cache TTL.
+        // Only when a write actually happened — `persistNotifications`
+        // returns just the rows it created/updated this cycle, so an empty
+        // result means "no new alerts / all deduped" and a cache bust would
+        // be needless churn per cron tick. (The orchestrator owns this
+        // side-effect; `persistNotifications`/dedup stay free of next/cache.)
+        if (rows.length > 0) {
+          revalidateNotificationWrite(slug);
+        }
         return serializeNotifications(rows);
       },
     );

@@ -1,4 +1,17 @@
+/**
+ * Wave 309c (ADR-0001 Wave B, #309) — domain op `getProfitabilityByAnimal`.
+ *
+ * A transaction-derived read: fetches every transaction + active animal,
+ * partitions transactions into tagged (per-animal) vs camp-level, and
+ * forwards to the pure calculator `calcProfitabilityByAnimal`. Moved
+ * verbatim from the old `lib/server/profitability-by-animal.ts` (Wave G4
+ * #168) — behaviour is byte-identical; only its home changed so it sits in
+ * the transactions domain alongside the other transaction ops.
+ *
+ * See `docs/adr/0001-route-handler-architecture.md`.
+ */
 import type { PrismaClient, Prisma } from '@prisma/client'
+import { crossSpecies } from '@/lib/server/species-scoped-prisma'
 import {
   calcProfitabilityByAnimal,
   AnimalProfitabilityRow,
@@ -21,7 +34,7 @@ export async function getProfitabilityByAnimal(
       select: { animalId: true, campId: true, type: true, amount: true },
     }),
     // cross-species by design: profitability-per-animal spans every species.
-    prisma.animal.findMany({
+    crossSpecies(prisma, 'analytics-rollup').animal.findMany({
       where: { status: 'Active' },
       select: { animalId: true, name: true, category: true, currentCamp: true },
     }),

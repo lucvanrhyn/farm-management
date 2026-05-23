@@ -107,7 +107,9 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode }:
         >
           <span className="text-sm">⚠</span>
           <p className="text-sm font-medium" style={{ color: "#C0574C" }}>
-            {lowGrazingCount} {lowGrazingCount === 1 ? "camp" : "camps"} with &lt;7 days grazing remaining
+            {lowGrazingCount}{" "}
+            {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
+            with &lt;7 days grazing remaining
           </p>
           <span className="ml-auto text-xs font-mono" style={{ color: "#C0574C" }}>View Performance →</span>
         </Link>

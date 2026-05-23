@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import ModalHeader from "@/components/ui/ModalHeader";
 
 interface Category {
   id: string;
@@ -153,9 +154,12 @@ export default function TransactionModal({
         className="rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
       >
-        <h2 className="text-lg font-bold" style={{ color: "#1C1815" }}>
-          {isEdit ? "Edit Transaction" : "New Transaction"}
-        </h2>
+        <ModalHeader
+          title={isEdit ? "Edit Transaction" : "New Transaction"}
+          onClose={onClose}
+          titleStyle={{ color: "#1C1815" }}
+          closeStyle={{ color: "#6B5C4E" }}
+        />
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type toggle */}
           <div className="flex gap-2">

@@ -68,7 +68,8 @@ vi.mock("@/lib/domain/mobs/move-mob", async () => {
 });
 
 import { PATCH } from "@/app/api/mobs/[mobId]/route";
-import { CrossSpeciesBlockedError, MobNotFoundError } from "@/lib/domain/mobs/move-mob";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 
 function patchReq(mobId: string, body: Record<string, unknown>): NextRequest {
   return new NextRequest(`http://localhost/api/mobs/${mobId}`, {

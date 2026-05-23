@@ -111,7 +111,13 @@ describe('markObservationPending — re-queue helper for #209 retry UI', () => {
       sync_status: 'pending',
       clientLocalId: animalUuid,
     });
-    await markAnimalCreateFailed(animalId, { statusCode: 422, error: 'no dam' });
+    // #324 — use a TRANSIENT status here. A terminal 4xx (e.g. 422) is now a
+    // poison message that markAnimalCreatePending deliberately refuses to
+    // re-queue; that behaviour has its own spec in
+    // `terminal-failure-classification.test.ts`. This case pins the
+    // orthogonal #209 contract: a transient retry preserves clientLocalId +
+    // audit metadata.
+    await markAnimalCreateFailed(animalId, { statusCode: 503, error: 'no dam' });
 
     const coverUuid = '99999999-8888-4777-8666-555544443333';
     const coverId = await queueCoverReading({
@@ -138,7 +144,7 @@ describe('markObservationPending — re-queue helper for #209 retry UI', () => {
     expect(pendingAnimals[0].clientLocalId).toBe(animalUuid);
     expect(pendingAnimals[0].attempts).toBe(1);
     expect(pendingAnimals[0].lastError).toBe('no dam');
-    expect(pendingAnimals[0].lastStatusCode).toBe(422);
+    expect(pendingAnimals[0].lastStatusCode).toBe(503);
 
     const pendingCovers = await getPendingCoverReadings();
     expect(pendingCovers).toHaveLength(1);

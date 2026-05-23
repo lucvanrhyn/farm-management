@@ -33,6 +33,10 @@ import {
   markObservationPending,
   markAnimalCreatePending,
   markCoverReadingPending,
+  discardFailedObservation,
+  discardFailedAnimalCreate,
+  discardFailedCoverReading,
+  isTerminalFailure,
   type PendingObservation,
   type PendingAnimalCreate,
   type PendingCoverReading,
@@ -52,9 +56,67 @@ interface FailedRowView {
   lastStatusCode: number | null;
   attempts: number;
   firstFailedAt: number | null;
+  /**
+   * Issue #324 — a row whose most-recent failure was a terminal 4xx
+   * (400/404/422) is a poison message: the re-queue writers no-op on it, so
+   * "Retry" can never drain it. Terminal rows get a Discard control instead.
+   */
+  isTerminal: boolean;
+  /**
+   * Issue #366 — the row failed because `createObservation` rejected it as a
+   * byte-identical duplicate camp_condition (409 DUPLICATE_OBSERVATION).
+   * Surfaced with a clear "already logged" message + a Discard control: the
+   * row holds the identical payload so a blind retry is futile.
+   */
+  isDuplicate: boolean;
+  /** Issue #366 — the "already logged" copy when `isDuplicate` is true. */
+  duplicateMessage: string;
 }
 
 const ERROR_DISPLAY_MAX_CHARS = 120;
+
+/**
+ * Issue #366 — recognise a byte-identical duplicate camp_condition
+ * rejection in a failed row's diagnostics.
+ *
+ * `createObservation` rejects a second-mount duplicate by throwing
+ * `DuplicateObservationError`; the API mapper renders it as
+ * `422 { error: "DUPLICATE_OBSERVATION", details: { existingId } }`, and
+ * the sync manager records that response body verbatim in `lastError`.
+ *
+ * 422 already makes the row terminal under `isTerminalStatus` (a duplicate
+ * is a poison message — its identical payload re-rejects identically
+ * forever), so the existing Discard machinery handles it. This helper only
+ * REFINES the message: a generic terminal poison row says "the data needs
+ * fixing on a fresh entry", which is wrong for a duplicate — the data was
+ * already saved. The duplicate copy: a clear "already logged" notice.
+ *
+ * Pure + exported so the camp_condition duplicate-display contract is
+ * unit-testable without mounting the IDB-bound dialog.
+ */
+export function describeDuplicateFailure(row: {
+  lastError: string | null;
+  lastStatusCode: number | null;
+}): { isDuplicate: boolean; message: string } {
+  const NOT_DUP = { isDuplicate: false, message: '' };
+  if (row.lastStatusCode !== 422 || !row.lastError) return NOT_DUP;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.lastError);
+  } catch {
+    return NOT_DUP;
+  }
+  const code =
+    parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>).error
+      : undefined;
+  if (code !== 'DUPLICATE_OBSERVATION') return NOT_DUP;
+  return {
+    isDuplicate: true,
+    message:
+      'This camp condition was already logged today — the duplicate copy was not saved. Discard this stuck entry.',
+  };
+}
 
 function truncateForDisplay(s: string | null): string {
   if (!s) return '';
@@ -105,6 +167,13 @@ function observationTypeLabel(type: string): string {
 }
 
 function mapObservation(o: PendingObservation): FailedRowView {
+  // Issue #366 — a 409 DUPLICATE_OBSERVATION rejection is non-retryable in
+  // practice (the row holds the identical payload). Surface it with the
+  // "already logged" message and route it through the Discard control.
+  const dup = describeDuplicateFailure({
+    lastError: o.lastError,
+    lastStatusCode: o.lastStatusCode,
+  });
   return {
     kind: 'observation',
     localId: o.local_id!,
@@ -115,6 +184,9 @@ function mapObservation(o: PendingObservation): FailedRowView {
     lastStatusCode: o.lastStatusCode,
     attempts: o.attempts,
     firstFailedAt: o.firstFailedAt,
+    isTerminal: isTerminalFailure(o),
+    isDuplicate: dup.isDuplicate,
+    duplicateMessage: dup.message,
   };
 }
 
@@ -129,6 +201,9 @@ function mapAnimal(a: PendingAnimalCreate): FailedRowView {
     lastStatusCode: a.lastStatusCode,
     attempts: a.attempts,
     firstFailedAt: a.firstFailedAt,
+    isTerminal: isTerminalFailure(a),
+    isDuplicate: false,
+    duplicateMessage: '',
   };
 }
 
@@ -143,6 +218,9 @@ function mapCover(c: PendingCoverReading): FailedRowView {
     lastStatusCode: c.lastStatusCode,
     attempts: c.attempts,
     firstFailedAt: c.firstFailedAt,
+    isTerminal: isTerminalFailure(c),
+    isDuplicate: false,
+    duplicateMessage: '',
   };
 }
 
@@ -168,6 +246,20 @@ async function retryRow(row: FailedRowView): Promise<void> {
       return;
     case 'cover-reading':
       await markCoverReadingPending(row.localId);
+      return;
+  }
+}
+
+async function discardRow(row: FailedRowView): Promise<void> {
+  switch (row.kind) {
+    case 'observation':
+      await discardFailedObservation(row.localId);
+      return;
+    case 'animal':
+      await discardFailedAnimalCreate(row.localId);
+      return;
+    case 'cover-reading':
+      await discardFailedCoverReading(row.localId);
       return;
   }
 }
@@ -231,7 +323,12 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       // Snapshot the current visible rows so we re-queue exactly what the user
       // saw — if a row were added between the click and the loop, it would be
       // out of scope for this batch.
-      const snapshot = rows;
+      // Issue #324 — skip terminal poison rows. The re-queue writers no-op
+      // on them anyway; iterating them here would falsely imply they were
+      // re-armed. They stay visible with their own Discard control.
+      // Issue #366 — also skip duplicate-rejected rows: the row holds the
+      // identical payload, so a re-POST is rejected as a duplicate again.
+      const snapshot = rows.filter((r) => !r.isTerminal && !r.isDuplicate);
       for (const row of snapshot) {
         await retryRow(row);
       }
@@ -243,6 +340,25 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       setBusy(false);
     }
   }, [busy, rows, reload, syncNow, refreshPendingCount]);
+
+  const onDiscardOne = useCallback(
+    async (row: FailedRowView) => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        // Permanently drop a poison row. No sync cycle — the payload is
+        // server-rejected and unrecoverable; reload lets the list drain (and
+        // auto-close when empty) so the farmer escapes the dead-end.
+        await discardRow(row);
+        await reload();
+        await refreshPendingCount();
+        await reload();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, reload, refreshPendingCount],
+  );
 
   if (!isOpen) return null;
 
@@ -311,16 +427,52 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                     {row.subjectLabel}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRetryOne(row)}
-                  disabled={busy}
-                  className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
-                  style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
-                >
-                  Retry
-                </button>
+                {row.isTerminal || row.isDuplicate ? (
+                  <button
+                    type="button"
+                    data-testid={`discard-row-${row.kind}-${row.localId}`}
+                    onClick={() => onDiscardOne(row)}
+                    disabled={busy}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
+                    style={{ backgroundColor: '#6B4226', color: '#F5F0E8' }}
+                  >
+                    Discard
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`retry-row-${row.kind}-${row.localId}`}
+                    onClick={() => onRetryOne(row)}
+                    disabled={busy}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
+                    style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
+              {/* Issue #366 — a byte-identical duplicate gets its own clear
+                  "already logged" copy; the generic terminal message is for
+                  the malformed-payload poison-row case. */}
+              {row.isDuplicate ? (
+                <p
+                  data-testid={`duplicate-msg-${row.kind}-${row.localId}`}
+                  className="text-[11px] font-medium"
+                  style={{ color: '#E0A050' }}
+                >
+                  {row.duplicateMessage}
+                </p>
+              ) : (
+                row.isTerminal && (
+                  <p
+                    className="text-[11px] font-medium"
+                    style={{ color: '#E0A050' }}
+                  >
+                    Rejected by the server — won&apos;t retry. The data needs
+                    fixing on a fresh entry; discard this stuck copy.
+                  </p>
+                )
+              )}
               <div
                 className="text-xs flex flex-wrap gap-x-3 gap-y-1"
                 style={{ color: 'rgba(210, 180, 140, 0.7)' }}

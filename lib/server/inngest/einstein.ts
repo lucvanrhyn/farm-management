@@ -52,6 +52,7 @@ import {
 } from "@/lib/einstein/chunker";
 import { embed, embeddingToBytes } from "@/lib/einstein/embeddings";
 import { resetMonthlyBudget } from "@/lib/einstein/budget";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 // ── Event / trigger constants ───────────────────────────────────────────────
 
@@ -287,12 +288,14 @@ export async function findStaleEntities(
       // "animal 'Bella' (Cattle, Angus, camp 'North Pasture')" instead of
       // bare IDs. See chunker comment on Wave 2A field-mismatch postmortem.
       const [rows, animals, camps] = await Promise.all([
-        prisma.observation.findMany({}),
+        crossSpecies(prisma, "einstein-rag").observation.findMany({}),
         // cross-species by design: RAG embeddings cover every animal entity.
-        prisma.animal.findMany({
+        crossSpecies(prisma, "einstein-rag").animal.findMany({
           select: { animalId: true, name: true, species: true, breed: true },
         }),
-        prisma.camp.findMany({ select: { campId: true, campName: true } }),
+        crossSpecies(prisma, "einstein-rag").camp.findMany({
+          select: { campId: true, campName: true },
+        }),
       ]);
       const animalById = new Map(animals.map((a) => [a.animalId, a]));
       const campById = new Map(camps.map((c) => [c.campId, c.campName]));
@@ -310,7 +313,7 @@ export async function findStaleEntities(
       break;
     }
     case "camp": {
-      const rows = await prisma.camp.findMany({});
+      const rows = await crossSpecies(prisma, "einstein-rag").camp.findMany({});
       // Use updatedAt now that 0014_einstein_chunker_version migration added the
       // column. Falls back to createdAt for rows that pre-date the migration
       // (they'll have updatedAt === createdAt via the DEFAULT CURRENT_TIMESTAMP
@@ -322,8 +325,10 @@ export async function findStaleEntities(
       // Denormalise current-camp name for readable chunk text.
       // cross-species by design: RAG embeddings cover every animal.
       const [rows, camps] = await Promise.all([
-        prisma.animal.findMany({}),
-        prisma.camp.findMany({ select: { campId: true, campName: true } }),
+        crossSpecies(prisma, "einstein-rag").animal.findMany({}),
+        crossSpecies(prisma, "einstein-rag").camp.findMany({
+          select: { campId: true, campName: true },
+        }),
       ]);
       const campById = new Map(camps.map((c) => [c.campId, c.campName]));
       sourceRows = rows.map((r) => ({
@@ -626,7 +631,7 @@ export async function reindexForEntity(
           // UNIQUE on species+campId). findFirst preserves single-species
           // behaviour; Phase B will thread species through this read once
           // species is denormalised onto Observation more thoroughly.
-          prisma.camp.findFirst({
+          crossSpecies(prisma, "einstein-rag").camp.findFirst({
             where: { campId: r.campId },
             select: { campName: true },
           }),
@@ -651,7 +656,7 @@ export async function reindexForEntity(
       const r = await prisma.animal.findUnique({ where: { id: entityId } });
       if (r) {
         // Phase A of #28: see comment above on findFirst rationale.
-        const camp = await prisma.camp.findFirst({
+        const camp = await crossSpecies(prisma, "einstein-rag").camp.findFirst({
           where: { campId: r.currentCamp },
           select: { campName: true },
         });

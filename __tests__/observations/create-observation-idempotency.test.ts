@@ -28,6 +28,15 @@
  *   - Calling with DIFFERENT `clientLocalId`s creates two distinct rows.
  *   - Omitting `clientLocalId` (legacy callers, e.g. before #207 lands the
  *     Animal/Cover slice) falls back to the original create path — back-compat.
+ *
+ * #321 note: this suite uses `camp_check` as its arbitrary valid
+ * observation type. It previously used `camp_condition`, but #321 (PRD #318
+ * wave R4) added a required grazing/water/fence guard to `camp_condition`
+ * in `createObservation`; the throwaway `{}`/`'first'` details these
+ * idempotency cases pass would now (correctly) be rejected by that guard.
+ * `camp_check` carries no required-field contract, so the idempotency
+ * behaviour under test is exercised without coupling to camp_condition
+ * semantics.
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
@@ -146,7 +155,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
     const clientLocalId = '11111111-1111-4111-8111-111111111111';
 
     const first = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: 'first',
@@ -156,7 +165,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
     });
 
     const second = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: 'retry — same UUID',
@@ -174,7 +183,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
     const clientLocalId = '22222222-2222-4222-8222-222222222222';
 
     await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -183,7 +192,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
       clientLocalId,
     });
     await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -200,7 +209,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
     const clientLocalId = '33333333-3333-4333-8333-333333333333';
 
     await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -218,7 +227,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
 
   it('creates two distinct rows when given two different clientLocalIds', async () => {
     const first = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -227,7 +236,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
       clientLocalId: '44444444-4444-4444-8444-444444444444',
     });
     const second = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -245,7 +254,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
     // (and the existing route handler under test in __tests__/api/observations.test.ts)
     // must keep working with the old create() path.
     const first = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',
@@ -253,7 +262,7 @@ describe('createObservation — idempotency via clientLocalId (#206)', () => {
       loggedBy: 'logger@example.com',
     });
     const second = await createObservation(asPrisma(fake), {
-      type: 'camp_condition',
+      type: 'camp_check',
       camp_id: 'A',
       animal_id: null,
       details: '{}',

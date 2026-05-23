@@ -54,6 +54,7 @@ import {
   MissingFileError,
   uploadPhoto,
 } from '@/lib/domain/photos';
+import { createObservation } from '@/lib/domain/observations/create-observation';
 
 function mapPhotoError(err: unknown): NextResponse | null {
   if (err instanceof MissingFileError) {
@@ -121,9 +122,12 @@ export const POST = tenantWrite<unknown, { id: string }>({
   handle: async (ctx, _body, req, params) => {
     const { prisma, slug } = ctx;
 
+    // ADR-0006 — only existence is read here; the door re-loads the
+    // animal (and stamps species via the waterfall) so we no longer
+    // duplicate `currentCamp` / `species` extraction at this seam.
     const animal = await prisma.animal.findUnique({
       where: { animalId: params.id },
-      select: { animalId: true, currentCamp: true, species: true },
+      select: { animalId: true, currentCamp: true },
     });
     if (!animal) {
       return routeError('ANIMAL_NOT_FOUND', 'Animal not found', 404);
@@ -137,23 +141,22 @@ export const POST = tenantWrite<unknown, { id: string }>({
       }
       const { url } = await uploadPhoto(slug, file);
 
-      const observation = await prisma.observation.create({
-        data: {
-          type: 'camp_check',
-          campId: animal.currentCamp,
-          animalId: animal.animalId,
-          species: animal.species,
-          details: JSON.stringify({ note: 'Photo uploaded from admin' }),
-          observedAt: new Date(),
-          loggedBy: ctx.session.user?.email ?? ctx.session.user?.name ?? 'admin',
-          attachmentUrl: url,
-        },
-        select: { id: true, attachmentUrl: true },
+      // ADR-0006 — route observation create through the named door so
+      // species denormalisation lives in one place (the waterfall) and
+      // the structural test stays binary. `attachmentUrl` is now a
+      // door input.
+      const observation = await createObservation(prisma, {
+        type: 'camp_check',
+        camp_id: animal.currentCamp,
+        animal_id: animal.animalId,
+        details: JSON.stringify({ note: 'Photo uploaded from admin' }),
+        loggedBy: ctx.session.user?.email ?? ctx.session.user?.name ?? 'admin',
+        attachmentUrl: url,
       });
 
       return NextResponse.json({
         success: true,
-        attachmentUrl: observation.attachmentUrl,
+        attachmentUrl: url,
         observationId: observation.id,
       });
     } catch (err) {

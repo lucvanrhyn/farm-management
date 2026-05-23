@@ -16,6 +16,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
@@ -69,9 +71,11 @@ export default async function MapSettingsPage({
 
   const tier: FarmTier = (creds?.tier ?? "basic") as FarmTier;
 
+  const mode = await getFarmMode(farmSlug);
+
   const [rawSettings, camps] = await Promise.all([
     prisma.farmSettings.findFirst({ select: { mapSettings: true } }),
-    prisma.camp.findMany({ select: { geojson: true } }),
+    scoped(prisma, mode).camp.findMany({ select: { geojson: true } }),
   ]);
 
   const settings = parseMapSettings(rawSettings?.mapSettings);

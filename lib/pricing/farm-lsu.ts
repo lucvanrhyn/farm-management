@@ -1,6 +1,7 @@
 import { calcLsu } from '@/lib/species/shared/lsu';
 import { getMergedLsuValues } from '@/lib/species/registry';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 
 /** A counted bucket of animals sharing a category (e.g. { category: 'Cow', count: 100 }). */
 export interface CategoryBucket {
@@ -69,11 +70,17 @@ export async function computeFarmLsu(farmSlug: string): Promise<number> {
 
   const [animalGroups, gameRows] = await Promise.all([
     // cross-species by design: farm-wide LSU sums cattle + sheep + game.
-    prisma.animal.groupBy({
+    // crossSpecies() forwards args verbatim — no species/status injection.
+    // The facade returns Prisma's broadest groupBy shape (documented
+    // trade-off in species-scoped-prisma.ts); re-narrow to the row shape
+    // this query's `by`/`_count` selection produces — behaviour-identical.
+    crossSpecies(prisma, 'analytics-rollup').animal.groupBy({
       by: ['category'],
       where: { status: 'Active' },
       _count: { _all: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ category: string; _count: { _all: number } }>
+    >,
     prisma.$queryRawUnsafe<RawGameSpeciesRow[]>(
       `SELECT currentEstimate, lsuEquivalent FROM GameSpecies`,
     ).catch(() => [] as RawGameSpeciesRow[]),

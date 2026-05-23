@@ -30,28 +30,55 @@ export const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
   weighing:        { color: "#5BAD5E", bg: "rgba(91,173,94,0.15)" },
 };
 
+/**
+ * @deprecated since #394 — prefer `getObservationTypeLabel(type)` from
+ * `./registry.ts`. That helper is the authoritative source for label /
+ * summary / detail-form across the admin timeline. This flat map is
+ * retained for `app/[farmSlug]/sheep/observations/SheepObservationsTimeline.tsx`,
+ * which is outside this wave's allow-list. The 9 persistence-canonical
+ * types that used to be missing from this map are now filled in so the
+ * legacy caller stays in sync with the registry until it migrates.
+ *
+ * If you find yourself reading this in a new feature, import from
+ * `./registry` instead — every type is reachable via the exhaustive
+ * `OBSERVATION_REGISTRY` mapped object type, and the structural arch
+ * test (`tests/arch/observation-registry-coverage.test.ts`) catches a
+ * missing entry at CI rather than at runtime in the UI.
+ */
 export const TYPE_LABEL: Record<string, string> = {
-  camp_check:      "Camp inspection",
-  camp_condition:  "Camp condition",
-  health_issue:    "Health",
-  animal_movement: "Movement",
-  reproduction:    "Reproduction",
-  treatment:       "Treatment",
-  death:           "Death",
-  weighing:        "Weighing",
-  calving:         "Calving",
-  pregnancy_scan:  "Pregnancy Scan",
-  heat:            "Heat / Oestrus",
-  insemination:    "Insemination",
-  lambing:         "Lambing",
-  joining:         "Joining",
-  shearing:        "Shearing",
-  predation_loss:  "Predation Loss",
-  dosing:          "Dosing",
-  famacha:         "FAMACHA Score",
-  fostering:       "Fostering",
-  camp_cover:      "Cover Reading",
-  mob_movement:    "Mob Movement",
+  camp_check:            "Camp Inspection",
+  camp_condition:        "Camp Condition",
+  health_issue:          "Health",
+  animal_movement:       "Movement",
+  reproduction:          "Reproduction",
+  treatment:             "Treatment",
+  death:                 "Death",
+  weighing:              "Weighing",
+  calving:               "Calving",
+  pregnancy_scan:        "Pregnancy Scan",
+  heat:                  "Heat / Oestrus",
+  heat_detection:        "Heat Detection",
+  insemination:          "Insemination",
+  lambing:               "Lambing",
+  joining:               "Joining",
+  shearing:              "Shearing",
+  predation_loss:        "Predation Loss",
+  dosing:                "Dosing",
+  famacha:               "FAMACHA Score",
+  fostering:             "Fostering",
+  camp_cover:            "Cover Reading",
+  mob_movement:          "Mob Movement",
+  // #394 — fill the 9 persistence-canonical types that used to fall
+  // through the legacy TYPE_LABEL lookup. The registry is authoritative;
+  // this list exists only for the SheepObservationsTimeline caller.
+  body_condition_score:  "Body Condition Score",
+  temperament_score:     "Temperament Score",
+  scrotal_circumference: "Scrotal Circumference",
+  drying_off:            "Drying Off",
+  weaning:               "Weaning",
+  general:               "General Note",
+  game_census:           "Game Census",
+  game_sighting:         "Game Sighting",
 };
 
 export const TREATMENT_TYPES = ["Antibiotic", "Dip", "Deworming", "Vaccination", "Supplement", "Other"];
@@ -63,7 +90,16 @@ export const FENCE_STATUS = ["Intact", "Damaged"];
 export const REPRODUCTION_EVENTS = ["heat", "insemination", "pregnancy_scan", "calving"];
 export const DEATH_CAUSES = ["Unknown", "Redwater", "Heartwater", "Snake", "Old_age", "Birth_complications", "Other"];
 
-/** Observation types whose details can be edited from the timeline modal. */
+/**
+ * @deprecated since #394 — prefer `isObservationEditable(type)` from
+ * `./registry.ts`. The registry derives editability from the per-type
+ * `editable: boolean` flag, kept consistent with the form components
+ * it dispatches.
+ *
+ * Retained for any out-of-tree caller (none in the repo as of #394, but
+ * the constant is part of the historical public surface of this
+ * directory).
+ */
 export const EDITABLE_TYPES = new Set([
   "weighing",
   "treatment",
@@ -71,6 +107,12 @@ export const EDITABLE_TYPES = new Set([
   "camp_condition",
   "reproduction",
   "death",
+  // #394 — newly editable types after the registry-driven dispatch.
+  "body_condition_score",
+  "temperament_score",
+  "scrotal_circumference",
+  "dosing",
+  "general",
 ]);
 
 export const lightSelect: CSSProperties = {

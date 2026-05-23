@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { tenantRead, tenantWrite, routeError } from "@/lib/server/route";
+import { tenantRead, tenantWrite } from "@/lib/server/route";
+import { mapApiDomainError } from "@/lib/server/api-errors";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
-import { timeAsync } from "@/lib/server/server-timing";
 import {
   createAnimal,
   CreateAnimalValidationError,
 } from "@/lib/domain/animals/create-animal";
+import { listAnimals } from "@/lib/domain/animals/list-animals";
 
 // Pagination tunables. Default 500/request balances payload size (~100KB JSON
 // for a typical cattle row) against round-trip count on large herds. Max
@@ -30,6 +31,16 @@ const MAX_LIMIT = 2000;
  * unchanged but every other GET in the codebase gains the same defence by
  * construction. The per-route `dbQueryFailed` helper that lived here is
  * deleted in this commit.
+ *
+ * Wave 316b (#309) — the fat handler body (baseWhere construction, the
+ * unbounded vs cursor `findMany` split, hasMore/nextCursor) moved into the
+ * `listAnimals` domain op. The route is now a thin adapter: it parses query
+ * params, keeps the `{ error: "Invalid limit" }` 400 at the boundary
+ * (legacy sync-manager clients pattern-match the literal — migrating it to
+ * a typed envelope is a deferred future wave), then maps the op's
+ * discriminated result back to the byte-identical legacy wire (bare array
+ * in unbounded mode, `{ items, nextCursor, hasMore }` in cursor mode). The
+ * discriminator never reaches the client.
  */
 export const GET = tenantRead({
   handle: async (ctx, req) => {
@@ -55,66 +66,46 @@ export const GET = tenantRead({
     const cursorParam = searchParams.get("cursor");
     const paginated = limitParam !== null || cursorParam !== null;
 
-    const baseWhere = {
-      ...(camp ? { currentCamp: camp } : {}),
-      ...(category ? { category } : {}),
-      ...(status !== "all" ? { status } : {}),
-      ...(species ? { species } : {}),
-      ...(unassigned ? { mobId: null } : {}),
-      ...(search
-        ? {
-            OR: [
-              { animalId: { contains: search } },
-              { name: { contains: search } },
-            ],
-          }
-        : {}),
-    };
-
-    if (!paginated) {
-      // cross-species by design: species filter is opt-in via `?species=`
-      // (see baseWhere construction above). Callers that want a single
-      // species pass it explicitly; legacy callers stay multi-species.
-      const animals = await timeAsync("query", () =>
-        prisma.animal.findMany({
-          where: baseWhere,
-          orderBy: [{ category: "asc" }, { animalId: "asc" }],
-        }),
-      );
-      return NextResponse.json(animals);
+    let limit: number | undefined;
+    if (paginated) {
+      const rawLimit = limitParam
+        ? Number.parseInt(limitParam, 10)
+        : DEFAULT_LIMIT;
+      if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
+        // Pre-existing wire shape for query-param validation:
+        // `{ error: "Invalid limit" }`. Kept here at the route boundary
+        // (NOT routed through `routeError`, NOT a domain error) because the
+        // legacy clients (sync-manager) pattern-match on the message. A
+        // future wave can switch this to a typed VALIDATION_FAILED envelope
+        // alongside a client-side flip.
+        return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+      }
+      limit = Math.min(rawLimit, MAX_LIMIT);
     }
 
-    const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
-    if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
-      // Pre-existing wire shape for query-param validation: `{ error: "Invalid limit" }`.
-      // Kept here (NOT routed through `routeError`) because the legacy clients
-      // (sync-manager) pattern-match on the message. A future wave can switch
-      // this to a typed VALIDATION_FAILED envelope alongside a client-side flip.
-      return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
+    const result = await listAnimals(prisma, {
+      camp,
+      category,
+      status,
+      species,
+      search,
+      unassigned,
+      paginated,
+      limit,
+      cursor: cursorParam,
+    });
+
+    // Map the discriminated result back to the byte-identical legacy wire.
+    // The discriminator never reaches the client: unbounded mode is a bare
+    // array, cursor mode is `{ items, nextCursor, hasMore }`.
+    if (result.mode === "all") {
+      return NextResponse.json(result.animals);
     }
-    const limit = Math.min(rawLimit, MAX_LIMIT);
-
-    // Cursor is the last `animalId` returned in the previous batch. We order
-    // ONLY by animalId when paginating (dropping the category tie-breaker) so
-    // a single monotonic cursor is sufficient. Fetch `limit + 1` rows to
-    // detect "has more" without a second COUNT round-trip.
-    // cross-species by design: species filter is opt-in via baseWhere above.
-    const items = await timeAsync("query", () =>
-      prisma.animal.findMany({
-        where: {
-          ...baseWhere,
-          ...(cursorParam ? { animalId: { gt: cursorParam } } : {}),
-        },
-        orderBy: { animalId: "asc" },
-        take: limit + 1,
-      }),
-    );
-
-    const hasMore = items.length > limit;
-    const trimmed = hasMore ? items.slice(0, limit) : items;
-    const nextCursor = hasMore ? trimmed[trimmed.length - 1]!.animalId : null;
-
-    return NextResponse.json({ items: trimmed, nextCursor, hasMore });
+    return NextResponse.json({
+      items: result.items,
+      nextCursor: result.nextCursor,
+      hasMore: result.hasMore,
+    });
   },
 });
 
@@ -123,17 +114,21 @@ export const GET = tenantRead({
  *
  * tenantWrite (not adminWrite): LOGGER role may create calf records via the
  * calving-observation flow; ADMIN may create any animal. We can't use the
- * pure adminWrite gate here, so we use tenantWrite + an in-handler role
- * guard. (When the wave-B+ domain extraction lands a `createAnimal` op,
- * the role gate moves into the domain layer.)
+ * pure adminWrite gate here, so we use tenantWrite and forward the caller's
+ * role to `createAnimal`.
+ *
+ * Wave 316b (#309) — the in-handler role gate moved INTO `createAnimal` (it
+ * throws `AnimalRoleForbiddenError` for a non-ADMIN/non-LOGGER role). The
+ * route is now a thin adapter: it always passes `role: ctx.role`, and maps
+ * the typed error onto the byte-identical legacy 403 via
+ * `mapApiDomainError` (which re-mints the exact `routeError("FORBIDDEN",
+ * "Forbidden", 403)` envelope). `CreateAnimalValidationError` → 400 stays
+ * unchanged.
  */
 export const POST = tenantWrite<unknown>({
   revalidate: revalidateAnimalWrite,
   handle: async (ctx, body) => {
     const { prisma, role } = ctx;
-    if (role !== "ADMIN" && role !== "LOGGER") {
-      return routeError("FORBIDDEN", "Forbidden", 403);
-    }
 
     const {
       animalId,
@@ -181,6 +176,8 @@ export const POST = tenantWrite<unknown>({
           typeof clientLocalId === "string" && clientLocalId
             ? clientLocalId
             : null,
+        // Wave 316b (#309) — role gate now lives in the domain op.
+        role,
       });
 
       return NextResponse.json(
@@ -191,6 +188,11 @@ export const POST = tenantWrite<unknown>({
       if (err instanceof CreateAnimalValidationError) {
         return NextResponse.json({ error: err.message }, { status: 400 });
       }
+      // Wave 316b (#309) — `AnimalRoleForbiddenError` maps to the
+      // byte-identical legacy 403 via the shared domain-error mapper (it
+      // re-mints the exact `routeError("FORBIDDEN", "Forbidden", 403)`).
+      const mapped = mapApiDomainError(err);
+      if (mapped) return mapped;
       throw err;
     }
   },

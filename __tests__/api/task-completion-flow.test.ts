@@ -49,6 +49,14 @@ const mockTransaction = vi.fn();
 // Phase I.3 — task route now looks up Animal.species at write time so the
 // denormalised Observation.species stays fresh. Default mock returns cattle.
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: "cattle" });
+// ADR-0006 — updateTask now routes the task-completion observation
+// through `createObservation`, which calls `crossSpecies(...).camp.findFirst`
+// to verify camp existence and read its species. Stub a default
+// "camp exists, species null" so the door's CampNotFoundError path is
+// not the default outcome. The mob stub is defensive (mob_id is never
+// supplied on task-completion observations).
+const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: "camp-north", species: null });
+const mockMobFindUnique = vi.fn();
 
 const mockPrisma = {
   task: {
@@ -62,6 +70,12 @@ const mockPrisma = {
   },
   animal: {
     findUnique: mockAnimalFindUnique,
+  },
+  camp: {
+    findFirst: mockCampFindFirst,
+  },
+  mob: {
+    findUnique: mockMobFindUnique,
   },
   taskTemplate: {
     upsert: mockTemplateUpsert,
@@ -556,6 +570,17 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
     vi.resetModules();
   });
 
+  // ADR-0006 — task-completion observations route through
+  // `createObservation`, which enforces the registry allowlist and the
+  // #321 camp_condition required-field guard.
+  //
+  // Issue #360 — rainfall_reading, camp_inspection, and camp_move are
+  // reminder-only task types: `observationFromTaskCompletion` maps them
+  // to null, so completing one of those tasks updates status to
+  // "completed" with `observationCreated: false` and writes no
+  // Observation row. The scenarios below cover the flows that DO
+  // produce a valid door input; the reminder-only contract is pinned in
+  // the section that follows.
   const taskTypeScenarios = [
     {
       taskType: "pregnancy_scan",
@@ -568,18 +593,6 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
       payload: { product: "Lumpy Skin vax", dose: "2ml" },
       expectedObsType: "treatment",
       expectedDetailsFragment: "Lumpy Skin vax",
-    },
-    {
-      taskType: "camp_inspection",
-      payload: { condition: "good" },
-      expectedObsType: "camp_condition",
-      expectedDetailsFragment: "good",
-    },
-    {
-      taskType: "rainfall_reading",
-      payload: { rainfallMm: 12 },
-      expectedObsType: "rainfall",
-      expectedDetailsFragment: "12",
     },
   ];
 
@@ -619,4 +632,78 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
       mockTransaction.mockClear();
     });
   }
+
+  // ── Reminder-only task types (issue #360) ──────────────────────────
+  // rainfall_reading / camp_inspection / camp_move are reminder-only:
+  // `observationFromTaskCompletion` returns null, so the task completes
+  // 200 with observationCreated=false and no Observation row is written.
+  // Pre-#360 these emitted door-invalid payloads (off-registry
+  // `rainfall` / `camp_move`; `camp_condition` missing the #321
+  // grazing/water/fence keys) and surfaced as 422 — observation-mapping.ts
+  // is now structurally incapable of producing a door-rejection.
+  it("taskType=rainfall_reading → 200, no observation (reminder-only)", async () => {
+    mockTaskFindUnique.mockResolvedValueOnce({
+      ...BASE_TASK,
+      taskType: "rainfall_reading",
+    });
+
+    const { PATCH } = await import("@/app/api/tasks/[id]/route");
+    const req = makeReq("http://localhost/api/tasks/task-weighing-1", {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        completionPayload: { rainfallMm: 12 },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "task-weighing-1" }) });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.observationCreated).toBe(false);
+    expect(mockObservationCreate).not.toHaveBeenCalled();
+  });
+
+  it("taskType=camp_inspection → 200, no observation (reminder-only)", async () => {
+    mockTaskFindUnique.mockResolvedValueOnce({
+      ...BASE_TASK,
+      taskType: "camp_inspection",
+    });
+
+    const { PATCH } = await import("@/app/api/tasks/[id]/route");
+    const req = makeReq("http://localhost/api/tasks/task-weighing-1", {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        completionPayload: { condition: "good" },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "task-weighing-1" }) });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.observationCreated).toBe(false);
+    expect(mockObservationCreate).not.toHaveBeenCalled();
+  });
+
+  it("taskType=camp_move → 200, no observation (reminder-only)", async () => {
+    mockTaskFindUnique.mockResolvedValueOnce({
+      ...BASE_TASK,
+      taskType: "camp_move",
+    });
+
+    const { PATCH } = await import("@/app/api/tasks/[id]/route");
+    const req = makeReq("http://localhost/api/tasks/task-weighing-1", {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        completionPayload: { toCampId: "camp-B" },
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "task-weighing-1" }) });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.observationCreated).toBe(false);
+    expect(mockObservationCreate).not.toHaveBeenCalled();
+  });
 });

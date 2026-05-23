@@ -184,7 +184,7 @@ describe("POST /api/observations", () => {
     mockPrisma.observation.create = vi.fn().mockResolvedValue({
       id: "OBS1",
       campId: "C1",
-      type: "camp_condition",
+      type: "camp_check",
       observedAt: new Date(),
     });
 
@@ -192,7 +192,13 @@ describe("POST /api/observations", () => {
     const req = new NextRequest("http://localhost/api/observations", {
       method: "POST",
       body: JSON.stringify({
-        type: "camp_condition",
+        // #321 (PRD #318 wave R4): this case asserts revalidateTag wiring,
+        // not camp_condition semantics. `camp_condition` now requires an
+        // explicit grazing/water/fence payload in `createObservation`, so
+        // `details: {}` would (correctly) be rejected by that guard.
+        // `camp_check` is a valid type with no required-field contract —
+        // the cache-invalidation behaviour under test is unchanged.
+        type: "camp_check",
         camp_id: "C1",
         details: {},
       }),

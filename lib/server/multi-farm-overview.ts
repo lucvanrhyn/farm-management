@@ -1,5 +1,6 @@
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { SessionFarm } from "@/types/next-auth";
 
 export interface FarmOverview {
@@ -55,9 +56,9 @@ export async function getOverviewForUserFarms(
       // profitability-by-animal).
       const [activeAnimalCount, campCount, latestObs] = await Promise.all([
         // cross-species by design: farm-selector overview counts every species.
-        prisma.animal.count({ where: { status: "Active" } }),
-        prisma.camp.count(),
-        prisma.observation.findFirst({
+        crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
+        crossSpecies(prisma, "analytics-rollup").camp.count(),
+        crossSpecies(prisma, "analytics-rollup").observation.findFirst({
           orderBy: { createdAt: "desc" },
           select: { createdAt: true },
         }),
