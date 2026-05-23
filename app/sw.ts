@@ -9,6 +9,7 @@ import {
 } from "serwist";
 import { defaultCache } from "@serwist/next/worker";
 import { isTelemetryRequest } from "@/lib/sw/telemetry-bypass";
+import { isTenantNavigationRequest } from "@/lib/sw/tenant-nav";
 
 // Required: declare __SW_MANIFEST on the SW global scope.
 // This token is replaced by @serwist/next at build time with the actual
@@ -43,6 +44,34 @@ const serwist = new Serwist({
     ],
   },
   runtimeCaching: [
+    // Tenant-scoped navigation (`/[farmSlug]/...`) — NetworkOnly.
+    //
+    // Issue #397 (PRD #389 Module 3 W2): even after #393 hardened the
+    // server-side tenant resolver, an installed service worker could still
+    // serve a cached shell rendered while the user was on farm A as the
+    // response for a navigation to farm B. The cache is path-keyed, but
+    // SWR returns the stale entry instantly — and the cached HTML embeds
+    // tenant-specific data in the React tree (Codex's "clean headless
+    // browser did not reproduce" was exactly this — required an installed
+    // SW + a prior cache entry for the target URL).
+    //
+    // Strategy: route tenant navigations to NetworkOnly so the shell is
+    // never served from cache. Static assets (chunks, images, geojson,
+    // /logger warm-up requests) keep their existing caching strategies
+    // below. The `/offline` fallback in `fallbacks.entries` still serves
+    // a hard-navigation under offline conditions, which matches the
+    // pre-existing behaviour for tenant routes that hadn't been pre-cached.
+    //
+    // Predicate lives in `lib/sw/tenant-nav.ts` (pure, unit-tested at
+    // `__tests__/sw/tenant-nav.test.ts`).
+    //
+    // MUST be placed before the catch-all navigation matcher below so it
+    // wins for tenant URLs.
+    {
+      matcher: ({ url, request }: { url: URL; request: Request }) =>
+        request.mode === "navigate" && isTenantNavigationRequest(url.pathname),
+      handler: new NetworkOnly(),
+    },
     // Navigation requests (HTML pages) — cache after first online visit so
     // the app shell loads offline. Must be first so it matches before defaultCache.
     {
