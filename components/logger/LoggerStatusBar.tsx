@@ -5,16 +5,47 @@ import { useOffline } from './OfflineProvider';
 import FailedSyncDialog from './FailedSyncDialog';
 import { OfflineBanner } from './OfflineBanner';
 import { SyncBadge } from './SyncBadge';
+import {
+  deriveSyncStatusFromCounts,
+  type SyncStatusDescriptor,
+} from '@/lib/sync/deriveSyncStatus';
 
-function formatRelativeTime(iso: string | null): string {
-  if (!iso) return 'Never';
-  const diff = Date.now() - new Date(iso).getTime();
+function formatRelativeTime(epochMs: number | null): string {
+  if (epochMs === null) return 'Never';
+  const diff = Date.now() - epochMs;
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * Issue #395 — descriptor → copy map. Renders the right-side status text
+ * based on the deriver output. Lives outside the component so the test
+ * suite can exercise it directly without a render.
+ *
+ * "Synced: …" appears ONLY when `kind === 'fresh'` — the bug this issue
+ * closes was that the right-hand text always read "Synced" regardless of
+ * pending or failed rows in the offline queue.
+ */
+export function describeSyncStatus(descriptor: SyncStatusDescriptor): string {
+  const { kind, counts, lastSuccessAt } = descriptor;
+  switch (kind) {
+    case 'fresh':
+      return `Synced: ${formatRelativeTime(lastSuccessAt)}`;
+    case 'syncing':
+      return `${counts.pending} pending`;
+    case 'failed':
+      return `${counts.failed} failed`;
+    case 'partial':
+      return `${counts.pending} pending · ${counts.failed} failed`;
+    case 'stale':
+      return `Stale: ${formatRelativeTime(lastSuccessAt)}`;
+    case 'offline':
+      return 'Offline';
+  }
 }
 
 // Issue #252 — how long a per-item reconnect toast stays on screen before
@@ -86,6 +117,20 @@ export function LoggerStatusBar() {
   const statusIcon = !isOnline ? '🔴' : syncStatus === 'syncing' ? '🟡' : '🟢';
   const statusText = !isOnline ? 'Offline' : syncStatus === 'syncing' ? 'Uploading...' : 'Online';
 
+  // Issue #395 — single derivation point for the right-side copy. Reads the
+  // PRD #194 SyncTruth (`lastSyncedAt` is `lastFullSuccessAt` in ISO form),
+  // the queue counts, and connectivity. The component renders `copy` and
+  // does not concatenate strings or inspect counts itself — that is what
+  // produced the "Synced while 12 rows are queued" bug this issue closes.
+  const lastSuccessEpochMs = lastSyncedAt ? Date.parse(lastSyncedAt) : null;
+  const descriptor = deriveSyncStatusFromCounts(
+    pendingCount,
+    failedCount,
+    Number.isNaN(lastSuccessEpochMs) ? null : lastSuccessEpochMs,
+    isOnline,
+  );
+  const copy = describeSyncStatus(descriptor);
+
   return (
     <>
       {/* Issue #252 — sticky offline banner. Renders ONLY while offline,
@@ -131,10 +176,18 @@ export function LoggerStatusBar() {
           )}
         </div>
 
-        {/* Right: last synced + action buttons */}
+        {/* Right: descriptor-driven status copy + action buttons.
+            Issue #395 — copy is derived from `descriptor.kind`; no inline
+            string concat or count inspection here. "Synced: …" appears
+            only when `kind === 'fresh'` (queue empty AND lastSuccessAt
+            within `STALE_THRESHOLD_MS`). */}
         <div className="flex items-center gap-3">
-          <span style={{ color: 'rgba(210, 180, 140, 0.7)' }}>
-            Synced: {formatRelativeTime(lastSyncedAt)}
+          <span
+            data-testid="logger-status-copy"
+            data-status-kind={descriptor.kind}
+            style={{ color: 'rgba(210, 180, 140, 0.7)' }}
+          >
+            {copy}
           </span>
           {isOnline && pendingCount > 0 && (
             <button
