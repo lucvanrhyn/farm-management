@@ -7,9 +7,12 @@
 
 import { useState } from "react";
 import type { PrismaObservation } from "@/lib/types";
-import { EDITABLE_TYPES, TYPE_LABEL } from "./constants";
 import { safeParse } from "./parseDetails";
-import { TypeFields } from "./fields";
+import {
+  getObservationDetailsForm,
+  getObservationTypeLabel,
+  isObservationEditable,
+} from "./registry";
 
 export interface EditModalProps {
   obs: PrismaObservation;
@@ -26,7 +29,8 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const isEditable = EDITABLE_TYPES.has(obs.type);
+  const isEditable = isObservationEditable(obs.type);
+  const DetailsForm = getObservationDetailsForm(obs.type);
 
   function handleFieldChange(key: string, value: unknown) {
     setDetails((prev) => ({ ...prev, [key]: value }));
@@ -97,7 +101,7 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "#9C8E7A" }}>
-          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Type:</span> {TYPE_LABEL[obs.type] ?? obs.type}</span>
+          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Type:</span> {getObservationTypeLabel(obs.type)}</span>
           <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Camp:</span> {obs.campId}</span>
           <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
           {obs.animalId && <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Animal:</span> {obs.animalId}</span>}
@@ -108,7 +112,7 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
           <label className="block text-xs font-semibold mb-2" style={{ color: "#9C8E7A" }}>
             {isEditable ? "Details" : "Details (read-only)"}
           </label>
-          <TypeFields type={obs.type} details={details} onChange={handleFieldChange} />
+          <DetailsForm details={details} onChange={handleFieldChange} />
         </div>
 
         {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}

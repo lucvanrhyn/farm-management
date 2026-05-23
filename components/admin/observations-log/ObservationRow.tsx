@@ -5,8 +5,11 @@
 "use client";
 
 import type { PrismaObservation } from "@/lib/types";
-import { TYPE_BADGE, TYPE_LABEL } from "./constants";
-import { parseDetails } from "./parseDetails";
+import { TYPE_BADGE } from "./constants";
+import {
+  getObservationTypeLabel,
+  parseObservationDetails,
+} from "./registry";
 
 interface ObservationRowProps {
   obs: PrismaObservation;
@@ -32,7 +35,7 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
             className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
             style={{ background: badge.bg, color: badge.color }}
           >
-            {TYPE_LABEL[obs.type] ?? obs.type}
+            {getObservationTypeLabel(obs.type)}
           </span>
           <span className="text-xs font-semibold font-mono" style={{ color: "#1C1815" }}>
             {obs.campId}
@@ -44,7 +47,7 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
           )}
         </div>
         <p className="text-xs mt-1 truncate" style={{ color: "#9C8E7A" }}>
-          {parseDetails(obs.details, obs.type)}
+          {parseObservationDetails(obs.type, obs.details)}
           {obs.editedAt && (
             <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
           )}
