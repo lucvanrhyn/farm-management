@@ -2,6 +2,8 @@ import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
 
+import { requireFarmContext } from "@/lib/farm-context";
+
 // Keep in sync with `lib/server/farm-context.ts`. We intentionally re-implement
 // the tiny HMAC helper here rather than importing, because proxy.ts runs on
 // the Edge-compatible middleware runtime and must keep its module graph flat
@@ -98,18 +100,49 @@ export async function proxy(req: NextRequest) {
       );
     }
 
-    // Auto-set the active farm cookie so client-side API calls work even on direct
-    // navigation (bookmark, refresh, typed URL). Only update when it differs.
-    const currentCookie = req.cookies.get("active_farm_slug")?.value;
-    if (currentCookie !== farmSlug) {
+    // Issue #393 (PRD #389, Module 3): the URL `[farmSlug]` is the single
+    // source of truth on the server. Every server fetcher in
+    // `lib/farm-prisma.ts` now resolves the tenant from `params.farmSlug`,
+    // not from this cookie. The cookie is diagnostic-only and is rewritten
+    // here to keep client-side telemetry/picker UI consistent — but the
+    // semantics are now driven by the pure `requireFarmContext` decision so
+    // the cookie can never silently outvote the URL.
+    //
+    // Decisions:
+    //   - `set-cookie`     — URL has a slug, cookie absent → write the
+    //                        URL slug as the new diagnostic value.
+    //   - `clear-stale-cookie` — cookie disagrees with the URL → delete it.
+    //                        We deliberately do NOT overwrite with the new
+    //                        URL slug here. Letting the cookie ride along
+    //                        empty until the next request is the conservative
+    //                        choice: it eliminates any window where a
+    //                        cookie-only handler (no [farmSlug] in URL)
+    //                        could pick up the new tenant before the URL
+    //                        update was visible to the rest of the request.
+    //                        The next request (cookie absent → set-cookie)
+    //                        will re-bootstrap it.
+    //   - `ok` / `no-action` — nothing to do.
+    const cookieSlug = req.cookies.get("active_farm_slug")?.value ?? null;
+    const decision = requireFarmContext(farmSlug, cookieSlug);
+
+    if (decision.kind === "set-cookie") {
       const response = withSessionHeaders(req, token, farm, NextResponse.next);
-      response.cookies.set("active_farm_slug", farmSlug, {
+      response.cookies.set("active_farm_slug", decision.slug, {
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
+      return response;
+    }
+
+    if (decision.kind === "clear-stale-cookie") {
+      const response = withSessionHeaders(req, token, farm, NextResponse.next);
+      // `cookies.delete` emits a Set-Cookie with the 1970 epoch so browsers
+      // drop the entry immediately. Path matches the original set so the
+      // delete covers every scope.
+      response.cookies.delete({ name: "active_farm_slug", path: "/" });
       return response;
     }
   }
