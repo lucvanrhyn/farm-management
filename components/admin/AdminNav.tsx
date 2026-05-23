@@ -119,7 +119,6 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -161,7 +160,6 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -202,7 +200,6 @@ const GAME_NAV_ITEMS: NavItem[] = [
     group: "Today",
     children: [
       { path: "/admin/tasks",                  label: "Tasks" },
-      { path: "/admin/tasks?view=calendar",    label: "Calendar" },
       { path: "/admin/map/route-today",        label: "Route Today" },
       { path: "/admin/settings/tasks",         label: "Templates" },
     ],
@@ -412,7 +409,7 @@ export default function AdminNav({
   const farmSlug = pathname.split("/")[1];
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { mode, isMultiMode } = useFarmModeSafe();
+  const { mode, isMultiMode, enabledModes } = useFarmModeSafe();
 
   useEffect(() => {
     return () => {
@@ -426,6 +423,14 @@ export default function AdminNav({
   // If enabledSpecies is undefined (defensive fallback), show everything.
   const rawNavItems = NAV_BY_MODE[mode] ?? CATTLE_NAV_ITEMS;
   const navItems = rawNavItems.filter((item) => {
+    // #263: hide /admin/settings/species on single-species tenants —
+    // there's nothing meaningful to configure when only Cattle is
+    // enabled (the toggle for non-cattle species is the page's only
+    // job). Multi-species tenants (Trio B) keep the link so they can
+    // disable a species after enabling it.
+    if (item.path === "/admin/settings/species" && enabledModes.length <= 1) {
+      return false;
+    }
     if (!item.species) return true; // cattle/shared items always render
     if (!enabledSpecies) return true; // defensive fallback
     return enabledSpecies.includes(item.species);
@@ -453,10 +458,10 @@ export default function AdminNav({
         const children = item.children
           ? item.children.map((c) => {
               const childHref = `/${farmSlug}${c.path}`;
-              // Child active if pathname matches the child's path portion
-              // (strip query). We compare ignoring any ?foo=bar so
-              // `/admin/tasks?view=calendar` still highlights when the
-              // current pathname is `/farm/admin/tasks`.
+              // Child active if pathname matches the child's path portion.
+              // We strip any ?foo=bar query string before comparing so a
+              // child path that carries a query still highlights when the
+              // current pathname matches its base route.
               const childPathOnly = c.path.split("?")[0];
               const childHrefNoQuery = `/${farmSlug}${childPathOnly}`;
               return {
@@ -484,12 +489,40 @@ export default function AdminNav({
   const activeGroupLabel: string =
     groups.find((g) => g.links.some((l) => l.isActive))?.label ?? "Overview";
 
-  // User's collapsed/expanded preferences. Lazy initializer reads localStorage
-  // on first client render (SSR-safe — readStoredExpanded returns null on the server).
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const stored = readStoredExpanded(farmSlug);
-    return new Set<string>(stored ?? [activeGroupLabel]);
-  });
+  // React #418 hydration fix (issue #387):
+  // The initializer MUST produce the same value as the server render so that
+  // the client's first render (before any effect runs) matches the server HTML
+  // byte-for-byte. On the server `readStoredExpanded` returns null (no `window`),
+  // so the server always renders `new Set([activeGroupLabel])`. Previously the
+  // client's first render called `readStoredExpanded` synchronously here and
+  // could produce a *different* set when the user had stored a preference —
+  // different panels were MOUNTED (structural DOM divergence) → React #418.
+  //
+  // Fix: seed with the server-equivalent value; apply the stored preference
+  // AFTER mount in the effect below (using queueMicrotask per the repo's
+  // no-sync-setState-in-effect lint rule, mirroring useHasMounted in
+  // lib/hooks/use-client-time.ts).
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set<string>([activeGroupLabel]),
+  );
+
+  // Apply the persisted preference after mount. queueMicrotask defers the
+  // setState off the synchronous effect body (lint rule: no synchronous
+  // setState inside useEffect — cascading-render hazard). The microtask
+  // lands before paint so there is no visible placeholder flash; framer-motion
+  // AnimatePresence will play its normal enter animation when the preference
+  // causes groups to open/close.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const stored = readStoredExpanded(farmSlug);
+      if (stored) setExpanded(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [farmSlug]);
 
   // Ensure the active group is always visible — derived in render, no effect needed.
   // This avoids any synchronous setState in an effect body (lint rule violation).

@@ -13,6 +13,8 @@
  */
 import type { PrismaClient } from "@prisma/client";
 
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
 export interface CampPerformanceRow {
   readonly campId: string;
   readonly campName: string;
@@ -47,7 +49,9 @@ export async function listCampPerformance(
   prisma: PrismaClient,
 ): Promise<CampPerformanceRow[]> {
   // Step 1: fetch camp list (needed to scope IN-queries)
-  const camps = await prisma.camp.findMany({ orderBy: { campId: "asc" } });
+  const camps = await crossSpecies(prisma, "analytics-rollup").camp.findMany({
+    orderBy: { campId: "asc" },
+  });
   const campIds = camps.map((c) => c.campId);
 
   if (campIds.length === 0) return [];
@@ -56,14 +60,20 @@ export async function listCampPerformance(
   // (was N+1: 1 camp list + 3 queries per camp = 3N+1)
   const [animalGroups, allConditions, allCovers] = await Promise.all([
     // cross-species by design: per-camp performance rollup spans species.
-    prisma.animal.groupBy({
+    // crossSpecies() forwards args verbatim — no species/status injection.
+    // The facade returns Prisma's broadest groupBy shape (documented
+    // trade-off in species-scoped-prisma.ts); re-narrow to the row shape
+    // this query's `by`/`_count` selection produces — behaviour-identical.
+    crossSpecies(prisma, "analytics-rollup").animal.groupBy({
       by: ["currentCamp"],
       where: { currentCamp: { in: campIds }, status: "Active" },
       _count: { _all: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; _count: { _all: number } }>
+    >,
     // Fetch all camp_condition records for these camps, newest first.
     // We pick the first occurrence per campId below (= latest) so ordering matters.
-    prisma.observation.findMany({
+    crossSpecies(prisma, "analytics-rollup").observation.findMany({
       where: { campId: { in: campIds }, type: "camp_condition" },
       orderBy: { observedAt: "desc" },
       select: { campId: true, details: true, observedAt: true },

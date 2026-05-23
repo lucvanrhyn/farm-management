@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import MobsManager from "@/components/admin/MobsManager";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp, Mob } from "@/lib/types";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -32,15 +33,21 @@ export default async function AdminMobsPage({
   // KB JSON on trio-b) into the RSC payload because MobsManager also served
   // as the picker's data source.
   const [prismaMobs, animalGroups, prismaCamps, mobMembers] = await Promise.all([
-    prisma.mob.findMany({ orderBy: { name: "asc" } }),
-    prisma.animal.groupBy({
+    scoped(prisma, mode).mob.findMany({ orderBy: { name: "asc" } }),
+    // scoped() forwards args verbatim; the facade returns Prisma's broadest
+    // groupBy shape (documented trade-off) so re-narrow to what this query's
+    // by/_count selection produces — behaviour-identical. scoped() injects
+    // `{ species: mode }`; status stays caller-controlled.
+    scoped(prisma, mode).animal.groupBy({
       by: ["mobId"],
-      where: { status: "Active", mobId: { not: null }, species: mode },
+      where: { status: "Active", mobId: { not: null } },
       _count: { _all: true },
-    }),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
-    prisma.animal.findMany({
-      where: { status: "Active", species: mode, mobId: { not: null } },
+    }) as unknown as Promise<
+      Array<{ mobId: string | null; _count: { _all: number } }>
+    >,
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).animal.findMany({
+      where: { status: "Active", mobId: { not: null } },
       select: { animalId: true, name: true, mobId: true },
       orderBy: { animalId: "asc" },
     }),

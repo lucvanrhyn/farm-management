@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 const SYMPTOMS = [
   "Lame",
@@ -136,19 +137,22 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
         {/* Photo */}
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
-        {/* Submit */}
-        <button
-          onClick={submit}
-          disabled={selectedSymptoms.length === 0}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={
-            selectedSymptoms.length === 0
-              ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-              : { backgroundColor: '#B87333', color: '#F5F0E8' }
-          }
-        >
-          Submit Report
-        </button>
+        {/* Submit — wrapped in StickySubmitBar (wave/262) so it stays in view
+            on 390x844 viewports without scrolling past PhotoCapture. */}
+        <StickySubmitBar>
+          <button
+            onClick={submit}
+            disabled={selectedSymptoms.length === 0}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
+            style={
+              selectedSymptoms.length === 0
+                ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
+                : { backgroundColor: '#B87333', color: '#F5F0E8' }
+            }
+          >
+            Submit Report
+          </button>
+        </StickySubmitBar>
       </div>
     </BottomSheet>
   );

@@ -1,0 +1,61 @@
+name: audit-animal-list-deceased-flag
+
+# Structural lint that enforces "every per-species animal LIST/SEARCH query
+# commits to a lifecycle (status) decision rather than silently inheriting
+# one". Issue #255 (Wave 4 of PRD #250).
+#
+# Sibling of audit-species-where (species axis). This audit covers the
+# deceased-rows-leaking-out class:
+#
+#   const animals = await scoped(prisma, mode).animal.findMany({});
+#                                                              ^^
+#   `scoped(...)` injects status: "Active" by default. A new catalogue /
+#   search / mortality-list surface that goes through the facade silently
+#   EXCLUDES every deceased row — code review can't catch this because the
+#   call typechecks and returns rows. SARS para-13A and IT3 require
+#   deceased-animal traceability for ≥5 years, so silent exclusion is a
+#   regulatory bug, not just a UX one.
+#
+# The structural cure is `searchAnimals(...)` (lib/server/animal-search.ts)
+# which requires `includeDeceased: boolean` by signature. This workflow
+# closes the loop at every OTHER callsite by failing CI on raw findMany
+# reads that lack an explicit `status:` predicate.
+#
+# Compliant patterns:
+#   1. The call carries `status:` explicitly inside `where`.
+#   2. The call goes through `searchAnimals(...)`.
+#   3. `// audit-allow-deceased-flag: <reason>` pragma on the preceding line
+#      (cross-status deliberate spans).
+#
+# Baseline file: `.audit-animal-list-deceased-flag-baseline.json` grandfathers
+# existing offenders so this workflow fails ONLY on NEW violations. The
+# baseline can only shrink over time — every entry is a follow-up migration
+# to `searchAnimals`.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  audit-animal-list-deceased-flag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit animal list/search calls — explicit lifecycle predicate enforcement
+        run: pnpm tsx scripts/audit-animal-list-deceased-flag.ts

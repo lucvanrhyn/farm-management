@@ -18,6 +18,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import RouteTodayMap from "@/components/map/RouteTodayMap";
@@ -56,13 +58,15 @@ export default async function RouteTodayPage({
     );
   }
 
+  const mode = await getFarmMode(farmSlug);
+
   // Farm centre comes from FarmSettings; safe fallback is null (buildRouteToday
   // starts at the first pin when centre is unknown).
   const [settings, prismaCamps] = await Promise.all([
     prisma.farmSettings.findFirst({
       select: { latitude: true, longitude: true },
     }),
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
   ]);
 
   const farmLat = settings?.latitude ?? null;

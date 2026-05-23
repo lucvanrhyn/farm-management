@@ -14,9 +14,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockPut = vi.hoisted(() => vi.fn());
 
-vi.mock("@vercel/blob", () => ({
-  put: mockPut,
-}));
+vi.mock("@vercel/blob", async () => {
+  // Re-export real error classes so `instanceof` checks inside `upload-photo`
+  // continue to work (Wave 1 / #251 added BlobServiceNotAvailable +
+  // friends to the import surface). Only `put` is faked.
+  const actual = await vi.importActual<typeof import("@vercel/blob")>(
+    "@vercel/blob",
+  );
+  return { ...actual, put: mockPut };
+});
 
 import { uploadPhoto } from "../upload-photo";
 import {
@@ -62,11 +68,11 @@ describe("uploadPhoto(slug, file)", () => {
     expect(mockPut).not.toHaveBeenCalled();
   });
 
-  it("throws FileTooLargeError when file size exceeds 4 MB", async () => {
+  it("throws FileTooLargeError when file size exceeds the 10 MB cap (Wave 1 / #251)", async () => {
     const file = makeFile({
       name: "huge.jpg",
       type: "image/jpeg",
-      size: 4 * 1024 * 1024 + 1,
+      size: 10 * 1024 * 1024 + 1,
     });
 
     await expect(uploadPhoto("trio-b", file)).rejects.toBeInstanceOf(

@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { PrismaClient } from "@prisma/client";
 import type { SpeciesId } from "@/lib/species/types";
 
@@ -51,21 +51,34 @@ async function resolveFarmName(farmSlug: string): Promise<string> {
 }
 
 /**
- * Issue #234 — fetch the camp IDs visible under the active FarmMode so the
- * client picker (`<CampSelector />`) can filter the IDB-backed camp list
- * before rendering tiles. The fetch goes through the species-scoped Prisma
- * facade (`scoped(prisma, mode).camp.findMany`) so the species predicate
- * is injected by construction — same pattern as `admin/animals/page.tsx`
- * (Wave 1 proof-of-pattern, #224).
+ * Issue #234 introduced this lookup to fetch the camp IDs visible to the
+ * client picker (`<CampSelector />`) so it could filter the IDB-backed
+ * camp list before rendering tiles. The original implementation routed
+ * through `scoped(prisma, mode).camp.findMany` — same pattern as
+ * `admin/animals/page.tsx` (Wave 1 proof-of-pattern, #224).
+ *
+ * Issue #390 (PRD #389, Module 4) reclassifies this read to
+ * `crossSpecies("farm-wide-audit")`. Camps are CROSS-species
+ * infrastructure: a physical camp grazes whatever species is on it,
+ * regardless of the user's active FarmMode. On Trio B (cattle-only farm
+ * tagged `species='cattle'`) under sheep FarmMode the `scoped()` door
+ * injected `where: { species: 'sheep' }` and returned zero rows, so the
+ * `Set<string>` of allowed IDs was empty and the Sheep Logger picker
+ * filtered every camp out of view. PR #373 (#364) fixed the same bug
+ * class on the camp map by flipping to `crossSpecies("farm-wide-audit")`;
+ * #390 finishes the ADR-0005 Wave-5 camp-scope reclassification this
+ * page started.
+ *
+ * The `mode` parameter is kept on the signature so callers always pass
+ * the active FarmMode (forward-compat for any future per-species filter
+ * the picker may add — task-list overlay, recommended-camp banner, etc.).
+ * The Prisma read itself is now FarmMode-invariant.
  *
  * Resilience: this lookup runs alongside the SSR-resilient farmName
  * fetch and follows the same pattern — never let a Prisma throw take
  * down the entire logger surface for field workers. If the facade
  * throws, we fall back to `undefined` so `<CampSelector />` renders all
- * IDB-cached camps (back-compat path). The cross-species leak only
- * comes back IF this fetch fails AND the user is on a multi-species
- * tenant — strictly better than today (where the picker always leaks)
- * and aligned with the P0.2 "logger must keep working" guarantee.
+ * IDB-cached camps (back-compat path) — same behaviour as before #234.
  *
  * Offline-queue boundary (ADR-0002): this fetch reads camp IDs only; it
  * does NOT touch `lib/sync/queue.ts`, `lib/sync-manager.ts`, or
@@ -79,13 +92,13 @@ async function resolveAllowedCampIds(
   try {
     const prisma = await getPrismaForFarm(farmSlug);
     if (!prisma) return undefined;
-    const camps = await scoped(prisma as PrismaClient, mode).camp.findMany({
+    const camps = await crossSpecies(prisma as PrismaClient, "farm-wide-audit").camp.findMany({
       select: { campId: true },
       orderBy: { campName: "asc" },
     });
     return new Set(camps.map((c) => c.campId));
   } catch (err) {
-    logger.error("[logger/page] species-scoped camp fetch failed — falling back to unfiltered picker", {
+    logger.error("[logger/page] cross-species camp fetch failed — falling back to unfiltered picker", {
       farmSlug,
       mode,
       error: err,

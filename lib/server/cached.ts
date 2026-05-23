@@ -34,7 +34,11 @@ import { getCensusPopulationByCamp } from "@/lib/species/game/analytics";
 import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/rotation-engine";
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
+import {
+  getTenantDayStart,
+  getTenantMonthYYYYMM,
+} from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
 import type { Camp } from "@/lib/types";
 
@@ -54,6 +58,68 @@ function mapToRecord(map: Map<string, LiveCampStatus>): LiveCampStatusRecord {
 function recordToMap(record: LiveCampStatusRecord): Map<string, LiveCampStatus> {
   return new Map(Object.entries(record));
 }
+
+/**
+ * Resolve a dashboard sub-query to a safe fallback when it throws, so a
+ * single failing tile degrades only itself instead of rejecting the whole
+ * Overview aggregate.
+ *
+ * Issue #280 root cause: `getCachedDashboardOverview` runs ~13 independent
+ * sub-queries inside one `Promise.all`. `Promise.all` rejects on the FIRST
+ * rejection, so when the #276 schema-drift made `farmSettings.findFirst()`
+ * throw `no such column: timezone`, the entire admin Overview zeroed
+ * ("0/9", "0/19") rather than just the settings-derived tile. Wrapping
+ * each member in `settle(...)` makes the aggregate resilient: the broken
+ * tile shows its fallback, every healthy tile keeps its real value.
+ *
+ * The fallback is logged (not silently swallowed) so the underlying
+ * failure still surfaces in server logs / observability — the tile just
+ * stops being able to take the rest of the dashboard down with it.
+ */
+async function settle<T>(
+  label: string,
+  fallback: T,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    console.error(
+      `[dashboard-overview] sub-query "${label}" failed; degrading this tile only:`,
+      err,
+    );
+    return fallback;
+  }
+}
+
+/** Neutral repro-stats payload shown when the repro sub-query degrades. */
+const EMPTY_REPRO_STATS: ReproStats = {
+  pregnancyRate: null,
+  calvingRate: null,
+  avgCalvingIntervalDays: null,
+  upcomingCalvings: [],
+  inHeat7d: 0,
+  inseminations30d: 0,
+  calvingsDue30d: 0,
+  scanCounts: { pregnant: 0, empty: 0, uncertain: 0 },
+  conceptionRate: null,
+  pregnancyRateByCycle: [],
+  daysOpen: [],
+  avgDaysOpen: null,
+  weaningRate: null,
+};
+
+/** Neutral data-health payload shown when the data-health sub-query degrades. */
+const EMPTY_DATA_HEALTH: DataHealthScore = {
+  overall: 0,
+  grade: "D",
+  breakdown: {
+    animalsWeighedRecently: { score: 0, pct: 0, label: "" },
+    campsInspectedRecently: { score: 0, pct: 0, label: "" },
+    animalsWithCampAssigned: { score: 0, pct: 0, label: "" },
+    transactionsThisMonth: { score: 0, present: false, label: "" },
+  },
+};
 
 // ── Cached: Camp Conditions (60s) ────────────────────────────────────────────
 
@@ -157,11 +223,31 @@ export async function getCachedDashboardOverview(
   const fetcher = unstable_cache(
     async (slug: string, currentMode: SpeciesId): Promise<DashboardOverview> => {
       return withFarmPrisma(slug, async (prisma) => {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        // Issue #258: every "today" derivation must consult the tenant's
+        // stored TZ. Prefetch FarmSettings once so we have `timezone` for
+        // bucketing AND alert thresholds — saves a duplicate findFirst that
+        // used to live inside the Promise.all below.
+        //
+        // Issue #280: this prefetch is the exact query that took the whole
+        // Overview down on #276's schema drift (default SELECT lists the
+        // drifted `timezone` column → `no such column`). `settle()` makes a
+        // failure here degrade ONLY the TZ/threshold-derived tiles: the
+        // dashboard falls back to the Africa/Johannesburg default TZ and
+        // built-in alert thresholds rather than zeroing every tile.
+        const settingsRow = await settle("farmSettings.findFirst", null, () =>
+          prisma.farmSettings.findFirst(),
+        );
+        const tz = settingsRow?.timezone ?? "Africa/Johannesburg";
+
+        const now = new Date();
+        const todayStart = getTenantDayStart(tz, now);
+        // 7-day window is anchored at TZ-local midnight 7 days ago so the
+        // "Health Issues · 7d" tile lines up with the same calendar boundary
+        // as the "today" tiles.
+        const sevenDaysAgo = new Date(
+          todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
+        );
+        const currentMonth = getTenantMonthYYYYMM(tz, now);
 
         // Issue #225: route per-species reads through the species-scoped
         // facade so `{ species: currentMode }` is injected by construction
@@ -173,7 +259,6 @@ export async function getCachedDashboardOverview(
         const [
           totalAnimals,
           totalCamps,
-          settingsRow,
           reproStats,
           campConditions,
           healthIssuesThisWeek,
@@ -186,31 +271,68 @@ export async function getCachedDashboardOverview(
           mtdTransactions,
           dataHealth,
         ] = await Promise.all([
+          // Issue #280: every member is wrapped in `settle(label, fallback,
+          // fn)` so one failing sub-query degrades ONLY its own tile — the
+          // Overview never zeroes wholesale on a single rejection again.
+          // Fallbacks are the empty/neutral value the tile would show with
+          // no data.
+          //
           // Active head for the current species (issue #225). The facade's
           // count() injects `{ species: mode }` — status stays caller-controlled
           // per the facade contract (species-scoped-prisma.ts JSDoc).
-          speciesPrisma.animal.count({ where: { status: "Active" } }),
-          // audit-allow-species-where: camp total is the same on every per-species view; not species-scoped because every camp serves some species at some point.
-          prisma.camp.count(),
-          prisma.farmSettings.findFirst(),
-          getReproStats(prisma, { species: currentMode }),
-          getLatestCampConditions(prisma),
-          countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
-          countInspectedToday(prisma, currentMode),
-          getRecentHealthObservations(prisma, 8, currentMode),
+          settle("animal.count", 0, () =>
+            speciesPrisma.animal.count({ where: { status: "Active" } }),
+          ),
+          // Camp total is the same on every per-species view — not
+          // species-scoped because every camp serves some species at
+          // some point.
+          settle("camp.count", 0, () => crossSpecies(prisma, "analytics-rollup").camp.count()),
+          settle("getReproStats", EMPTY_REPRO_STATS, () =>
+            getReproStats(prisma, { species: currentMode }),
+          ),
+          settle(
+            "getLatestCampConditions",
+            new Map<string, LiveCampStatus>(),
+            () => getLatestCampConditions(prisma),
+          ),
+          settle("countHealthIssuesSince", 0, () =>
+            countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
+          ),
+          // Issue #258: pass tenant TZ so "today" matches every other tile.
+          // Issue #363: camp inspections are NULL-species observations —
+          // countInspectedToday is intentionally mode-independent, so
+          // `currentMode` is no longer threaded through.
+          settle("countInspectedToday", 0, () =>
+            countInspectedToday(prisma, tz),
+          ),
+          settle("getRecentHealthObservations", [], () =>
+            getRecentHealthObservations(prisma, 8, currentMode),
+          ),
           // cross-species by design: low-grazing math is LSU across all species (camp can host any species).
-          getLowGrazingCampCount(prisma),
+          settle("getLowGrazingCampCount", 0, () =>
+            getLowGrazingCampCount(prisma),
+          ),
           // Per-species death/calving tile counts: route through facade so
-          // observation rows are filtered to the active species.
-          speciesPrisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
-          speciesPrisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
-          getWithdrawalCount(prisma),
-          prisma.transaction.findMany({
-            where: { date: { startsWith: currentMonth } },
-            select: { type: true, amount: true },
-          }),
+          // observation rows are filtered to the active species. todayStart is
+          // tenant-TZ midnight (issue #258) so SAST early-morning events land
+          // in the right bucket.
+          settle("observation.count(death)", 0, () =>
+            speciesPrisma.observation.count({ where: { type: "death", observedAt: { gte: todayStart } } }),
+          ),
+          settle("observation.count(calving)", 0, () =>
+            speciesPrisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
+          ),
+          settle("getWithdrawalCount", 0, () => getWithdrawalCount(prisma)),
+          settle("transaction.findMany", [] as { type: string; amount: number }[], () =>
+            prisma.transaction.findMany({
+              where: { date: { startsWith: currentMonth } },
+              select: { type: true, amount: true },
+            }),
+          ),
           // cross-species by design: data-health is a farm-wide hygiene score.
-          getDataHealthScore(prisma),
+          settle("getDataHealthScore", EMPTY_DATA_HEALTH, () =>
+            getDataHealthScore(prisma),
+          ),
         ]);
 
         const settings = settingsRow ?? {
@@ -221,18 +343,26 @@ export async function getCachedDashboardOverview(
           alertThresholdHours: 48,
         };
 
-        const dashboardAlerts = await getDashboardAlerts(
-          prisma,
-          slug,
-          {
-            adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
-            calvingAlertDays: settings.calvingAlertDays,
-            daysOpenLimit: settings.daysOpenLimit,
-            campGrazingWarningDays: settings.campGrazingWarningDays,
-            staleCampInspectionHours: settings.alertThresholdHours,
-          },
-          { reproStats, campConditions },
-          currentMode,
+        // Issue #280: alerts is its own DB-touching aggregate awaited after
+        // the Promise.all. Degrade it to "no alerts" rather than letting it
+        // take the whole Overview down.
+        const dashboardAlerts = await settle(
+          "getDashboardAlerts",
+          { red: [], amber: [], totalCount: 0 } as DashboardAlerts,
+          () =>
+            getDashboardAlerts(
+              prisma,
+              slug,
+              {
+                adgPoorDoerThreshold: settings.adgPoorDoerThreshold,
+                calvingAlertDays: settings.calvingAlertDays,
+                daysOpenLimit: settings.daysOpenLimit,
+                campGrazingWarningDays: settings.campGrazingWarningDays,
+                staleCampInspectionHours: settings.alertThresholdHours,
+              },
+              { reproStats, campConditions },
+              currentMode,
+            ),
         );
 
         return {
@@ -336,17 +466,22 @@ export async function getCachedCampList(
     async (slug: string, sp: string): Promise<CachedCamp[]> => {
       return withFarmPrisma(slug, async (prisma) => {
         const [camps, animalGroups] = await Promise.all([
-          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campName: "asc" } }),
           // cross-species by design when `sp` is empty: callers opt in to
           // species filter via the `species` parameter on getCachedCampList.
-          prisma.animal.groupBy({
+          // crossSpecies() forwards args verbatim; the facade returns Prisma's
+          // broadest groupBy shape (documented trade-off) so re-narrow to what
+          // this query's by/_count selection produces — behaviour-identical.
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["currentCamp"],
             where: {
               status: "Active",
               ...(sp ? { species: sp } : {}),
             },
             _count: { _all: true },
-          }),
+          }) as unknown as Promise<
+            Array<{ currentCamp: string; _count: { _all: number } }>
+          >,
         ]);
         const countByCamp: Record<string, number> = {};
         for (const g of animalGroups) {
@@ -396,8 +531,8 @@ export async function getCachedFarmSummary(
         const [settings, animalCount, campCount] = await Promise.all([
           prisma.farmSettings.findFirst(),
           // cross-species by design: /api/farm header counts whole farm.
-          prisma.animal.count({ where: { status: "Active" } }),
-          prisma.camp.count(),
+          crossSpecies(prisma, "analytics-rollup").animal.count({ where: { status: "Active" } }),
+          crossSpecies(prisma, "analytics-rollup").camp.count(),
         ]);
         return {
           farmName: settings?.farmName ?? "My Farm",
@@ -543,17 +678,24 @@ export async function getCachedDashboardData(
         ] = await Promise.all([
           // cross-species by design: dashboard groups by species explicitly
           // so the UI can render per-species totals AND a combined headline.
-          prisma.animal.groupBy({
+          // crossSpecies() forwards args verbatim; the facade returns Prisma's
+          // broadest groupBy shape (documented trade-off) so re-narrow to what
+          // this query's by/_count selection produces — behaviour-identical.
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["species"],
             where: { status: "Active" },
             _count: { _all: true },
-          }),
-          prisma.animal.groupBy({
+          }) as unknown as Promise<
+            Array<{ species: string | null; _count: { _all: number } }>
+          >,
+          crossSpecies(prisma, "analytics-rollup").animal.groupBy({
             by: ["species", "currentCamp"],
             where: { status: "Active" },
             _count: { _all: true },
-          }),
-          prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+          }) as unknown as Promise<
+            Array<{ species: string | null; currentCamp: string; _count: { _all: number } }>
+          >,
+          crossSpecies(prisma, "analytics-rollup").camp.findMany({ orderBy: { campName: "asc" } }),
           prisma.farmSettings.findFirst({ select: { latitude: true, longitude: true } }),
           getCensusPopulationByCamp(prisma),
           getRotationStatusByCamp(prisma),

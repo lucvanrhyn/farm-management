@@ -23,6 +23,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getFarmCreds } from "@/lib/meta-db";
 import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -58,19 +59,17 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
       getBreedingSnapshot(prisma, farmSlug, species),
       suggestPairings(prisma, farmSlug, species),
       prisma.farmSettings.findFirst(),
-      prisma.observation.findMany({
+      scoped(prisma, species).observation.findMany({
         where: {
           type: { in: ["pregnancy_scan", "insemination", "heat_detection"] },
-          species,
           observedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
         },
         orderBy: { observedAt: "desc" },
         select: { type: true, animalId: true, details: true, observedAt: true },
       }),
-      prisma.observation.findMany({
+      scoped(prisma, species).observation.findMany({
         where: {
           type: "calving",
-          species,
           observedAt: { gte: new Date(Date.now() - 365 * 86_400_000) },
         },
         orderBy: { observedAt: "desc" },

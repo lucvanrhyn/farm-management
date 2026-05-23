@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, Baby, Droplets, Scissors } from "lucide-react";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmSpeciesSettings } from "@/lib/server/cached";
 import { sheepModule } from "@/lib/species/sheep/index";
@@ -166,13 +167,13 @@ export default async function SheepReproductionPage({
     sheepModule.getReproStats(prisma),
     sheepModule.getAlerts(prisma, farmSlug, {}),
     sheepModule.getDashboardData(prisma),
-    prisma.observation.findMany({
+    scoped(prisma, "sheep").observation.findMany({
       where: { type: { in: ["lambing", "joining", "shearing"] } },
       orderBy: { observedAt: "desc" },
       take: 10,
       select: { type: true, observedAt: true, animalId: true, campId: true },
     }),
-    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+    scoped(prisma, "sheep").camp.findMany({ select: { campId: true, campName: true } }),
   ]);
 
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));

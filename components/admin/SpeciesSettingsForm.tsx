@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Beef, Rabbit, Target, Plus, FileUp, PenLine, X } from "lucide-react";
+import React, { useState } from "react";
+import { Beef, Rabbit, Target, Mail } from "lucide-react";
 
 export type SpeciesRow = {
   id: string;
@@ -19,141 +18,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
 };
 
 type RowStatus = "idle" | "saving" | "saved" | "error";
-
-// ── Add Species Modal ─────────────────────────────────────────────────────────
-
-function AddSpeciesModal({
-  farmSlug,
-  onClose,
-}: {
-  farmSlug: string;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-
-  // Close on Escape
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  function handleImportCsv() {
-    onClose();
-    router.push(`/${farmSlug}/admin/import`);
-  }
-
-  function handleAddManually() {
-    onClose();
-    router.push(`/${farmSlug}/admin/animals`);
-  }
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        data-testid="modal-backdrop"
-        className="fixed inset-0 z-40"
-        style={{ background: "rgba(28,24,21,0.55)" }}
-        onClick={onClose}
-      />
-
-      {/* Dialog */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-species-title"
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-5"
-          style={{
-            background: "#FFFFFF",
-            border: "1px solid rgba(28,24,21,0.1)",
-            boxShadow: "0 8px 32px rgba(28,24,21,0.18)",
-          }}
-        >
-          {/* Close button */}
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors"
-            style={{ color: "#9C8E7A" }}
-          >
-            <X className="w-4 h-4" />
-          </button>
-
-          {/* Heading */}
-          <div>
-            <h2 id="add-species-title" className="text-base font-bold" style={{ color: "#1C1815" }}>
-              Add species
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-              Choose how you want to add a new species module
-            </p>
-          </div>
-
-          {/* CTAs */}
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={handleImportCsv}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-left transition-colors"
-              style={{
-                background: "rgba(58,107,73,0.07)",
-                border: "1px solid rgba(58,107,73,0.18)",
-              }}
-            >
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: "rgba(58,107,73,0.12)" }}
-              >
-                <FileUp className="w-4 h-4" style={{ color: "#3A6B49" }} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
-                  Import from CSV
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-                  Upload an Excel / CSV file with your existing records
-                </p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleAddManually}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-left transition-colors"
-              style={{
-                background: "rgba(28,24,21,0.03)",
-                border: "1px solid rgba(28,24,21,0.08)",
-              }}
-            >
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: "rgba(28,24,21,0.06)" }}
-              >
-                <PenLine className="w-4 h-4" style={{ color: "#6B5C4E" }} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
-                  Add manually
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
-                  Enter animals one by one from the animals page
-                </p>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
 
 // ── Species toggle ────────────────────────────────────────────────────────────
 
@@ -276,10 +140,6 @@ export default function SpeciesSettingsForm({
 }) {
   const [rows, setRows] = useState<SpeciesRow[]>(species);
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const openModal = useCallback(() => setModalOpen(true), []);
-  const closeModal = useCallback(() => setModalOpen(false), []);
 
   async function handleToggle(id: string, newEnabled: boolean) {
     // Optimistic update
@@ -316,36 +176,58 @@ export default function SpeciesSettingsForm({
   }
 
   return (
-    <>
-      <div className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <SpeciesCard
-            key={row.id}
-            row={row}
-            onToggle={handleToggle}
-            status={rowStatus[row.id] ?? "idle"}
-          />
-        ))}
+    <div className="flex flex-col gap-3">
+      {rows.map((row) => (
+        <SpeciesCard
+          key={row.id}
+          row={row}
+          onToggle={handleToggle}
+          status={rowStatus[row.id] ?? "idle"}
+        />
+      ))}
 
-        {/* Add species button */}
-        <button
-          type="button"
-          onClick={openModal}
-          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 px-4 text-sm font-medium transition-colors mt-1"
-          style={{
-            background: "rgba(58,107,73,0.05)",
-            border: "1.5px dashed rgba(58,107,73,0.3)",
-            color: "#3A6B49",
-          }}
+      {/*
+        #263 — explicit "Multi-species rollout — contact us" panel.
+        Replaces the previous F1 "+ Add species" CTA + modal which routed
+        to /import and /animals (neither of which actually adds a
+        species). User feedback (Luc, 2026-05-13): "I don't like that add
+        species thing that's everywhere... it needs to be removed." The
+        toggles above ARE the live multi-species control surface; this
+        panel makes it explicit that adding a *new* species (one not yet
+        in the registry: cattle/sheep/game) is a manual rollout step the
+        FarmTrack team gates.
+      */}
+      <div
+        className="flex items-start gap-3 rounded-xl p-4 mt-1"
+        style={{
+          background: "rgba(58,107,73,0.05)",
+          border: "1px dashed rgba(58,107,73,0.3)",
+        }}
+      >
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: "rgba(58,107,73,0.12)" }}
         >
-          <Plus className="w-4 h-4" />
-          <span>+ Add species</span>
-        </button>
+          <Mail className="w-4 h-4" style={{ color: "#3A6B49" }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+            Multi-species rollout
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            Need a species beyond cattle, sheep, and game? Adding new species
+            modules is a guided rollout — get in touch and we&apos;ll switch it
+            on for your farm.
+          </p>
+          <a
+            href="mailto:hello@farmtrack.app?subject=Multi-species%20rollout%20request"
+            className="inline-flex items-center gap-1 text-xs font-medium mt-2 underline"
+            style={{ color: "#3A6B49" }}
+          >
+            Contact us
+          </a>
+        </div>
       </div>
-
-      {modalOpen && (
-        <AddSpeciesModal farmSlug={farmSlug} onClose={closeModal} />
-      )}
-    </>
+    </div>
   );
 }

@@ -128,6 +128,47 @@ describe('MoveModePanel — OfflineProvider context contract', () => {
   });
 });
 
+// Issue #289 — Move Mob idle-phase instruction.
+// Activating Move Mob (phase.tag === 'idle') must immediately show a next-step
+// hint instead of rendering nothing. The hint is superseded by the existing
+// source-selected / mob-selected guidance as the flow advances.
+describe('MoveModePanel — idle-phase instruction (#289)', () => {
+  const idlePhase = { tag: 'idle' as const };
+
+  it('renders a next-step source-pick hint on activation (idle no longer renders nothing)', () => {
+    const { container } = render(
+      <OfflineProvider>
+        <MoveModePanel
+          phase={idlePhase}
+          campNameMap={campNameMap}
+          actions={actions}
+          onMoveDone={onMoveDone}
+        />
+      </OfflineProvider>,
+    );
+    // Panel is visible (header) and instructs the farmer to pick a source camp.
+    expect(container.textContent).toContain('Move Mob');
+    expect(container.textContent).toMatch(/tap a camp/i);
+    expect(container.textContent).toMatch(/source/i);
+  });
+
+  it('idle hint is superseded by source-selected guidance as the flow advances', () => {
+    const { container } = render(
+      <OfflineProvider>
+        <MoveModePanel
+          phase={{ tag: 'source_selected', campId: 'camp-A' }}
+          campNameMap={campNameMap}
+          actions={actions}
+          onMoveDone={onMoveDone}
+        />
+      </OfflineProvider>,
+    );
+    // Later phase shows its own copy and NOT the idle hint.
+    expect(container.textContent).toMatch(/Select a mob to move:|Loading mobs|No mobs in this camp/);
+    expect(container.textContent).not.toMatch(/tap a camp to pick the mob's source/i);
+  });
+});
+
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 describe('Per-farm layout hoists <OfflineProvider> above admin + logger trees', () => {

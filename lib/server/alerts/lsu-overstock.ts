@@ -11,6 +11,7 @@ import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { getMergedLsuValues } from "@/lib/species/registry";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const OVERSTOCK_MULTIPLIER = 1.1;
 
@@ -37,13 +38,15 @@ export async function evaluate(
   _settings: FarmSettings,
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
+  // cross-species by design: LSU overstock uses merged LSU values across all
+  // species (cattle + sheep + game) per the brief's mixed-species math.
+  // crossSpecies() forwards args verbatim — no species/status injection.
+  const xs = crossSpecies(prisma, "notification-cron");
   const [camps, animals, veldRows] = await Promise.all([
-    prisma.camp.findMany({
+    xs.camp.findMany({
       select: { id: true, campId: true, campName: true, sizeHectares: true },
     }) as Promise<CampRow[]>,
-    // cross-species by design: LSU overstock uses merged LSU values across all
-    // species (cattle + sheep + game) per the brief's mixed-species math.
-    prisma.animal.findMany({
+    xs.animal.findMany({
       where: { status: "Active" },
       select: { category: true, currentCamp: true, status: true },
     }) as Promise<AnimalRow[]>,

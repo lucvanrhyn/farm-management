@@ -1,7 +1,12 @@
 import { type NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compareSync } from 'bcryptjs';
-import { getUserByIdentifier, getFarmsForUser, isEmailVerified } from './meta-db';
+import {
+  AUTH_LOOKUP_ERROR,
+  findUserByIdentifier,
+  getFarmsForUser,
+  isEmailVerified,
+} from './meta-db';
 import { checkRateLimit } from './rate-limit';
 import { AUTH_ERROR_CODES } from './auth-errors';
 import { logger } from './logger';
@@ -17,7 +22,10 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'credentials',
       credentials: {
-        identifier: { label: 'Email or Username', type: 'text' },
+        // Wave 6b (#261): username-only sign-in — see tasks/auth-and-users.md.
+        // Field name kept as `identifier` for backwards compatibility with the
+        // existing login-check route + Playwright fixture.
+        identifier: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
@@ -32,9 +40,9 @@ export const authOptions: NextAuthOptions = {
           throw new Error(AUTH_ERROR_CODES.RATE_LIMITED);
         }
 
-        let user: Awaited<ReturnType<typeof getUserByIdentifier>>;
+        let lookup: Awaited<ReturnType<typeof findUserByIdentifier>>;
         try {
-          user = await getUserByIdentifier(credentials.identifier);
+          lookup = await findUserByIdentifier(credentials.identifier);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const stack = err instanceof Error ? (err.stack ?? '') : '';
@@ -50,10 +58,20 @@ export const authOptions: NextAuthOptions = {
           throw new Error(AUTH_ERROR_CODES.DB_UNAVAILABLE);
         }
 
-        if (!user) {
+        if (!lookup.ok) {
+          if (lookup.code === AUTH_LOOKUP_ERROR.AMBIGUOUS) {
+            // Defence-in-depth: legacy meta-DB without unique constraint.
+            // Refuse to authenticate and surface to operators — see
+            // findUserByIdentifier docblock + meta-migration 0003.
+            logger.error('[authorize] ambiguous username — duplicate row in meta-DB users', {
+              identifier: credentials.identifier,
+            });
+            throw new Error(AUTH_ERROR_CODES.SERVER_MISCONFIGURED);
+          }
           // Keep generic to avoid account enumeration.
           throw new Error(AUTH_ERROR_CODES.INVALID_CREDENTIALS);
         }
+        const user = lookup.user;
 
         const valid = compareSync(credentials.password, user.passwordHash);
         if (!valid) {

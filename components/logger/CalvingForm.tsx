@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { AnimalSex, EaseOfBirth } from "@/lib/types";
 import { getCachedFarmSettings } from "@/lib/offline-store";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
 interface Bull {
   animalId: string;
@@ -169,11 +170,16 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   const [calvingDifficulty, setCalvingDifficulty] = useState("1");
   const [birthWeight, setBirthWeight] = useState("");
 
+  // #285 — calf ear tag is the required-field gate. The submit button is
+  // visibly `disabled` until this is true (replacing the alert-only gate),
+  // and the server independently rejects a calving observation missing the
+  // calf identity (`lib/server/validators/reproductive-state.ts` →
+  // 422 REPRO_FIELD_REQUIRED) so a stale / offline-queued client cannot
+  // bypass it.
+  const canSubmit = calfAnimalId.trim().length > 0;
+
   function submit() {
-    if (!calfAnimalId.trim()) {
-      alert("Ear tag (animal ID) is required.");
-      return;
-    }
+    if (!canSubmit) return;
     if (onSubmit) {
       onSubmit({
         animalId,
@@ -368,13 +374,16 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         {/* Photo */}
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
-        <button
-          onClick={submit}
-          className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
-          style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
-        >
-          Record Birth
-        </button>
+        <StickySubmitBar>
+          <button
+            onClick={submit}
+            disabled={!canSubmit}
+            className="w-full font-bold py-4 rounded-2xl text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+          >
+            Record Birth
+          </button>
+        </StickySubmitBar>
       </div>
     </BottomSheet>
   );

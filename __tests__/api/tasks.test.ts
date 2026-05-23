@@ -45,6 +45,14 @@ const mockTemplateUpsert = vi.fn();
 const mockTemplateFindUnique = vi.fn();
 const mockOccurrenceFindMany = vi.fn();
 const mockTransaction = vi.fn();
+// ADR-0006 — updateTask now routes task-completion observations through
+// `createObservation`, which consults animal/camp/mob to drive the
+// species-stamping waterfall. The pre-ADR-0006 mock surface (just
+// task + observation + taskTemplate) was insufficient — the door would
+// hit `undefined.animal.findUnique` / `undefined.camp.findFirst`.
+const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: "cattle" });
+const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: "camp-north", species: null });
+const mockMobFindUnique = vi.fn();
 
 const mockPrisma = {
   task: {
@@ -55,6 +63,15 @@ const mockPrisma = {
   },
   observation: {
     create: mockObservationCreate,
+  },
+  animal: {
+    findUnique: mockAnimalFindUnique,
+  },
+  camp: {
+    findFirst: mockCampFindFirst,
+  },
+  mob: {
+    findUnique: mockMobFindUnique,
   },
   taskTemplate: {
     upsert: mockTemplateUpsert,

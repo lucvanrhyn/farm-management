@@ -4,6 +4,7 @@ import {
   categoriesForScope,
   type CogScope,
 } from "@/lib/calculators/cost-of-gain";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 export interface FinancialAnalyticsResult {
   grossMargin: number;
@@ -74,8 +75,8 @@ export async function getFinancialAnalytics(
       select: { type: true, amount: true, category: true },
     }),
     // cross-species by design: financial KPI denominator is farm-wide head count.
-    prisma.animal.count({ where: { status: "Active" } }),
-    prisma.observation.findMany({
+    crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: "Active" } }),
+    crossSpecies(prisma, "farm-wide-audit").observation.findMany({
       where: {
         type: "weighing",
         observedAt: { lte: to },
@@ -156,7 +157,7 @@ export async function getCostPerCamp(
       where,
       select: { campId: true, amount: true },
     }),
-    prisma.camp.findMany({ select: { campId: true, campName: true, sizeHectares: true } }),
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({ select: { campId: true, campName: true, sizeHectares: true } }),
   ]);
 
   const campMap = new Map(camps.map((c) => [c.campId, c]));
@@ -226,7 +227,7 @@ export async function getProfitabilityByCategory(
       select: { type: true, amount: true, animalId: true },
     }),
     // cross-species by design: profitability-by-category aggregates all species.
-    prisma.animal.findMany({
+    crossSpecies(prisma, "farm-wide-audit").animal.findMany({
       where: { status: "Active" },
       select: { animalId: true, category: true },
     }),
@@ -285,7 +286,7 @@ export async function getFinancialKPIs(
       select: { type: true, amount: true },
     }),
     // cross-species by design: financial KPI denominator is farm-wide head count.
-    prisma.animal.count({ where: { status: "Active" } }),
+    crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: "Active" } }),
   ]);
 
   let totalIncome = 0;
@@ -429,7 +430,7 @@ async function computeKgGainedByAnimal(
   from: Date,
   to: Date,
 ): Promise<Map<string, number>> {
-  const weighings = await prisma.observation.findMany({
+  const weighings = await crossSpecies(prisma, "farm-wide-audit").observation.findMany({
     where: {
       type: "weighing",
       observedAt: { lte: to },
@@ -487,11 +488,11 @@ export async function getCogByCamp(
       where: { ...buildExpenseWhere(from, to, scope), campId: { not: null } },
       select: { campId: true, amount: true },
     }),
-    prisma.camp.findMany({
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
     }),
     // cross-species by design: COG-by-camp totals every animal in a camp.
-    prisma.animal.findMany({
+    crossSpecies(prisma, "farm-wide-audit").animal.findMany({
       where: { status: "Active" },
       select: { animalId: true, currentCamp: true },
     }),
@@ -559,7 +560,7 @@ export async function getCogByAnimal(
       select: { animalId: true, amount: true },
     }),
     // cross-species by design: COG-by-animal lookup needs every species.
-    prisma.animal.findMany({
+    crossSpecies(prisma, "farm-wide-audit").animal.findMany({
       select: {
         animalId: true,
         name: true,
@@ -620,7 +621,7 @@ export async function getCogSummary(
       select: { amount: true },
     }),
     // cross-species by design: financial KPI denominator is farm-wide head count.
-    prisma.animal.count({ where: { status: "Active" } }),
+    crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: "Active" } }),
     computeKgGainedByAnimal(prisma, from, to),
   ]);
 

@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { scoped } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 import type { AnimalCategory } from "@/lib/types";
 
 
@@ -28,9 +30,11 @@ export default async function AnimalProfilePage({
 
   const animal = await prisma.animal.findUnique({ where: { animalId } });
   const [campRecord, observations] = await Promise.all([
-    animal ? prisma.camp.findFirst({ where: { campId: animal.currentCamp } }) : Promise.resolve(null),
     animal
-      ? prisma.observation.findMany({ where: { animalId }, orderBy: { observedAt: "desc" }, take: 100 })
+      ? scoped(prisma, animal.species as SpeciesId).camp.findFirst({ where: { campId: animal.currentCamp } })
+      : Promise.resolve(null),
+    animal
+      ? scoped(prisma, animal.species as SpeciesId).observation.findMany({ where: { animalId }, orderBy: { observedAt: "desc" }, take: 100 })
       : Promise.resolve([]),
   ]);
 

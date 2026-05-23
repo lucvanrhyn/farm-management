@@ -105,7 +105,7 @@ test.skip('A4 — bad-creds login emits zero console.error events', async () => 
   // await page.click('button[type="submit"]');
   //
   // // Wait for the user-facing error copy.
-  // await page.locator('text=/incorrect email\\/username or password/i').waitFor();
+  // await page.locator('text=/wrong username or password/i').waitFor();
   //
   // // The form must consume the 401 silently — Sentry/Vercel must not see it.
   // expect(consoleErrors).toHaveLength(0);

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import AddCampForm from "@/components/admin/AddCampForm";
 import CampsTable from "@/components/admin/CampsTable";
 import CampAnalyticsSection from "@/components/admin/CampAnalyticsSection";
+import CampsEmptyState from "@/components/camps/CampsEmptyState";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp } from "@/lib/types";
@@ -69,11 +70,21 @@ export default async function SheepCampsPage({
       </div>
 
       <AddCampForm />
-      <CampsTable camps={camps} farmSlug={farmSlug} />
 
-      <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
-        <CampAnalyticsSection farmSlug={farmSlug} />
-      </Suspense>
+      {camps.length === 0 ? (
+        // Zero sheep camps for the active species → actionable onboarding
+        // guidance instead of a headerless/empty table (#288). The add form
+        // stays above so the primary action is always one tap away.
+        <CampsEmptyState farmSlug={farmSlug} speciesLabel="sheep" />
+      ) : (
+        <>
+          <CampsTable camps={camps} farmSlug={farmSlug} />
+
+          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+            <CampAnalyticsSection farmSlug={farmSlug} />
+          </Suspense>
+        </>
+      )}
     </AdminPage>
   );
 }

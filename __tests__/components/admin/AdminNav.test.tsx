@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 // usePathname is mutated per-test; stubs below read this variable at call-time.
@@ -35,6 +37,11 @@ vi.mock("@/components/ui/ModeSwitcher", () => ({
 // Directly control the farm-mode hook so tests can pin any mode independently
 // of the FarmModeProvider's enabled-mode expansion rules.
 let mockMode: "cattle" | "sheep" | "game" = "cattle";
+let mockEnabledModes: readonly ("cattle" | "sheep" | "game")[] = [
+  "cattle",
+  "sheep",
+  "game",
+];
 vi.mock("@/lib/farm-mode", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/farm-mode")>();
   return {
@@ -42,8 +49,9 @@ vi.mock("@/lib/farm-mode", async (importOriginal) => {
     useFarmModeSafe: () => ({
       mode: mockMode,
       setMode: () => {},
-      enabledModes: ["cattle", "sheep", "game"] as const,
-      isMultiMode: true,
+      enabledModes: mockEnabledModes,
+      isMultiMode: mockEnabledModes.length > 1,
+      hasMultipleSpecies: mockEnabledModes.length > 1,
     }),
   };
 });
@@ -59,13 +67,19 @@ function renderNav({
   pathname,
   enabledSpecies,
   mode = "cattle",
+  enabledModes,
 }: {
   pathname: string;
   enabledSpecies?: string[];
   mode?: FarmMode;
+  /** Override the FarmModeProvider's enabledModes (drives single-vs-multi
+   * species chrome). Defaults to all three so legacy tests keep their
+   * pre-#263 multi-species posture. */
+  enabledModes?: readonly FarmMode[];
 }) {
   mockPathname = pathname;
   mockMode = mode;
+  mockEnabledModes = enabledModes ?? ["cattle", "sheep", "game"];
   return render(<AdminNav tier="advanced" enabledSpecies={enabledSpecies} />);
 }
 
@@ -234,15 +248,24 @@ describe("AdminNav", () => {
       expect(parsed).toContain("Finance");
     });
 
-    it("restores expanded groups from localStorage on mount", () => {
+    it("restores expanded groups from localStorage on mount", async () => {
+      // The stored preference is applied AFTER mount via a queueMicrotask
+      // inside useEffect (issue #387 hydration fix). We must flush the
+      // microtask queue before asserting the expanded state.
       window.localStorage.setItem(
         "farmtrack-nav-expanded-farm-x",
         JSON.stringify(["Finance", "Compliance"]),
       );
-      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
-      expect(
-        screen.getByRole("button", { name: /^Finance$/i }).getAttribute("aria-expanded"),
-      ).toBe("true");
+      await act(async () => {
+        renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+        // Flush pending microtasks (the queueMicrotask inside useEffect).
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /^Finance$/i }).getAttribute("aria-expanded"),
+        ).toBe("true");
+      });
       expect(
         screen.getByRole("button", { name: /^Compliance$/i }).getAttribute("aria-expanded"),
       ).toBe("true");
@@ -257,6 +280,87 @@ describe("AdminNav", () => {
       // we keep it open to preserve orientation.
       breedingHeader.click();
       expect(breedingHeader.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
+
+  // ─── #290: misleading "Calendar" nav entry removed ───────────────────────
+  //
+  // AdminNav previously rendered a "Calendar" child under Tasks linking to
+  // /admin/tasks?view=calendar. There is no calendar feature — that route
+  // silently rendered the Tasks list under a different name (the `view`
+  // query param was never read by app/[farmSlug]/admin/tasks/page.tsx). A
+  // real calendar view is explicit future scope (PRD #279). #290 removes the
+  // dead path: the "Calendar" entry and the inert ?view=calendar query param.
+  describe("#290 — no misleading Calendar nav entry", () => {
+    it("does NOT render a 'Calendar' nav entry in cattle mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in sheep mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "sheep" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("does NOT render a 'Calendar' nav entry in game mode", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "game" });
+      expect(getLink("Calendar")).toBeNull();
+    });
+
+    it("still renders the Tasks nav link pointing at /admin/tasks (unaffected)", () => {
+      renderNav({ pathname: "/farm-x/admin", mode: "cattle" });
+      const tasks = getLink("Tasks");
+      expect(tasks).not.toBeNull();
+      expect(tasks!.getAttribute("href")).toBe("/farm-x/admin/tasks");
+    });
+
+    it("AdminNav source contains no `view=calendar` query param anywhere", () => {
+      const src = readFileSync(
+        join(process.cwd(), "components/admin/AdminNav.tsx"),
+        "utf8",
+      );
+      expect(src).not.toContain("view=calendar");
+      expect(src).not.toMatch(/label:\s*"Calendar"/);
+    });
+  });
+
+  // ─── #263: Species settings nav link visibility ──────────────────────────
+  //
+  // The "Species" link points at /admin/settings/species which only does
+  // anything useful for tenants that actually have multiple species
+  // configured (Trio B). For single-species tenants (Basson) it surfaces
+  // the disabled "Add species" CTA that the user explicitly asked to
+  // remove. After #263 the nav link itself is hidden when the tenant has
+  // exactly one enabled species.
+  describe("#263 — Species settings link visibility", () => {
+    it("renders the Species nav link on a multi-species tenant (Trio B: cattle + sheep)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "cattle",
+        enabledModes: ["cattle", "sheep"],
+        enabledSpecies: ["cattle", "sheep"],
+      });
+      expect(getLink("Species")).not.toBeNull();
+    });
+
+    it("does NOT render the Species nav link on a single-species tenant (Basson: cattle-only)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "cattle",
+        enabledModes: ["cattle"],
+        enabledSpecies: ["cattle"],
+      });
+      expect(getLink("Species")).toBeNull();
+    });
+
+    it("does NOT render the Species nav link on a sheep-only tenant (defence in depth)", () => {
+      renderNav({
+        pathname: "/farm-x/admin",
+        mode: "sheep",
+        enabledModes: ["sheep"],
+        enabledSpecies: ["sheep"],
+      });
+      expect(getLink("Species")).toBeNull();
     });
   });
 });

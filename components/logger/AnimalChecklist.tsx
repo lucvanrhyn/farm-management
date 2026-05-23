@@ -1,8 +1,12 @@
 import { getCategoryLabel } from "@/lib/utils";
 import { Animal, AnimalCategory } from "@/lib/types";
 import type { FarmMode } from "@/lib/farm-mode";
+import {
+  canPerformLoggerAction,
+  type LoggerAction,
+} from "@/lib/logger/canPerformAction";
 
-type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "weigh" | "treat";
+type ModalType = LoggerAction;
 
 interface AnimalChecklistProps {
   campId: string;
@@ -90,14 +94,18 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, 
         return (
           <div
             key={animal.animal_id}
-            className="flex items-center gap-3 px-4 py-3.5 min-h-[68px] transition-colors"
+            data-animal-row
+            // Wave 262: stack vertically on mobile (< sm) so the 7-button cattle
+            // action cluster never collides with the ID+chip column on a 390px
+            // viewport. Side-by-side returns at sm+ where the row has space.
+            className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3.5 min-h-[68px] transition-colors"
             style={{
               borderBottom: '1px solid rgba(92, 61, 46, 0.25)',
               backgroundColor: isFlagged ? 'rgba(184, 115, 51, 0.08)' : undefined,
             }}
           >
             {/* ID + category */}
-            <div className="flex-1 min-w-0">
+            <div data-animal-id-col className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span
                   className="font-mono font-bold text-sm"
@@ -124,19 +132,44 @@ export default function AnimalChecklist({ campId, onFlag, animals: animalsProp, 
               )}
             </div>
 
-            {/* Action pill buttons — species-specific */}
-            <div className="flex items-center gap-1 shrink-0">
-              {actionButtons.map((btn) => (
-                <button
-                  key={btn.type}
-                  onClick={() => onFlag(animal.animal_id, btn.type)}
-                  aria-label={btn.label}
-                  className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className}`}
-                >
-                  <span className="text-base leading-none">{btn.icon}</span>
-                  <span className="text-[10px] leading-none">{btn.label}</span>
-                </button>
-              ))}
+            {/* Action pill buttons — species-specific.
+                Wave 262: `overflow-x-auto` so on tighter widths (or when more
+                actions are added) the user swipes through actions instead of
+                clipping. `-mx-4 px-4` matches the row's parent gutter so the
+                strip can scroll edge-to-edge without a visible inset. */}
+            <div
+              data-animal-actions
+              className="flex items-center gap-1 shrink-0 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible"
+            >
+              {actionButtons.map((btn) => {
+                // Issue #391 — pure predicate gates invalid (animal, action)
+                // pairs at the UI layer so the farmer cannot tick something
+                // the server will reject (e.g. calving on a bull, reproduction
+                // on a lamb). The reason string doubles as the tooltip +
+                // aria-description so the disabled state is self-explanatory.
+                const eligibility = canPerformLoggerAction(
+                  { sex: animal.sex, category: animal.category },
+                  btn.type,
+                );
+                const disabled = !eligibility.allowed;
+                const reason = eligibility.allowed ? undefined : eligibility.reason;
+                return (
+                  <button
+                    key={btn.type}
+                    onClick={() => onFlag(animal.animal_id, btn.type)}
+                    aria-label={btn.label}
+                    aria-disabled={disabled}
+                    aria-description={reason}
+                    title={reason}
+                    disabled={disabled}
+                    data-action-disabled-reason={reason}
+                    className={`shrink-0 flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl min-w-[44px] transition-colors ${btn.className} disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none`}
+                  >
+                    <span className="text-base leading-none">{btn.icon}</span>
+                    <span className="text-[10px] leading-none">{btn.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         );

@@ -3,26 +3,24 @@
 /**
  * MtnCoverageLayer — renders MTN network coverage as a raster tile overlay.
  *
- * Wave 2D stub: if no real tile URL is configured (env var NEXT_PUBLIC_MTN_TILES_URL),
- * we render a checkerboard placeholder raster using an inline PNG data URL so
- * the wiring is visible in dev without a real upstream.
- *
- * Real tile URL when available: an XYZ template like
+ * Tile source: a real XYZ template configured via env var
+ * NEXT_PUBLIC_MTN_TILES_URL, e.g.
  *   https://example.com/mtn/{z}/{x}/{y}.png
  *
- * IMPORTANT — PNG, not SVG. Mapbox GL JS raster sources only decode
- * PNG/JPG/WebP; SVG data URLs throw "The source image could not be decoded…
- * SVGs are not supported" once per tile request, polluting the console (141
- * errors per page in production triage P2.1, wave/181) and silently leaving
- * the layer blank. We therefore inline a tiny pre-rasterized 32×32 checker
- * PNG (114 bytes; 16×16 amber squares at 12% alpha — visually equivalent
- * to the prior SVG, just decoded by Mapbox).
+ * No real tile-source URL configured (`NEXT_PUBLIC_MTN_TILES_URL` unset)?
+ * The component renders `null`. It used to mount the raster <Source> with an
+ * inline `data:image/png;base64,...` placeholder PNG so the wiring was
+ * "visible" in dev, but Mapbox treats the data-URI as an XYZ tile template
+ * and fires one (failed) fetch per tile per redraw — flooding the
+ * console/network during map use, pan/zoom and draw mode (issue #284). The
+ * missing-data state is communicated through the LayerToggle "unavailable"
+ * affordance instead (see `MTN_COVERAGE_AVAILABLE` below), so there is
+ * nothing useful to render.
  *
- * Fail-gracefully contract: if the placeholder is in use, we also render a
- * small note inside the layer's footprint (via a separate notice element that
- * the shell positions — but since we can't overlay arbitrary DOM on a Mapbox
- * raster source, the "Coverage data unavailable" copy is surfaced through the
- * layer's description in the LayerToggle panel instead).
+ * `PLACEHOLDER_TILE` is retained as an exported constant (and regression-
+ * tested) so the PNG-not-SVG contract from production triage P2.1
+ * (wave/181 — Mapbox raster sources cannot decode SVG data URLs) stays
+ * locked even though the placeholder is no longer mounted as a tile source.
  */
 
 import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
@@ -49,16 +47,23 @@ const rasterLayer: LayerProps = {
 };
 
 export default function MtnCoverageLayer() {
-  // Prefer the real XYZ template if available. Otherwise use a static
-  // placeholder — Mapbox will request `{z}/{x}/{y}` against the template, but
-  // a data URL ignores those and returns the same PNG every time.
-  const tileTemplate = MTN_TILES_URL || PLACEHOLDER_TILE;
+  // No real upstream tile source configured? Render nothing.
+  //
+  // We used to mount the raster <Source> with a `data:image/png;base64,...`
+  // placeholder so the wiring was "visible" in dev. But Mapbox treats the
+  // data-URI as an XYZ tile template and issues one (failed) fetch per tile
+  // per redraw — flooding the console/network during map use, pan/zoom and
+  // draw mode (issue #284). The missing-data state is already communicated
+  // via the LayerToggle "unavailable" affordance (MTN_COVERAGE_AVAILABLE
+  // === false), so there is nothing useful to render here.
+  if (!MTN_TILES_URL) return null;
 
+  // Real XYZ template configured — render the raster overlay normally.
   return (
     <Source
       id="mtn-coverage-source"
       type="raster"
-      tiles={[tileTemplate]}
+      tiles={[MTN_TILES_URL]}
       tileSize={256}
     >
       <Layer {...rasterLayer} />

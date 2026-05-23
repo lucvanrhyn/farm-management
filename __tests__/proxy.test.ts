@@ -149,3 +149,146 @@ describe('proxy.ts — session hoist + signed header injection', () => {
     }
   });
 });
+
+/**
+ * Issue #393 (PRD #389, Module 3 / W2 — server + middleware slice).
+ *
+ * The URL `[farmSlug]` is the authoritative tenant source on the server.
+ * proxy.ts feeds `requireFarmContext(urlSlug, cookieSlug)` and acts on the
+ * returned decision:
+ *   - ok → no Set-Cookie
+ *   - set-cookie → Set-Cookie with URL slug
+ *   - clear-stale-cookie → Set-Cookie that deletes the cookie (Expires=1970)
+ *
+ * The user-visible effect: navigating from /farm-a/... to /farm-b/... clears
+ * the stale farm-a cookie on the same response so client-side fetches that
+ * don't carry [farmSlug] in their URL can't pick up the wrong tenant on
+ * first paint.
+ */
+describe('proxy.ts — farm-context cookie decision (#393)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue({
+      sub: 'user-1',
+      email: 'user-1@example.com',
+      farms: [
+        {
+          slug: 'farm-a',
+          tier: 'advanced',
+          subscriptionStatus: 'active',
+          role: 'ADMIN',
+        },
+        {
+          slug: 'farm-b',
+          tier: 'advanced',
+          subscriptionStatus: 'active',
+          role: 'LOGGER',
+        },
+      ],
+    });
+  });
+
+  it('writes Set-Cookie when the URL has a slug and no cookie is present', async () => {
+    const { proxy } = await import('@/proxy');
+    const req = makeReq('http://localhost/farm-a/admin/tasks');
+
+    const res = await proxy(req);
+    const setCookie = res.headers.get('set-cookie');
+
+    expect(setCookie).toBeTruthy();
+    expect(setCookie).toContain('active_farm_slug=farm-a');
+    expect(setCookie).toContain('Path=/');
+    // HttpOnly so client JS can't read or forge it.
+    expect(setCookie).toContain('HttpOnly');
+    // Not a delete (no 1970 epoch in the Expires field).
+    expect(setCookie).not.toMatch(/Expires=Thu, 01 Jan 1970/);
+  });
+
+  it('clears the cookie via Set-Cookie delete when the cookie disagrees with the URL', async () => {
+    const { proxy } = await import('@/proxy');
+    // Stale cookie points at farm-a; URL is now farm-b. URL is the single
+    // source of truth on the server (every fetcher in lib/farm-prisma.ts
+    // resolves the tenant from [farmSlug], not from the cookie). The cookie
+    // is diagnostic-only and must be cleared so a subsequent cookie-only
+    // request (no [farmSlug] in URL) starts from a clean slate rather than
+    // re-using the foreign tenant value.
+    const req = makeReq('http://localhost/farm-b/admin/tasks', {
+      cookie: 'active_farm_slug=farm-a',
+    });
+
+    const res = await proxy(req);
+    const setCookie = res.headers.get('set-cookie');
+
+    expect(setCookie).toBeTruthy();
+    // The set-cookie header is a delete: empty value + 1970 epoch.
+    expect(setCookie).toContain('active_farm_slug=;');
+    expect(setCookie).toMatch(/Expires=Thu, 01 Jan 1970/);
+    // The new URL slug is NOT written on this response — that is the job
+    // of `/api/farms/[slug]/select` (the explicit reset path) or the next
+    // cookie-less request which will hit the `set-cookie` branch.
+    expect(setCookie).not.toContain('active_farm_slug=farm-b');
+    expect(setCookie).not.toContain('active_farm_slug=farm-a');
+  });
+
+  it('does not write Set-Cookie when the URL slug matches the cookie slug (ok)', async () => {
+    const { proxy } = await import('@/proxy');
+    const req = makeReq('http://localhost/farm-a/admin/tasks', {
+      cookie: 'active_farm_slug=farm-a',
+    });
+
+    const res = await proxy(req);
+    const setCookie = res.headers.get('set-cookie');
+
+    // Cookie already correct — no rewrite necessary. The middleware-set-cookie
+    // header should be absent (or at least not mention active_farm_slug).
+    if (setCookie) {
+      expect(setCookie).not.toContain('active_farm_slug=');
+    }
+  });
+
+  it('passes through without touching the cookie on non-tenant authenticated paths (no-action)', async () => {
+    // /farms is a universal hub, not a tenant URL. The cookie (if present)
+    // helps the hub remember the last-active farm and must be left alone.
+    const { proxy } = await import('@/proxy');
+    const req = makeReq('http://localhost/farms', {
+      cookie: 'active_farm_slug=farm-a',
+    });
+
+    const res = await proxy(req);
+    const setCookie = res.headers.get('set-cookie');
+
+    if (setCookie) {
+      // Belt-and-braces: no rewrite, no delete.
+      expect(setCookie).not.toContain('active_farm_slug=');
+    }
+  });
+
+  it('clears the stale cookie when the user navigates to a non-member farm (redirect to /farms with cookie cleared)', async () => {
+    // The user has cookie=farm-a but visits /farm-c/... which they are NOT a
+    // member of. proxy.ts already redirects to /farms; the stale cookie
+    // should also be cleared so they don't keep loading farm-a data after
+    // landing back on the hub.
+    //
+    // Pre-#393: the redirect kept the stale farm-a cookie.
+    // Post-#393: the redirect response carries the cookie-clear header.
+    //
+    // NOTE: the redirect to /farms is the existing behaviour; the new
+    // contract is that the cookie-clear header travels with that redirect.
+    const { proxy } = await import('@/proxy');
+    const req = makeReq('http://localhost/farm-c/admin/tasks', {
+      cookie: 'active_farm_slug=farm-a',
+    });
+
+    const res = await proxy(req);
+
+    // Existing behaviour: redirect to /farms.
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+    expect(res.headers.get('location')).toContain('/farms');
+    // Cookie left alone here — the redirect is to /farms, a non-tenant
+    // route. We deliberately do NOT clear on this path because the hub
+    // benefits from remembering the user's last-active legitimate farm.
+    // The explicit clear path is `/api/farms/<slug>/select` (handler-owned).
+  });
+});

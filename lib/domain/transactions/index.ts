@@ -30,6 +30,7 @@ export {
   resetTransactions,
   type ResetTransactionsResult,
 } from "./reset-transactions";
+export { getProfitabilityByAnimal } from "./profitability-by-animal";
 export {
   TransactionNotFoundError,
   InvalidSaleTypeError,

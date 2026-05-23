@@ -8,6 +8,7 @@ import {
   type ProposeMappingInput,
 } from "@/lib/onboarding/adaptive-import";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 /**
  * POST /api/onboarding/map-columns
@@ -80,7 +81,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existingCamps = await prisma.camp.findMany({
+  const existingCamps = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).camp.findMany({
     select: { campId: true, campName: true, sizeHectares: true },
   });
 

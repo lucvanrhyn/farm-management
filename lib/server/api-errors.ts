@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  CrossSpeciesBlockedError,
-  MobNotFoundError,
-} from "@/lib/domain/mobs/move-mob";
+import { routeError } from "@/lib/server/route/envelope";
+import { CrossSpeciesBlockedError } from "@/lib/species/errors";
+import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import {
   MobHasAnimalsError,
   NotFoundError,
@@ -10,10 +9,25 @@ import {
 } from "@/lib/domain/mobs/errors";
 import {
   CampNotFoundError,
+  DuplicateObservationError,
   InvalidTimestampError,
   InvalidTypeError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
+import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
+import {
+  CampHasActiveAnimalsError,
+  DuplicateCampError,
+  MissingSpeciesError,
+} from "@/lib/domain/camps/errors";
+import {
+  AnimalFieldForbiddenError,
+  AnimalNotFoundError,
+  AnimalRoleForbiddenError,
+  InvalidAnimalFieldError,
+  ParentNotFoundError,
+  SpeciesScopedCampError,
+} from "@/lib/domain/animals/errors";
 import {
   InvalidDateFormatError,
   InvalidSaleTypeError,
@@ -80,6 +94,15 @@ import {
  * count-bearing message). All three are emitted by the new `lib/domain/mobs/*`
  * ops. Wire shape stays bare `{ error: CODE }` so the pre-Wave-B tests
  * (which compared by strict equality) keep passing without modification.
+ *
+ * Wave 309b (ADR-0001 Wave B, #309) extension — added the animals
+ * `[id]` GET/PATCH arms (`AnimalNotFoundError` → 404 `{error:"Not
+ * found"}`, `AnimalFieldForbiddenError` → the `routeError("FORBIDDEN",
+ * "Forbidden",403)` envelope, `InvalidAnimalFieldError` → 400 free-text,
+ * `ParentNotFoundError` → 422 `PARENT_NOT_FOUND`, `SpeciesScopedCampError`
+ * → 422 NOT_FOUND|WRONG_SPECIES). This route carries authorization +
+ * validation so every arm reproduces the PRE-extraction literal
+ * byte-identical — NOT the canonical SCREAMING_SNAKE direction.
  */
 export function mapApiDomainError(err: unknown): NextResponse | null {
   if (err instanceof MobNotFoundError) {
@@ -106,11 +129,85 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   if (err instanceof CampNotFoundError) {
     return NextResponse.json({ error: err.code }, { status: 404 });
   }
+  // Wave 309a (ADR-0001 Wave B, #309) — camps domain delete guard.
+  if (err instanceof CampHasActiveAnimalsError) {
+    // Wire shape preserves the count-bearing message (legacy clients
+    // display the `error` field as a sentence — not migrated to a typed
+    // code). Byte-identical to the pre-extraction route literal.
+    return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  // Wave 316a (ADR-0001 Wave B, #309) — camps domain create guards.
+  if (err instanceof MissingSpeciesError) {
+    // Issue #232 — typed 422 (distinct from schema VALIDATION_FAILED 400).
+    return NextResponse.json({ error: "MISSING_SPECIES" }, { status: 422 });
+  }
+  if (err instanceof DuplicateCampError) {
+    // Wire shape preserves the free-text message (the legacy admin form
+    // pattern-matches it). Byte-identical to the pre-extraction route
+    // literal `{ error: "A camp with this ID already exists" }`.
+    return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  // Wave 309b (ADR-0001 Wave B, #309) — animals `[id]` GET/PATCH ops.
+  // This route carries authorization + validation; the wave is strictly
+  // behaviour-preserving so each arm reproduces the PRE-extraction wire
+  // literal byte-identical (NOT the canonical SCREAMING_SNAKE direction).
+  if (err instanceof AnimalNotFoundError) {
+    // Legacy GET 404 body was the free-text `{ error: "Not found" }`.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (err instanceof AnimalFieldForbiddenError) {
+    // Legacy route minted this via `routeError("FORBIDDEN", "Forbidden",
+    // 403)` → body `{ error: "FORBIDDEN", message: "Forbidden" }`. Reuse
+    // the exact same minter so the envelope stays byte-identical.
+    return routeError("FORBIDDEN", "Forbidden", 403);
+  }
+  // Wave 316b (ADR-0001 Wave B, #309) — the POST `/api/animals` collection
+  // role gate, relocated from the route into `createAnimal`. The legacy
+  // route minted a non-ADMIN/non-LOGGER rejection via the IDENTICAL
+  // `routeError("FORBIDDEN", "Forbidden", 403)` call → body
+  // `{ error: "FORBIDDEN", message: "Forbidden" }` at status 403. Re-mint
+  // through the exact same minter so the envelope stays byte-identical.
+  if (err instanceof AnimalRoleForbiddenError) {
+    return routeError("FORBIDDEN", "Forbidden", 403);
+  }
+  if (err instanceof InvalidAnimalFieldError) {
+    // Legacy 400 body was the free-text enum sentence (`status must be
+    // one of: ...` / `sex must be one of: ...`) under the `error` key.
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+  if (err instanceof ParentNotFoundError) {
+    // Legacy 422 body literal `{ error: "PARENT_NOT_FOUND" }`.
+    return NextResponse.json({ error: err.code }, { status: 422 });
+  }
+  if (err instanceof SpeciesScopedCampError) {
+    // Legacy 422 body `{ error: result.reason }` (NOT_FOUND|WRONG_SPECIES).
+    return NextResponse.json({ error: err.reason }, { status: 422 });
+  }
   if (err instanceof InvalidTypeError) {
     return NextResponse.json({ error: err.code }, { status: 422 });
   }
   if (err instanceof InvalidTimestampError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  if (err instanceof CampConditionFieldRequiredError) {
+    return NextResponse.json(
+      { error: err.code, details: { field: err.field } },
+      { status: 422 },
+    );
+  }
+  // Issue #366 — byte-identical duplicate camp_condition. 422: per the
+  // offline-sync terminal-status contract (`isTerminalStatus`), a payload
+  // the server "understood and definitively rejected" is a poison message
+  // — a duplicate's identical payload re-rejects identically forever, so a
+  // blind retry is futile and the row must be discardable, not looped. The
+  // body carries `existingId` + the typed code so `FailedSyncDialog`
+  // surfaces a clear "already logged" message rather than a generic
+  // poison-row notice.
+  if (err instanceof DuplicateObservationError) {
+    return NextResponse.json(
+      { error: err.code, details: { existingId: err.existingId } },
+      { status: 422 },
+    );
   }
   // Wave D (#159) — transactions domain typed errors.
   if (err instanceof TransactionNotFoundError) {

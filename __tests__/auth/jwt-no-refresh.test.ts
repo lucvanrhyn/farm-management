@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─── Mock meta-db before importing auth-options ─────────────────────────────
 const getFarmsForUserMock = vi.fn();
 vi.mock('@/lib/meta-db', () => ({
-  getUserByIdentifier: vi.fn(),
+  // Wave 6b (#261): authorize() uses `findUserByIdentifier`. This test
+  // doesn't drive the lookup path — it asserts the JWT-callback's
+  // farm-refresh contract — so the mock is unused but must exist.
+  findUserByIdentifier: vi.fn(),
+  AUTH_LOOKUP_ERROR: { NOT_FOUND: 'NOT_FOUND', AMBIGUOUS: 'AMBIGUOUS' } as const,
   isEmailVerified: vi.fn(),
   getFarmsForUser: (...args: unknown[]) => getFarmsForUserMock(...args),
 }));

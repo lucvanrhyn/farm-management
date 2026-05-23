@@ -75,6 +75,16 @@ export default function CampInspectionPage({
   const [selectedMob, setSelectedMob] = useState<MobWithCount | null>(null);
   const [mobDestCamp, setMobDestCamp] = useState("");
   const [mobMoving, setMobMoving] = useState(false);
+  // Issue #281 — per-visit idempotency key for the "complete visit / all
+  // normal" enqueue. handleCompleteVisit is a bare page button (no form
+  // component to host a mount-stable UUID like CampConditionForm/
+  // CampCoverLogForm do), so the key lives in page state. Generated once
+  // per camp visit and replayed VERBATIM on every retry (refresh,
+  // reconnect, offline-queue replay, double-click) so the server upsert on
+  // Observation.clientLocalId collapses duplicate camp_check POSTs to a
+  // single stored inspection. Regenerated when the camp changes (reset
+  // block below) so two distinct visits never collide.
+  const [visitClientLocalId, setVisitClientLocalId] = useState<string>(() => crypto.randomUUID());
 
   // useState-pair pattern (memory/feedback-react-state-from-props.md): Next.js
   // does NOT unmount this page when only the [campId] dynamic segment changes
@@ -104,6 +114,10 @@ export default function CampInspectionPage({
     setSelectedMob(null);
     setMobDestCamp("");
     setMobMoving(false);
+    // Issue #281 — a brand-new camp is a brand-new visit: mint a fresh
+    // idempotency key so camp B's "all normal" enqueue never dedupes
+    // against camp A's stored inspection on the server upsert.
+    setVisitClientLocalId(crypto.randomUUID());
   }
 
   const camp = camps.find((c) => c.camp_id === decodedId);
@@ -177,6 +191,10 @@ export default function CampInspectionPage({
       created_at: now,
       synced_at: null,
       sync_status: "pending",
+      // Issue #281 — per-visit mount-stable UUID. Persisted on the queue
+      // row + replayed verbatim by sync-manager so a retry collapses to
+      // the same server row via the Observation.clientLocalId upsert.
+      clientLocalId: visitClientLocalId,
     });
     await updateCampCondition(decodedId, { last_inspected_at: now, last_inspected_by: loggedBy });
     await refreshCampsState();
@@ -244,12 +262,21 @@ export default function CampInspectionPage({
     setActiveModal(null);
   }
 
-  async function handleDeathSubmit(cause: string) {
+  async function handleDeathSubmit(data: { cause: string; carcassDisposal: string }) {
     await queueObservation({
       type: "death",
       camp_id: decodedId,
       animal_id: selectedAnimalId,
-      details: JSON.stringify({ cause }),
+      // Wave 3b / #254 — `carcassDisposal` joins `cause` in the JSON details
+      // payload. The shared POST /api/observations route invokes
+      // `validateDeathObservation` (lib/server/validators/death.ts) and
+      // rejects a missing/invalid disposal with 422 DEATH_DISPOSAL_REQUIRED.
+      // The DeathModal's submit-gate is the UX-layer half of the same
+      // defense-in-depth.
+      details: JSON.stringify({
+        cause: data.cause,
+        carcassDisposal: data.carcassDisposal,
+      }),
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",
@@ -633,7 +660,7 @@ export default function CampInspectionPage({
           isOpen
           animalId={selectedAnimalId}
           causes={DEATH_CAUSES_BY_SPECIES[mode] ?? DEATH_CAUSES_BY_SPECIES.cattle}
-          onSelect={handleDeathSubmit}
+          onSubmit={handleDeathSubmit}
           onClose={() => setActiveModal(null)}
         />
       )}

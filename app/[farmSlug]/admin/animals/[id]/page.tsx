@@ -12,11 +12,14 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
+import type { SpeciesId } from "@/lib/species/types";
 import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { getAnimalWeightData } from "@/lib/server/weight-analytics";
 import { getCostPerAnimal } from "@/lib/server/financial-analytics";
+import { getAnimalPhotos } from "@/lib/server/animal-photos";
 import { BASE_TABS, PROGENY_TAB, type TabKey } from "./_components/tabs";
 import EditAnimalButton from "./_components/EditAnimalButton";
 import { OverviewTab } from "./_components/OverviewTab";
@@ -26,6 +29,7 @@ import { MovementTab } from "./_components/MovementTab";
 import { WeightTab } from "./_components/WeightTab";
 import { InvestmentTab } from "./_components/InvestmentTab";
 import { ProgenyTab } from "./_components/ProgenyTab";
+import { AnimalPhotosTab } from "@/components/admin/AnimalPhotosTab";
 
 export default async function AnimalDetailPage({
   params,
@@ -44,28 +48,35 @@ export default async function AnimalDetailPage({
 
   const isBull = animal.category === "Bull";
 
-  const [observations, camp, weightData, investmentData, offspring, allCamps] = await Promise.all([
-    prisma.observation.findMany({
+  const [observations, camp, weightData, investmentData, offspring, allCamps, photos] = await Promise.all([
+    scoped(prisma, animal.species as SpeciesId).observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
       take: 200,
     }),
-    prisma.camp.findFirst({ where: { campId: animal.currentCamp } }),
+    scoped(prisma, animal.species as SpeciesId).camp.findFirst({ where: { campId: animal.currentCamp } }),
     getAnimalWeightData(prisma, id),
     getCostPerAnimal(prisma, id),
     isBull
-      ? prisma.animal.findMany({
+      ? // Offspring lineage must include Sold/Deceased progeny — `scoped()`
+        // would inject status: "Active" and silently hide them (the issue
+        // #255 status-trap class). Route through crossSpecies() keeping the
+        // explicit species filter so the species axis stays correct without
+        // a status injection.
+        crossSpecies(prisma, "species-registry-internal").animal.findMany({
           where: { fatherId: animal.animalId, species: animal.species },
           orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),
     // audit-allow-findmany-no-select: per-tenant camp list (≤36 typical) for EditAnimalModal camp picker; modal uses full Camp type
-    prisma.camp.findMany({ orderBy: { campName: "asc" } }),
+    scoped(prisma, animal.species as SpeciesId).camp.findMany({ orderBy: { campName: "asc" } }),
+    // Wave 5a / #264 — photos aggregation for the new Photos tab.
+    getAnimalPhotos(prisma, id),
   ]);
 
   // Fetch calving observations for offspring birth weights & difficulty
   const offspringCalvingObs = isBull && offspring.length > 0
-    ? await prisma.observation.findMany({
+    ? await scoped(prisma, animal.species as SpeciesId).observation.findMany({
         where: {
           type: "calving",
           animalId: { in: offspring.map((o) => o.animalId) },
@@ -161,6 +172,10 @@ export default async function AnimalDetailPage({
 
         {activeTab === "investment" && (
           <InvestmentTab investmentData={investmentData} weightData={weightData} />
+        )}
+
+        {activeTab === "photos" && (
+          <AnimalPhotosTab farmSlug={farmSlug} animalId={id} photos={photos} />
         )}
 
         {activeTab === "progeny" && isBull && (

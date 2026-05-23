@@ -113,27 +113,103 @@ export interface FarmCreds {
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
-export async function getUserByIdentifier(identifier: string): Promise<MetaUser | null> {
+/**
+ * Auth lookup error codes — typed result codes returned by
+ * `findUserByIdentifier`. Kept tight (not the same vocabulary as
+ * `AUTH_ERROR_CODES` in `lib/auth-errors.ts`) because the lookup layer
+ * only knows about resolution outcomes, not the user-facing copy or the
+ * subsequent password / verification checks.
+ *
+ * NOT_FOUND is the normal "no such user" path. AMBIGUOUS is defence-in-
+ * depth: post-migration 0003 the DB unique constraint on `users.username`
+ * makes >1 row physically impossible, but if a legacy meta-DB ever
+ * surfaces a duplicate, we surface a typed error instead of silently
+ * picking the first row.
+ */
+export const AUTH_LOOKUP_ERROR = {
+  NOT_FOUND: 'NOT_FOUND',
+  AMBIGUOUS: 'AMBIGUOUS',
+} as const;
+
+export type AuthLookupErrorCode =
+  (typeof AUTH_LOOKUP_ERROR)[keyof typeof AUTH_LOOKUP_ERROR];
+
+export type FindUserResult =
+  | { ok: true; user: MetaUser }
+  | { ok: false; code: AuthLookupErrorCode };
+
+/**
+ * Resolve a sign-in identifier (USERNAME ONLY) to a meta-DB user.
+ *
+ * Issue #261 / Wave 6b — replaces the legacy `getUserByIdentifier` (which
+ * OR'd `email = ? OR username = ?`). The maintainer-locked HITL contract
+ * is documented in `tasks/auth-and-users.md`: sign-in accepts only the
+ * username field; the optional `users.email` column is used for
+ * verification flows, not authentication lookup.
+ *
+ * Returns a typed result so callers can distinguish "no user" from
+ * "ambiguous storage" — both are auth failures, but only the latter is
+ * an operator-visible incident.
+ */
+export async function findUserByIdentifier(
+  identifier: string,
+): Promise<FindUserResult> {
+  // Empty / whitespace-only input is NOT_FOUND without a DB round-trip.
+  // Belt-and-braces: callers (login-check route + authorize()) already
+  // reject empty strings, but this guards against a future caller
+  // forgetting and silently returning the first row of an unscoped scan.
+  const trimmed = identifier.trim();
+  if (!trimmed) {
+    return { ok: false, code: AUTH_LOOKUP_ERROR.NOT_FOUND };
+  }
+
   // Auth-critical lookup: use withMetaDb so an expired token self-heals
   // rather than silently blocking login.
+  //
+  // We SELECT all matching rows (no LIMIT) and surface AMBIGUOUS when
+  // >1 comes back. The DB unique index added in meta-migration 0003
+  // makes that physically impossible for new data, but the typed-error
+  // branch is the defence-in-depth requested by the issue spec.
   return withMetaDb(async (client) => {
     const result = await client.execute({
       sql: `SELECT id, email, username, password_hash, name
             FROM users
-            WHERE email = ? OR username = ?
-            LIMIT 1`,
-      args: [identifier, identifier],
+            WHERE username = ?`,
+      args: [trimmed],
     });
-    if (result.rows.length === 0) return null;
+    if (result.rows.length === 0) {
+      return { ok: false, code: AUTH_LOOKUP_ERROR.NOT_FOUND };
+    }
+    if (result.rows.length > 1) {
+      return { ok: false, code: AUTH_LOOKUP_ERROR.AMBIGUOUS };
+    }
     const row = result.rows[0];
     return {
-      id: row.id as string,
-      email: (row.email as string) || null,
-      username: row.username as string,
-      passwordHash: row.password_hash as string,
-      name: row.name as string | null,
+      ok: true,
+      user: {
+        id: row.id as string,
+        email: (row.email as string) || null,
+        username: row.username as string,
+        passwordHash: row.password_hash as string,
+        name: row.name as string | null,
+      },
     };
   });
+}
+
+/**
+ * @deprecated Use `findUserByIdentifier` (returns a typed result) instead.
+ *
+ * Retained as a thin shim during Wave 6b rollout so callers outside the
+ * auth surface (e.g. ad-hoc scripts) don't break in the same PR. New
+ * code MUST use `findUserByIdentifier`. This shim still resolves
+ * username-only — the legacy email-OR-username behaviour is gone.
+ */
+export async function getUserByIdentifier(
+  identifier: string,
+): Promise<MetaUser | null> {
+  const result = await findUserByIdentifier(identifier);
+  return result.ok ? result.user : null;
 }
 
 export async function getFarmsForUser(userId: string): Promise<UserFarm[]> {

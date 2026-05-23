@@ -1,32 +1,26 @@
 name: audit-species-where
 
-# Structural lint that enforces "every per-species `prisma.<model>.<op>`
-# call commits to the species axis". PRD #222 / issue #224.
+# Structural lint that enforces the ADR-0005 species-access invariant:
+# the four species-bearing models (Animal, Camp, Mob, Observation) may be
+# reached on a tenant code path ONLY through the two named doors in
+# `lib/server/species-scoped-prisma.ts` — `scoped(prisma, mode)` (per-
+# species) or `crossSpecies(prisma, reason)` (deliberate cross-species).
 #
-# Sibling of audit-findmany-no-take (row bounds) and audit-findmany-no-select
-# (column bounds). This audit covers the cross-species-leak class:
+# A raw `prisma.<species-model>.<op>` (findMany/findFirst/count/groupBy/
+# updateMany/deleteMany) outside a structural door-module exemption is the
+# silent cross-species-leak bug class — no exception, no failing test.
 #
-#   const animals = await prisma.animal.findMany({ where: { status: "Active" } });
-#                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#   On a multi-species tenant this returns rows from every species — silent
-#   bug, no exception, no failing test. The structural cure is the species-
-#   scoped facade (`lib/server/species-scoped-prisma.ts`) which makes
-#   "forgetting mode" a compile error. This workflow closes the loop at every
-#   non-facade callsite by failing CI on raw `prisma.<model>.<op>` reads/
-#   mutations that lack a top-level `species:` predicate.
+# ADR-0005's final wave (#353) replaced the content-inspecting
+# `scripts/audit-species-where.ts` script + `.audit-species-where-baseline
+# .json` + `audit-allow-species-where:` pragma with a single structural
+# architecture test modelled on
+# `__tests__/architecture/sync-truth-no-direct-callers.test.ts`
+# (ADR-0002's invariant): presence of a NAMED DOOR, not presence of a
+# `where` key. The test is binary — there is no baseline to grandfather.
 #
-# Compliant patterns:
-#   1. `where: { species: mode, ... }` — explicit literal predicate.
-#   2. `where: activeSpeciesWhere(mode)` — helper that returns the predicate.
-#   3. `// audit-allow-species-where: <reason>` pragma on the preceding line
-#      (cross-species deliberate spans).
-#   4. Callsite is routed through `scoped(prisma, mode).<model>.<op>(...)`
-#      — the facade dispatches and injects species, so the source literal
-#      doesn't carry `prisma.<model>` at all.
-#
-# Baseline file: `.audit-species-where-baseline.json` grandfathers existing
-# offenders so this workflow fails ONLY on NEW violations. The baseline can
-# only shrink over time — every entry is a follow-up migration to the facade.
+# The workflow filename and the check/job name `audit-species-where` are
+# kept byte-identical because branch protection pins the status-check
+# context string; only the underlying command changed.
 
 on:
   pull_request:
@@ -53,5 +47,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit prisma per-species calls — species predicate enforcement
-        run: pnpm tsx scripts/audit-species-where.ts
+      - name: Species-access invariant — structural arch test
+        run: npx vitest run __tests__/architecture/species-access-no-direct-prisma.test.ts

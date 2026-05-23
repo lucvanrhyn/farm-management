@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 /**
- * F1 — Species '+ Add' modal
+ * #263 — SpeciesSettingsForm: explicit "Multi-species rollout — contact us"
+ * copy replaces the previous F1 "+ Add species" CTA + dummy modal.
  *
- * Tests SpeciesSettingsForm for:
- *  - Renders a "+ Add species" button
- *  - Clicking the button opens a modal
- *  - Modal contains "Import from CSV" and "Add manually" CTAs
- *  - Pressing Escape closes the modal
- *  - Clicking outside the modal (backdrop) closes it
+ * Background. The original F1 modal (PR shipped as wave/235) opened a
+ * dialog with two CTAs that just routed to /admin/import and
+ * /admin/animals — neither of which actually added a species. The user
+ * explicitly flagged this as dead UI on 2026-05-13: "I don't like that
+ * add species thing that's everywhere... it needs to be removed."
  *
- * Auth is not required — these are pure component unit tests.
+ * After #263 the form must:
+ *   1. NOT render the "+ Add species" button.
+ *   2. NOT mount the AddSpeciesModal under any circumstance.
+ *   3. Render explicit copy referencing the multi-species rollout +
+ *      a contact affordance (mailto / link / button — wording flexible).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import React from "react";
 
-// F1 requires a modal component — stub router for navigation CTAs
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/farm-x/admin/settings/species",
@@ -32,7 +35,7 @@ function renderForm(farmSlug = "farm-x", species = SAMPLE_SPECIES) {
   return render(<SpeciesSettingsForm farmSlug={farmSlug} species={species} />);
 }
 
-describe("F1 — SpeciesSettingsForm + Add modal", () => {
+describe("#263 — SpeciesSettingsForm contact-us copy (supersedes F1 modal)", () => {
   beforeEach(() => {
     cleanup();
   });
@@ -41,64 +44,34 @@ describe("F1 — SpeciesSettingsForm + Add modal", () => {
     cleanup();
   });
 
-  it("renders a '+ Add species' button", () => {
+  it("does NOT render the '+ Add species' button", () => {
     renderForm();
-    const btn = screen.queryByRole("button", { name: /\+ Add species/i });
-    expect(btn).not.toBeNull();
+    const btn = screen.queryByRole("button", { name: /\+\s*Add species/i });
+    expect(btn).toBeNull();
   });
 
-  it("modal is NOT visible before the button is clicked", () => {
+  it("does NOT mount the AddSpeciesModal (no role=dialog in initial render)", () => {
     renderForm();
-    // modal should not be in the DOM or should have aria-hidden
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("clicking '+ Add species' opens a modal dialog", () => {
+  it("renders explicit 'Multi-species rollout' copy", () => {
     renderForm();
-    const btn = screen.getByRole("button", { name: /\+ Add species/i });
-    fireEvent.click(btn);
-    expect(screen.queryByRole("dialog")).not.toBeNull();
+    expect(screen.queryByText(/multi-species rollout/i)).not.toBeNull();
   });
 
-  it("modal contains an 'Import from CSV' CTA", () => {
+  it("renders a contact affordance (mailto link or contact button)", () => {
     renderForm();
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add species/i }));
-    expect(screen.queryByText(/Import from CSV/i)).not.toBeNull();
+    // Either a "Contact us" button/link or a mailto: anchor — wording flexible.
+    const link = screen.queryByRole("link", { name: /contact/i });
+    const button = screen.queryByRole("button", { name: /contact/i });
+    expect(link ?? button).not.toBeNull();
   });
 
-  it("modal contains an 'Add manually' CTA", () => {
+  it("still renders existing species toggles (Cattle, Sheep)", () => {
     renderForm();
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add species/i }));
-    expect(screen.queryByText(/Add manually/i)).not.toBeNull();
-  });
-
-  it("pressing Escape closes the modal", () => {
-    renderForm();
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add species/i }));
-    expect(screen.queryByRole("dialog")).not.toBeNull();
-
-    fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
-    expect(screen.queryByRole("dialog")).toBeNull();
-  });
-
-  it("clicking the backdrop closes the modal", () => {
-    renderForm();
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add species/i }));
-    expect(screen.queryByRole("dialog")).not.toBeNull();
-
-    // Backdrop should have data-testid="modal-backdrop"
-    const backdrop = screen.queryByTestId("modal-backdrop");
-    expect(backdrop).not.toBeNull();
-    fireEvent.click(backdrop!);
-    expect(screen.queryByRole("dialog")).toBeNull();
-  });
-
-  it("clicking inside the modal does NOT close it", () => {
-    renderForm();
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add species/i }));
-    const dialog = screen.getByRole("dialog");
-    fireEvent.click(dialog);
-    // modal should still be open
-    expect(screen.queryByRole("dialog")).not.toBeNull();
+    // Sanity: the toggles are the actual functional UI on this page.
+    expect(screen.queryByText(/^Cattle$/)).not.toBeNull();
+    expect(screen.queryByText(/^Sheep$/)).not.toBeNull();
   });
 });

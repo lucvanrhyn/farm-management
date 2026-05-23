@@ -1,7 +1,14 @@
 import { type PrismaClient } from "@prisma/client";
 import { GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
+import { getTenantDayStart } from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
+// ADR-0005 Wave 2: camp-status reads are farm-wide analytics roll-ups
+// (latest camp conditions, recent health obs, LSU grazing math). The
+// existing `...(mode ? { species: mode } : {})` spreads are KEPT verbatim
+// — crossSpecies() injects nothing, so behaviour is bit-identical.
 
 export interface LiveCampStatus {
   grazing_quality: GrazingQuality;
@@ -22,7 +29,7 @@ export interface HealthObservation {
 export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map<string, LiveCampStatus>> {
   // Use distinct on campId with descending observedAt to get only the latest
   // observation per camp — avoids fetching the entire historical table.
-  const observations = await prisma.observation.findMany({
+  const observations = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: { in: ["camp_condition", "camp_check"] } },
     orderBy: { observedAt: "desc" },
     distinct: ["campId"],
@@ -64,7 +71,7 @@ export async function getRecentHealthObservations(
   limit = 8,
   mode?: SpeciesId,
 ): Promise<HealthObservation[]> {
-  const rows = await prisma.observation.findMany({
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: "health_issue",
       // Per-species when `mode` is provided (admin dashboard #225); cross-species
@@ -98,7 +105,7 @@ export async function countHealthIssuesSince(
   since: Date,
   mode?: SpeciesId,
 ): Promise<number> {
-  return prisma.observation.count({
+  return crossSpecies(prisma, "analytics-rollup").observation.count({
     where: {
       type: "health_issue",
       observedAt: { gte: since },
@@ -112,15 +119,21 @@ export async function countHealthIssuesSince(
  * Uses 3 batched queries — safe to call on the admin home page.
  */
 export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays = 7): Promise<number> {
+  const xs = crossSpecies(prisma, "analytics-rollup");
   const [camps, allCoverReadings, allAnimals] = await Promise.all([
-    prisma.camp.findMany({ select: { campId: true, sizeHectares: true } }),
+    xs.camp.findMany({ select: { campId: true, sizeHectares: true } }),
     prisma.campCoverReading.findMany({ orderBy: { recordedAt: "desc" } }),
     // cross-species by design: low-grazing math sums LSU across all species.
-    prisma.animal.groupBy({
+    // Facade returns Prisma's broadest groupBy shape (documented
+    // trade-off in species-scoped-prisma.ts); re-narrow to this query's
+    // `by`/`_count` selection — behaviour-identical.
+    xs.animal.groupBy({
       by: ["currentCamp", "species", "category"],
       where: { status: "Active" },
       _count: { id: true },
-    }),
+    }) as unknown as Promise<
+      Array<{ currentCamp: string | null; category: string; _count: { id: number } }>
+    >,
   ]);
 
   const latestCover = new Map<string, { kgDmPerHa: number; useFactor: number }>();
@@ -155,21 +168,27 @@ export async function getLowGrazingCampCount(prisma: PrismaClient, warningDays =
 
 export async function countInspectedToday(
   prisma: PrismaClient,
-  mode?: SpeciesId,
+  tz?: string | null,
 ): Promise<number> {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Issue #258: bucket "today" against the tenant's stored TZ
+  // (FarmSettings.timezone, default "Africa/Johannesburg") rather than the
+  // server's local TZ. UTC bucketing undercounted SAST inspections done
+  // between 00:00 and 02:00 SAST (= 22:00–00:00 UTC the previous day).
+  // `tz` is optional so legacy call-sites keep compiling; when omitted we
+  // fall back to "Africa/Johannesburg" — the FarmSettings.timezone default.
+  const todayStart = getTenantDayStart(tz ?? "Africa/Johannesburg");
 
-  const rows = await prisma.observation.findMany({
+  // Issue #363: a camp inspection is a NULL-species `camp_condition` /
+  // `camp_check` observation logged against a camp — it is NOT a per-species
+  // concept. The previous `...(mode ? { species: mode } : {})` predicate
+  // dropped every NULL-species row whenever a FarmMode was active, so the
+  // "Inspections Today" tile read 0/N on every per-species dashboard. This
+  // query is intentionally cross-species: it counts the distinct camps
+  // inspected today regardless of which species the dashboard is filtered to.
+  const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: { in: ["camp_condition", "camp_check"] },
       observedAt: { gte: todayStart },
-      // Camp-condition observations log against a campId AND now carry a
-      // denormalised species (migration 0003). On a per-mode dashboard,
-      // only count inspections logged for the active species. When `mode`
-      // is omitted, fall back to cross-species (legacy callers / farm-wide
-      // metric).
-      ...(mode ? { species: mode } : {}),
     },
     select: { campId: true },
   });

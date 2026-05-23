@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mobFindUniqueMock,
   campFindUniqueMock,
+  campFindFirstMock,
   mobUpdateMock,
   animalFindManyMock,
   animalUpdateManyMock,
@@ -32,6 +33,13 @@ const {
 } = vi.hoisted(() => {
   const mobFindUnique = vi.fn();
   const campFindUnique = vi.fn();
+  // ADR-0006 — the mob_movement observation rows now go through
+  // `createObservation`, which calls
+  // `crossSpecies(client, "species-registry-internal").camp.findFirst`
+  // to verify camp existence and read its species. The mock surfaces
+  // a default ("camp exists, species null") so the door's CampNotFound
+  // path is not the default; tests that need a per-call result override.
+  const campFindFirst = vi.fn();
   const mobUpdate = vi.fn();
   const animalFindMany = vi.fn();
   const animalUpdateMany = vi.fn();
@@ -42,7 +50,7 @@ const {
   const prisma = {
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
     mob: { findUnique: mobFindUnique, update: mobUpdate },
-    camp: { findUnique: campFindUnique },
+    camp: { findUnique: campFindUnique, findFirst: campFindFirst },
     animal: { findMany: animalFindMany, updateMany: animalUpdateMany },
     observation: { create: observationCreate },
   };
@@ -50,6 +58,7 @@ const {
   return {
     mobFindUniqueMock: mobFindUnique,
     campFindUniqueMock: campFindUnique,
+    campFindFirstMock: campFindFirst,
     mobUpdateMock: mobUpdate,
     animalFindManyMock: animalFindMany,
     animalUpdateManyMock: animalUpdateMany,
@@ -58,11 +67,11 @@ const {
   };
 });
 
+import { performMobMove } from "@/lib/domain/mobs/move-mob";
 import {
-  performMobMove,
   CrossSpeciesBlockedError,
   CROSS_SPECIES_BLOCKED,
-} from "@/lib/domain/mobs/move-mob";
+} from "@/lib/species/errors";
 import type { PrismaClient } from "@prisma/client";
 
 const mob = (overrides: Partial<{ id: string; name: string; currentCamp: string; species: string }> = {}) => ({
@@ -84,6 +93,7 @@ describe("performMobMove — cross-species guard (#28 Phase B)", () => {
   beforeEach(() => {
     mobFindUniqueMock.mockReset();
     campFindUniqueMock.mockReset();
+    campFindFirstMock.mockReset();
     mobUpdateMock.mockReset();
     animalFindManyMock.mockReset();
     animalUpdateManyMock.mockReset();
@@ -92,6 +102,9 @@ describe("performMobMove — cross-species guard (#28 Phase B)", () => {
     animalFindManyMock.mockResolvedValue([]);
     mobUpdateMock.mockResolvedValue({});
     animalUpdateManyMock.mockResolvedValue({ count: 0 });
+    // ADR-0006 — default the door's camp existence/species lookup.
+    // The two mob_movement observations (source + dest) each hit this.
+    campFindFirstMock.mockResolvedValue({ campId: "camp-x", species: null });
     observationCreateMock.mockImplementation((args: { data: { campId: string } }) => ({
       id: `obs-${args.data.campId}`,
     }));

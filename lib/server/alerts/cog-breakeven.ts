@@ -12,6 +12,7 @@ import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { parseSpeciesThresholds } from "./helpers";
 import { logger } from "@/lib/logger";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const BREAKEVEN_FRACTION = 0.85;
 
@@ -56,7 +57,8 @@ export async function evaluate(
 
   // cross-species by design: alert fires per-animal using a per-species
   // marketByS lookup; the loop below keys on `a.species` row-by-row.
-  const animals = (await prisma.animal.findMany({
+  // crossSpecies() forwards args verbatim — no species/status injection.
+  const animals = (await crossSpecies(prisma, "notification-cron").animal.findMany({
     where: { status: "Active" },
     select: { id: true, animalId: true, species: true },
   })) as AnimalRow[];

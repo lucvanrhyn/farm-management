@@ -8,6 +8,7 @@ import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import nextDynamic from "next/dynamic";
 
 const PregnancyRateCycleChart = nextDynamic(
@@ -125,18 +126,17 @@ export default async function ReproductionPage({
     mode === "sheep" ? ["lambing"] : mode === "game" ? ["fawning"] : ["calving"];
 
   const [recentEvents, allCamps] = await Promise.all([
-    prisma.observation.findMany({
+    scoped(prisma, mode).observation.findMany({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan", ...birthEventTypes] },
         observedAt: observedAtFilter,
-        species: mode,
       },
       orderBy: { observedAt: "desc" },
       take: 15,
       select: { id: true, type: true, animalId: true, campId: true, observedAt: true, loggedBy: true, details: true },
     }),
     // audit-allow-findmany: bounded per-tenant camp list for name lookup (~36 camps).
-    prisma.camp.findMany({ select: { campId: true, campName: true } }),
+    scoped(prisma, mode).camp.findMany({ select: { campId: true, campName: true } }),
   ]);
 
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));

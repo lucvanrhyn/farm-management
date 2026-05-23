@@ -6,6 +6,7 @@
 import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, diffDays, toIsoWeek } from "./helpers";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 const STALE_DAYS = 90;
 
@@ -26,14 +27,16 @@ export async function evaluate(
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
   // cross-species by design: 90-day weighing alert applies to every species.
-  const animals = (await prisma.animal.findMany({
+  // crossSpecies() forwards args verbatim — no species/status injection.
+  const xs = crossSpecies(prisma, "notification-cron");
+  const animals = (await xs.animal.findMany({
     where: { status: "Active" },
     select: { id: true, animalId: true, currentCamp: true },
   })) as AnimalRow[];
   if (animals.length === 0) return [];
 
   const animalIds = animals.map((a) => a.id);
-  const rows = (await prisma.observation.findMany({
+  const rows = (await xs.observation.findMany({
     where: { animalId: { in: animalIds }, type: "weighing" },
     select: { animalId: true, observedAt: true },
     orderBy: { observedAt: "desc" },

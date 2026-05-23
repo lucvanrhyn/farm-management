@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { getFarmCreds } from '@/lib/meta-db';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { getFarmMode } from '@/lib/server/get-farm-mode';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 import { getFarmSummary } from '@/lib/server/veld-score';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { VeldAssessmentForm } from '@/components/veld/VeldAssessmentForm';
@@ -30,9 +32,11 @@ export default async function VeldToolPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) notFound();
 
+  const mode = await getFarmMode(farmSlug);
+
   const [summary, camps, settings, recent] = await Promise.all([
     getFarmSummary(prisma),
-    prisma.camp.findMany({ select: { campId: true, campName: true, sizeHectares: true } }),
+    scoped(prisma, mode).camp.findMany({ select: { campId: true, campName: true, sizeHectares: true } }),
     prisma.farmSettings.findUnique({
       where: { id: 'singleton' },
       select: { biomeType: true },

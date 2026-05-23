@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -48,9 +49,9 @@ export default async function AdminObservationsPage({
 
   const [prismaCamps, prismaAnimals] = await Promise.all([
     // audit-allow-findmany: camps are bounded per tenant (trio-b ≈ 36); dropdown needs full list.
-    prisma.camp.findMany({ orderBy: { campName: "asc" }, select: { campId: true, campName: true } }),
-    prisma.animal.findMany({
-      where: { status: "Active", species: mode },
+    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" }, select: { campId: true, campName: true } }),
+    scoped(prisma, mode).animal.findMany({
+      where: { status: "Active" },
       orderBy: { animalId: "asc" },
       take: PAGE_SIZE,
       select: { animalId: true, currentCamp: true },

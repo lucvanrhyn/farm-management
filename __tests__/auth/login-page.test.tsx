@@ -51,8 +51,8 @@ async function loadLoginPage(): Promise<React.ComponentType> {
   return mod.default;
 }
 
-function fillAndSubmit(identifier = 'wrong@user.com', password = 'nope'): void {
-  fireEvent.change(screen.getByLabelText(/email or username/i), {
+function fillAndSubmit(identifier = 'nobody', password = 'nope'): void {
+  fireEvent.change(screen.getByLabelText(/^username$/i), {
     target: { value: identifier },
   });
   fireEvent.change(screen.getByLabelText(/password/i), {
@@ -74,7 +74,7 @@ describe('login page — accessibility (P4) + 200-typed-payload flow (P1)', () =
     fillAndSubmit();
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/incorrect email\/username or password/i);
+    expect(alert).toHaveTextContent(/wrong username or password/i);
     // Assertive — credential failures block the user from continuing,
     // so screen readers should interrupt instead of waiting for an idle moment.
     expect(alert.getAttribute('aria-live')).toBe('assertive');
@@ -150,7 +150,9 @@ describe('login page — accessibility (P4) + 200-typed-payload flow (P1)', () =
     fillAndSubmit();
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/network error/i);
+    // Wave 6b (#261) acceptance #6: distinct copy from the credential-
+    // error toast. "Couldn't reach the server" is the user-facing string.
+    expect(alert).toHaveTextContent(/couldn't reach the server/i);
     consoleErrorSpy.mockRestore();
   });
 });

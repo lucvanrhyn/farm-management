@@ -2,8 +2,27 @@
 
 import { useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
+import StickySubmitBar from "@/components/logger/StickySubmitBar";
+import type { ObservationType } from "@/lib/domain/observations/registry";
 
-type ReproType = "heat_detection" | "insemination" | "pregnancy_scan" | "calving" | "body_condition_score" | "temperament_score" | "scrotal_circumference";
+/**
+ * #319 — the reproduction sub-flows the form can submit. Derived from the
+ * registry's `ObservationType` via `Extract` so every value here is provably
+ * a member of the single persistence allowlist. If one of these names is ever
+ * removed from `lib/domain/observations/registry.ts`, this `Extract` collapses
+ * and the build fails — the UI enum can no longer silently drift from the
+ * write boundary (the root cause of the 422 INVALID_TYPE persistence loss).
+ */
+type ReproType = Extract<
+  ObservationType,
+  | "heat_detection"
+  | "insemination"
+  | "pregnancy_scan"
+  | "calving"
+  | "body_condition_score"
+  | "temperament_score"
+  | "scrotal_circumference"
+>;
 
 export interface ReproSubmitData {
   type: ReproType;
@@ -137,25 +156,33 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
   const [selectedType, setSelectedType] = useState<ReproType | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
+  // #286 (PRD #279) — every scored / single-select sub-flow starts at an
+  // explicit UNSELECTED sentinel (`null`). A pre-filled default reads as
+  // the farmer's answer, so a tap-through used to persist a fabricated
+  // value. The submit button for each sub-flow is gated on a non-null
+  // selection, and the server validator
+  // (`lib/server/validators/reproductive-state.ts` → REPRO_FIELD_REQUIRED)
+  // independently rejects a missing required field from a stale client.
+
   // Heat detection
-  const [heatMethod, setHeatMethod] = useState<"visual" | "scratch_card">("visual");
+  const [heatMethod, setHeatMethod] = useState<"visual" | "scratch_card" | null>(null);
 
   // Insemination
-  const [insemMethod, setInsemMethod] = useState<"AI" | "natural">("AI");
+  const [insemMethod, setInsemMethod] = useState<"AI" | "natural" | null>(null);
   const [bullId, setBullId] = useState("");
 
   // Pregnancy scan
-  const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain">("pregnant");
+  const [scanResult, setScanResult] = useState<"pregnant" | "empty" | "uncertain" | null>(null);
 
   // Calving
   const [calfStatus, setCalfStatus] = useState<"live" | "stillborn">("live");
   const [calfTag, setCalfTag] = useState("");
 
   // Body condition score
-  const [bcsScore, setBcsScore] = useState(5);
+  const [bcsScore, setBcsScore] = useState<number | null>(null);
 
   // Temperament score
-  const [temperamentScore, setTemperamentScore] = useState(1);
+  const [temperamentScore, setTemperamentScore] = useState<number | null>(null);
 
   // Scrotal circumference
   const [scrotalCm, setScrotalCm] = useState("");
@@ -170,36 +197,56 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
     setStep("details");
   }
 
+  // #286 — per-sub-flow submit gate. Each sub-flow's required value must be
+  // ACTIVELY chosen (non-null sentinel) before its submit enables. Mirrors
+  // the server contract in `lib/server/validators/reproductive-state.ts`.
+  function canSubmit(): boolean {
+    switch (selectedType) {
+      case "heat_detection":
+        return heatMethod !== null;
+      case "insemination":
+        return insemMethod !== null;
+      case "pregnancy_scan":
+        return scanResult !== null;
+      case "body_condition_score":
+        return bcsScore !== null;
+      case "temperament_score":
+        return temperamentScore !== null;
+      case "scrotal_circumference":
+        return scrotalCm.trim().length > 0;
+      case "calving":
+        return calfTag.trim().length > 0;
+      default:
+        return false;
+    }
+  }
+
   function handleSubmit() {
-    if (!selectedType) return;
+    if (!selectedType || !canSubmit()) return;
 
     let details: Record<string, string>;
     if (selectedType === "heat_detection") {
-      details = { method: heatMethod };
+      details = { method: heatMethod! };
     } else if (selectedType === "insemination") {
       details = {
-        method: insemMethod,
+        method: insemMethod!,
         ...(bullId.trim() ? { bullId: bullId.trim() } : {}),
       };
     } else if (selectedType === "pregnancy_scan") {
       details = {
-        result: scanResult,
+        result: scanResult!,
       };
     } else if (selectedType === "body_condition_score") {
       details = { score: String(bcsScore) };
     } else if (selectedType === "temperament_score") {
       details = { score: String(temperamentScore) };
     } else if (selectedType === "scrotal_circumference") {
-      if (!scrotalCm.trim()) {
-        alert("Scrotal circumference measurement is required.");
-        return;
-      }
       details = { measurement_cm: scrotalCm.trim() };
     } else {
       // calving
       details = {
         calf_status: calfStatus,
-        ...(calfTag.trim() ? { calf_tag: calfTag.trim() } : {}),
+        calf_tag: calfTag.trim(),
       };
     }
 
@@ -244,31 +291,46 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2a: heat detection */}
         {step === "details" && selectedType === "heat_detection" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-heat-method-label" style={{ color: "#D2B48C" }}>
               How was heat detected?
             </p>
-            {(
-              [
-                { value: "visual" as const, label: "Visual observation (standing heat)" },
-                { value: "scratch_card" as const, label: "Scratch card / Kamar patch" },
-              ] as const
-            ).map((opt) => (
+            {/*
+              Wave 1 / #253 — explicit `role="radiogroup"` so the In-Heat
+              method picker is structurally a single-select. Server-side
+              `validateReproductiveState` (lib/server/validators/reproductive-state.ts)
+              is the defense-in-depth backstop — the radio role here is the
+              UX-layer half of the fix.
+            */}
+            <div role="radiogroup" aria-labelledby="repro-heat-method-label">
+              {(
+                [
+                  { value: "visual" as const, label: "Visual observation (standing heat)" },
+                  { value: "scratch_card" as const, label: "Scratch card / Kamar patch" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={heatMethod === opt.value}
+                  onClick={() => setHeatMethod(opt.value)}
+                  className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors mb-2"
+                  style={heatMethod === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <StickySubmitBar>
               <button
-                key={opt.value}
-                onClick={() => setHeatMethod(opt.value)}
-                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors"
-                style={heatMethod === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
-                {opt.label}
+                Record Heat
               </button>
-            ))}
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Heat
-            </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -310,45 +372,65 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Insemination
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Insemination
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
         {/* Step 2c: pregnancy scan */}
         {step === "details" && selectedType === "pregnancy_scan" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-scan-result-label" style={{ color: "#D2B48C" }}>
               Scan result
             </p>
-            {(
-              [
-                { value: "pregnant" as const, label: "✓  Pregnant" },
-                { value: "empty" as const, label: "✗  Empty" },
-                { value: "uncertain" as const, label: "?  Uncertain — recheck" },
-              ] as const
-            ).map((opt) => (
+            {/*
+              Wave 1 / #253 — explicit `role="radiogroup"` for the
+              {Pregnant, Open (=Empty), Uncertain} mutually-exclusive states.
+              The 2026-05-13 stress test confirmed dirty payloads with
+              multiple state markers were silently collapsed at the DB.
+              The server-side `ReproductiveStateValidator` rejects those
+              with `422 REPRO_MULTI_STATE`; this radio is the UX-layer half
+              of the defense-in-depth fix.
+            */}
+            <div role="radiogroup" aria-labelledby="repro-scan-result-label">
+              {(
+                [
+                  { value: "pregnant" as const, label: "✓  Pregnant" },
+                  { value: "empty" as const, label: "✗  Open (Empty)" },
+                  { value: "uncertain" as const, label: "?  Uncertain — recheck" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={scanResult === opt.value}
+                  onClick={() => setScanResult(opt.value)}
+                  className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors mb-2"
+                  style={scanResult === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <StickySubmitBar>
               <button
-                key={opt.value}
-                onClick={() => setScanResult(opt.value)}
-                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-colors"
-                style={scanResult === opt.value ? SELECTED_STYLE : DEFAULT_STYLE}
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
               >
-                {opt.label}
+                Record Scan Result
               </button>
-            ))}
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Scan Result
-            </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -390,13 +472,16 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Calving
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Calving
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -423,13 +508,16 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 );
               })}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record BCS
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record BCS
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -451,13 +539,16 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Temperament
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Temperament
+              </button>
+            </StickySubmitBar>
           </>
         )}
 
@@ -488,13 +579,16 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 }}
               />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="w-full font-bold py-4 rounded-2xl text-base mt-2"
-              style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-            >
-              Record Scrotal Circumference
-            </button>
+            <StickySubmitBar>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit()}
+                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+              >
+                Record Scrotal Circumference
+              </button>
+            </StickySubmitBar>
           </>
         )}
 

@@ -44,6 +44,15 @@ model Observation {
   // the new idempotent path. Per-tenant DB architecture means the unique
   // scope is implicitly per-farm — there is no global `Observation` table.
   clientLocalId String?   @unique
+  // Wave 3b / #254 (PRD #250) — carcass disposal for `type='death'` rows.
+  // Maintainer-locked enum {BURIED, BURNED, RENDERED, OTHER} (HITL #254).
+  // Nullable at the DB layer because non-death observations don't carry a
+  // disposal. The required-on-death invariant is enforced by
+  // `lib/server/validators/death.ts` :: validateDeathObservation, which
+  // rejects empty/invalid values with `422 DEATH_DISPOSAL_REQUIRED` before
+  // the row reaches Prisma. Backfilled to 'OTHER' for pre-#254 death rows
+  // by migration 0021_death_carcass_disposal.sql.
+  carcassDisposal String?
 
   @@index([type, campId, observedAt], name: "idx_obs_type_camp_date")
   @@index([type, animalId, observedAt], name: "idx_obs_type_animal_date")

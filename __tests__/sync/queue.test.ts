@@ -263,3 +263,99 @@ describe('lib/sync/queue — SyncKind covers the four offline domain types', () 
     expect(truth.pendingCount).toBeGreaterThan(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Issue #252 / Wave 2 — offline-enqueue → reload → replay → conflict path.
+//
+// The 2026-05-13 stress test confirmed an offline Health observation on
+// BB-C014 was silently dropped. The root cause was UI-only (no signal to the
+// user that the obs was queued, and the queue was invisible across reloads).
+// The queue itself was always durable. This suite pins three contracts the
+// new UI relies on:
+//
+//   1. Enqueue while offline → `pendingCount === 1`. The queue accepts work
+//      with no network round-trip.
+//   2. Reload (a fresh import that re-opens IDB on the same farm slug) sees
+//      the same `pendingCount`. IndexedDB persistence survives module-graph
+//      teardown — i.e. closing the browser tab.
+//   3. Replay path: markSucceeded drops the row from `pendingCount`; the
+//      conflict path (markFailed with HTTP 422) moves the row from
+//      `pendingCount` into `failedCount` so the dead-letter UI surfaces it.
+//
+// This is the structural test that closes the BB-C014 silent-drop bug class:
+// if any of these three contracts ever regresses, every row queued offline
+// stops being visible in the surface that this wave introduces.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('lib/sync/queue — offline-enqueue → reload → replay (issue #252)', () => {
+  it('enqueueing while offline surfaces in pendingCount (no network needed)', async () => {
+    const { queue } = await loadQueueWithFreshFarm();
+    await queue.enqueuePending('observation', makePendingObservation(101));
+    const truth = await queue.getCurrentSyncTruth();
+    expect(truth.pendingCount).toBe(1);
+    expect(truth.failedCount).toBe(0);
+    // No sync attempt has been recorded — lastFullSuccessAt MUST stay null.
+    expect(truth.lastFullSuccessAt).toBeNull();
+  });
+
+  it('queue survives a module reload — IndexedDB-backed durability', async () => {
+    // Use a stable farm slug so both module loads address the same IDB DB.
+    const slug = `queue-reload-${Math.random().toString(36).slice(2)}`;
+
+    // First load — queue the obs while "offline".
+    {
+      const store1 = await import('@/lib/offline-store');
+      store1.setActiveFarmSlug(slug);
+      const queue1 = await import('@/lib/sync/queue');
+      await queue1.enqueuePending('observation', makePendingObservation(202));
+      const before = await queue1.getCurrentSyncTruth();
+      expect(before.pendingCount).toBe(1);
+    }
+
+    // Simulate a browser tab close / page reload by tearing down the module
+    // graph. IndexedDB itself is process-global (provided by fake-indexeddb)
+    // so the same DB name must surface the same row on the next open.
+    vi.resetModules();
+
+    // Second load — fresh module graph, same slug. The pending row must be
+    // visible: this is the exact contract the "across browser restart"
+    // acceptance criterion in #252 depends on.
+    {
+      const store2 = await import('@/lib/offline-store');
+      store2.setActiveFarmSlug(slug);
+      const queue2 = await import('@/lib/sync/queue');
+      const after = await queue2.getCurrentSyncTruth();
+      expect(after.pendingCount).toBe(1);
+      expect(after.failedCount).toBe(0);
+    }
+  });
+
+  it('replay success drops the row from pendingCount', async () => {
+    const { queue } = await loadQueueWithFreshFarm();
+    await queue.enqueuePending('observation', makePendingObservation(303));
+    await queue.markSucceeded('observation', 303, { id: 'srv-303' });
+    const truth = await queue.getCurrentSyncTruth();
+    expect(truth.pendingCount).toBe(0);
+    expect(truth.failedCount).toBe(0);
+  });
+
+  it('conflict path: server 422 moves the row from pending → failed bucket', async () => {
+    const { queue } = await loadQueueWithFreshFarm();
+    await queue.enqueuePending('observation', makePendingObservation(404));
+    // Sync attempts the upload; server rejects with a typed 422 (e.g. the
+    // REPRO_MULTI_STATE refinement from PRD #250 wave 3). The row is no longer
+    // pending — it MUST surface in failedCount so the dead-letter dialog
+    // (FailedSyncDialog, issue #209) renders it for re-edit + retry.
+    await queue.markFailed('observation', 404, 'rejected_422', {
+      statusCode: 422,
+      error: 'REPRO_MULTI_STATE',
+    });
+    const truth = await queue.getCurrentSyncTruth();
+    expect(truth.pendingCount).toBe(0);
+    expect(truth.failedCount).toBe(1);
+    // No cycle outcome has been recorded — only the row-level transition fired.
+    // lastFullSuccessAt MUST stay null until recordSyncAttempt runs with zero
+    // failures across all kinds.
+    expect(truth.lastFullSuccessAt).toBeNull();
+  });
+});

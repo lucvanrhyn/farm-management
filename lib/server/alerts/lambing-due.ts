@@ -15,6 +15,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { addDays, defaultExpiry, diffDays, toIsoWeek } from "./helpers";
 import { logger } from "@/lib/logger";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 
 const DEFAULT_GESTATION_DAYS = 147;
 const LEAD_DAYS = 7;
@@ -47,8 +48,12 @@ export async function evaluate(
   _settings: FarmSettings,
   _farmSlug?: string,
 ): Promise<AlertCandidate[]> {
-  const ewes = await prisma.animal.findMany({
-    where: { species: "sheep", status: "Active", sex: "Female" },
+  // LAMBING_DUE is sheep-only — route through the scoped() door so
+  // species: "sheep" is injected structurally. The explicit status:
+  // "Active" is preserved (mergeWhere lets the caller's status win over
+  // the door's injected ACTIVE_STATUS — byte-identical here).
+  const ewes = await scoped(prisma, "sheep").animal.findMany({
+    where: { status: "Active", sex: "Female" },
     select: { id: true, animalId: true, breed: true },
   });
   if (ewes.length === 0) return [];
@@ -56,8 +61,9 @@ export async function evaluate(
   const eweIds = ewes.map((e) => e.id);
 
   // Pull heat/insemination/joining/pregnancy_scan observations for these ewes
-  // in one query, then reduce per-animal.
-  const obs = (await prisma.observation.findMany({
+  // in one query, then reduce per-animal. LAMBING_DUE is sheep-only — route
+  // through the scoped() door so species: "sheep" is injected structurally.
+  const obs = (await scoped(prisma, "sheep").observation.findMany({
     where: {
       animalId: { in: eweIds },
       type: { in: ["insemination", "heat_detection", "joining", "pregnancy_scan"] },

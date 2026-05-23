@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { getFarmCreds } from '@/lib/meta-db';
 import { getPrismaForFarm } from '@/lib/farm-prisma';
+import { getFarmMode } from '@/lib/server/get-farm-mode';
+import { scoped } from '@/lib/server/species-scoped-prisma';
 import { getFarmFeedOnOfferPayload } from '@/lib/server/feed-on-offer';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { FeedOnOfferSummaryCards } from '@/components/feed-on-offer/FeedOnOfferSummaryCards';
@@ -29,9 +31,11 @@ export default async function FeedOnOfferToolPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) notFound();
 
+  const mode = await getFarmMode(farmSlug);
+
   const [payload, camps] = await Promise.all([
     getFarmFeedOnOfferPayload(prisma),
-    prisma.camp.findMany({
+    scoped(prisma, mode).camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
       orderBy: { campName: 'asc' },
     }),

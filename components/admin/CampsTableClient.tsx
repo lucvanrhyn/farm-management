@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import TypedConfirm from "./TypedConfirm";
 
 export interface CampRow {
   camp_id: string;
@@ -54,7 +56,7 @@ const LABEL_STYLE: React.CSSProperties = {
 export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; farmSlug: string }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [resetting, setResetting] = useState(false);
+  const [removeAllError, setRemoveAllError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
     campName: "", sizeHectares: "", waterSource: "", color: "",
@@ -136,18 +138,17 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
   }
 
   async function handleRemoveAll() {
-    if (!window.confirm("Remove ALL camps? This cannot be undone.")) return;
-    setResetting(true);
+    setRemoveAllError(null);
     try {
       const res = await fetch("/api/camps/reset", { method: "DELETE" });
       if (!res.ok) {
         const { error } = await res.json() as { error?: string };
-        alert(error ?? "Failed to remove camps.");
+        setRemoveAllError(error ?? "Failed to remove camps.");
       } else {
         router.refresh();
       }
-    } finally {
-      setResetting(false);
+    } catch {
+      setRemoveAllError("Network error — try again.");
     }
   }
 
@@ -313,19 +314,6 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
         </div>
       )}
 
-      {rows.length > 0 && (
-        <div className="flex justify-end mb-3">
-          <button
-            onClick={handleRemoveAll}
-            disabled={resetting}
-            className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70 disabled:opacity-40"
-            style={{ background: "rgba(192,87,76,0.12)", color: "#C0574C", border: "1px solid rgba(192,87,76,0.25)" }}
-          >
-            {resetting ? "Removing…" : "Remove All Camps"}
-          </button>
-        </div>
-      )}
-
       <div
         className="overflow-x-auto rounded-2xl"
         style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
@@ -445,6 +433,43 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
           </table>
         )}
       </div>
+
+      {/*
+        #371 — "Remove All Camps" moved out of the inline table-controls row
+        (where it sat next to "+ Add Camp") into a footer-level Danger Zone
+        with the shared typed-confirmation gate. No bare window.confirm().
+      */}
+      {rows.length > 0 && (
+        <div
+          data-testid="danger-zone"
+          className="mt-8 rounded-xl overflow-hidden"
+          style={{ border: "1px solid rgba(160,50,50,0.3)", background: "rgba(139,20,20,0.05)" }}
+        >
+          <div className="flex items-center gap-2 px-4 py-3">
+            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "#C0574C" }} />
+            <span className="text-sm font-semibold" style={{ color: "#C0574C" }}>Danger Zone</span>
+          </div>
+          <div
+            className="px-4 pb-4 pt-3 flex flex-col gap-3"
+            style={{ borderTop: "1px solid rgba(160,50,50,0.2)" }}
+          >
+            <div>
+              <p className="text-sm font-medium" style={{ color: "#1C1815" }}>Remove All Camps</p>
+              <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                Permanently deletes every camp on this farm. Blocked if any camp still holds active animals.
+              </p>
+            </div>
+            <TypedConfirm
+              phrase="REMOVE"
+              triggerLabel="Remove All Camps"
+              confirmLabel="Confirm Remove"
+              busyLabel="Removing..."
+              onConfirm={handleRemoveAll}
+              error={removeAllError ?? undefined}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

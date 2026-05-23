@@ -25,6 +25,7 @@
 
 import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { embed, embeddingToBytes } from '@/lib/einstein/embeddings';
+import { crossSpecies } from '@/lib/server/species-scoped-prisma';
 import { RETRIEVAL_TOP_K } from './defaults';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -267,8 +268,8 @@ async function structured(
     try {
       if (entityType === 'animal') {
         // cross-species by design: RAG aggregate covers every animal entity.
-        const active = await prisma.animal.count({ where: { status: 'Active' } });
-        const total = await prisma.animal.count();
+        const active = await crossSpecies(prisma, 'einstein-rag').animal.count({ where: { status: 'Active' } });
+        const total = await crossSpecies(prisma, 'einstein-rag').animal.count();
         chunks.push({
           entityType: 'animal',
           entityId: 'aggregate:animals',
@@ -277,7 +278,7 @@ async function structured(
           sourceUpdatedAt: new Date(),
         });
       } else if (entityType === 'camp') {
-        const count = await prisma.camp.count();
+        const count = await crossSpecies(prisma, 'einstein-rag').camp.count();
         chunks.push({
           entityType: 'camp',
           entityId: 'aggregate:camps',
@@ -293,7 +294,7 @@ async function structured(
           if (dateEnd) rangeClause.lte = dateEnd;
           where.observedAt = rangeClause;
         }
-        const count = await prisma.observation.count({ where });
+        const count = await crossSpecies(prisma, 'einstein-rag').observation.count({ where });
         const rangeLabel =
           dateStart || dateEnd
             ? ` between ${dateStart?.toISOString().slice(0, 10) ?? 'start'} and ${

@@ -17,6 +17,10 @@ import {
   getPendingCoverReadings,
   markCoverReadingPosted,
   clearPendingAnimalUpdate,
+  getFailedAnimals,
+  getFailedCoverReadings,
+  getFailedObservations,
+  markObservationSynced,
   PendingObservation,
   PendingAnimalCreate,
 } from './offline-store';
@@ -561,16 +565,208 @@ interface SyncAndRefreshOptions {
   species?: string;
 }
 
+/**
+ * Issue #252 — per-item descriptor surfaced to the UI so the OfflineProvider
+ * can fire one toast per row that actually landed on the server. The 2026-05-13
+ * stress test confirmed that aggregate-only feedback ("12 synced") let users
+ * miss the BB-C014 case where the visible obs was actually a different one
+ * that landed earlier. Per-item lets the UI render "Health obs for BB-C014
+ * synced", which is the load-bearing trust signal the user needs.
+ */
+export interface SyncedItem {
+  kind: 'observation' | 'animal' | 'cover-reading';
+  /** Stable per-row identifier — `clientLocalId` when available, else the
+   *  IDB `local_id` cast to string. The OfflineProvider de-dupes its toast
+   *  buffer on this so a flaky network that retries the same row does not
+   *  fire two toasts. */
+  itemKey: string;
+  /** Human-readable subject for the toast body, e.g.
+   *  `"Health observation for BB-C014"` or `"New animal KALF-123"`. */
+  label: string;
+}
+
+function describePendingObservation(o: PendingObservation): string {
+  const typeLabel =
+    o.type === 'health_issue'
+      ? 'Health observation'
+      : o.type === 'weighing'
+        ? 'Weighing'
+        : o.type === 'reproduction'
+          ? 'Reproduction'
+          : o.type === 'movement'
+            ? 'Movement'
+            : o.type === 'calving'
+              ? 'Calving'
+              : o.type === 'camp_condition'
+                ? 'Camp condition'
+                : o.type === 'treatment'
+                  ? 'Treatment'
+                  : o.type.replace(/_/g, ' ');
+  if (o.animal_id) return `${typeLabel} for ${o.animal_id}`;
+  return `${typeLabel} on camp ${o.camp_id}`;
+}
+
+/**
+ * Issue #287 — post-sync failed-row reconciliation.
+ *
+ * Root cause this closes: Issue #208 made failed rows strict — once a row
+ * lands in `failed` it leaves the pending bucket and is never auto-retried.
+ * There was no mechanism to notice that a failed row's record actually DID
+ * reach the server (the idempotent `clientLocalId` upsert from #281, or a
+ * transient failure where the POST landed but the response was lost in
+ * transit). The Logger "Failed: N" indicator therefore stayed stuck forever
+ * even though the data was safely server-side.
+ *
+ * The fix is a SEPARATE post-sync pass — NOT a re-enablement of the #208
+ * auto-retry. It cross-references every IDB observation row still in
+ * `failed` state against the server's queue-status mirror
+ * (`GET /api/sync/queue/status`). Any failed row whose `clientLocalId` is
+ * present in the server mirror is provably persisted server-side, so it is
+ * flipped `failed → synced`.
+ *
+ * ADR-0002 safety: the queue-status route is the dedicated server mirror
+ * ("did the server actually receive the obs I queued?"), NOT a cache GET.
+ * Only a confirmed server mirror may flip failed → synced; a row whose
+ * `clientLocalId` is absent from the mirror (or a row with no
+ * `clientLocalId` at all, which cannot be matched) stays `failed`. This
+ * pass never ticks any sync-truth timestamp — `recordSyncAttempt` remains
+ * the single writer of `lastFullSuccessAt`.
+ *
+ * Idempotent: a row already flipped to `synced` no longer appears in
+ * `getFailedObservations()`, so a second pass is a no-op. Best-effort: a
+ * failed status fetch leaves every failed row untouched (we never clear a
+ * row we could not confirm).
+ *
+ * Scope: observations only. They are the kind that carries `clientLocalId`
+ * end-to-end AND the kind the server queue-status mirror reflects; they are
+ * also what the Logger "Failed: N" indicator counts in the #208/#281 stuck
+ * scenario this issue targets.
+ */
+interface QueueStatusMirror {
+  observations: Array<{ clientLocalId: string | null }>;
+}
+
+export async function reconcileFailedRows(): Promise<{ reconciled: number }> {
+  const failed = await getFailedObservations();
+  // Only rows with a clientLocalId can be safely matched against the
+  // server mirror. A legacy row with no key cannot be proven server-side
+  // and must stay failed (ADR-0002).
+  const matchable = failed.filter(
+    (o): o is PendingObservation & { clientLocalId: string; local_id: number } =>
+      typeof o.clientLocalId === 'string' &&
+      o.clientLocalId.length > 0 &&
+      typeof o.local_id === 'number',
+  );
+  if (matchable.length === 0) return { reconciled: 0 };
+
+  let serverConfirmed: Set<string>;
+  try {
+    const res = await fetch('/api/sync/queue/status');
+    if (!res.ok) {
+      console.warn('[sync] queue-status fetch failed:', res.status, res.statusText);
+      return { reconciled: 0 };
+    }
+    const body = (await res.json()) as QueueStatusMirror;
+    serverConfirmed = new Set(
+      (body.observations ?? [])
+        .map((o) => o.clientLocalId)
+        .filter((c): c is string => typeof c === 'string' && c.length > 0),
+    );
+  } catch (err) {
+    console.warn('[sync] queue-status reconcile threw:', err);
+    return { reconciled: 0 };
+  }
+
+  let reconciled = 0;
+  for (const row of matchable) {
+    if (serverConfirmed.has(row.clientLocalId)) {
+      await markObservationSynced(row.local_id);
+      reconciled++;
+    }
+  }
+  return { reconciled };
+}
+
 export async function syncAndRefresh(
   options: SyncAndRefreshOptions = {},
-): Promise<{ synced: number; failed: number }> {
+): Promise<{ synced: number; failed: number; syncedItems: SyncedItem[] }> {
   const { species } = options;
+
+  // Capture per-row snapshots BEFORE the sync attempts so we can describe
+  // each row that successfully synced. After `markSucceeded` flips status
+  // to `synced`, the row is no longer reachable through the pending getters.
+  const obsBefore = await getPendingObservations();
+  const animalsBefore = await getPendingAnimalCreates();
+  const coversBefore = await getPendingCoverReadings();
+
   const [obsResult, animalsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
     syncPendingAnimals(),
     syncPendingCoverReadings(),
   ]);
   const photoResult = await syncPendingPhotos(obsResult.localToServerId);
+
+  // Build the per-item event list. A row is a "synced item" iff
+  // (a) it was in the pending snapshot AND (b) the corresponding sync helper
+  // returned success for it. For observations we use `localToServerId` as the
+  // truth source; for animals/cover we re-read failed-bucket membership and
+  // exclude any row still failed.
+  const syncedItems: SyncedItem[] = [];
+  for (const o of obsBefore) {
+    if (o.local_id !== undefined && obsResult.localToServerId.has(o.local_id)) {
+      syncedItems.push({
+        kind: 'observation',
+        itemKey: o.clientLocalId ?? `obs-${o.local_id}`,
+        label: describePendingObservation(o),
+      });
+    }
+  }
+  // Animals + cover readings: a row that succeeded is gone from BOTH
+  // `getFailedAnimals()` and `getPendingAnimalCreates()`. Use the post-sync
+  // failed-bucket as the negative signal — anything in the snapshot that is
+  // NOT still failed and NOT still pending must have transitioned to synced.
+  if (animalsResult.synced > 0) {
+    const stillFailed = new Set(
+      (await getFailedAnimals()).map((a) => a.local_id),
+    );
+    const stillPending = new Set(
+      (await getPendingAnimalCreates()).map((a) => a.local_id),
+    );
+    for (const a of animalsBefore) {
+      if (
+        a.local_id !== undefined &&
+        !stillFailed.has(a.local_id) &&
+        !stillPending.has(a.local_id)
+      ) {
+        syncedItems.push({
+          kind: 'animal',
+          itemKey: a.clientLocalId ?? `animal-${a.local_id}`,
+          label: a.name ? `New animal ${a.animal_id} (${a.name})` : `New animal ${a.animal_id}`,
+        });
+      }
+    }
+  }
+  if (coversResult.synced > 0) {
+    const stillFailed = new Set(
+      (await getFailedCoverReadings()).map((c) => c.local_id),
+    );
+    const stillPending = new Set(
+      (await getPendingCoverReadings()).map((c) => c.local_id),
+    );
+    for (const c of coversBefore) {
+      if (
+        c.local_id !== undefined &&
+        !stillFailed.has(c.local_id) &&
+        !stillPending.has(c.local_id)
+      ) {
+        syncedItems.push({
+          kind: 'cover-reading',
+          itemKey: c.clientLocalId ?? `cover-${c.local_id}`,
+          label: `Cover reading on camp ${c.camp_id}`,
+        });
+      }
+    }
+  }
 
   const synced =
     obsResult.synced + animalsResult.synced + coversResult.synced + photoResult.synced;
@@ -595,5 +791,13 @@ export async function syncAndRefresh(
     },
   });
 
-  return { synced, failed };
+  // Issue #287 — post-sync reconciliation. Failed rows whose record is
+  // provably server-side (confirmed via the queue-status mirror) flip
+  // failed → synced so the Logger "Failed: N" indicator clears itself
+  // instead of staying stuck forever. Best-effort: a failed reconcile
+  // never clears an unconfirmed row, and it does not move sync truth
+  // (`recordSyncAttempt` above is the single truth writer per ADR-0002).
+  await reconcileFailedRows();
+
+  return { synced, failed, syncedItems };
 }

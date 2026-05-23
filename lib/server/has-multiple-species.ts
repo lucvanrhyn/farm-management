@@ -5,9 +5,9 @@
 // "+ Add species" upsell pill.
 //
 // Cross-species by design: we explicitly groupBy across every species.
-// This file is added to the `audit-species-where` allowlist in the
-// audit script (see `lib/server/cached.ts` precedent) so the static
-// check does not flag the intentional un-scoped query.
+// The query goes through the `crossSpecies(prisma, reason)` door
+// (ADR-0005) so the structural arch test recognises the intentional
+// cross-species span — no allowlist or pragma needed.
 //
 // Cached wrapper lives in `lib/server/cached.ts`
 // (`getCachedHasMultipleActiveSpecies`). Tagged on `farm-<slug>-animals`
@@ -15,6 +15,7 @@
 // alongside the per-species counts the dashboard already invalidates.
 
 import { withFarmPrisma } from "@/lib/farm-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
 /**
  * Returns `true` iff `prisma.animal.groupBy({ by: ['species'] })`
@@ -29,11 +30,17 @@ export async function hasMultipleActiveSpecies(
 ): Promise<boolean> {
   try {
     return await withFarmPrisma(farmSlug, async (prisma) => {
-      // audit-allow-species-where: intentional cross-species count for #235 upsell-pill visibility
-      const groups = await prisma.animal.groupBy({
+      // crossSpecies() forwards args verbatim; the facade returns Prisma's
+      // broadest groupBy shape (documented trade-off) so re-narrow to what
+      // this query's by selection produces — behaviour-identical. The
+      // cross-species span is intentional (#235 upsell-pill visibility).
+      const groups = (await crossSpecies(
+        prisma,
+        "species-registry-internal",
+      ).animal.groupBy({
         by: ["species"],
         where: { status: "Active" },
-      });
+      })) as unknown as Array<{ species: string | null }>;
       return groups.length >= 2;
     });
   } catch {

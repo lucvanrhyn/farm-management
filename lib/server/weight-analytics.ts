@@ -1,5 +1,10 @@
 // lib/server/weight-analytics.ts
 import type { PrismaClient } from "@prisma/client";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+
+// ADR-0005 Wave 2: per-animal ADG + herd-ADG trend are analytics
+// roll-ups. crossSpecies() forwards args verbatim — the per-animalId /
+// type predicates already bound these reads; behaviour is identical.
 
 export interface WeightRecord {
   id: string;
@@ -51,7 +56,7 @@ export async function getAnimalWeightData(
   animalId: string,
   poorDoerThreshold = 0.7,
 ): Promise<ADGResult> {
-  const rawObs = await prisma.observation.findMany({
+  const rawObs = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: { type: "weighing", animalId },
     orderBy: { observedAt: "asc" },
   });
@@ -158,7 +163,7 @@ export async function getHerdAdgTrend(
   const cutoff = new Date(Date.now() - lookbackDays * 86_400_000);
   const campMap = new Map(camps.map((c) => [c.campId, c.campName]));
 
-  const rawObs = await prisma.observation.findMany({
+  const rawObs = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
       type: "weighing",
       observedAt: { gte: cutoff },

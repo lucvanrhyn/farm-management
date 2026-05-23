@@ -42,6 +42,14 @@ vi.mock('@/lib/offline-store', () => ({
   markObservationPending: helperSpies.markObservationPending,
   markAnimalCreatePending: helperSpies.markAnimalCreatePending,
   markCoverReadingPending: helperSpies.markCoverReadingPending,
+  // Issue #324 — the dialog now classifies each row's terminality on load.
+  discardFailedObservation: vi.fn(async () => {}),
+  discardFailedAnimalCreate: vi.fn(async () => {}),
+  discardFailedCoverReading: vi.fn(async () => {}),
+  isTerminalFailure: (row: { lastStatusCode: number | null }) =>
+    row.lastStatusCode === 400 ||
+    row.lastStatusCode === 404 ||
+    row.lastStatusCode === 422,
 }));
 
 vi.mock('@/components/logger/OfflineProvider', () => ({
@@ -92,9 +100,15 @@ function seedOneOfEach() {
       clientLocalId: ANIMAL_UUID,
       name: 'Sunny',
       attempts: 1,
-      lastError: 'missing dam',
+      // #324 — this fixture exercises cross-kind "Retry all" wiring, which
+      // requires a TRANSIENT row. A 4xx (422) animal row is, post-R2, a
+      // terminal poison row the re-queue writer no-ops on; the dialog now
+      // renders it with Discard, not Retry. Use a transient 503 so the
+      // retry-all-hits-every-kind contract still holds. Terminal-row
+      // behaviour is covered by failed-sync-dialog-terminal.test.tsx.
+      lastError: 'service unavailable',
       firstFailedAt: Date.now() - 90_000,
-      lastStatusCode: 422,
+      lastStatusCode: 503,
     },
   ];
   failedRowsState.covers = [
@@ -148,7 +162,7 @@ describe('FailedSyncDialog — #209 dead-letter UI', () => {
 
     expect(screen.getByText('gateway timeout')).toBeTruthy();
     expect(screen.getByText('HTTP 504')).toBeTruthy();
-    expect(screen.getByText('HTTP 422')).toBeTruthy();
+    expect(screen.getByText('HTTP 503')).toBeTruthy();
     expect(screen.getByText('HTTP 500')).toBeTruthy();
     expect(screen.getByText('Attempted 2 times')).toBeTruthy();
     expect(screen.getByText('Attempted 1 time')).toBeTruthy();

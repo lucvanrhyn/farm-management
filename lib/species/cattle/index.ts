@@ -7,6 +7,7 @@ import type {
   SpeciesReproStats,
   SpeciesAlert,
 } from "../types";
+import { scoped } from "@/lib/server/species-scoped-prisma";
 import { CATTLE_CONFIG } from "./config";
 import { getReproStatsForSpecies } from "../shared/repro-engine";
 
@@ -28,11 +29,15 @@ export const cattleModule: SpeciesModule = {
   config: CATTLE_CONFIG,
 
   async getDashboardData(prisma: PrismaClient): Promise<SpeciesDashboardData> {
-    const animals = await prisma.animal.groupBy({
+    // scoped() forwards args verbatim; the facade returns Prisma's broadest
+    // groupBy shape (documented trade-off) so re-narrow to what this query's
+    // by/_count selection produces — behaviour-identical. `scoped()` injects
+    // `{ species: "cattle" }`; status stays caller-controlled.
+    const animals = (await scoped(prisma, "cattle").animal.groupBy({
       by: ["category"],
-      where: { status: "Active", species: "cattle" },
+      where: { status: "Active" },
       _count: { id: true },
-    });
+    })) as unknown as Array<{ category: string; _count: { id: number } }>;
 
     const byCategory: Record<string, number> = {};
     let activeCount = 0;
@@ -41,11 +46,11 @@ export const cattleModule: SpeciesModule = {
       activeCount += row._count.id;
     }
 
-    const campCounts = await prisma.animal.groupBy({
+    const campCounts = (await scoped(prisma, "cattle").animal.groupBy({
       by: ["currentCamp"],
-      where: { status: "Active", species: "cattle" },
+      where: { status: "Active" },
       _count: { id: true },
-    });
+    })) as unknown as Array<{ currentCamp: string; _count: { id: number } }>;
     const byCamp: Record<string, number> = {};
     for (const row of campCounts) {
       byCamp[row.currentCamp] = row._count.id;
@@ -98,7 +103,7 @@ export const cattleModule: SpeciesModule = {
     ).length;
 
     // ── Poor doers (weighing) ────────────────────────────────────────────────
-    const weighingObs = await prisma.observation.findMany({
+    const weighingObs = await scoped(prisma, "cattle").observation.findMany({
       where: { type: "weighing", animalId: { not: null } },
       select: { animalId: true, observedAt: true, details: true },
       orderBy: { observedAt: "asc" },
