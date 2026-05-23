@@ -4,7 +4,7 @@ import { getCategoryLabel, getCategoryChipColor } from "@/lib/utils";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies, scoped } from "@/lib/server/species-scoped-prisma";
 import StatusIndicator from "@/components/dashboard/StatusIndicator";
 import type { AnimalCategory } from "@/lib/types";
 
@@ -34,8 +34,14 @@ export default async function CampDetailPage({
 
   const mode = await getFarmMode(farmSlug);
 
+  // Camps are cross-species infrastructure — a physical camp grazes
+  // whatever species is on it, regardless of the user's active FarmMode.
+  // Routing this by-id read through `scoped()` would hide camps tagged for
+  // another species (same bug class PR #373 / #364 fixed on the camp map).
+  // Animals stay species-scoped: the camp detail view lists ACTIVE animals
+  // of the active species in this camp.
   const [camp, animals, liveConditions] = await Promise.all([
-    scoped(prisma, mode).camp.findFirst({ where: { campId: decodedId } }),
+    crossSpecies(prisma, "farm-wide-audit").camp.findFirst({ where: { campId: decodedId } }),
     scoped(prisma, mode).animal.findMany({
       where: { currentCamp: decodedId, status: "Active" },
       orderBy: [{ category: "asc" }, { animalId: "asc" }],

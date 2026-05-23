@@ -9,7 +9,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies, scoped } from "@/lib/server/species-scoped-prisma";
 import type { AnimalCategory } from "@/lib/types";
 
 
@@ -62,10 +62,16 @@ export default async function CampDetailPage({
 
   const mode = await getFarmMode(farmSlug);
 
-  // Phase A of #28: campId is no longer globally unique (composite UNIQUE on
-  // species+campId). The species-scoped door pins this read to the active
-  // mode so the composite key resolves to a single row.
-  const camp = await scoped(prisma, mode).camp.findFirst({ where: { campId } });
+  // Camps are cross-species infrastructure — a physical camp grazes
+  // whatever species is on it, regardless of the user's active FarmMode.
+  // Phase A of #28 made `(species, campId)` the composite UNIQUE, but the
+  // admin camp detail page wants the row by-id from anywhere on the farm,
+  // not pinned to the active mode. Routing through `scoped()` here would
+  // 404 cross-species camps (same bug PR #373 / #364 fixed on the camp
+  // map). On a multi-species tenant where two species share a `campId`
+  // (rare — Phase A campaign was to retire that collision), the first row
+  // returned is single-species-safe by composite-UNIQUE construction.
+  const camp = await crossSpecies(prisma, "farm-wide-audit").camp.findFirst({ where: { campId } });
   if (!camp) notFound();
 
   // Capture wall-clock once so every derived value in this render uses a
