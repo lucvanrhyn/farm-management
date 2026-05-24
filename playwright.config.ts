@@ -36,6 +36,13 @@ export default defineConfig({
     // E2E_PASSWORD. ADR-0003 motivates the asymmetric route shape this guard
     // backstops.
     'sheep-global-redirect.spec.ts',
+    // Issue #397 (2026-05-23): Serwist navigation cache cannot leak another
+    // tenant's shell. Verifies NetworkOnly routes the `[farmSlug]` hard-nav
+    // to network every time, and asserts static-asset caches still warm.
+    // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset, or when
+    // E2E_SW_FARM_A_SLUG === E2E_SW_FARM_B_SLUG (CI must point at two
+    // distinct tenants the synthetic user can access).
+    'sw-tenant-isolation.spec.ts',
   ],
   reporter: 'list',
   use: {
