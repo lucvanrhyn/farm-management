@@ -49,6 +49,12 @@ export default defineConfig({
     // Poor / Overgrazed). Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are
     // unset.
     'logger-last-visit-refresh.spec.ts',
+    // Issue #406 (2026-05-24): TB1 — Logger done-button caption explains
+    // why the button copy varies between "All Normal — Camp Good" and
+    // "Done — no animals flagged". Parameterised across all four
+    // grazing-quality branches. Self-skips when E2E_IDENTIFIER /
+    // E2E_PASSWORD are unset.
+    'logger-caption-visibility.spec.ts',
   ],
   reporter: 'list',
   use: {
