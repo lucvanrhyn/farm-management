@@ -30,6 +30,12 @@ export default defineConfig({
     // Issue #256 (2026-05-13): tenant map page — locks `/<slug>/map` against
     // regression. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'tenant-map.spec.ts',
+    // Issue #260 (2026-05-13): TenantRouteGuard for the global /sheep/* leak
+    // paths (animals, camps, observations). The unauthenticated row runs
+    // unconditionally; the authed rows self-skip without E2E_IDENTIFIER /
+    // E2E_PASSWORD. ADR-0003 motivates the asymmetric route shape this guard
+    // backstops.
+    'sheep-global-redirect.spec.ts',
     // Issue #397 (2026-05-23): Serwist navigation cache cannot leak another
     // tenant's shell. Verifies NetworkOnly routes the `[farmSlug]` hard-nav
     // to network every time, and asserts static-asset caches still warm.
