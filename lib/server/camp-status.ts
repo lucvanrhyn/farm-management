@@ -4,6 +4,7 @@ import { calcDaysGrazingRemaining } from "@/lib/server/analytics";
 import { getTenantDayStart } from "@/lib/server/tenant-day";
 import type { SpeciesId } from "@/lib/species/types";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { CAMP_INSPECTION_OBSERVATION_TYPES } from "@/lib/observations/camp-inspection-types";
 
 // ADR-0005 Wave 2: camp-status reads are farm-wide analytics roll-ups
 // (latest camp conditions, recent health obs, LSU grazing math). The
@@ -29,8 +30,12 @@ export interface HealthObservation {
 export async function getLatestCampConditions(prisma: PrismaClient): Promise<Map<string, LiveCampStatus>> {
   // Use distinct on campId with descending observedAt to get only the latest
   // observation per camp — avoids fetching the entire historical table.
+  // Issue #407 — the type set is the hoisted producer/consumer contract
+  // (`@/lib/observations/camp-inspection-types`). The producer (logger
+  // submit handlers) and this consumer share that literal pair; drift is
+  // structurally impossible.
   const observations = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
-    where: { type: { in: ["camp_condition", "camp_check"] } },
+    where: { type: { in: [...CAMP_INSPECTION_OBSERVATION_TYPES] } },
     orderBy: { observedAt: "desc" },
     distinct: ["campId"],
   });
@@ -185,9 +190,12 @@ export async function countInspectedToday(
   // "Inspections Today" tile read 0/N on every per-species dashboard. This
   // query is intentionally cross-species: it counts the distinct camps
   // inspected today regardless of which species the dashboard is filtered to.
+  // Issue #407 — share the camp-inspection type set with
+  // getLatestCampConditions via the hoisted producer/consumer constant
+  // (`@/lib/observations/camp-inspection-types`).
   const rows = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where: {
-      type: { in: ["camp_condition", "camp_check"] },
+      type: { in: [...CAMP_INSPECTION_OBSERVATION_TYPES] },
       observedAt: { gte: todayStart },
     },
     select: { campId: true },

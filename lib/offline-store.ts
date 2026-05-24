@@ -172,6 +172,70 @@ function getDB(): Promise<IDBPDatabase> {
   });
 }
 
+/**
+ * Issue #407 — pure merge of a server camp payload with the prior local IDB
+ * row. The "inspection bundle" (last_inspected_at + last_inspected_by +
+ * grazing_quality + water_status + fence_status) moves together — those
+ * five fields are stamped at the same instant by a single submit and must
+ * not be split, or a fresh local inspection would end up with mixed
+ * server/local fields.
+ *
+ * Merge rule: latest-timestamp-wins on `last_inspected_at`.
+ *
+ * Pre-#407 this lived inline in `seedCamps` and used nullish-coalescing
+ * (`server.last_inspected_at ?? prev.last_inspected_at`), which is
+ * server-wins-when-present. A stale server payload (from the 60s
+ * `unstable_cache` window on `getCachedCampConditions`) would override the
+ * fresh local write, pinning the Logger tile at "Yesterday".
+ *
+ * Exported (rather than inlined) so unit tests can exercise the merge
+ * without `fake-indexeddb` and the offline-sync stack — see
+ * `__tests__/offline/camp-condition-merge-latest-wins.test.ts`.
+ *
+ * Server metadata (camp_name, size_hectares, water_source, geojson, color,
+ * species, animal_count) is always taken from the incoming server payload
+ * — the admin surface is authoritative for those.
+ */
+export function mergeCampWithLocalOverlay(
+  serverCamp: Camp,
+  prevLocalCamp: Camp | undefined,
+): Camp {
+  if (!prevLocalCamp) return serverCamp;
+
+  const serverTs = serverCamp.last_inspected_at;
+  const prevTs = prevLocalCamp.last_inspected_at;
+
+  // Pick the "inspection bundle" side by latest timestamp. Both sides
+  // populated → compare ISO strings (lexicographic order matches calendar
+  // order). Only one side populated → that side wins. Neither side → both
+  // bundles are absent; fields will be undefined on either source so the
+  // explicit fallback below is safe.
+  let inspectionSource: Camp;
+  if (serverTs && prevTs) {
+    inspectionSource = serverTs >= prevTs ? serverCamp : prevLocalCamp;
+  } else if (serverTs) {
+    inspectionSource = serverCamp;
+  } else if (prevTs) {
+    inspectionSource = prevLocalCamp;
+  } else {
+    // Neither timestamp populated — prefer whichever side carries the
+    // condition triplet (defensive; should be rare). Server-first.
+    inspectionSource =
+      serverCamp.grazing_quality || serverCamp.water_status || serverCamp.fence_status
+        ? serverCamp
+        : prevLocalCamp;
+  }
+
+  return {
+    ...serverCamp,
+    grazing_quality: inspectionSource.grazing_quality,
+    water_status: inspectionSource.water_status,
+    fence_status: inspectionSource.fence_status,
+    last_inspected_at: inspectionSource.last_inspected_at,
+    last_inspected_by: inspectionSource.last_inspected_by,
+  };
+}
+
 export async function seedCamps(camps: Camp[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction('camps', 'readwrite');
@@ -181,24 +245,12 @@ export async function seedCamps(camps: Camp[]): Promise<void> {
   const existingMap = new Map(existing.map((c) => [c.camp_id, c]));
   const incomingIds = new Set(camps.map((c) => c.camp_id));
 
-  // Upsert each incoming camp.
-  // If the incoming camp already carries server-authoritative condition fields
-  // (merged in by refreshCachedData → /api/camps/status), those win.
-  // If the incoming camp has no condition data (server didn't provide any for this
-  // camp), fall back to whatever was already in IDB so local observations are
-  // not silently wiped on every refresh.
+  // Upsert each incoming camp via the pure latest-timestamp-wins merge
+  // (`mergeCampWithLocalOverlay`). Pre-#407 the merge was inlined here as
+  // nullish-coalescing; see the function doc for why it had to change.
   for (const camp of camps) {
     const prev = existingMap.get(camp.camp_id);
-    const merged: Camp = prev
-      ? {
-          ...camp,
-          grazing_quality: camp.grazing_quality ?? prev.grazing_quality,
-          water_status: camp.water_status ?? prev.water_status,
-          fence_status: camp.fence_status ?? prev.fence_status,
-          last_inspected_at: camp.last_inspected_at ?? prev.last_inspected_at,
-          last_inspected_by: camp.last_inspected_by ?? prev.last_inspected_by,
-        }
-      : camp;
+    const merged = mergeCampWithLocalOverlay(camp, prev);
     await tx.store.put(merged);
   }
 
