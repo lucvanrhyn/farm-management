@@ -43,6 +43,12 @@ export default defineConfig({
     // E2E_SW_FARM_A_SLUG === E2E_SW_FARM_B_SLUG (CI must point at two
     // distinct tenants the synthetic user can access).
     'sw-tenant-isolation.spec.ts',
+    // Issue #407 (2026-05-24): Logger last-visit badge must move off
+    // "Yesterday" after the farmer submits a fresh camp_condition observation.
+    // Parameterised across all four grazing-quality branches (Good / Fair /
+    // Poor / Overgrazed). Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are
+    // unset.
+    'logger-last-visit-refresh.spec.ts',
   ],
   reporter: 'list',
   use: {
