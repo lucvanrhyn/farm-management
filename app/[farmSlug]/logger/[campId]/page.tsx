@@ -37,6 +37,7 @@ import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { campConditionDoneLabel } from "./_lib/camp-condition-done-label";
+import { campConditionDoneCaption } from "./_lib/camp-condition-done-caption";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
 
@@ -493,22 +494,43 @@ export default function CampInspectionPage({
             ✓ Visit recorded
           </div>
         ) : (
-          <button
-            onClick={handleCompleteVisit}
-            className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
-            style={{
-              backgroundColor: '#B87333',
-              color: '#F5F0E8',
-              boxShadow: '0 4px 20px rgba(184, 115, 51, 0.4)',
-            }}
-          >
-            <span className="text-xl">✓</span>
-            <span>
-              {flaggedAnimalIds.size > 0
-                ? `Done — ${flaggedAnimalIds.size} animal${flaggedAnimalIds.size > 1 ? 's' : ''} flagged`
-                : campConditionDoneLabel(campWithCondition?.grazing_quality)}
-            </span>
-          </button>
+          <>
+            <button
+              onClick={handleCompleteVisit}
+              className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
+              style={{
+                backgroundColor: '#B87333',
+                color: '#F5F0E8',
+                boxShadow: '0 4px 20px rgba(184, 115, 51, 0.4)',
+              }}
+            >
+              <span className="text-xl">✓</span>
+              <span>
+                {flaggedAnimalIds.size > 0
+                  ? `Done — ${flaggedAnimalIds.size} animal${flaggedAnimalIds.size > 1 ? 's' : ''} flagged`
+                  : campConditionDoneLabel(campWithCondition?.grazing_quality)}
+              </span>
+            </button>
+            {/* Issue #406 — TB1: explain in place why the done-button copy
+                varies between "All Normal — Camp Good" (Good veld) and
+                "Done — no animals flagged" (Fair / Poor / Overgrazed veld).
+                Caption only renders when no animals are flagged (the
+                branched-label case) and when grazing quality is one of the
+                four recognised tiers — otherwise `campConditionDoneCaption`
+                returns null and the <p> never mounts. Visually subordinate
+                (smaller text, lower contrast) so it never reads as a
+                tap-target. */}
+            {flaggedAnimalIds.size === 0 &&
+              campConditionDoneCaption(campWithCondition?.grazing_quality) && (
+                <p
+                  data-testid="camp-condition-done-caption"
+                  className="text-xs text-center mt-2 px-2 leading-snug"
+                  style={{ color: 'rgba(210, 180, 140, 0.7)' }}
+                >
+                  {campConditionDoneCaption(campWithCondition?.grazing_quality)}
+                </p>
+              )}
+          </>
         )}
       </div>
 
