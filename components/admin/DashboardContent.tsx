@@ -19,7 +19,10 @@ import {
   BarChart2,
   Lock,
 } from "lucide-react";
-import { getCachedDashboardOverview } from "@/lib/server/cached";
+import {
+  getCachedDashboardOverviewByMode,
+  getCachedDashboardOverviewShared,
+} from "@/lib/server/cached";
 import { getSession } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import type { SpeciesId } from "@/lib/species/types";
@@ -43,27 +46,34 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode }:
   const session = await getSession();
   const isAdmin = (session?.user?.role as string | undefined) === "ADMIN";
 
-  // Single cached call — all dashboard data in one cache entry (30s TTL).
-  // On cache hit: zero Turso queries. On miss: all queries fire in parallel.
-  // `mode` is part of the cache key (#225) so cattle and sheep never share
-  // an entry.
-  const overview = await getCachedDashboardOverview(farmSlug, mode);
+  // Two cached calls in parallel (issue #414):
+  //   - by-mode bundle keyed on (slug, mode) — species-dependent tiles
+  //   - shared bundle keyed on (slug) only — mode-independent tiles
+  // Splitting the cache key for mode-independent values fixes the #411
+  // `totalCamps` drift between cattle / sheep views: the shared entry
+  // survives a FarmMode flip so the KPI tile stays stable.
+  const [byMode, shared] = await Promise.all([
+    getCachedDashboardOverviewByMode(farmSlug, mode),
+    getCachedDashboardOverviewShared(farmSlug),
+  ]);
   const {
     totalAnimals,
-    totalCamps,
     reproStats,
     healthIssuesThisWeek,
-    inspectedToday,
     recentHealth,
-    lowGrazingCount,
     deathsToday,
     birthsToday,
-    withdrawalCount,
     mtdTransactions,
-    dataHealth,
     dashboardAlerts,
-  } = overview;
-  const liveConditions = new Map(Object.entries(overview.liveConditions));
+  } = byMode;
+  const {
+    totalCamps,
+    inspectedToday,
+    lowGrazingCount,
+    withdrawalCount,
+    dataHealth,
+  } = shared;
+  const liveConditions = new Map(Object.entries(shared.liveConditions));
 
   // ── Finance MTD ──────────────────────────────────────────────────────────────
   let mtdBalance = 0;

@@ -331,43 +331,63 @@ describe("getCachedDashboardOverview resilience (issue #280)", () => {
     _countInspectedTodayMock.mockClear();
   });
 
+  // Issue #414 fetcher swap: the overview was split along the
+  // mode-dependence seam. `inspectedToday` / `totalCamps` now live on the
+  // shared fetcher (slug-only key); `totalAnimals` / `dashboardAlerts` on
+  // the by-mode fetcher (slug+mode key). Resilience semantics are
+  // preserved on BOTH halves — `settle()` still wraps every sub-query.
   it("returns the correct non-zero inspectedToday even when farmSettings.findFirst throws (no-such-column drift)", async () => {
     // Two distinct camps inspected today → inspectedToday must be 2.
     _inspectedRows = [{ campId: "camp-a" }, { campId: "camp-b" }];
 
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    const result = await getCachedDashboardOverview("basson", "cattle");
+    const {
+      getCachedDashboardOverviewByMode,
+      getCachedDashboardOverviewShared,
+    } = await import("@/lib/server/cached");
+    const [byMode, shared] = await Promise.all([
+      getCachedDashboardOverviewByMode("basson", "cattle"),
+      getCachedDashboardOverviewShared("basson"),
+    ]);
 
     // The whole Overview did NOT throw / zero out…
-    expect(result).toBeDefined();
+    expect(byMode).toBeDefined();
+    expect(shared).toBeDefined();
     // …the inspections tile is correct and non-zero…
-    expect(result.inspectedToday).toBe(2);
+    expect(shared.inspectedToday).toBe(2);
     // …and the other tiles survived the poisoned settings query.
-    expect(result.totalAnimals).toBe(42);
-    expect(result.totalCamps).toBe(7);
+    expect(byMode.totalAnimals).toBe(42);
+    expect(shared.totalCamps).toBe(7);
   });
 
   it("degrades ONLY the settings-derived alert thresholds — overview still resolves", async () => {
     _inspectedRows = [{ campId: "camp-x" }];
 
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    const result = await getCachedDashboardOverview("basson", "cattle");
+    const {
+      getCachedDashboardOverviewByMode,
+      getCachedDashboardOverviewShared,
+    } = await import("@/lib/server/cached");
+    const [byMode, shared] = await Promise.all([
+      getCachedDashboardOverviewByMode("basson", "cattle"),
+      getCachedDashboardOverviewShared("basson"),
+    ]);
 
-    expect(result.inspectedToday).toBe(1);
+    expect(shared.inspectedToday).toBe(1);
     // dashboardAlerts still present (fed safe default thresholds when the
     // settings row could not be read).
-    expect(result.dashboardAlerts).toBeDefined();
+    expect(byMode.dashboardAlerts).toBeDefined();
   });
 
   it("tenant isolation: a different farm reads only its own stubbed rows", async () => {
     _inspectedRows = [{ campId: "trio-only-camp" }];
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    const trio = await getCachedDashboardOverview("trio", "cattle");
+    const { getCachedDashboardOverviewShared } = await import(
+      "@/lib/server/cached"
+    );
+    const trio = await getCachedDashboardOverviewShared("trio");
     expect(trio.inspectedToday).toBe(1);
 
     // Basson has its own (empty) inspection set — never sees Trio's camp.
     _inspectedRows = [];
-    const basson = await getCachedDashboardOverview("basson", "cattle");
+    const basson = await getCachedDashboardOverviewShared("basson");
     expect(basson.inspectedToday).toBe(0);
   });
 });

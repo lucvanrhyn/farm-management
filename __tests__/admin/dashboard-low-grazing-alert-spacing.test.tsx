@@ -31,13 +31,19 @@ import { cleanup, render } from "@testing-library/react";
 
 // ── Hoisted mocks (memory rule: feedback-vi-hoisted-shared-mocks.md) ─────────
 
+// Issue #414 fetcher swap: the dashboard overview was split along the
+// mode-dependence seam. `lowGrazingCount` is mode-INDEPENDENT and lives on
+// the shared fetcher; the by-mode fetcher returns the species-dependent
+// half. DashboardContent merges both via Promise.all.
 const mocks = vi.hoisted(() => ({
-  getCachedDashboardOverview: vi.fn(),
+  getCachedDashboardOverviewByMode: vi.fn(),
+  getCachedDashboardOverviewShared: vi.fn(),
   getSession: vi.fn(),
 }));
 
 vi.mock("@/lib/server/cached", () => ({
-  getCachedDashboardOverview: mocks.getCachedDashboardOverview,
+  getCachedDashboardOverviewByMode: mocks.getCachedDashboardOverviewByMode,
+  getCachedDashboardOverviewShared: mocks.getCachedDashboardOverviewShared,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -60,10 +66,9 @@ vi.mock("@/components/admin/AnimatedNumber", () => ({
 
 // ── Overview fixture builder ─────────────────────────────────────────────────
 
-function overviewWith(lowGrazingCount: number) {
+function byModeFixture() {
   return {
     totalAnimals: 0,
-    totalCamps: 0,
     reproStats: {
       pregnancyRate: null,
       calvingRate: null,
@@ -79,23 +84,30 @@ function overviewWith(lowGrazingCount: number) {
       avgDaysOpen: null,
       weaningRate: null,
     },
-    liveConditions: {},
     healthIssuesThisWeek: 0,
-    inspectedToday: 0,
     recentHealth: [],
-    lowGrazingCount,
     deathsToday: 0,
     birthsToday: 0,
-    withdrawalCount: 0,
     mtdTransactions: [],
-    dataHealth: { overall: 0, grade: "D" as const, breakdown: {} },
     dashboardAlerts: { red: [], amber: [], totalCount: 0 },
   };
 }
 
+function sharedFixture(lowGrazingCount: number) {
+  return {
+    totalCamps: 0,
+    liveConditions: {},
+    inspectedToday: 0,
+    lowGrazingCount,
+    withdrawalCount: 0,
+    dataHealth: { overall: 0, grade: "D" as const, breakdown: {} },
+  };
+}
+
 async function renderDashboard(lowGrazingCount: number) {
-  mocks.getCachedDashboardOverview.mockResolvedValue(
-    overviewWith(lowGrazingCount),
+  mocks.getCachedDashboardOverviewByMode.mockResolvedValue(byModeFixture());
+  mocks.getCachedDashboardOverviewShared.mockResolvedValue(
+    sharedFixture(lowGrazingCount),
   );
   const { default: DashboardContent } = await import(
     "@/components/admin/DashboardContent"

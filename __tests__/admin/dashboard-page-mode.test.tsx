@@ -15,12 +15,18 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 // ── Hoisted mocks (memory rule: feedback-vi-hoisted-shared-mocks.md) ─────────
 
+// Issue #414 fetcher swap: getCachedDashboardOverview was split into
+// getCachedDashboardOverviewByMode(slug, mode) (species-dependent half)
+// and getCachedDashboardOverviewShared(slug) (mode-independent half).
+// DashboardContent calls both via Promise.all. This suite asserts mode is
+// forwarded to the by-mode fetcher — the per-species cache key axis.
 const mocks = vi.hoisted(() => ({
   getFarmMode: vi.fn(),
   getPrismaForFarm: vi.fn(),
   getFarmCreds: vi.fn(),
   getCachedFarmSettings: vi.fn(),
-  getCachedDashboardOverview: vi.fn(),
+  getCachedDashboardOverviewByMode: vi.fn(),
+  getCachedDashboardOverviewShared: vi.fn(),
   getSession: vi.fn(),
 }));
 
@@ -39,7 +45,8 @@ vi.mock("@/lib/meta-db", () => ({
 
 vi.mock("@/lib/server/cached", () => ({
   getCachedFarmSettings: mocks.getCachedFarmSettings,
-  getCachedDashboardOverview: mocks.getCachedDashboardOverview,
+  getCachedDashboardOverviewByMode: mocks.getCachedDashboardOverviewByMode,
+  getCachedDashboardOverviewShared: mocks.getCachedDashboardOverviewShared,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -65,10 +72,9 @@ vi.mock("@/components/admin/AnimatedNumber", () => ({
 
 // ── Overview fixture builder ─────────────────────────────────────────────────
 
-function overviewWith(totalAnimals: number) {
+function byModeWith(totalAnimals: number) {
   return {
     totalAnimals,
-    totalCamps: 0,
     reproStats: {
       pregnancyRate: null,
       calvingRate: null,
@@ -84,17 +90,23 @@ function overviewWith(totalAnimals: number) {
       avgDaysOpen: null,
       weaningRate: null,
     },
-    liveConditions: {},
     healthIssuesThisWeek: 0,
-    inspectedToday: 0,
     recentHealth: [],
-    lowGrazingCount: 0,
     deathsToday: 0,
     birthsToday: 0,
-    withdrawalCount: 0,
     mtdTransactions: [],
-    dataHealth: { overall: 0, grade: "D" as const, breakdown: {} },
     dashboardAlerts: { red: [], amber: [], totalCount: 0 },
+  };
+}
+
+function sharedFixture() {
+  return {
+    totalCamps: 0,
+    liveConditions: {},
+    inspectedToday: 0,
+    lowGrazingCount: 0,
+    withdrawalCount: 0,
+    dataHealth: { overall: 0, grade: "D" as const, breakdown: {} },
   };
 }
 
@@ -147,9 +159,10 @@ describe("/[farmSlug]/admin/page.tsx — source-level FarmMode wiring (#225)", (
   });
 });
 
-describe("DashboardContent — calls getCachedDashboardOverview with mode (#225)", () => {
-  it("forwards mode='cattle' to getCachedDashboardOverview and renders the cattle count", async () => {
-    mocks.getCachedDashboardOverview.mockResolvedValue(overviewWith(10));
+describe("DashboardContent — calls getCachedDashboardOverviewByMode with mode (#225/#414)", () => {
+  it("forwards mode='cattle' to getCachedDashboardOverviewByMode and renders the cattle count", async () => {
+    mocks.getCachedDashboardOverviewByMode.mockResolvedValue(byModeWith(10));
+    mocks.getCachedDashboardOverviewShared.mockResolvedValue(sharedFixture());
 
     const { default: DashboardContent } = await import(
       "@/components/admin/DashboardContent"
@@ -165,16 +178,19 @@ describe("DashboardContent — calls getCachedDashboardOverview with mode (#225)
     });
     render(element as React.ReactElement);
 
-    expect(mocks.getCachedDashboardOverview).toHaveBeenCalledWith(
+    expect(mocks.getCachedDashboardOverviewByMode).toHaveBeenCalledWith(
       "trio-b",
       "cattle",
     );
+    // The shared fetcher is called WITHOUT mode — that's the #411 fix.
+    expect(mocks.getCachedDashboardOverviewShared).toHaveBeenCalledWith("trio-b");
     expect(screen.getByText("Total Animals")).toBeTruthy();
     expect(screen.getAllByText("10").length).toBeGreaterThan(0);
   });
 
   it("forwards mode='sheep' and renders the sheep count", async () => {
-    mocks.getCachedDashboardOverview.mockResolvedValue(overviewWith(5));
+    mocks.getCachedDashboardOverviewByMode.mockResolvedValue(byModeWith(5));
+    mocks.getCachedDashboardOverviewShared.mockResolvedValue(sharedFixture());
 
     const { default: DashboardContent } = await import(
       "@/components/admin/DashboardContent"
@@ -189,10 +205,11 @@ describe("DashboardContent — calls getCachedDashboardOverview with mode (#225)
     });
     render(element as React.ReactElement);
 
-    expect(mocks.getCachedDashboardOverview).toHaveBeenCalledWith(
+    expect(mocks.getCachedDashboardOverviewByMode).toHaveBeenCalledWith(
       "trio-b",
       "sheep",
     );
+    expect(mocks.getCachedDashboardOverviewShared).toHaveBeenCalledWith("trio-b");
     expect(screen.getByText("Total Animals")).toBeTruthy();
     expect(screen.getAllByText("5").length).toBeGreaterThan(0);
   });
