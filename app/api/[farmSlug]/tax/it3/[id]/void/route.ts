@@ -27,7 +27,11 @@ import { revalidateObservationWrite } from "@/lib/server/revalidate";
 export const dynamic = "force-dynamic";
 
 export const POST = tenantWriteSlug<unknown, { farmSlug: string; id: string }>({
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — voiding an IT3 does NOT touch an Observation row; it
+  // reuses `revalidateObservationWrite` only for the dashboard tag.
+  // Pass `null` to keep historical observations + dashboard tag
+  // invalidation, never the `farm-<slug>-camps` tag.
+  revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, parsedBody, _req, { id }) => {
     if (ctx.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

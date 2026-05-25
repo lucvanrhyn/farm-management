@@ -323,6 +323,10 @@ describe("POST /api/[farmSlug]/nvd — transport forwarding (Wave 4 A7)", () => 
       { params: params() },
     );
     expect(res.status).toBe(201);
-    expect(mockRevalidateObservationWrite).toHaveBeenCalledWith(FARM_SLUG);
+    // Issue #413 — NVD issuance does NOT write an Observation row; the
+    // route reuses `revalidateObservationWrite` for the dashboard tag
+    // only. Pass `null` as the observationType so the `farm-<slug>-camps`
+    // tag is NOT invalidated.
+    expect(mockRevalidateObservationWrite).toHaveBeenCalledWith(FARM_SLUG, null);
   });
 });

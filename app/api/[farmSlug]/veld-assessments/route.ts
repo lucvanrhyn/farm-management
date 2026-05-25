@@ -57,7 +57,11 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
 });
 
 export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — veld-assessment writes do NOT touch an Observation
+  // row; they reuse `revalidateObservationWrite` only for the
+  // dashboard tag. Pass `null` to keep historical observations +
+  // dashboard tag invalidation, never the `farm-<slug>-camps` tag.
+  revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, body, _req, { farmSlug }) => {
     if (ctx.role !== 'ADMIN' && ctx.role !== 'MANAGER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

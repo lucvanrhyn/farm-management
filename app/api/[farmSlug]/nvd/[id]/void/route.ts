@@ -19,7 +19,11 @@ interface VoidBody {
 }
 
 export const POST = adminWriteSlug<VoidBody, { farmSlug: string; id: string }>({
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — voiding an NVD does NOT touch an Observation row;
+  // it reuses `revalidateObservationWrite` only for the dashboard
+  // tag. Pass `null` to keep historical observations + dashboard
+  // tag invalidation, never the `farm-<slug>-camps` tag.
+  revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, body, _req, params) => {
     const reason =
       typeof body?.reason === "string" && body.reason.trim()
