@@ -3,7 +3,7 @@
  *
  * Issue #225 — admin dashboard home filters by FarmMode.
  *
- * Regression lock: getCachedDashboardOverview MUST include `mode` in the
+ * Regression lock: getCachedDashboardOverviewByMode MUST include `mode` in the
  * cache key, OR cattle and sheep dashboards share one cache entry and
  * the second-mode call returns the first-mode numbers.
  *
@@ -99,7 +99,7 @@ vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
-// ── Stub every downstream helper getCachedDashboardOverview pulls in ─────────
+// ── Stub every downstream helper getCachedDashboardOverviewByMode pulls in ─────────
 //
 // We mock the helpers to return zero/empty payloads so the test focuses on
 // the cache-key axis (mode), not on the helpers' internal semantics. Each
@@ -179,7 +179,7 @@ vi.mock("@/lib/server/feed-on-offer", () => ({
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => {
+describe("getCachedDashboardOverviewByMode — mode in cache key (issue #225)", () => {
   beforeEach(() => {
     _cache.clear();
     _tagIndex.clear();
@@ -192,41 +192,41 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
   });
 
   it("returns 10 active cattle when called with mode='cattle'", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    const result = await getCachedDashboardOverview("farm-x", "cattle");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
+    const result = await getCachedDashboardOverviewByMode("farm-x", "cattle");
     expect(result.totalAnimals).toBe(10);
   });
 
   it("returns 5 active sheep when subsequently called with mode='sheep' (cache key includes mode)", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
 
     // First call: cattle — populates cache for the cattle key
-    const cattle = await getCachedDashboardOverview("farm-x", "cattle");
+    const cattle = await getCachedDashboardOverviewByMode("farm-x", "cattle");
     expect(cattle.totalAnimals).toBe(10);
 
     // Second call: sheep — would return cattle's 10 if the cache key
     // collapsed `mode` (the bug this issue closes). With mode in the key,
     // sheep gets its own entry and the underlying count fires for `sheep`.
-    const sheep = await getCachedDashboardOverview("farm-x", "sheep");
+    const sheep = await getCachedDashboardOverviewByMode("farm-x", "sheep");
     expect(sheep.totalAnimals).toBe(5);
   });
 
   it("re-uses the cattle cache entry on warm cattle calls", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
 
-    await getCachedDashboardOverview("farm-x", "cattle");
+    await getCachedDashboardOverviewByMode("farm-x", "cattle");
     const fetcherCallsAfterCold = _fetcherCallCount;
     expect(fetcherCallsAfterCold).toBeGreaterThan(0);
 
     // Warm cattle hit — should be served entirely from the cattle cache
     // entry, so the underlying animal.count mock is NOT re-invoked.
-    await getCachedDashboardOverview("farm-x", "cattle");
+    await getCachedDashboardOverviewByMode("farm-x", "cattle");
     expect(_fetcherCallCount).toBe(fetcherCallsAfterCold);
   });
 
   it("threads `mode` through to getReproStats", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    await getCachedDashboardOverview("farm-x", "sheep");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
+    await getCachedDashboardOverviewByMode("farm-x", "sheep");
 
     // getReproStats is called with the per-species option object.
     expect(_getReproStatsMock).toHaveBeenCalled();
@@ -236,8 +236,8 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
   });
 
   it("threads `mode` through to countHealthIssuesSince", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    await getCachedDashboardOverview("farm-x", "sheep");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
+    await getCachedDashboardOverviewByMode("farm-x", "sheep");
 
     // The bug class this guards: pre-fix the dashboard counted health
     // issues across every species. Post-fix the helper accepts `mode`
@@ -248,9 +248,12 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
     expect(healthCall?.[2]).toBe("sheep");
   });
 
-  it("does NOT thread `mode` into countInspectedToday (issue #363)", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    await getCachedDashboardOverview("farm-x", "sheep");
+  it("does NOT thread `mode` into countInspectedToday (issue #363/#414)", async () => {
+    // Issue #414: countInspectedToday is mode-INDEPENDENT (#363) and now
+    // lives on getCachedDashboardOverviewShared, which doesn't take `mode`
+    // at all — the type system structurally rules out the regression.
+    const { getCachedDashboardOverviewShared } = await import("@/lib/server/cached");
+    await getCachedDashboardOverviewShared("farm-x");
 
     // Issue #363: camp inspections are NULL-species observations, so the
     // "Inspections Today" tile is mode-independent. countInspectedToday's
@@ -262,8 +265,8 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
   });
 
   it("threads `mode` through to getRecentHealthObservations", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    await getCachedDashboardOverview("farm-x", "game");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
+    await getCachedDashboardOverviewByMode("farm-x", "game");
 
     expect(_getRecentHealthMock).toHaveBeenCalled();
     const call = _getRecentHealthMock.mock.calls.at(-1);
@@ -272,8 +275,8 @@ describe("getCachedDashboardOverview — mode in cache key (issue #225)", () => 
   });
 
   it("threads `mode` through to getDashboardAlerts", async () => {
-    const { getCachedDashboardOverview } = await import("@/lib/server/cached");
-    await getCachedDashboardOverview("farm-x", "sheep");
+    const { getCachedDashboardOverviewByMode } = await import("@/lib/server/cached");
+    await getCachedDashboardOverviewByMode("farm-x", "sheep");
 
     expect(_getDashboardAlertsMock).toHaveBeenCalled();
     const call = _getDashboardAlertsMock.mock.calls.at(-1);

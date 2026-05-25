@@ -64,7 +64,7 @@ function recordToMap(record: LiveCampStatusRecord): Map<string, LiveCampStatus> 
  * single failing tile degrades only itself instead of rejecting the whole
  * Overview aggregate.
  *
- * Issue #280 root cause: `getCachedDashboardOverview` runs ~13 independent
+ * Issue #280 root cause: the dashboard overview fetchers run ~13 independent
  * sub-queries inside one `Promise.all`. `Promise.all` rejects on the FIRST
  * rejection, so when the #276 schema-drift made `farmSettings.findFirst()`
  * throw `no such column: timezone`, the entire admin Overview zeroed
@@ -198,42 +198,63 @@ export async function getCachedDataHealth(
 
 // ── Cached: Dashboard Overview (30s) ─────────────────────────────────────────
 // Admin dashboard health/stats widget — not the main /dashboard page data.
+//
+// Issue #414 (parent PRD #412) — the overview is split along the
+// mode-dependence seam:
+//   - getCachedDashboardOverviewByMode(slug, mode) — keyed by (slug, mode),
+//     returns the species-dependent tiles (animal counts, repro stats,
+//     recent health, deaths/births today, mtdTransactions, dashboardAlerts,
+//     healthIssuesThisWeek). Tagged `farm-<slug>-dashboard`.
+//   - getCachedDashboardOverviewShared(slug) — keyed by (slug) ONLY,
+//     returns the species-agnostic tiles (totalCamps, inspectedToday,
+//     liveConditions, lowGrazingCount, withdrawalCount, dataHealth). Tagged
+//     with BOTH `farm-<slug>-dashboard` AND `farm-<slug>-camps` so the
+//     #413 camp-inspection-write invalidation reaches it.
+//
+// Why two fetchers: flipping FarmMode forced a fresh DB read for the
+// whole bundle and the `totalCamps` KPI tile visibly drifted (#411).
+// Keying mode-independent values by `(slug)` only makes the cache entry
+// survive a FarmMode flip, so `totalCamps` stays stable on every reload.
 
-export interface DashboardOverview {
+export interface ModeDependentOverview {
   totalAnimals: number;
-  totalCamps: number;
   reproStats: ReproStats;
-  liveConditions: LiveCampStatusRecord;
   healthIssuesThisWeek: number;
-  inspectedToday: number;
   recentHealth: HealthObservation[];
-  lowGrazingCount: number;
   deathsToday: number;
   birthsToday: number;
-  withdrawalCount: number;
   mtdTransactions: { type: string; amount: number }[];
-  dataHealth: DataHealthScore;
   dashboardAlerts: DashboardAlerts;
 }
 
-export async function getCachedDashboardOverview(
+export interface SharedOverview {
+  totalCamps: number;
+  liveConditions: LiveCampStatusRecord;
+  inspectedToday: number;
+  lowGrazingCount: number;
+  withdrawalCount: number;
+  dataHealth: DataHealthScore;
+}
+
+/**
+ * Structural union of the two fetchers' returns — the shape
+ * `DashboardContent.tsx` consumes once both calls have resolved.
+ */
+export type DashboardOverview = ModeDependentOverview & SharedOverview;
+
+export async function getCachedDashboardOverviewByMode(
   farmSlug: string,
   mode: SpeciesId,
-): Promise<DashboardOverview> {
+): Promise<ModeDependentOverview> {
   const fetcher = unstable_cache(
-    async (slug: string, currentMode: SpeciesId): Promise<DashboardOverview> => {
+    async (slug: string, currentMode: SpeciesId): Promise<ModeDependentOverview> => {
       return withFarmPrisma(slug, async (prisma) => {
         // Issue #258: every "today" derivation must consult the tenant's
         // stored TZ. Prefetch FarmSettings once so we have `timezone` for
-        // bucketing AND alert thresholds — saves a duplicate findFirst that
-        // used to live inside the Promise.all below.
+        // bucketing AND alert thresholds.
         //
-        // Issue #280: this prefetch is the exact query that took the whole
-        // Overview down on #276's schema drift (default SELECT lists the
-        // drifted `timezone` column → `no such column`). `settle()` makes a
-        // failure here degrade ONLY the TZ/threshold-derived tiles: the
-        // dashboard falls back to the Africa/Johannesburg default TZ and
-        // built-in alert thresholds rather than zeroing every tile.
+        // Issue #280: `settle()` makes a failure here degrade ONLY the
+        // TZ/threshold-derived tiles — the rest of the bundle survives.
         const settingsRow = await settle("farmSettings.findFirst", null, () =>
           prisma.farmSettings.findFirst(),
         );
@@ -241,52 +262,32 @@ export async function getCachedDashboardOverview(
 
         const now = new Date();
         const todayStart = getTenantDayStart(tz, now);
-        // 7-day window is anchored at TZ-local midnight 7 days ago so the
-        // "Health Issues · 7d" tile lines up with the same calendar boundary
-        // as the "today" tiles.
         const sevenDaysAgo = new Date(
           todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
         );
         const currentMonth = getTenantMonthYYYYMM(tz, now);
 
         // Issue #225: route per-species reads through the species-scoped
-        // facade so `{ species: currentMode }` is injected by construction
-        // (PRD #222). `scoped()` is a no-cost in-memory wrapper — same
-        // underlying Prisma client; the facade just merges the species
-        // predicate into the where clause of each delegate call.
+        // facade so `{ species: currentMode }` is injected by construction.
         const speciesPrisma = scoped(prisma, currentMode);
 
+        // campConditions are read here ONLY because getDashboardAlerts wants
+        // them in preFetched form. liveConditions are exposed on the SHARED
+        // fetcher — this is a transient read inside the mode-scoped fetcher,
+        // not a return value.
         const [
           totalAnimals,
-          totalCamps,
           reproStats,
           campConditions,
           healthIssuesThisWeek,
-          inspectedToday,
           recentHealth,
-          lowGrazingCount,
           deathsToday,
           birthsToday,
-          withdrawalCount,
           mtdTransactions,
-          dataHealth,
         ] = await Promise.all([
-          // Issue #280: every member is wrapped in `settle(label, fallback,
-          // fn)` so one failing sub-query degrades ONLY its own tile — the
-          // Overview never zeroes wholesale on a single rejection again.
-          // Fallbacks are the empty/neutral value the tile would show with
-          // no data.
-          //
-          // Active head for the current species (issue #225). The facade's
-          // count() injects `{ species: mode }` — status stays caller-controlled
-          // per the facade contract (species-scoped-prisma.ts JSDoc).
           settle("animal.count", 0, () =>
             speciesPrisma.animal.count({ where: { status: "Active" } }),
           ),
-          // Camp total is the same on every per-species view — not
-          // species-scoped because every camp serves some species at
-          // some point.
-          settle("camp.count", 0, () => crossSpecies(prisma, "analytics-rollup").camp.count()),
           settle("getReproStats", EMPTY_REPRO_STATS, () =>
             getReproStats(prisma, { species: currentMode }),
           ),
@@ -298,19 +299,8 @@ export async function getCachedDashboardOverview(
           settle("countHealthIssuesSince", 0, () =>
             countHealthIssuesSince(prisma, sevenDaysAgo, currentMode),
           ),
-          // Issue #258: pass tenant TZ so "today" matches every other tile.
-          // Issue #363: camp inspections are NULL-species observations —
-          // countInspectedToday is intentionally mode-independent, so
-          // `currentMode` is no longer threaded through.
-          settle("countInspectedToday", 0, () =>
-            countInspectedToday(prisma, tz),
-          ),
           settle("getRecentHealthObservations", [], () =>
             getRecentHealthObservations(prisma, 8, currentMode),
-          ),
-          // cross-species by design: low-grazing math is LSU across all species (camp can host any species).
-          settle("getLowGrazingCampCount", 0, () =>
-            getLowGrazingCampCount(prisma),
           ),
           // Per-species death/calving tile counts: route through facade so
           // observation rows are filtered to the active species. todayStart is
@@ -322,16 +312,11 @@ export async function getCachedDashboardOverview(
           settle("observation.count(calving)", 0, () =>
             speciesPrisma.observation.count({ where: { type: "calving", observedAt: { gte: todayStart } } }),
           ),
-          settle("getWithdrawalCount", 0, () => getWithdrawalCount(prisma)),
           settle("transaction.findMany", [] as { type: string; amount: number }[], () =>
             prisma.transaction.findMany({
               where: { date: { startsWith: currentMonth } },
               select: { type: true, amount: true },
             }),
-          ),
-          // cross-species by design: data-health is a farm-wide hygiene score.
-          settle("getDataHealthScore", EMPTY_DATA_HEALTH, () =>
-            getDataHealthScore(prisma),
           ),
         ]);
 
@@ -343,9 +328,6 @@ export async function getCachedDashboardOverview(
           alertThresholdHours: 48,
         };
 
-        // Issue #280: alerts is its own DB-touching aggregate awaited after
-        // the Promise.all. Degrade it to "no alerts" rather than letting it
-        // take the whole Overview down.
         const dashboardAlerts = await settle(
           "getDashboardAlerts",
           { red: [], amber: [], totalCount: 0 } as DashboardAlerts,
@@ -367,30 +349,94 @@ export async function getCachedDashboardOverview(
 
         return {
           totalAnimals,
-          totalCamps,
           reproStats,
-          liveConditions: mapToRecord(campConditions),
           healthIssuesThisWeek,
-          inspectedToday,
           recentHealth,
-          lowGrazingCount,
           deathsToday,
           birthsToday,
-          withdrawalCount,
           mtdTransactions: mtdTransactions.map((t) => ({ type: t.type, amount: t.amount })),
-          dataHealth,
           dashboardAlerts,
         };
       });
     },
-    // Issue #225: `mode` is part of the cache key so cattle and sheep
-    // dashboards never share an entry. unstable_cache treats every fn arg as
-    // part of the key, but we also include it in keyParts as a documentation
-    // signal — same pattern as `multi-farm-overview` keying off userId.
-    ["dashboard-overview"],
+    // `mode` is part of the cache key (issue #225) so cattle and sheep
+    // dashboards never share an entry.
+    ["dashboard-overview-by-mode"],
     { revalidate: 30, tags: [farmTag(farmSlug, "dashboard")] },
   );
   return fetcher(farmSlug, mode);
+}
+
+export async function getCachedDashboardOverviewShared(
+  farmSlug: string,
+): Promise<SharedOverview> {
+  const fetcher = unstable_cache(
+    async (slug: string): Promise<SharedOverview> => {
+      return withFarmPrisma(slug, async (prisma) => {
+        // Issue #258: tenant TZ drives "today" bucketing for inspections.
+        const settingsRow = await settle("farmSettings.findFirst", null, () =>
+          prisma.farmSettings.findFirst(),
+        );
+        const tz = settingsRow?.timezone ?? "Africa/Johannesburg";
+
+        const [
+          totalCamps,
+          campConditions,
+          inspectedToday,
+          lowGrazingCount,
+          withdrawalCount,
+          dataHealth,
+        ] = await Promise.all([
+          // Camp total is the same on every per-species view — not
+          // species-scoped because every camp serves some species at
+          // some point. crossSpecies() is the ADR-0005 named door for
+          // farm-wide rollups.
+          settle("camp.count", 0, () => crossSpecies(prisma, "analytics-rollup").camp.count()),
+          settle(
+            "getLatestCampConditions",
+            new Map<string, LiveCampStatus>(),
+            () => getLatestCampConditions(prisma),
+          ),
+          // Issue #363: camp inspections are NULL-species observations —
+          // countInspectedToday is intentionally mode-independent.
+          settle("countInspectedToday", 0, () =>
+            countInspectedToday(prisma, tz),
+          ),
+          // cross-species by design: low-grazing math is LSU across all species.
+          settle("getLowGrazingCampCount", 0, () =>
+            getLowGrazingCampCount(prisma),
+          ),
+          // Withdrawal periods are a farm-wide hygiene signal — not
+          // species-scoped (every animal in withdrawal counts regardless
+          // of current FarmMode).
+          settle("getWithdrawalCount", 0, () => getWithdrawalCount(prisma)),
+          // cross-species by design: data-health is a farm-wide hygiene score.
+          settle("getDataHealthScore", EMPTY_DATA_HEALTH, () =>
+            getDataHealthScore(prisma),
+          ),
+        ]);
+
+        return {
+          totalCamps,
+          liveConditions: mapToRecord(campConditions),
+          inspectedToday,
+          lowGrazingCount,
+          withdrawalCount,
+          dataHealth,
+        };
+      });
+    },
+    // Mode-independent: cache key is (slug) only so flipping FarmMode does
+    // not invalidate `totalCamps` (#411). Tagged with BOTH `-dashboard` and
+    // `-camps` so the #413 camp-inspection-write invalidation also reaches
+    // the `liveConditions` / `inspectedToday` tiles served from here.
+    ["dashboard-overview-shared"],
+    {
+      revalidate: 30,
+      tags: [farmTag(farmSlug, "dashboard"), farmTag(farmSlug, "camps")],
+    },
+  );
+  return fetcher(farmSlug);
 }
 
 // ── Cached: Farm Settings (5 min) ────────────────────────────────────────────
