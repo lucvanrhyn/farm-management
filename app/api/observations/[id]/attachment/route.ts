@@ -36,12 +36,21 @@ const attachmentSchema = {
 
 export const PATCH = tenantWrite<AttachmentBody, { id: string }>({
   schema: attachmentSchema,
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — revalidate inline so the observation's `type` can be
+  // threaded into `revalidateObservationWrite(slug, type)`; attaching a
+  // photo to a camp_condition / camp_check write must also invalidate
+  // the `farm-<slug>-camps` tag (cached camp pages show photo
+  // thumbnails). The adapter-level hook only sees `slug`.
   handle: async (ctx, body, _req, params) => {
+    const existing = await ctx.prisma.observation.findUnique({
+      where: { id: params.id },
+      select: { type: true },
+    });
     const result = await attachObservationPhoto(ctx.prisma, {
       id: params.id,
       attachmentUrl: body.attachmentUrl,
     });
+    revalidateObservationWrite(ctx.slug, existing?.type ?? null);
     return NextResponse.json(result);
   },
 });

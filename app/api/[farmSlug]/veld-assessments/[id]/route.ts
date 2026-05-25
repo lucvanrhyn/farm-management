@@ -20,7 +20,11 @@ import { verifyFreshAdminRole } from '@/lib/auth';
 import { revalidateObservationWrite } from '@/lib/server/revalidate';
 
 export const DELETE = tenantWriteSlug<unknown, { farmSlug: string; id: string }>({
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — veld-assessment deletes do NOT touch an Observation
+  // row; they reuse `revalidateObservationWrite` only for the
+  // dashboard tag. Pass `null` to keep historical observations +
+  // dashboard tag invalidation, never the `farm-<slug>-camps` tag.
+  revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, _body, _req, { id }) => {
     if (ctx.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });

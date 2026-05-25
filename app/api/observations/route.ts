@@ -87,7 +87,13 @@ export const GET = tenantRead({
 
 export const POST = tenantWrite<CreateObservationBody>({
   schema: createObservationSchema,
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — `revalidate` is called manually inside `handle` (see the
+  // post-`createObservation` block below) so it can pass the observation
+  // type as the second arg of `revalidateObservationWrite(slug, type)`.
+  // The adapter-level `revalidate` hook only receives `slug`, so it
+  // cannot thread the camp_condition / camp_check distinction needed
+  // to invalidate the `farm-<slug>-camps` tag. Doing the call inline
+  // keeps the contract race-free and explicit.
   handle: async (ctx, body) => {
     // Rate limit: 100 observations per minute per user. Transport-only —
     // offline sync can burst, but cap runaway clients.
@@ -155,6 +161,10 @@ export const POST = tenantWrite<CreateObservationBody>({
       clientLocalId: body.clientLocalId ?? null,
     };
     const result = await createObservation(ctx.prisma, input);
+    // Issue #413 — invalidate camp-scoped caches on camp_condition /
+    // camp_check writes. Inline because the adapter-level revalidate
+    // hook only receives `slug` and cannot thread the wire type.
+    revalidateObservationWrite(ctx.slug, body.type);
     return NextResponse.json(result);
   },
 });

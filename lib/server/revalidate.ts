@@ -33,9 +33,24 @@ export function revalidateAnimalWrite(slug: string): void {
   for (const tag of animalWriteTags(slug)) revalidateTag(tag, REVALIDATE_PROFILE);
 }
 
-/** Observation create / update / delete / attachment */
-export function revalidateObservationWrite(slug: string): void {
-  for (const tag of observationWriteTags(slug)) revalidateTag(tag, REVALIDATE_PROFILE);
+/**
+ * Observation create / update / delete / attachment.
+ *
+ * Issue #413 — `observationType` is REQUIRED. Pass the wire `type` field
+ * (e.g. `body.type` in `POST /api/observations`) so the helper can add the
+ * `farm-<slug>-camps` tag when the write is a camp-inspection
+ * (`camp_condition` / `camp_check`). Pass `null` for routes that reuse
+ * this helper without writing a typed Observation row (admin reset,
+ * NVD / IT3 / veld-assessment side-channels) — those keep the historical
+ * "invalidate observations + dashboard" semantics.
+ */
+export function revalidateObservationWrite(
+  slug: string,
+  observationType: string | null,
+): void {
+  for (const tag of observationWriteTags(slug, observationType)) {
+    revalidateTag(tag, REVALIDATE_PROFILE);
+  }
 }
 
 /** Camp create / update / delete / cover */

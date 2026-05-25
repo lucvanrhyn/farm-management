@@ -66,7 +66,11 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
 // ── POST — issue a new snapshot ───────────────────────────────────────────────
 
 export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
-  revalidate: revalidateObservationWrite,
+  // Issue #413 — IT3 issuance does NOT write an Observation row; it
+  // reuses `revalidateObservationWrite` only for the dashboard tag.
+  // Passing `null` keeps the historical observations + dashboard tag
+  // invalidation, never the `farm-<slug>-camps` tag.
+  revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, parsedBody, _req, { farmSlug }) => {
     if (ctx.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,3 +1,5 @@
+import { isCampInspection } from "@/lib/domain/observations/is-camp-inspection";
+
 /**
  * lib/server/cache-tags.ts
  *
@@ -48,8 +50,31 @@ export function farmTag(slug: string, scope: FarmCacheScope = "all"): string {
 export const animalWriteTags = (slug: string) =>
   [farmTag(slug, "animals"), farmTag(slug, "dashboard")] as const;
 
-export const observationWriteTags = (slug: string) =>
-  [farmTag(slug, "observations"), farmTag(slug, "dashboard")] as const;
+/**
+ * Tags to invalidate after an observation write.
+ *
+ * Issue #413 — `observationType` is now REQUIRED (no overload). When
+ * the type is a camp-inspection write (`camp_condition` / `camp_check`,
+ * per `isCampInspection` in `lib/domain/observations/`), the
+ * `farm-<slug>-camps` tag is added so cached camp-scoped fetchers
+ * invalidate. Pass `null` for writes that do not have a single
+ * observation type (admin reset, NVD/IT3 reuse) — the camps tag is
+ * NOT added in that case.
+ *
+ * Background: pre-#413 this helper returned only
+ * `[observations, dashboard]`, leaving cached camp fetchers stale
+ * until TTL — see issue #409 and PRD #412 for the staleness class.
+ */
+export const observationWriteTags = (
+  slug: string,
+  observationType: string | null,
+): readonly string[] => {
+  const tags: string[] = [farmTag(slug, "observations"), farmTag(slug, "dashboard")];
+  if (observationType !== null && isCampInspection(observationType)) {
+    tags.push(farmTag(slug, "camps"));
+  }
+  return tags;
+};
 
 export const campWriteTags = (slug: string) =>
   [farmTag(slug, "camps"), farmTag(slug, "dashboard")] as const;

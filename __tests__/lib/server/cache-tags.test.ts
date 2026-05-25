@@ -59,10 +59,42 @@ describe("mutation tag arrays", () => {
     expect(tags).toHaveLength(2);
   });
 
-  it("observationWriteTags includes observations + dashboard scopes", () => {
-    const tags = observationWriteTags(SLUG);
+  it("observationWriteTags(slug, null) includes observations + dashboard scopes (default — non-camp write)", () => {
+    const tags = observationWriteTags(SLUG, null);
     expect(tags).toContain(farmTag(SLUG, "observations"));
     expect(tags).toContain(farmTag(SLUG, "dashboard"));
+    expect(tags).toHaveLength(2);
+  });
+
+  it("observationWriteTags(slug, 'weighing') does NOT include the camps scope (non-camp-inspection write)", () => {
+    const tags = observationWriteTags(SLUG, "weighing");
+    expect(tags).toContain(farmTag(SLUG, "observations"));
+    expect(tags).toContain(farmTag(SLUG, "dashboard"));
+    expect(tags).not.toContain(farmTag(SLUG, "camps"));
+    expect(tags).toHaveLength(2);
+  });
+
+  it("observationWriteTags(slug, 'camp_condition') ALSO includes the camps scope (issue #413)", () => {
+    const tags = observationWriteTags(SLUG, "camp_condition");
+    expect(tags).toContain(farmTag(SLUG, "observations"));
+    expect(tags).toContain(farmTag(SLUG, "dashboard"));
+    expect(tags).toContain(farmTag(SLUG, "camps"));
+    expect(tags).toHaveLength(3);
+  });
+
+  it("observationWriteTags(slug, 'camp_check') ALSO includes the camps scope (issue #413)", () => {
+    const tags = observationWriteTags(SLUG, "camp_check");
+    expect(tags).toContain(farmTag(SLUG, "observations"));
+    expect(tags).toContain(farmTag(SLUG, "dashboard"));
+    expect(tags).toContain(farmTag(SLUG, "camps"));
+    expect(tags).toHaveLength(3);
+  });
+
+  it("observationWriteTags(slug, 'unknown_type') falls back to default (does not include camps)", () => {
+    const tags = observationWriteTags(SLUG, "unknown_type");
+    expect(tags).toContain(farmTag(SLUG, "observations"));
+    expect(tags).toContain(farmTag(SLUG, "dashboard"));
+    expect(tags).not.toContain(farmTag(SLUG, "camps"));
     expect(tags).toHaveLength(2);
   });
 
