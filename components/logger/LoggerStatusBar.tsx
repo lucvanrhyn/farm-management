@@ -9,10 +9,28 @@ import {
   deriveSyncStatusFromCounts,
   type SyncStatusDescriptor,
 } from '@/lib/sync/deriveSyncStatus';
+import { useNow } from '@/lib/hooks/use-now';
 
-function formatRelativeTime(epochMs: number | null): string {
+/**
+ * Issue #422 — relative-time formatter is now PURE: it takes the current
+ * wall-clock epoch as an explicit `nowMs` parameter rather than reading
+ * `Date.now()` itself. This is what makes the render hydration-safe — the
+ * caller (`LoggerStatusBar`) feeds it the SSR-deterministic `useNow()`
+ * seed (`0`) on the first render and the live tick after mount.
+ *
+ * When `nowMs <= 0` we treat the hook as not-yet-hydrated and render a
+ * neutral placeholder ("…") so the server and the client's first render
+ * agree byte-for-byte. The real relative-time string appears on the very
+ * next paint (the `useNow` post-mount microtask flips `nowMs` to a real
+ * `Date.now()` value).
+ */
+function formatRelativeTime(epochMs: number | null, nowMs: number): string {
   if (epochMs === null) return 'Never';
-  const diff = Date.now() - epochMs;
+  // Pre-hydration sentinel. `useNow` seeds with `0` so this branch fires
+  // on SSR and the client's very first render — both produce the same
+  // placeholder, eliminating the #418 hydration mismatch.
+  if (nowMs <= 0) return '…';
+  const diff = nowMs - epochMs;
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
@@ -29,12 +47,20 @@ function formatRelativeTime(epochMs: number | null): string {
  * "Synced: …" appears ONLY when `kind === 'fresh'` — the bug this issue
  * closes was that the right-hand text always read "Synced" regardless of
  * pending or failed rows in the offline queue.
+ *
+ * Issue #422 — `nowMs` is now an explicit argument (default `Date.now()`)
+ * so the caller can thread a hydration-safe `useNow()` value through.
+ * The default keeps the pre-existing direct callers in the test suite
+ * working unchanged (those tests mock `Date.now()`).
  */
-export function describeSyncStatus(descriptor: SyncStatusDescriptor): string {
+export function describeSyncStatus(
+  descriptor: SyncStatusDescriptor,
+  nowMs: number = Date.now(),
+): string {
   const { kind, counts, lastSuccessAt } = descriptor;
   switch (kind) {
     case 'fresh':
-      return `Synced: ${formatRelativeTime(lastSuccessAt)}`;
+      return `Synced: ${formatRelativeTime(lastSuccessAt, nowMs)}`;
     case 'syncing':
       return `${counts.pending} pending`;
     case 'failed':
@@ -42,7 +68,7 @@ export function describeSyncStatus(descriptor: SyncStatusDescriptor): string {
     case 'partial':
       return `${counts.pending} pending · ${counts.failed} failed`;
     case 'stale':
-      return `Stale: ${formatRelativeTime(lastSuccessAt)}`;
+      return `Stale: ${formatRelativeTime(lastSuccessAt, nowMs)}`;
     case 'offline':
       return 'Offline';
   }
@@ -117,6 +143,14 @@ export function LoggerStatusBar() {
   const statusIcon = !isOnline ? '🔴' : syncStatus === 'syncing' ? '🟡' : '🟢';
   const statusText = !isOnline ? 'Offline' : syncStatus === 'syncing' ? 'Uploading...' : 'Online';
 
+  // Issue #422 — hydration-safe wall-clock for the "X ago" relative-time
+  // string. Seeds `0` on the first render (SSR and the client's pre-effect
+  // render), then ticks every 30s after mount so the "Synced: 5m ago" copy
+  // stays fresh without a console-visible React #418 mismatch. The
+  // descriptor → copy mapper treats `0` as "not yet hydrated" and renders
+  // a neutral placeholder; the real clock value lands one paint later.
+  const nowMs = useNow(30_000);
+
   // Issue #395 — single derivation point for the right-side copy. Reads the
   // PRD #194 SyncTruth (`lastSyncedAt` is `lastFullSuccessAt` in ISO form),
   // the queue counts, and connectivity. The component renders `copy` and
@@ -129,7 +163,7 @@ export function LoggerStatusBar() {
     Number.isNaN(lastSuccessEpochMs) ? null : lastSuccessEpochMs,
     isOnline,
   );
-  const copy = describeSyncStatus(descriptor);
+  const copy = describeSyncStatus(descriptor, nowMs);
 
   return (
     <>
