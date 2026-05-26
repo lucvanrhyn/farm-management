@@ -21,6 +21,7 @@ import {
 } from '@/lib/offline-store';
 import { getCurrentSyncTruth } from '@/lib/sync/queue';
 import { refreshCachedData, syncAndRefresh, type SyncedItem } from '@/lib/sync-manager';
+import { cleanupPreFixBcsDeadLetters } from '@/lib/offline-bcs-dead-letter-cleanup';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
 import { useFarmModeSafe } from '@/lib/farm-mode';
@@ -344,6 +345,22 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // Load tasks from IndexedDB if available (tasks store added in DB v3)
     getCachedTasks(farmSlug).then((cachedTasks) => {
       if (!cancelled) setTasks(cachedTasks);
+    });
+
+    // Issue #426 — one-time cleanup of the three pre-fix BCS dead-letter rows
+    // (root cause fixed in PR #332 / commit 742cf32, 2026-05-18). Idempotent
+    // via a localStorage flag; failure-isolated so a cleanup mishap never
+    // breaks the mount path. Fire-and-forget — does not gate any render or
+    // sync work; refreshPendingCount above re-derives the badge once the
+    // sync truth catches up post-discard.
+    void cleanupPreFixBcsDeadLetters().then((result) => {
+      if (cancelled) return;
+      if (result.removed > 0) {
+        // Re-derive the failed/pending pills now that the rows are gone, so
+        // the UI badge clears on the same tick rather than waiting for the
+        // next user-driven sync.
+        void refreshPendingCount();
+      }
     });
 
     return () => { cancelled = true; };
