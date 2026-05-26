@@ -107,6 +107,16 @@ export interface PendingAnimalCreate extends PendingQueueFailureMeta {
   current_camp: string;
   mother_id?: string;
   date_added: string;       // ISO date
+  /**
+   * Issue #424 — active FarmMode at the moment of capture. Carried through
+   * the queue so `uploadAnimalCreate` (sync-manager) can re-emit it on
+   * replay. Optional for back-compat with rows queued pre-#424; when absent
+   * the replayer omits `species` and the server falls back to its default
+   * (currently `"cattle"`). MUST NOT be inferred from another field —
+   * inference at replay time has no access to the FarmMode the user was in
+   * when they captured the row.
+   */
+  species?: string;
   sync_status: 'pending' | 'synced' | 'failed';
   /**
    * Issue #207 — client-generated idempotency key. Form / queue helper
