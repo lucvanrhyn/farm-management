@@ -55,6 +55,12 @@ export default defineConfig({
     // grazing-quality branches. Self-skips when E2E_IDENTIFIER /
     // E2E_PASSWORD are unset.
     'logger-caption-visibility.spec.ts',
+    // Issue #415 (2026-05-25): PRD #412 regression guard — `totalCamps` /
+    // `inspectedToday` stability across FarmMode flips (#411) AND
+    // `camp_condition` write busts the camps cache tag (#409). Negative
+    // control: a `general` write must NOT touch the camps tiles. Self-skips
+    // when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'dashboard-counter-stability.spec.ts',
   ],
   reporter: 'list',
   use: {
