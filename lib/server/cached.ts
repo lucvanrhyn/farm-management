@@ -651,8 +651,18 @@ export async function getCachedFarmSpeciesSettings(
 
 // ── Cached: Multi-farm overview for /farms page (60s) ────────────────────────
 // Eliminates the N×3 Turso fan-out on the /farms page.
-// Tagged with animals+camps+observations for each farm in the user's list —
-// any mutation to any of those scopes clears the entry.
+// Tagged with animals+camps+observations+dashboard for each farm in the user's
+// list — any mutation to any of those scopes clears the entry.
+//
+// Issue #423 — the historical animals/camps/observations tag set theoretically
+// overlapped with mutation tag sets but, in practice, stale-for-hours behaviour
+// proved the invalidation wasn't reliably reaching this entry. The
+// `farm-<slug>-dashboard` tag (PRD #412, 2026-05-26) is the universally-busted
+// tier — every observation, animal, camp, transaction, alert, and rotation
+// write surface emits it. Adding it here lets the selector ride the dashboard
+// tier and inherit its coherence; future write surfaces get selector-busting
+// for free. The legacy tags are KEPT so any future write surface that emits
+// only animals/camps/observations still busts the selector.
 
 export async function getCachedMultiFarmOverview(
   userId: string,
@@ -673,6 +683,7 @@ export async function getCachedMultiFarmOverview(
         farmTag(slug, "animals"),
         farmTag(slug, "camps"),
         farmTag(slug, "observations"),
+        farmTag(slug, "dashboard"),
       ]),
     },
   );
