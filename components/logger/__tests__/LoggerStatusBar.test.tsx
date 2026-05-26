@@ -17,7 +17,8 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, cleanup, screen } from '@testing-library/react';
+import { render, cleanup, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import React from 'react';
 
 afterEach(() => {
@@ -102,6 +103,13 @@ describe('LoggerStatusBar — descriptor → copy mapping (#395)', () => {
       lastSyncedAt: fiveMinutesAgoIso,
     });
     await renderBar();
+    // Issue #422 — the relative-time string is now hydration-safe: the
+    // first render shows the `useNow` seed-driven placeholder ("…"), and
+    // the post-mount microtask flips `nowMs` to the live `Date.now()`
+    // value on the next paint. Wait for that transition before asserting.
+    await waitFor(() => {
+      expect(statusCopy().text).toContain('5m ago');
+    });
     const { text, kind } = statusCopy();
     expect(kind).toBe('fresh');
     expect(text).toMatch(/^Synced: /);
@@ -204,5 +212,61 @@ describe('LoggerStatusBar — descriptor → copy mapping (#395)', () => {
       const { text } = statusCopy();
       expect(text, `kind=${c.label} should not contain "Synced"`).not.toMatch(/Synced/);
     }
+  });
+});
+
+/**
+ * Issue #422 — React #418 hydration parity for the "X ago" relative-time
+ * string the status bar renders.
+ *
+ * Root cause being closed: `formatRelativeTime(epochMs)` (consumed by the
+ * descriptor → copy path) called `Date.now()` synchronously in the render
+ * body. `LoggerStatusBar` is mounted from an RSC, so SSR ran `Date.now()`
+ * at one instant and the client's first (pre-effect) render ran it at a
+ * different instant. The moment the ms-skew crossed a "minute" boundary,
+ * the server emitted "4m ago" and the client first render emitted "5m
+ * ago" — text divergence → React #418.
+ *
+ * Fix shape (mirror PR #388 / `f4a3de9` AdminNav pattern): consume the
+ * new `useNow(intervalMs, seed)` hook with a deterministic seed (`0`) so
+ * the first render of the relative-time text is identical on server and
+ * client. The real wall clock is only consulted AFTER mount inside the
+ * hook's effect.
+ *
+ * Locked invariant: two `renderToString` passes — one with `Date.now()`
+ * forced to value A, one forced to value B — produce byte-for-byte
+ * identical HTML for the status copy. Under the old buggy code the
+ * "X ago" substring would differ between the two passes.
+ */
+describe('LoggerStatusBar — hydration parity (#422, mirrors #387 / PR #388)', () => {
+  it('first render is identical across two different wall-clock instants (no #418)', async () => {
+    // A recent successful sync so the descriptor lands on `fresh` —
+    // which is the kind whose copy interpolates the relative-time string
+    // that used to call `Date.now()` at render.
+    const baseline = 1_700_000_000_000;
+    setOffline({
+      isOnline: true,
+      pendingCount: 0,
+      failedCount: 0,
+      lastSyncedAt: new Date(baseline - 5 * 60_000).toISOString(),
+    });
+
+    // ── Render 1: clock at T+0s ───────────────────────────────────────
+    vi.spyOn(Date, 'now').mockReturnValue(baseline);
+    const { LoggerStatusBar } = await import('@/components/logger/LoggerStatusBar');
+    const serverHtml = renderToString(React.createElement(LoggerStatusBar));
+
+    // ── Render 2: clock advanced 90s — would push relative-time from
+    // "5m ago" to "6m ago" under the old in-render `Date.now()` code ──
+    vi.restoreAllMocks();
+    vi.spyOn(Date, 'now').mockReturnValue(baseline + 90_000);
+    const clientFirstRender = renderToString(React.createElement(LoggerStatusBar));
+
+    // Byte-for-byte identical → the first render did not consult the
+    // wall clock. React would have thrown #418 if these differed.
+    expect(clientFirstRender).toBe(serverHtml);
+    // And the copy is the deterministic seed-driven placeholder, not the
+    // wall-clock-derived "Nm ago" string.
+    expect(serverHtml).not.toMatch(/\d+m ago/);
   });
 });
