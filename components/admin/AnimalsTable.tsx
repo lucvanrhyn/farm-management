@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useMemo, useDeferredValue, useCallback } from "react";
+import {
+  useState,
+  useMemo,
+  useDeferredValue,
+  useCallback,
+  useEffect,
+} from "react";
 import Link from "next/link";
 import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
@@ -142,7 +148,19 @@ export default function AnimalsTable({
   // Defer the search query so the input stays responsive under large lists.
   const deferredSearch = useDeferredValue(search);
 
-  const filtered = useMemo(() => {
+  // Issue #425 — remote search fallback. When the local subset returns zero
+  // matches AND the herd has more rows than are currently loaded, we fire
+  // `/api/animals?search=<q>` and render those rows in the same table. The
+  // local fast-path is preserved: queries that match within `animals` never
+  // hit the network. `remoteFor` pins which query produced `remoteResults`
+  // so stale rows can't leak when the user keeps typing.
+  const [remoteResults, setRemoteResults] = useState<PrismaAnimal[] | null>(
+    null,
+  );
+  const [remoteFor, setRemoteFor] = useState<string>("");
+  const [remoteSearching, setRemoteSearching] = useState(false);
+
+  const localFiltered = useMemo(() => {
     const source = tab === "deceased" ? deceasedAnimals : activeAnimals;
     const q = deferredSearch.toLowerCase();
     return source
@@ -160,6 +178,117 @@ export default function AnimalsTable({
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
   }, [tab, activeAnimals, deceasedAnimals, deferredSearch, campFilter, categoryFilter, statusFilter, sortKey, sortDir]);
+
+  // Trigger the remote fallback when (a) the user has typed something, (b)
+  // the local subset returned zero matches for that query, (c) there's more
+  // herd off-screen than what's hydrated, and (d) we haven't already
+  // fetched for this exact query. Keyed on `deferredSearch` so we don't
+  // hammer the API on every keystroke — `useDeferredValue` already low-pri
+  // batches the input.
+  const totalForSpecies =
+    typeof speciesTotal === "number" ? speciesTotal : animals.length;
+  const hasUnloadedRows = animals.length < totalForSpecies;
+  const trimmedSearch = deferredSearch.trim();
+
+  useEffect(() => {
+    // Reset stale remote results the moment the local subset can answer the
+    // query, or when the query is cleared / filtered away.
+    if (!trimmedSearch || localFiltered.length > 0 || !hasUnloadedRows) {
+      if (remoteResults !== null) {
+        setRemoteResults(null);
+        setRemoteFor("");
+      }
+      return;
+    }
+    // Already fetched for this exact query — don't re-fire.
+    if (remoteFor === trimmedSearch) return;
+
+    let cancelled = false;
+    setRemoteSearching(true);
+    (async () => {
+      try {
+        const url = new URL("/api/animals", window.location.origin);
+        url.searchParams.set("search", trimmedSearch);
+        if (species) url.searchParams.set("species", species);
+        url.searchParams.set("status", "all");
+        url.searchParams.set("limit", String(PAGE_SIZE));
+        const res = await fetch(url.pathname + url.search);
+        if (!res.ok) {
+          if (!cancelled) {
+            setRemoteResults([]);
+            setRemoteFor(trimmedSearch);
+          }
+          return;
+        }
+        const data = (await res.json()) as
+          | PrismaAnimal[]
+          | { items: PrismaAnimal[]; nextCursor: string | null; hasMore: boolean };
+        const items = Array.isArray(data) ? data : data.items;
+        if (!cancelled) {
+          setRemoteResults(items);
+          setRemoteFor(trimmedSearch);
+        }
+      } catch {
+        if (!cancelled) {
+          setRemoteResults([]);
+          setRemoteFor(trimmedSearch);
+        }
+      } finally {
+        if (!cancelled) setRemoteSearching(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // `remoteResults` / `remoteFor` are intentionally read-only signals
+    // inside the effect; including them would re-fire the effect after each
+    // setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trimmedSearch, localFiltered.length, hasUnloadedRows, species]);
+
+  // The "Searched full herd" hint and the rendered list switch over to the
+  // remote payload ONLY when (a) the fetch was for the current query, (b)
+  // the local subset is still empty for that query. Otherwise we render the
+  // local subset as before — that keeps the fast-path latency-free and
+  // prevents stale remote rows from flashing in.
+  const remoteIsApplicable =
+    remoteResults !== null &&
+    remoteFor !== "" &&
+    remoteFor === trimmedSearch &&
+    localFiltered.length === 0;
+
+  const filtered = useMemo(() => {
+    if (remoteIsApplicable && remoteResults) {
+      // Apply the same camp/category/status filters to the remote payload so
+      // the rendered set is still consistent with the active dropdowns.
+      return remoteResults
+        .filter((a) => {
+          if (tab === "deceased" && a.status !== "Deceased") return false;
+          if (tab === "active" && a.status === "Deceased") return false;
+          if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
+          if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
+          if (tab === "active" && statusFilter !== "all" && a.status !== statusFilter) return false;
+          return true;
+        })
+        .sort((a, b) => {
+          const av = String((a as unknown as Record<string, unknown>)[sortKey] ?? "");
+          const bv = String((b as unknown as Record<string, unknown>)[sortKey] ?? "");
+          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+    }
+    return localFiltered;
+  }, [
+    remoteIsApplicable,
+    remoteResults,
+    localFiltered,
+    tab,
+    campFilter,
+    categoryFilter,
+    statusFilter,
+    sortKey,
+    sortDir,
+  ]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -374,6 +503,26 @@ export default function AnimalsTable({
           {filtered.length.toLocaleString()} animals found
         </span>
       </div>
+
+      {/* Issue #425 — remote-fallback hint. Renders ONLY when we had to go
+          past the hydrated batch to answer the search (or are mid-flight to
+          do so). Local-match queries keep the row clean. */}
+      {(remoteIsApplicable || (remoteSearching && trimmedSearch)) && (
+        <p
+          className="text-xs -mt-2 flex items-center gap-1.5"
+          style={{ color: "#8B6914" }}
+          data-testid="animals-remote-search-hint"
+        >
+          <span
+            aria-hidden="true"
+            className="inline-block w-1.5 h-1.5 rounded-full"
+            style={{ background: "#C49030" }}
+          />
+          {remoteSearching && !remoteIsApplicable
+            ? "Searching full herd…"
+            : "Searched full herd — results include rows not yet loaded above."}
+        </p>
+      )}
 
       {/* Table */}
       <div
