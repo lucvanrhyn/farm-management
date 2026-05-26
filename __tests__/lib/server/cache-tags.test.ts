@@ -52,11 +52,17 @@ describe("farmTag", () => {
 describe("mutation tag arrays", () => {
   const SLUG = "trio-b";
 
-  it("animalWriteTags includes animals + dashboard scopes", () => {
+  it("animalWriteTags includes animals + dashboard + camps scopes (issue #420)", () => {
+    // Issue #420 — animal writes must invalidate the camps tag because
+    // per-camp animal counts on the Logger Home camp grid are
+    // groupBy-derived from the animal roster (Animal.currentCamp).
+    // An animal_movement / animal create / animal delete that omits the
+    // camps tag leaves the tiles stale until the 30s TTL.
     const tags = animalWriteTags(SLUG);
     expect(tags).toContain(farmTag(SLUG, "animals"));
     expect(tags).toContain(farmTag(SLUG, "dashboard"));
-    expect(tags).toHaveLength(2);
+    expect(tags).toContain(farmTag(SLUG, "camps"));
+    expect(tags).toHaveLength(3);
   });
 
   it("observationWriteTags(slug, null) includes observations + dashboard scopes (default — non-camp write)", () => {

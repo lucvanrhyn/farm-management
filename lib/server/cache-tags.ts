@@ -47,8 +47,21 @@ export function farmTag(slug: string, scope: FarmCacheScope = "all"): string {
 // ── Convenience tag arrays for common mutation surfaces ───────────────────────
 // These are used by lib/server/revalidate.ts — don't call revalidateTag here.
 
+/**
+ * Tags to invalidate after an animal write (create / update / delete / import).
+ *
+ * Issue #420 — the `farm-<slug>-camps` tag is REQUIRED. The Logger Home
+ * camp grid and `GET /api/camps` (`getCachedCampList` in
+ * `lib/server/cached.ts`) derive per-camp `animal_count` from an
+ * `animal.groupBy({ by: ["currentCamp"] })` over the animal roster, so an
+ * animal write that omits the camps tag (e.g. an `animal_movement` /
+ * PATCH `currentCamp`) leaves the camp tiles stale until TTL. Mirror of
+ * the `observationWriteTags` camps coupling shipped by PRD #412 (#413).
+ * Remove the camps tag only if you have also decoupled `getCachedCampList`
+ * from the animal-roster groupBy.
+ */
 export const animalWriteTags = (slug: string) =>
-  [farmTag(slug, "animals"), farmTag(slug, "dashboard")] as const;
+  [farmTag(slug, "animals"), farmTag(slug, "dashboard"), farmTag(slug, "camps")] as const;
 
 /**
  * Tags to invalidate after an observation write.

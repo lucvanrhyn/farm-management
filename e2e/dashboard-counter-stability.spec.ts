@@ -19,8 +19,19 @@ import { applyAuth } from './fixtures/auth';
  *    commit `d8daa3a`) which made `observationWriteTags(slug, type)` append
  *    `farm-<slug>-camps` iff `isCampInspection(type)` is true.
  *
- * If either fix regresses — fetcher split collapsed, or the camps tag is
- * dropped from `observationWriteTags` — this spec fails loudly.
+ * 3. **animal camp move busts the camps cache tag (issue #420)** —
+ *    `PATCH /api/animals/[id]` with a new `currentCamp` MUST cause the
+ *    per-camp `animal_count` returned by `GET /api/camps`
+ *    (`getCachedCampList`, tagged `farm-<slug>-camps`) to reflect the move
+ *    inside the 30s TTL window. Fixed by adding `farmTag(slug, "camps")`
+ *    to `animalWriteTags(slug)` so `revalidateAnimalWrite` drops the camps
+ *    cache entry. The animal-roster → camp `animal_count` coupling lives
+ *    in the `animal.groupBy({ by: ["currentCamp"] })` inside
+ *    `getCachedCampList` in `lib/server/cached.ts`.
+ *
+ * If any fix regresses — fetcher split collapsed, the camps tag dropped
+ * from `observationWriteTags`, or the camps tag dropped from
+ * `animalWriteTags` — this spec fails loudly.
  *
  * Negative control: a `general` (non-camp-inspection) write MUST NOT
  * invalidate the camps tag, so `inspectedToday` MUST NOT increment off the
@@ -348,7 +359,118 @@ test.describe('Issue #415 — dashboard counter stability (PRD #412)', () => {
     ).toBe(before.inspectedToday);
   });
 
-  // ── Test 4: visible ModeSwitcher path on a multi-species tenant ───────────
+  // ── Test 4: animal_movement positive control — animal camp move busts camps tag (#420) ──
+
+  test('moving an animal between camps updates per-camp animal_count within the TTL window', async ({
+    request,
+  }) => {
+    // Issue #420 — `animalWriteTags(slug)` MUST include `farm-<slug>-camps`
+    // because the per-camp `animal_count` on `GET /api/camps`
+    // (`getCachedCampList` in `lib/server/cached.ts`) is derived from an
+    // `animal.groupBy({ by: ['currentCamp'] })` over the animal roster.
+    // An animal camp move (PATCH /api/animals/[id] with `currentCamp`) calls
+    // `revalidateAnimalWrite` — if that helper does NOT bust the `-camps`
+    // tag, the cached camp list shows stale per-camp counts until the 30s
+    // TTL. This test drives a real move and asserts the cache reflects it
+    // well inside the TTL window.
+    //
+    // Mirror of the `camp_condition` positive-control case above — same
+    // pattern: snapshot BEFORE, mutate via API, poll AFTER for the change.
+    const campsRes = await request.get(`${BASE_URL}/api/camps`);
+    test.skip(
+      !campsRes.ok(),
+      `GET /api/camps did not return 2xx (${campsRes.status()}) — preview clone not ready`,
+    );
+    type CampRow = { camp_id: string; animal_count: number };
+    const camps = (await campsRes.json()) as CampRow[];
+    test.skip(camps.length < 2, 'tenant needs >=2 camps to drive a camp move');
+
+    // Pull active animals; find one whose currentCamp is among the known
+    // camps so we have a well-defined source/target pair.
+    const animalsRes = await request.get(
+      `${BASE_URL}/api/animals?status=Active`,
+    );
+    test.skip(
+      !animalsRes.ok(),
+      `GET /api/animals did not return 2xx (${animalsRes.status()})`,
+    );
+    type AnimalRow = { animalId: string; currentCamp: string | null };
+    const animals = (await animalsRes.json()) as AnimalRow[];
+    const campIds = new Set(camps.map((c) => c.camp_id));
+    const movable = animals.find(
+      (a) => a.currentCamp != null && campIds.has(a.currentCamp),
+    );
+    test.skip(
+      !movable,
+      'no active animal whose currentCamp matches an existing camp — cannot drive move',
+    );
+    const source = camps.find((c) => c.camp_id === movable!.currentCamp)!;
+    const target = camps.find((c) => c.camp_id !== source.camp_id)!;
+
+    // Snapshot BEFORE — per-camp animal_count for source + target.
+    const beforeSource = source.animal_count;
+    const beforeTarget = target.animal_count;
+
+    // Drive the move via the animal PATCH route — this is the surface that
+    // calls `revalidateAnimalWrite(slug)`.
+    const patchRes = await request.patch(
+      `${BASE_URL}/api/animals/${movable!.animalId}`,
+      { data: { currentCamp: target.camp_id } },
+    );
+    expect(
+      patchRes.status(),
+      `PATCH /api/animals/${movable!.animalId} failed (${patchRes.status()}): ${await patchRes.text().catch(() => '<no body>')}`,
+    ).toBeLessThan(300);
+
+    // Poll the camp list for up to 10s. If `animalWriteTags` includes
+    // `farm-<slug>-camps` (the #420 fix), the cache entry is dropped on
+    // write and the next GET re-reads from Prisma immediately. Without the
+    // fix, the response is served from cache and source/target counts are
+    // unchanged until the 30s TTL expires.
+    let observed: { source: number; target: number } | null = null;
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const res = await request.get(`${BASE_URL}/api/camps`);
+      if (res.ok()) {
+        const rows = (await res.json()) as CampRow[];
+        const s = rows.find((r) => r.camp_id === source.camp_id);
+        const t = rows.find((r) => r.camp_id === target.camp_id);
+        if (s && t) {
+          observed = { source: s.animal_count, target: t.animal_count };
+          if (s.animal_count === beforeSource - 1 && t.animal_count === beforeTarget + 1) {
+            break;
+          }
+        }
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // Restore the animal to its original camp BEFORE asserting — keeps the
+    // clone state idempotent across re-runs even on assertion failure.
+    const restoreRes = await request.patch(
+      `${BASE_URL}/api/animals/${movable!.animalId}`,
+      { data: { currentCamp: source.camp_id } },
+    );
+    expect(
+      restoreRes.status(),
+      `restore PATCH failed (${restoreRes.status()})`,
+    ).toBeLessThan(300);
+
+    expect(
+      observed,
+      'GET /api/camps never returned both source and target rows after the move',
+    ).not.toBeNull();
+    expect(
+      observed!.source,
+      `source camp animal_count did not decrement after move — issue #420 regressed (animalWriteTags missing camps tag?). source=${source.camp_id} before=${beforeSource} after=${observed!.source}`,
+    ).toBe(beforeSource - 1);
+    expect(
+      observed!.target,
+      `target camp animal_count did not increment after move — issue #420 regressed. target=${target.camp_id} before=${beforeTarget} after=${observed!.target}`,
+    ).toBe(beforeTarget + 1);
+  });
+
+  // ── Test 5: visible ModeSwitcher path on a multi-species tenant ───────────
 
   test('totalCamps holds across ModeSwitcher clicks on a multi-species tenant', async ({
     page,
