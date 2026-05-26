@@ -38,6 +38,7 @@ import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { campConditionDoneLabel } from "./_lib/camp-condition-done-label";
 import { campConditionDoneCaption } from "./_lib/camp-condition-done-caption";
+import { resolveCampByUrlSegment } from "./_lib/resolve-camp-by-url-segment";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
 
@@ -121,7 +122,11 @@ export default function CampInspectionPage({
     setVisitClientLocalId(crypto.randomUUID());
   }
 
-  const camp = camps.find((c) => c.camp_id === decodedId);
+  // Issue #421 — case-insensitive lookup. libSQL Prisma adapter does NOT
+  // support `mode: 'insensitive'` in `where` clauses, so the fold lives on
+  // the client (we read from IndexedDB anyway via useOffline().camps). See
+  // _lib/resolve-camp-by-url-segment.ts for the contract + rationale.
+  const camp = resolveCampByUrlSegment(camps, decodedId);
   // camps in IndexedDB may carry merged condition fields (grazing_quality etc.) from updateCampCondition
   const campWithCondition = camp as (Camp & { grazing_quality?: string }) | undefined;
   const stats = { total: animals.length };
