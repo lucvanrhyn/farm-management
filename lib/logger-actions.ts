@@ -141,6 +141,13 @@ export async function submitCalvingObservation(
       current_camp: ctx.campId,
       mother_id: data.animalId,
       date_added: data.dateOfBirth,
+      // Issue #424 — active FarmMode MUST ride along through the queue. The
+      // server-side `createAnimal` op defaults missing `species` to "cattle";
+      // on a sheep/game tenant that makes the offline-queued lamb invisible
+      // because `animal-search.ts` filters `species: mode`. Pair edit lives
+      // in `lib/sync-manager.ts` (`uploadAnimalCreate`) — both sides covered
+      // by the contract test at `__tests__/sync/calf-payload-contract.test.ts`.
+      species: ctx.mode,
       sync_status: "pending" as const,
       clientLocalId: calfClientLocalId,
     };

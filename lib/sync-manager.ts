@@ -337,6 +337,16 @@ async function uploadAnimalCreate(
         dateAdded: animal.date_added,
         breed,
         status: 'Active',
+        // Issue #424 — forward the FarmMode the row was captured under.
+        // `undefined` (not `null`) for legacy rows queued before #424 so the
+        // server-side `createAnimal` default stays cattle-driven for back-
+        // compat. DO NOT "simplify" by dropping this and letting the server
+        // default — `lib/server/animal-search.ts` filters `species: mode`,
+        // so a row with default-cattle species on a sheep/game tenant is
+        // silently invisible in every catalogue. Pair edit lives in
+        // `lib/logger-actions.ts` (`queuedCalf` literal). Contract test:
+        // `__tests__/sync/calf-payload-contract.test.ts`.
+        species: animal.species ?? undefined,
         clientLocalId: animal.clientLocalId ?? null,
       }),
     });
