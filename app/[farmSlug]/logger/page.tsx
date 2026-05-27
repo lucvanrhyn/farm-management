@@ -8,6 +8,8 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { getCachedCampList } from "@/lib/server/cached";
+import { shouldRenderSheepEmptyState } from "@/lib/domain/camp/inspection-freshness";
 import type { PrismaClient } from "@prisma/client";
 import type { SpeciesId } from "@/lib/species/types";
 
@@ -118,9 +120,23 @@ export default async function LoggerPage({
   const loggerName = session?.user?.name ?? "Logger";
 
   const mode = await getFarmMode(farmSlug);
-  const [farmName, allowedCampIds] = await Promise.all([
+  const [farmName, allowedCampIds, sheepEmpty] = await Promise.all([
     resolveFarmName(farmSlug),
     resolveAllowedCampIds(farmSlug, mode),
+    // Issue #437 — server-side check whether to render the sheep empty-state
+    // banner in place of the misleading "19 × 0 animals · Just now" grid.
+    // Failure-isolated: if the cached camp list throws we fall back to
+    // false and the picker renders as usual (existing behaviour).
+    getCachedCampList(farmSlug, mode)
+      .then((camps) => shouldRenderSheepEmptyState(mode, camps))
+      .catch((err) => {
+        logger.error("[logger/page] sheep empty-state check failed — falling back to picker render", {
+          farmSlug,
+          mode,
+          error: err,
+        });
+        return false;
+      }),
   ]);
 
   return (
@@ -164,7 +180,72 @@ export default async function LoggerPage({
 
       <TodaysTasks />
 
-      <CampSelector allowedCampIds={allowedCampIds} />
+      {/* Issue #437 — sheep empty-state banner. Trio (cattle-only data)
+          on Sheep mode used to render 19 misleading "0 animals · Just now"
+          camp tiles. The server-side `shouldRenderSheepEmptyState`
+          predicate gates on `mode === 'sheep'` AND every camp's
+          species-scoped `animal_count === 0` (powered by the new
+          /api/camps?species=sheep payload). When the gate is true we
+          render this banner INSTEAD of the camp grid, so the field
+          worker sees one clear "no sheep structure yet" message rather
+          than a misleading 19-tile grid.
+
+          The Cattle / Game paths are untouched — CampSelector renders
+          its existing grid + #370 empty state for those modes. */}
+      {sheepEmpty ? (
+        <div className="flex justify-center p-4">
+          <div
+            data-testid="logger-sheep-empty-state-banner"
+            className="flex flex-col items-center gap-3 rounded-2xl px-8 py-12 text-center w-full max-w-sm"
+            style={{
+              backgroundColor: 'rgba(250, 240, 220, 0.10)',
+              border: '1px solid rgba(210, 180, 140, 0.28)',
+              boxShadow: 'inset 0 1px 0 rgba(255,248,235,0.10)',
+            }}
+          >
+            <div
+              aria-hidden="true"
+              className="flex size-14 items-center justify-center rounded-full"
+              style={{
+                backgroundColor: 'rgba(255, 248, 235, 0.10)',
+                border: '1px solid rgba(210, 180, 140, 0.35)',
+                color: '#5C3D2E',
+              }}
+            >
+              <svg
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="M3 10h18" />
+                <path d="M9 5v14" />
+                <path d="M15 5v14" />
+              </svg>
+            </div>
+            <h2
+              className="text-lg font-bold"
+              style={{ fontFamily: 'var(--font-display)', color: '#1A1510' }}
+            >
+              No sheep mob structure yet
+            </h2>
+            <p className="text-sm" style={{ color: '#5C3D2E', lineHeight: 1.5 }}>
+              {/* #382 spacing pin — `{" "}` literal preserved after the
+                  inline {expression} so the SWC space-strip transform does
+                  not glue the next word ("Mobs" / "Cattle"). */}
+              Set up mobs in Admin{" "}&rarr;{" "}Mobs, or switch to Cattle
+              to start logging.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <CampSelector allowedCampIds={allowedCampIds} />
+      )}
 
       <div className="h-8" />
     </div>

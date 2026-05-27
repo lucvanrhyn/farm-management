@@ -28,7 +28,7 @@ const DeathModal = dynamic(() => import("@/components/logger/DeathModal"), { ssr
 const MobMoveModal = dynamic(() => import("@/components/logger/MobMoveModal"), { ssr: false });
 
 import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
-import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
+import { getGrazingDot, getGrazingTailwindBg, relativeTime } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
 import { getAnimalsByCampCached, getPendingObservations, queueObservation, queuePhoto, queueCoverReading, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
@@ -487,7 +487,21 @@ export default function CampInspectionPage({
               Camp {camp.camp_name}
             </h1>
             <p className="text-xs" style={{ color: '#D2B48C' }}>
+              {/* Issue #437 — surface species-scoped last_inspected_at next
+                  to the head count. The value comes from the active-mode
+                  IDB partition (sync-manager writes the species-scoped
+                  payload from `/api/camps?species=<mode>`), so the cattle
+                  camp_condition row never bleeds in on a sheep view —
+                  the line shows "Never" when no species-matching
+                  inspection has been logged. */}
               {stats.total} animals · {camp.water_source ?? "water"}
+              {" · "}
+              <span data-testid="camp-last-inspected">
+                Last inspected:{" "}
+                {campWithCondition?.last_inspected_at
+                  ? relativeTime(campWithCondition.last_inspected_at)
+                  : "Never"}
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-1.5">

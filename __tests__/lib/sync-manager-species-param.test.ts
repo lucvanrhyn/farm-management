@@ -19,6 +19,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/lib/offline-store', () => ({
   seedCamps: vi.fn(async () => {}),
+  // Issue #437 — mode-partitioned write mock.
+  seedCampsForMode: vi.fn(async () => {}),
   seedAnimals: vi.fn(async () => {}),
   seedFarmSettings: vi.fn(async () => {}),
   getCachedFarmSettings: vi.fn(async () => null),

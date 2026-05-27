@@ -7,6 +7,7 @@
 // for a browser-tab failure.
 import {
   seedCamps,
+  seedCampsForMode,
   seedAnimals,
   seedFarmSettings,
   getCachedFarmSettings,
@@ -154,22 +155,53 @@ async function refreshCachedDataInternal(species?: string): Promise<void> {
 
     // Merge server-authoritative condition data so camp colors survive a sync
     // cycle. /api/camps/status returns the latest camp_condition observation
-    // per camp.
+    // per camp. Note: `/api/camps/status` is CROSS-species (no `species`
+    // predicate on its underlying Prisma read — by design, it powers the
+    // dashboard map which spans every species). When `species` is provided
+    // we trust the species-scoped `last_inspected_at` returned by
+    // `/api/camps?species=…` (issue #437) instead of overwriting it from
+    // the cross-species status payload. Grazing / water / fence still come
+    // from status because those are camp-level condition fields without a
+    // per-species axis on the schema.
     let mergedCamps = camps;
     if (statusRes.ok) {
       const statusMap: Record<string, ServerCampCondition> = await statusRes.json();
       mergedCamps = camps.map((camp) => {
         const serverCondition = statusMap[camp.camp_id];
         if (!serverCondition) return camp;
+        // Issue #437: when a species filter is active and the
+        // `/api/camps?species=…` response carried an explicit
+        // species-scoped `last_inspected_at` (including null = "no sheep
+        // inspection"), we keep the species-scoped value and drop the
+        // cross-species cattle leak from status.
+        const useSpeciesFreshness =
+          typeof species === 'string' && species.length > 0;
         return {
           ...camp,
           grazing_quality: serverCondition.grazing_quality,
           water_status: serverCondition.water_status,
           fence_status: serverCondition.fence_status,
-          last_inspected_at: serverCondition.last_inspected_at,
+          last_inspected_at: useSpeciesFreshness
+            ? camp.last_inspected_at ?? undefined
+            : serverCondition.last_inspected_at,
           last_inspected_by: serverCondition.last_inspected_by ?? undefined,
         };
       });
+    }
+
+    // Issue #437: mode-partitioned write when species is provided so cattle
+    // and sheep caches stay disjoint on disk — flipping FarmMode no longer
+    // overwrites the other mode's `animal_count` / `last_inspected_at` (the
+    // root cause of Trio's "0 animals · Just now" misleading tiles).
+    //
+    // We ALSO write the same payload to the legacy un-partitioned `camps`
+    // store so OfflineProvider's `getCachedCamps()` (the picker's mount
+    // read) keeps serving the current mode's data without coupling here to
+    // OfflineProvider's internals. Legacy callers always see the most
+    // recently fetched mode; the partition preserves both modes so a future
+    // cross-mode restore (cattle ← sheep flip) is a pure cache read.
+    if (typeof species === 'string' && species.length > 0) {
+      await seedCampsForMode(species, mergedCamps);
     }
     await seedCamps(mergedCamps);
   }

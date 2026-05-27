@@ -1,7 +1,25 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
 
-const DB_VERSION = 5;
+const DB_VERSION = 6;
+
+/**
+ * Issue #437 — mode-partitioned camps cache.
+ *
+ * The legacy `camps` store keys by `camp_id` only. On a multi-species
+ * tenant (Trio, Basson+sheep, etc.) flipping the FarmMode triggers a
+ * `/api/camps?species=<new mode>` fetch whose seeded rows overwrite the
+ * other mode's `animal_count` / `last_inspected_at` — root cause of the
+ * "0 animals · Just now" class on Trio's Sheep Logger.
+ *
+ * `camps_by_mode` is the per-mode partition: keyed by composite
+ * `[mode, camp_id]` so cattle and sheep rows for the same physical camp
+ * are disjoint records on disk. The legacy `camps` store stays in place
+ * as a back-compat fallback for first-paint callers that pre-date the
+ * partition (Set during the seam where a user upgrades and the new mode
+ * partition has not yet been seeded).
+ */
+const CAMPS_BY_MODE_STORE = "camps_by_mode";
 
 // Multi-tenant: each farm gets its own IndexedDB so switching farms in the
 // same browser never leaks data across tenants.
@@ -178,6 +196,19 @@ function getDB(): Promise<IDBPDatabase> {
           db.createObjectStore('pending_cover_readings', { keyPath: 'local_id', autoIncrement: true });
         }
       }
+      if (oldVersion < 6) {
+        // Issue #437 — mode-partitioned camps cache. Composite key
+        // [mode, camp_id] keeps cattle and sheep rows disjoint so one mode's
+        // refresh never overwrites the other mode's `animal_count` or
+        // `last_inspected_at`. The legacy `camps` store stays in place as a
+        // back-compat first-paint fallback for upgraded clients before the
+        // first mode-aware refresh runs.
+        if (!db.objectStoreNames.contains(CAMPS_BY_MODE_STORE)) {
+          db.createObjectStore(CAMPS_BY_MODE_STORE, {
+            keyPath: ['_partitionMode', 'camp_id'],
+          });
+        }
+      }
     },
   });
 }
@@ -276,6 +307,88 @@ export async function seedCamps(camps: Camp[]): Promise<void> {
 
 export async function getCachedCamps(): Promise<Camp[]> {
   const db = await getDB();
+  return db.getAll('camps');
+}
+
+/**
+ * Issue #437 — mode-partitioned analogue of `seedCamps`.
+ *
+ * Writes camp rows into `camps_by_mode` keyed by composite [mode, camp_id]
+ * so cattle and sheep records for the same physical camp stay disjoint on
+ * disk. Two coordinated invariants:
+ *
+ *   1. Same merge semantics as `seedCamps`: each incoming row passes through
+ *      `mergeCampWithLocalOverlay` against the prior row IN THIS SAME
+ *      PARTITION, so a fresh local inspection in sheep mode does not get
+ *      stomped by a stale server payload in sheep mode.
+ *
+ *   2. Orphan-sweep is partition-scoped: a row removed from the server
+ *      side of cattle is deleted from cattle ONLY — sheep is not touched.
+ *      This is the structural fix for the "flipping cattle → sheep wipes
+ *      cattle's counts" bug class #437 closes.
+ *
+ * The composite-key `_partitionMode` field is stripped from the returned
+ * shape by `getCachedCampsForMode` so callers see a clean `Camp[]`.
+ */
+export async function seedCampsForMode(
+  mode: string,
+  camps: Camp[],
+): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(CAMPS_BY_MODE_STORE, 'readwrite');
+
+  // Read existing rows for THIS partition to (a) preserve locally-set
+  // condition fields via the merge and (b) detect orphans.
+  const existing = (await tx.store.getAll()) as Array<
+    Camp & { _partitionMode: string }
+  >;
+  const existingForMode = existing.filter((c) => c._partitionMode === mode);
+  const existingMap = new Map(existingForMode.map((c) => [c.camp_id, c]));
+  const incomingIds = new Set(camps.map((c) => c.camp_id));
+
+  for (const camp of camps) {
+    const prev = existingMap.get(camp.camp_id);
+    const merged = mergeCampWithLocalOverlay(camp, prev);
+    // Stamp the partition discriminator. The composite keyPath
+    // [_partitionMode, camp_id] makes the on-disk uniqueness contract
+    // (mode, camp_id) — same shape as the SQL natural key.
+    await tx.store.put({ ...merged, _partitionMode: mode });
+  }
+
+  // Partition-scoped orphan sweep: only delete rows whose mode matches
+  // AND whose camp_id is no longer in the incoming list.
+  for (const prev of existingForMode) {
+    if (!incomingIds.has(prev.camp_id)) {
+      await tx.store.delete([mode, prev.camp_id] as IDBValidKey);
+    }
+  }
+
+  await tx.done;
+}
+
+/**
+ * Issue #437 — read camps for a single FarmMode partition.
+ *
+ * Back-compat: when the mode partition is empty (legacy clients that have
+ * upgraded but not yet re-seeded under the partition, or first paint
+ * before the mode-aware refresh fires) we fall back to the legacy `camps`
+ * store so the picker is not blank during the seam. The fallback is
+ * read-only — writes always go through the partition.
+ */
+export async function getCachedCampsForMode(mode: string): Promise<Camp[]> {
+  const db = await getDB();
+  const all = (await db.getAll(CAMPS_BY_MODE_STORE)) as Array<
+    Camp & { _partitionMode: string }
+  >;
+  const forMode = all
+    .filter((c) => c._partitionMode === mode)
+    // Strip the partition discriminator so callers see a clean Camp shape.
+    .map(({ _partitionMode, ...camp }) => {
+      void _partitionMode;
+      return camp as Camp;
+    });
+  if (forMode.length > 0) return forMode;
+  // Back-compat fallback: first-paint / pre-#437-upgrade clients.
   return db.getAll('camps');
 }
 
