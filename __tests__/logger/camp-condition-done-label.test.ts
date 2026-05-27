@@ -2,19 +2,19 @@
  * __tests__/logger/camp-condition-done-label.test.ts
  *
  * Wave C / U1 — Codex audit P2 polish (2026-05-10).
+ * Issue #440 — Updated: tests migrated from `campConditionDoneLabel` (removed)
+ * to `getCampVisitCompletenessLabel` which supersedes it.
  *
- * The logger camp page renders a sticky "complete visit" button. When the
- * user has flagged zero animals, the button used to ALWAYS read
- * "All Normal — Camp Good", regardless of the camp's grazing condition.
+ * The logger camp page renders a sticky "complete visit" button. The helper
+ * now accepts `{ grazingQuality, observationCount, flaggedCount }` and returns
+ * `{ label, severity }` — observation-aware copy that reflects veld condition
+ * AND any observations or flags logged during the visit.
  *
- * Codex audit flagged the copy as a lie on Fair / Poor / Overgrazed camps —
- * "no animals flagged" is still a legitimate outcome on a poor-condition
- * camp (the camp's veld can be bad without any sick animals), but the
- * button must not also claim "Camp Good" when the camp clearly isn't.
+ * This file preserves the Wave C / U1 contract as a subset:
+ *  - Good/null/undefined + 0 obs + 0 flagged → "Done — visit complete" / good
+ *  - Fair/Poor/Overgrazed + 0 obs + 0 flagged → "Veld needs attention — 0 observations today" / attention
  *
- * Contract pinned here:
- *   - good / unknown / nullish → "All Normal — Camp Good" (unchanged)
- *   - Fair / Poor / Overgrazed (case-insensitive) → "Done — no animals flagged"
+ * Full 5-row matrix is in camp-visit-completeness-label.test.ts (Issue #440).
  *
  * The helper lives in a sibling `_lib/` file (underscore folder = not
  * routed by Next.js) so it can be a pure unit-tested function without
@@ -22,39 +22,39 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { campConditionDoneLabel } from "@/app/[farmSlug]/logger/[campId]/_lib/camp-condition-done-label";
+import { getCampVisitCompletenessLabel } from "@/app/[farmSlug]/logger/[campId]/_lib/camp-condition-done-label";
 
-describe("campConditionDoneLabel — Wave C / U1", () => {
-  it("returns 'All Normal — Camp Good' when grazing quality is null/undefined", () => {
-    expect(campConditionDoneLabel(null)).toBe("All Normal — Camp Good");
-    expect(campConditionDoneLabel(undefined)).toBe("All Normal — Camp Good");
+describe("getCampVisitCompletenessLabel — Wave C / U1 baseline contract", () => {
+  it("returns severity 'good' when grazing quality is null/undefined and no activity", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: null, observationCount: 0, flaggedCount: 0 }).severity).toBe("good");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: undefined, observationCount: 0, flaggedCount: 0 }).severity).toBe("good");
   });
 
-  it("returns 'All Normal — Camp Good' when grazing quality is Good", () => {
-    expect(campConditionDoneLabel("Good")).toBe("All Normal — Camp Good");
+  it("returns 'Done — visit complete' when grazing quality is Good and no activity", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "Good", observationCount: 0, flaggedCount: 0 }).label).toBe("Done — visit complete");
   });
 
-  it("returns 'All Normal — Camp Good' for unknown / unrecognised tiers (safety default)", () => {
-    expect(campConditionDoneLabel("Excellent")).toBe("All Normal — Camp Good");
-    expect(campConditionDoneLabel("")).toBe("All Normal — Camp Good");
+  it("returns severity 'good' for unknown / unrecognised tiers (safety default)", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "Excellent", observationCount: 0, flaggedCount: 0 }).severity).toBe("good");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "", observationCount: 0, flaggedCount: 0 }).severity).toBe("good");
   });
 
-  it("returns 'Done — no animals flagged' when grazing quality is Fair", () => {
-    expect(campConditionDoneLabel("Fair")).toBe("Done — no animals flagged");
+  it("returns severity 'attention' when grazing quality is Fair and no flags", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "Fair", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
   });
 
-  it("returns 'Done — no animals flagged' when grazing quality is Poor", () => {
-    expect(campConditionDoneLabel("Poor")).toBe("Done — no animals flagged");
+  it("returns severity 'attention' when grazing quality is Poor and no flags", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "Poor", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
   });
 
-  it("returns 'Done — no animals flagged' when grazing quality is Overgrazed", () => {
-    expect(campConditionDoneLabel("Overgrazed")).toBe("Done — no animals flagged");
+  it("returns severity 'attention' when grazing quality is Overgrazed and no flags", () => {
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "Overgrazed", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
   });
 
   it("is case-insensitive on input (IndexedDB merges + SQL inserts use different casing)", () => {
-    expect(campConditionDoneLabel("fair")).toBe("Done — no animals flagged");
-    expect(campConditionDoneLabel("POOR")).toBe("Done — no animals flagged");
-    expect(campConditionDoneLabel("overgrazed")).toBe("Done — no animals flagged");
-    expect(campConditionDoneLabel("good")).toBe("All Normal — Camp Good");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "fair", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "POOR", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "overgrazed", observationCount: 0, flaggedCount: 0 }).severity).toBe("attention");
+    expect(getCampVisitCompletenessLabel({ grazingQuality: "good", observationCount: 0, flaggedCount: 0 }).severity).toBe("good");
   });
 });

@@ -87,6 +87,8 @@ vi.mock("@/components/logger/OfflineProvider", () => ({
 // assertion through `selectedMob` + `mobsInCamp` instead.
 vi.mock("@/lib/offline-store", () => ({
   getAnimalsByCampCached: vi.fn(async () => []),
+  // Issue #440 — getPendingObservations added to page.tsx for obs-count seeding
+  getPendingObservations: vi.fn(async () => []),
   queueObservation: vi.fn(async () => "obs-1"),
   queuePhoto: vi.fn(async () => {}),
   queueCoverReading: vi.fn(async () => {}),
@@ -224,17 +226,19 @@ describe("CampInspectionPage state leak across [campId] navigation (Wave 3 A2)",
       result = render(<CampInspectionPage params={paramsPromise({ farmSlug: "farm-x", campId: "A" })} />);
     });
 
+    // Issue #440 — button text changed from "All Normal — Camp Good" to
+    // "Done — visit complete"; use data-testid for resilient selection.
     await waitFor(() => {
-      expect(result.getByText(/All Normal/)).toBeTruthy();
+      expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy();
     });
 
-    // Click the "All Normal — Camp Good" button. handleCompleteVisit awaits
+    // Click the "Done — visit complete" button. handleCompleteVisit awaits
     // a chain of offline-store writes; with our mocks they resolve next-tick
     // and flip allNormalDone to true (rendering the green "Visit recorded"
     // banner) plus open the condition modal.
-    const allNormalBtn = result.getByText(/All Normal/);
+    const doneBtn = result.getByTestId("camp-visit-completeness-btn");
     await act(async () => {
-      fireEvent.click(allNormalBtn);
+      fireEvent.click(doneBtn);
       // Let the handler's awaited chain settle.
       await Promise.resolve();
       await Promise.resolve();
@@ -253,6 +257,6 @@ describe("CampInspectionPage state leak across [campId] navigation (Wave 3 A2)",
     });
 
     expect(result.queryByText(/Visit recorded/)).toBeNull();
-    expect(result.getByText(/All Normal/)).toBeTruthy();
+    expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy();
   });
 });

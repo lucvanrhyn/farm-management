@@ -84,6 +84,8 @@ const queueObservation =
   );
 vi.mock("@/lib/offline-store", () => ({
   getAnimalsByCampCached: vi.fn(async () => []),
+  // Issue #440 — getPendingObservations added to page.tsx for obs-count seeding
+  getPendingObservations: vi.fn(async () => []),
   queueObservation,
   queuePhoto: vi.fn(async () => {}),
   queueCoverReading: vi.fn(async () => {}),
@@ -169,10 +171,12 @@ describe("CampInspectionPage — complete-visit enqueue idempotency (#281)", () 
       );
     });
 
-    await waitFor(() => expect(result.getByText(/All Normal/)).toBeTruthy());
+    // Issue #440 — button text changed from "All Normal — Camp Good" to
+    // "Done — visit complete" (observation-aware label).
+    await waitFor(() => expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy());
 
     await act(async () => {
-      fireEvent.click(result.getByText(/All Normal/));
+      fireEvent.click(result.getByTestId("camp-visit-completeness-btn"));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -200,11 +204,13 @@ describe("CampInspectionPage — complete-visit enqueue idempotency (#281)", () 
       );
     });
 
-    await waitFor(() => expect(result.getByText(/All Normal/)).toBeTruthy());
+    // Issue #440 — button text changed from "All Normal — Camp Good" to
+    // "Done — visit complete"; use data-testid for resilient selection.
+    await waitFor(() => expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy());
 
     // First submit.
     await act(async () => {
-      fireEvent.click(result.getByText(/All Normal/));
+      fireEvent.click(result.getByTestId("camp-visit-completeness-btn"));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -220,7 +226,7 @@ describe("CampInspectionPage — complete-visit enqueue idempotency (#281)", () 
       await Promise.resolve();
     });
 
-    await waitFor(() => expect(result.getByText(/All Normal|Visit recorded/)).toBeTruthy());
+    await waitFor(() => expect(result.getByText(/Done.*visit complete|Visit recorded/)).toBeTruthy());
 
     // The page-transition reset only fires when campId actually changes;
     // re-rendering the same campId must keep the visit's idempotency key.
@@ -242,9 +248,10 @@ describe("CampInspectionPage — complete-visit enqueue idempotency (#281)", () 
       );
     });
 
-    await waitFor(() => expect(result.getByText(/All Normal/)).toBeTruthy());
+    // Issue #440 — button text changed; use data-testid for resilient selection.
+    await waitFor(() => expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy());
     await act(async () => {
-      fireEvent.click(result.getByText(/All Normal/));
+      fireEvent.click(result.getByTestId("camp-visit-completeness-btn"));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -258,9 +265,9 @@ describe("CampInspectionPage — complete-visit enqueue idempotency (#281)", () 
       await Promise.resolve();
     });
 
-    await waitFor(() => expect(result.getByText(/All Normal/)).toBeTruthy());
+    await waitFor(() => expect(result.getByTestId("camp-visit-completeness-btn")).toBeTruthy());
     await act(async () => {
-      fireEvent.click(result.getByText(/All Normal/));
+      fireEvent.click(result.getByTestId("camp-visit-completeness-btn"));
       await Promise.resolve();
       await Promise.resolve();
     });
