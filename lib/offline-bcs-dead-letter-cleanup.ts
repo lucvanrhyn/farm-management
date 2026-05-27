@@ -1,5 +1,5 @@
 /**
- * lib/offline-bcs-dead-letter-cleanup.ts — Issue #426 + Issue #435.
+ * lib/offline-bcs-dead-letter-cleanup.ts — Issue #426 + Issue #435 + Issue #449.
  *
  * Boot-time dead-letter cleanup. Two classes of permanently-stuck queue rows
  * are drained on mount:
@@ -18,9 +18,10 @@
  *   from racing with a newly-stuck row that the classifier will resolve on the
  *   next sync cycle. Predicate: `isTerminalDuplicateDeadLetter`.
  *
- * Both predicates are pure functions. The generalized driver `runDeadLetterCleanup`
- * runs both in a single IDB pass. The legacy `cleanupPreFixBcsDeadLetters`
- * export is preserved for back-compat with any direct call sites.
+ * Both predicates are pure functions. The generalized driver
+ * `runDeadLetterCleanup` runs both in a single IDB pass. Issue #449 removed
+ * the legacy `cleanupPreFixBcsDeadLetters` v1 driver — `OfflineProvider` now
+ * wires v2 directly, and v2 subsumes v1.
  *
  * Belt-and-suspenders
  * ───────────────────
@@ -31,10 +32,11 @@
  * Idempotency
  * ───────────
  * `runDeadLetterCleanup` uses `offline-dead-letter-cleanup-v2` as its flag
- * key. The legacy `offline-cleanup-bcs-pre-fix-422-v1` key is intentionally
- * left behind so devices that already ran the v1 pass don't lose that record.
- * The v2 pass subsumes v1: once v2 has run, both class A and class B are
- * handled in a single pass.
+ * key. The legacy `offline-cleanup-bcs-pre-fix-422-v1` key from PR #433 is
+ * intentionally left untouched on devices that already ran v1; v2's flag is
+ * orthogonal, so v2 will still run once on those devices and drain any
+ * subsequently-stuck class-B rows. Subsequent calls short-circuit on v2's
+ * flag.
  */
 
 import {
@@ -43,12 +45,6 @@ import {
 } from '@/lib/offline-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-/**
- * Legacy flag — set by the v1 (BCS-only) cleanup from PR #426.
- * Retained so we can detect "already did v1" without re-running class A.
- */
-const LEGACY_CLEANUP_FLAG_KEY = 'offline-cleanup-bcs-pre-fix-422-v1';
 
 /**
  * v2 flag — set after the first successful generalized cleanup pass.
@@ -152,46 +148,8 @@ export async function runDeadLetterCleanup(): Promise<{ removed: number }> {
     window.localStorage?.setItem(CLEANUP_FLAG_KEY, 'done');
     return { removed: candidates.length };
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[offline] dead-letter cleanup failed:', err);
     return { removed: 0 };
   }
 }
 
-/**
- * Legacy boot-time driver (Issue #426 / PR #433 — `cleanupPreFixBcsDeadLetters`).
- *
- * Handles class-A (pre-fix BCS `INVALID_TYPE`) rows using the original v1
- * localStorage flag. New call sites should use `runDeadLetterCleanup` instead,
- * which covers both class A and class B in a single pass.
- *
- * This function is preserved with its original contract so existing call sites
- * (OfflineProvider mount) continue to work without changes.
- */
-export async function cleanupPreFixBcsDeadLetters(): Promise<{ removed: number }> {
-  // SSR / non-browser environments: nothing to clean.
-  if (typeof window === 'undefined') return { removed: 0 };
-
-  try {
-    // Already ran on this device — short-circuit.
-    if (window.localStorage?.getItem(LEGACY_CLEANUP_FLAG_KEY) === 'done') {
-      return { removed: 0 };
-    }
-
-    const failed = await getFailedObservations();
-    const candidates = failed.filter(isPreFixBcsDeadLetter);
-
-    for (const row of candidates) {
-      if (row.local_id != null) {
-        await discardFailedObservation(row.local_id);
-      }
-    }
-
-    window.localStorage?.setItem(LEGACY_CLEANUP_FLAG_KEY, 'done');
-    return { removed: candidates.length };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[offline] BCS pre-fix dead-letter cleanup failed:', err);
-    return { removed: 0 };
-  }
-}
