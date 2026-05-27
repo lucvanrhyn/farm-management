@@ -450,9 +450,38 @@ export async function seedAnimals(animals: Animal[]): Promise<void> {
   await tx.done;
 }
 
+/**
+ * Issue #450 — case-insensitive animal-by-camp lookup.
+ *
+ * `resolveCampByUrlSegment` (PR #421) case-folds the URL `[campId]`
+ * segment when matching against the camps cache, but pre-#450 this
+ * function still passed the raw segment to a case-sensitive IDB index
+ * lookup. Symptom on Trio-B: `/logger/a` resolved to Camp A but rendered
+ * "0 animals" because `getAllFromIndex('animals', 'camp', 'a')` matched
+ * zero rows (animals' `current_camp` is stored as the server's canonical
+ * case, e.g. "A").
+ *
+ * Contract change: the `campId` argument is compared case-insensitively
+ * against the on-disk `current_camp`. We scan + filter rather than
+ * normalising the stored value at write time so:
+ *   1. No IDB schema bump (DB_VERSION stays at 6).
+ *   2. `current_camp` continues to round-trip the server's canonical
+ *      case for any non-logger consumer (admin views, mob editor, etc.).
+ *   3. Defense in depth — any future caller passing a URL-style segment
+ *      is safe by construction, symmetric with `resolveCampByUrlSegment`.
+ *
+ * Performance note: per-tenant animal counts are bounded (largest live
+ * tenant is ~100). `getAll` + filter is O(N) at IDB which is well within
+ * acceptable for a logger-page fetch. If the population grows by 10×,
+ * revisit by normalising the stored `current_camp` to lowercase and
+ * indexing on the lowered value (would require a v7 schema migration
+ * to rewrite the index).
+ */
 export async function getAnimalsByCampCached(campId: string): Promise<Animal[]> {
   const db = await getDB();
-  return db.getAllFromIndex('animals', 'camp', campId);
+  const target = campId.toLowerCase();
+  const all = (await db.getAll('animals')) as Animal[];
+  return all.filter((a) => (a.current_camp ?? '').toLowerCase() === target);
 }
 
 /**

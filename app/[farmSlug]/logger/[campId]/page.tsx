@@ -168,13 +168,18 @@ export default function CampInspectionPage({
     });
   }, [decodedId, flaggedAnimalIds]);
 
-  // Load mobs for this camp from API
+  // Load mobs for this camp from API.
+  // Issue #450 — case-insensitive comparison: the URL `[campId]` segment
+  // may differ in casing from the server-canonical `current_camp` (deep
+  // links, hand-typed URLs). Same root cause as the animal-count miss
+  // fixed in `getAnimalsByCampCached`; symmetric fix here.
   useEffect(() => {
     if (!isOnline) return;
+    const target = decodedId.toLowerCase();
     fetch("/api/mobs")
       .then((res) => (res.ok ? res.json() : []))
       .then((allMobs: MobWithCount[]) => {
-        setMobsInCamp(allMobs.filter((m) => m.current_camp === decodedId));
+        setMobsInCamp(allMobs.filter((m) => m.current_camp.toLowerCase() === target));
       })
       .catch(() => { /* non-fatal */ });
   }, [decodedId, isOnline]);
