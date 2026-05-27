@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { verifyFreshAdminRole } from "@/lib/auth";
-import { revalidateSettingsWrite } from "@/lib/server/revalidate";
+import { revalidateSettingsWrite, revalidateFarmIdentityWrite } from "@/lib/server/revalidate";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -321,6 +321,9 @@ export async function PATCH(req: NextRequest) {
   });
 
   revalidateSettingsWrite(farmSlug);
+  // Issue #438: FarmSettings writes must also bust the farm-identity cache so
+  // the server-rendered hero on /<slug>/home reflects the new name/breed/image.
+  revalidateFarmIdentityWrite(farmSlug);
   // Never return the raw API key — mirror the GET response shape
   return NextResponse.json({
     ...updated,

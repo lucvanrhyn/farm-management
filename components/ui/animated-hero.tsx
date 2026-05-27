@@ -1,15 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { clientLogger } from "@/lib/client-logger";
+import type { FarmIdentity } from "@/lib/domain/farm/get-farm-identity";
 
-interface FarmStats {
-  farmName: string;
-  breed: string;
-  animalCount: number;
-  campCount: number;
-  heroImageUrl?: string;
-}
+/**
+ * AnimatedHero — server-data-fed farm hero component.
+ *
+ * Issue #438 / PRD #434: previously fetched /api/farm in a useEffect after
+ * mount, causing a 3-state loading flicker:
+ *   1. First paint: empty cards (no data)
+ *   2. Placeholder: "FARM MANAGEMENT SYSTEM" + "—" subtitle
+ *   3. Branded farm header swap-in when fetch resolved
+ *
+ * Fix: the parent page (app/[farmSlug]/home/page.tsx) is now an async RSC
+ * that calls getFarmIdentity() server-side and passes `initialFarmData` as
+ * a prop. The hero renders the branded content on first paint — no
+ * client-side fetch, no fallback strings.
+ *
+ * This component stays a Client Component for the CSS animation
+ * (`hero-anim-*` classes, `hero-word` rotator) and the `mounted` guard that
+ * prevents the greeting/date from causing an SSR/client date mismatch.
+ *
+ * The `onHeroImageLoad` callback is intentionally REMOVED — the hero image
+ * is now passed directly to the page-level background via `initialFarmData`,
+ * so there is no need for a child-to-parent callback to update the background.
+ */
 
 // Phase M.2: framer-motion was previously imported here, pulling ~40 KB of
 // animation runtime into /home's initial JS graph. Phase M dynamic-split
@@ -46,15 +61,12 @@ function wordState(
 }
 
 export function AnimatedHero({
-  farmSlug,
-  onHeroImageLoad,
+  initialFarmData,
 }: {
-  farmSlug?: string;
-  onHeroImageLoad?: (url: string) => void;
+  initialFarmData: FarmIdentity;
 }) {
   const [wordIndex, setWordIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const [farm, setFarm] = useState<FarmStats | null>(null);
 
   const words = useMemo(
     () => ["Tracked", "Managed", "Monitored", "Cared For", "Profitable"],
@@ -72,29 +84,9 @@ export function AnimatedHero({
     return () => clearInterval(interval);
   }, [words.length]);
 
-  // Tenant fetch — refires on farmSlug change so the parent's reset hero
-  // (see app/[farmSlug]/home/page.tsx, refs #24) is re-populated under the
-  // new tenant. /api/farm reads the current tenant from session/proxy
-  // headers; including farmSlug in deps is the trigger, not part of the
-  // URL. Title / breed / animal-count surfaces still update only when
-  // this fetch resolves (a separate follow-up tracks resetting them
-  // synchronously on slug change).
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/farm", { signal: controller.signal })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data) {
-          setFarm(data);
-          if (data.heroImageUrl) onHeroImageLoad?.(data.heroImageUrl);
-        }
-      })
-      .catch((err) => { if (err?.name !== "AbortError") clientLogger.error("[animated-hero] fetch failed", { err }); });
-    return () => controller.abort();
-    // onHeroImageLoad intentionally excluded — parent re-creates it each
-    // render; including it would refetch on every parent render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [farmSlug]);
+  // Use server-provided farm data directly — no client-side fetch, no fallback.
+  // initialFarmData is populated by the RSC page before first paint.
+  const farm = initialFarmData;
 
   const now = new Date();
   const greeting = getGreeting(now.getHours());
@@ -102,7 +94,7 @@ export function AnimatedHero({
 
   return (
     <div className="flex flex-col items-center text-center gap-3">
-      {/* Greeting + date */}
+      {/* Greeting + date — guarded by mounted to prevent SSR/client date mismatch */}
       {mounted && (
         <div
           className="hero-anim-greeting flex items-center gap-2 text-sm"
@@ -119,7 +111,7 @@ export function AnimatedHero({
         </div>
       )}
 
-      {/* Farm name */}
+      {/* Farm name — branded on first paint (no fallback "—") */}
       <h1
         className="hero-anim-title text-5xl md:text-7xl font-bold uppercase"
         style={{
@@ -130,10 +122,10 @@ export function AnimatedHero({
           textShadow: "0 2px 20px rgba(0,0,0,0.9)",
         }}
       >
-        {farm?.farmName ?? "—"}
+        {farm.farmName}
       </h1>
 
-      {/* Subtitle */}
+      {/* Subtitle — branded on first paint (no "Farm Management System" fallback) */}
       <p
         className="hero-anim-subtitle text-sm md:text-base tracking-widest uppercase font-light"
         style={{
@@ -142,7 +134,7 @@ export function AnimatedHero({
           textShadow: "0 1px 12px rgba(0,0,0,0.8)",
         }}
       >
-        {farm ? `${farm.breed} Farm Management System` : "Farm Management System"}
+        {farm.breed} Farm Management System
       </p>
 
       {/* Animated slogan */}
@@ -177,7 +169,7 @@ export function AnimatedHero({
         </div>
       </div>
 
-      {/* Info pill */}
+      {/* Info pill — branded on first paint */}
       <div
         className="hero-anim-pill mt-1 px-4 py-1.5 rounded-full text-xs tracking-wider"
         style={{
@@ -187,9 +179,7 @@ export function AnimatedHero({
           fontFamily: "var(--font-sans)",
         }}
       >
-        {farm
-          ? `${farm.breed} · ${farm.animalCount} animals · ${farm.campCount} camps`
-          : "Loading…"}
+        {farm.breed} · {farm.animalCount} animals · {farm.campCount} camps
       </div>
     </div>
   );

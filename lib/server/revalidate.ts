@@ -21,6 +21,7 @@ import {
   alertWriteTags,
   rotationWriteTags,
   notificationWriteTags,
+  farmIdentityWriteTags,
   farmTag,
 } from "./cache-tags";
 
@@ -74,6 +75,20 @@ export function revalidateTaskWrite(slug: string): void {
  */
 export function revalidateSettingsWrite(slug: string): void {
   for (const tag of settingsWriteTags(slug)) revalidateTag(tag, REVALIDATE_PROFILE);
+}
+
+/**
+ * Farm identity cache invalidation (issue #438 — server-rendered farm hero).
+ *
+ * Must be called whenever `FarmSettings` is written so the `/<slug>/home`
+ * RSC re-renders with the new farm name / breed / hero image on next request.
+ * `revalidateSettingsWrite` already invalidates the settings tile; this helper
+ * separately busts the narrow `farm-<slug>-identity` tag so `getFarmIdentity`
+ * in `lib/domain/farm/get-farm-identity.ts` does not serve a stale cached
+ * response.
+ */
+export function revalidateFarmIdentityWrite(slug: string): void {
+  for (const tag of farmIdentityWriteTags(slug)) revalidateTag(tag, REVALIDATE_PROFILE);
 }
 
 /** Transaction / budget / category writes */

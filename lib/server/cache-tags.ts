@@ -17,6 +17,7 @@ import { isCampInspection } from "@/lib/domain/observations/is-camp-inspection";
  *   farm-<slug>-tasks          — tasks + occurrences
  *   farm-<slug>-alerts         — alert rules + notification state
  *   farm-<slug>-notifications  — unread notification feed served to /api/notifications
+ *   farm-<slug>-identity       — farm hero identity (name, breed, heroImage, counts) for RSC render
  *   user-notifications-<email> — per-user overlay for mark-read mutations
  */
 
@@ -29,7 +30,8 @@ export type FarmCacheScope =
   | "settings"
   | "tasks"
   | "alerts"
-  | "notifications";
+  | "notifications"
+  | "identity";
 
 /**
  * Build a farm-scoped cache tag.
@@ -100,6 +102,20 @@ export const taskWriteTags = (slug: string) =>
 
 export const settingsWriteTags = (slug: string) =>
   [farmTag(slug, "settings")] as const;
+
+/**
+ * Tags to invalidate when FarmSettings is written (farm name, breed, hero
+ * image, etc.). The farm-identity cache entry on `/<slug>/home` is derived
+ * from FarmSettings, so a settings write must bust it synchronously.
+ *
+ * Issue #438 — server-rendered farm hero. The `farm-<slug>-identity` tag
+ * is the narrow scope that covers only `getFarmIdentity()` in
+ * `lib/domain/farm/get-farm-identity.ts`. We do NOT bust the broad
+ * `farm-<slug>-settings` tag here — that scope serves the admin settings
+ * tile and its TTL is independent.
+ */
+export const farmIdentityWriteTags = (slug: string) =>
+  [farmTag(slug, "identity")] as const;
 
 export const transactionWriteTags = (slug: string) =>
   [farmTag(slug, "settings"), farmTag(slug, "dashboard")] as const;
