@@ -35,6 +35,8 @@ import { getRotationStatusByCamp, type CampRotationStatus } from "@/lib/server/r
 import { getLatestByCamp } from "@/lib/server/veld-score";
 import { getLatestCoverByCamp } from "@/lib/server/feed-on-offer";
 import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { getLastInspectionAt } from "@/lib/domain/camp/inspection-freshness";
+import type { PrismaClient } from "@prisma/client";
 import {
   getTenantDayStart,
   getTenantMonthYYYYMM,
@@ -502,6 +504,18 @@ export interface CachedCamp {
   geojson: string | null;
   color: string | null;
   animal_count: number;
+  /**
+   * Issue #437 — species-scoped last inspection timestamp, populated ONLY
+   * when the caller provided a `species` filter. Probes the observation
+   * table via `getLastInspectionAt` (ADR-0005 `scoped()` door) so a
+   * cattle camp_condition row never leaks onto a sheep query.
+   *
+   * `null` means no species-matching inspection exists.
+   * `undefined` (omitted) means the caller did NOT opt into species
+   * partitioning — back-compat: `/api/camps/status` still owns freshness
+   * for un-scoped callers.
+   */
+  last_inspected_at?: string | null;
 }
 
 export async function getCachedCampList(
@@ -533,6 +547,25 @@ export async function getCachedCampList(
         for (const g of animalGroups) {
           countByCamp[g.currentCamp] = g._count._all;
         }
+
+        // Issue #437 — when `sp` is provided, fill `last_inspected_at` per
+        // camp via the species-scoped probe (`getLastInspectionAt`). The
+        // probe routes through `scoped(prisma, sp)` (ADR-0005) so cattle
+        // camp_condition rows do not leak onto sheep queries. When `sp` is
+        // empty (back-compat caller), we skip the probe — `last_inspected_at`
+        // stays undefined and the legacy `/api/camps/status` route owns
+        // freshness for that path.
+        const lastInspectedByCamp = new Map<string, string | null>();
+        if (sp) {
+          const probes = await Promise.all(
+            camps.map((c) =>
+              getLastInspectionAt(prisma as PrismaClient, c.campId, sp as SpeciesId)
+                .then((v) => [c.campId, v] as const),
+            ),
+          );
+          for (const [id, ts] of probes) lastInspectedByCamp.set(id, ts);
+        }
+
         return camps.map((camp) => ({
           camp_id: camp.campId,
           camp_name: camp.campName,
@@ -541,6 +574,9 @@ export async function getCachedCampList(
           geojson: camp.geojson,
           color: camp.color ?? null,
           animal_count: countByCamp[camp.campId] ?? 0,
+          ...(sp
+            ? { last_inspected_at: lastInspectedByCamp.get(camp.campId) ?? null }
+            : {}),
         }));
       });
     },

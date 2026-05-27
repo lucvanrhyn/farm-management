@@ -73,6 +73,14 @@ export default defineConfig({
     // in the first 1.5s after navigation. Locks the fix against the 3-state
     // loading flicker. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'farm-home-no-flicker.spec.ts',
+    // Issue #437 (2026-05-27): PRD #434 — species cache isolation regression
+    // guard. Locks (a) `/api/camps?species=sheep` returns species-scoped
+    // `last_inspected_at` (no cattle leak), (b) cattle→sheep→cattle
+    // round-trip preserves cattle's `animal_count` (IDB mode partition),
+    // (c) Sheep Logger on a cattle-only tenant renders the empty-state
+    // banner instead of 19 misleading "0 animals · Just now" cards.
+    // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'species-cache-isolation.spec.ts',
   ],
   reporter: 'list',
   use: {
