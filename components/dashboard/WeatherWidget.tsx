@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useSsrSafeState } from "@/lib/client/use-ssr-safe-state";
 
 // ── WMO weather code → icon + label ──────────────────────────────────────────
 
@@ -110,13 +111,19 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     latitude != null && longitude != null ? { lat: latitude, lng: longitude } : null
   );
-  // Lazy initializer: if no coord props and geolocation is unavailable, mark as
-  // failed immediately rather than in an effect body (avoids synchronous setState
-  // in effect, which the lint rule flags as cascade-prone).
-  const [geoFailed, setGeoFailed] = useState<boolean>(() => {
-    const hasCoordProps = latitude != null && longitude != null;
-    return !hasCoordProps && typeof navigator !== "undefined" && !navigator.geolocation;
-  });
+  // SSR-safe initializer: the old lazy initializer read `navigator.geolocation`
+  // which is undefined on the server. Server evaluates to false; client may
+  // evaluate to true (navigator present but no geolocation) → React #418.
+  // useSsrSafeState renders serverInitial=false on first paint (identical to
+  // SSR HTML), then post-mount syncs to the real client value via useEffect.
+  const hasCoordProps = latitude != null && longitude != null;
+  const geoFailed = useSsrSafeState<boolean>(
+    false,
+    () => !hasCoordProps && typeof navigator !== "undefined" && !navigator.geolocation
+  );
+  // setGeoFailed is still needed for the async geolocation failure path.
+  const [geoFailedOverride, setGeoFailedOverride] = useState(false);
+  const effectiveGeoFailed = geoFailed || geoFailedOverride;
 
   // Combined weather result keyed by coord string — derives loading and error
   // purely in render so no synchronous setState in effect bodies.
@@ -132,22 +139,22 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   const error   = weatherResult?.key === coordKey ? weatherResult.error : null;
   // Loading: true while we're waiting for coords or for the weather fetch to settle.
   // False once geolocation failed (nothing more to wait for) or weather result arrived.
-  const loading = !geoFailed && (coordKey === null || weatherResult?.key !== coordKey);
+  const loading = !effectiveGeoFailed && (coordKey === null || weatherResult?.key !== coordKey);
 
   // If no props and geolocation is available, attempt to get current position.
-  // geoFailed is already true if geolocation is unavailable (lazy initializer).
+  // effectiveGeoFailed is true if geolocation is unavailable (via useSsrSafeState).
   useEffect(() => {
-    if (coords || geoFailed) return;
+    if (coords || effectiveGeoFailed) return;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
-        setGeoFailed(true);
+        setGeoFailedOverride(true);
       }
     );
-  }, [coords, geoFailed]);
+  }, [coords, effectiveGeoFailed]);
 
   useEffect(() => {
     if (!coords || !coordKey) return;
@@ -206,7 +213,7 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   }, [coords, coordKey]);
 
   // ── No coordinates ─────────────────────────────────────────────────────────
-  if (geoFailed || (!loading && !coords)) {
+  if (effectiveGeoFailed || (!loading && !coords)) {
     return (
       <div
         className="rounded-xl px-4 py-3 flex items-center gap-3"
