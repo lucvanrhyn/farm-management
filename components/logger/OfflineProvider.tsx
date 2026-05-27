@@ -21,7 +21,7 @@ import {
 } from '@/lib/offline-store';
 import { getCurrentSyncTruth } from '@/lib/sync/queue';
 import { refreshCachedData, syncAndRefresh, type SyncedItem } from '@/lib/sync-manager';
-import { cleanupPreFixBcsDeadLetters } from '@/lib/offline-bcs-dead-letter-cleanup';
+import { runDeadLetterCleanup } from '@/lib/offline-bcs-dead-letter-cleanup';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
 import { useFarmModeSafe } from '@/lib/farm-mode';
@@ -347,13 +347,18 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setTasks(cachedTasks);
     });
 
-    // Issue #426 — one-time cleanup of the three pre-fix BCS dead-letter rows
-    // (root cause fixed in PR #332 / commit 742cf32, 2026-05-18). Idempotent
-    // via a localStorage flag; failure-isolated so a cleanup mishap never
-    // breaks the mount path. Fire-and-forget — does not gate any render or
-    // sync work; refreshPendingCount above re-derives the badge once the
-    // sync truth catches up post-discard.
-    void cleanupPreFixBcsDeadLetters().then((result) => {
+    // Issue #426 + #435 — generalized boot-time dead-letter cleanup. Drains
+    // two permanently-stuck row classes in a single IDB pass:
+    //   - class A: pre-fix BCS INVALID_TYPE rows queued before PR #332's
+    //     2026-05-18 fix.
+    //   - class B: terminal DUPLICATE_OBSERVATION rows older than 6h (the
+    //     classifier's grace window protects in-flight rows).
+    // Idempotent via the `offline-dead-letter-cleanup-v2` localStorage flag;
+    // failure-isolated so a cleanup mishap never breaks the mount path.
+    // Fire-and-forget — does not gate any render or sync work;
+    // refreshPendingCount above re-derives the badge once the sync truth
+    // catches up post-discard.
+    void runDeadLetterCleanup().then((result) => {
       if (cancelled) return;
       if (result.removed > 0) {
         // Re-derive the failed/pending pills now that the rows are gone, so

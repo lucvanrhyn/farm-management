@@ -90,6 +90,86 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
+// ── isPreFixBcsDeadLetter predicate (class A) ─────────────────────────────────
+
+/**
+ * Class-A row factory mirroring the legacy v1 test fixture. Default values
+ * produce a row that satisfies all four predicate clauses; per-test overrides
+ * exercise each rejection branch.
+ */
+function makeBcsRow(overrides: {
+  type?: string;
+  lastStatusCode?: number | null;
+  lastError?: string | null;
+  created_at?: string;
+  local_id?: number;
+} = {}) {
+  return {
+    local_id: 'local_id' in overrides ? overrides.local_id! : 1,
+    type: 'type' in overrides ? overrides.type! : 'body_condition_score',
+    camp_id: 'A',
+    details: '{}',
+    created_at:
+      'created_at' in overrides ? overrides.created_at! : '2026-05-17T10:00:00Z',
+    synced_at: null,
+    sync_status: 'failed' as const,
+    attempts: 3,
+    firstFailedAt: 1715000000000,
+    lastError:
+      'lastError' in overrides
+        ? overrides.lastError!
+        : 'INVALID_TYPE: body_condition_score',
+    lastStatusCode:
+      'lastStatusCode' in overrides ? overrides.lastStatusCode! : 422,
+  };
+}
+
+describe('isPreFixBcsDeadLetter — pure predicate', () => {
+  it('returns true when all four conditions hold', async () => {
+    const { isPreFixBcsDeadLetter } = await import(
+      '@/lib/offline-bcs-dead-letter-cleanup'
+    );
+    expect(isPreFixBcsDeadLetter(makeBcsRow())).toBe(true);
+  });
+
+  it('returns false when type is not body_condition_score', async () => {
+    const { isPreFixBcsDeadLetter } = await import(
+      '@/lib/offline-bcs-dead-letter-cleanup'
+    );
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ type: 'camp_condition' }))).toBe(false);
+  });
+
+  it('returns false when status code is not 422', async () => {
+    const { isPreFixBcsDeadLetter } = await import(
+      '@/lib/offline-bcs-dead-letter-cleanup'
+    );
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastStatusCode: 400 }))).toBe(false);
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastStatusCode: 500 }))).toBe(false);
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastStatusCode: null }))).toBe(false);
+  });
+
+  it('returns false when lastError does not include INVALID_TYPE', async () => {
+    const { isPreFixBcsDeadLetter } = await import(
+      '@/lib/offline-bcs-dead-letter-cleanup'
+    );
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastError: 'VALIDATION_FAILED' }))).toBe(false);
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastError: null }))).toBe(false);
+    // Case-sensitive — wire format is uppercase.
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ lastError: 'invalid_type' }))).toBe(false);
+  });
+
+  it('returns false when created_at is on or after the 2026-05-18T11:47:00Z cut-off', async () => {
+    const { isPreFixBcsDeadLetter } = await import(
+      '@/lib/offline-bcs-dead-letter-cleanup'
+    );
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ created_at: '2026-05-18T11:47:00Z' }))).toBe(false);
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ created_at: '2026-05-18T11:47:01Z' }))).toBe(false);
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ created_at: '2026-05-19T00:00:00Z' }))).toBe(false);
+    // Boundary just before — still pre-fix, still a target.
+    expect(isPreFixBcsDeadLetter(makeBcsRow({ created_at: '2026-05-18T11:46:59Z' }))).toBe(true);
+  });
+});
+
 // ── isTerminalDuplicateDeadLetter predicate ───────────────────────────────────
 
 describe('isTerminalDuplicateDeadLetter — pure predicate', () => {
