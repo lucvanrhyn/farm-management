@@ -1,38 +1,40 @@
 /**
- * Issue #426 — one-time cleanup helper for pre-fix BCS dead-letter rows.
+ * lib/offline-bcs-dead-letter-cleanup.ts — Issue #426 + Issue #435.
  *
- * Background
- * ──────────
- * Before PR #332 (commit `742cf32`, 2026-05-18) the observation type registry
- * did not include `body_condition_score`, so any BCS observation queued offline
- * before that deploy now hits the server, gets HTTP 422 `INVALID_TYPE`, and is
- * permanently parked in the failed bucket by the sync queue's terminal-4xx
- * policy (#324). The visible symptom is "Failed: N" badges on affected devices
- * — Basson Boerdery (×2) and Trio B Boerdery (×1) at the time of writing.
+ * Boot-time dead-letter cleanup. Two classes of permanently-stuck queue rows
+ * are drained on mount:
  *
- * PR #332 fixed the root cause (new submissions go through cleanly), but the
- * three pre-existing rows still sit in IndexedDB on each device. This helper
- * runs once on boot, identifies those rows by a 4-clause predicate, and
- * discards them through the existing `discardFailedObservation` primitive.
+ *   Class A (Issue #426 / PR #332): pre-fix BCS `INVALID_TYPE` rows queued
+ *   before 2026-05-18T11:47:00Z. The registry fix landed but the three
+ *   already-stuck rows on Basson (×2) and Trio B (×1) must be discarded
+ *   once. Predicate: `isPreFixBcsDeadLetter`.
+ *
+ *   Class B (Issue #435): any row that carried a 422 DUPLICATE_OBSERVATION
+ *   response in `lastError` AND is older than 6 hours. These should have been
+ *   auto-resolved by the sync-manager classifier (which now calls
+ *   `markSucceeded` on them), but rows queued before that fix shipped, and any
+ *   edge cases where the background sync fires before the classifier update is
+ *   live, land here as a safety net. The 6h grace window prevents the cleanup
+ *   from racing with a newly-stuck row that the classifier will resolve on the
+ *   next sync cycle. Predicate: `isTerminalDuplicateDeadLetter`.
+ *
+ * Both predicates are pure functions. The generalized driver `runDeadLetterCleanup`
+ * runs both in a single IDB pass. The legacy `cleanupPreFixBcsDeadLetters`
+ * export is preserved for back-compat with any direct call sites.
  *
  * Belt-and-suspenders
  * ───────────────────
- * The predicate ANDs four conditions (type / status / error / pre-fix
- * timestamp). The timestamp cut-off — `2026-05-18T11:47:00Z` — caps the blast
- * radius to legacy rows so that even if a future bug ever re-introduces
- * 422-on-BCS, this cleanup won't silently swallow the new failures.
- *
- * Defense-in-depth: `discardFailedObservation` is internally gated to
- * terminal-4xx rows only (#324), so even a predicate mis-fire can only drop
- * rows that were already classified as poison.
+ * `discardFailedObservation` is internally gated to terminal-4xx rows only
+ * (#324), so even a predicate mis-fire can only drop rows that were already
+ * classified as poison.
  *
  * Idempotency
  * ───────────
- * The `offline-cleanup-bcs-pre-fix-422-v1` localStorage flag is set after the
- * first successful pass so the helper becomes a no-op on every subsequent
- * boot. The `v1` suffix exists so that if a future, similar one-time cleanup
- * lands (e.g. a different pre-fix dead-letter class), it can ship with `v2`
- * (or its own distinct key) without colliding.
+ * `runDeadLetterCleanup` uses `offline-dead-letter-cleanup-v2` as its flag
+ * key. The legacy `offline-cleanup-bcs-pre-fix-422-v1` key is intentionally
+ * left behind so devices that already ran the v1 pass don't lose that record.
+ * The v2 pass subsumes v1: once v2 has run, both class A and class B are
+ * handled in a single pass.
  */
 
 import {
@@ -40,22 +42,41 @@ import {
   discardFailedObservation,
 } from '@/lib/offline-store';
 
-/** Set after the first successful cleanup so repeated boots are no-ops. */
-const CLEANUP_FLAG_KEY = 'offline-cleanup-bcs-pre-fix-422-v1';
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/**
+ * Legacy flag — set by the v1 (BCS-only) cleanup from PR #426.
+ * Retained so we can detect "already did v1" without re-running class A.
+ */
+const LEGACY_CLEANUP_FLAG_KEY = 'offline-cleanup-bcs-pre-fix-422-v1';
+
+/**
+ * v2 flag — set after the first successful generalized cleanup pass.
+ * Subsumes v1: if v2 is set, both class A and class B have been handled.
+ */
+const CLEANUP_FLAG_KEY = 'offline-dead-letter-cleanup-v2';
 
 /**
  * PR #332 (commit `742cf32`) shipped the registry fix on 2026-05-18. Any BCS
  * row queued strictly BEFORE this ISO timestamp predates the fix and is the
- * cleanup target. Comparison is lexicographic on the ISO 8601 string — for
- * UTC-zone strings this matches calendar order, which is the only shape the
- * sync queue ever writes (`new Date().toISOString()`).
+ * class-A cleanup target.
  */
 const PRE_FIX_CUTOFF_ISO = '2026-05-18T11:47:00Z';
 
 /**
- * Pure predicate — true iff the row is a pre-fix BCS dead-letter that is safe
- * to discard. All four clauses must hold; weakening any of them broadens the
- * blast radius beyond the intended legacy population.
+ * Grace window for class-B DUPLICATE rows. Rows younger than this are
+ * left alone — the sync-manager classifier will auto-resolve them on the
+ * next background sync cycle (within seconds to minutes on a connected
+ * device). Only rows older than 6h are discarded as unrecoverable dead-letters.
+ */
+const DUPLICATE_GRACE_WINDOW_MS = 6 * 60 * 60 * 1_000;
+
+// ── Predicates ────────────────────────────────────────────────────────────────
+
+/**
+ * Class A predicate (Issue #426) — true iff the row is a pre-fix BCS
+ * dead-letter. All four clauses must hold; weakening any of them broadens
+ * the blast radius beyond the intended legacy population.
  */
 export function isPreFixBcsDeadLetter(row: {
   type: string;
@@ -67,33 +88,93 @@ export function isPreFixBcsDeadLetter(row: {
   if (row.type !== 'body_condition_score') return false;
   // (2) Only terminal validation rejections — every stuck row carries HTTP 422.
   if (row.lastStatusCode !== 422) return false;
-  // (3) Only the specific `INVALID_TYPE` wire error — distinguishes the
-  //     registry-mismatch class from any other 422 (e.g. field-required).
-  //     Case-sensitive: server emits the code in uppercase.
+  // (3) Only the specific `INVALID_TYPE` wire error.
   if (!row.lastError || !row.lastError.includes('INVALID_TYPE')) return false;
-  // (4) Only rows created before PR #332's deploy. A post-fix row that 422s
-  //     under the same code would be a NEW bug worth surfacing, not silently
-  //     dropping.
+  // (4) Only rows created before PR #332's deploy.
   if (row.created_at >= PRE_FIX_CUTOFF_ISO) return false;
   return true;
 }
 
 /**
- * Boot-time driver. SSR-safe, idempotent, failure-isolated.
+ * Class B predicate (Issue #435) — true iff the row is a DUPLICATE_OBSERVATION
+ * dead-letter old enough to safely discard.
+ *
+ * Two clauses:
+ *   (1) HTTP 422 with `DUPLICATE_OBSERVATION` in `lastError`.
+ *   (2) Row is older than the 6h grace window so we don't race the classifier.
+ */
+export function isTerminalDuplicateDeadLetter(row: {
+  lastStatusCode: number | null;
+  lastError: string | null;
+  created_at: string;
+}): boolean {
+  // (1) 422 DUPLICATE_OBSERVATION
+  if (row.lastStatusCode !== 422) return false;
+  if (!row.lastError || !row.lastError.includes('DUPLICATE_OBSERVATION')) return false;
+  // (2) Older than the grace window
+  const rowMs = Date.parse(row.created_at);
+  if (Number.isNaN(rowMs)) return false;
+  if (Date.now() - rowMs < DUPLICATE_GRACE_WINDOW_MS) return false;
+  return true;
+}
+
+// ── Drivers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Generalized boot-time dead-letter cleanup (Issue #435).
+ *
+ * Walks all failed rows, applies both predicates (class A + class B), and
+ * discards candidates in a single IDB pass. SSR-safe, idempotent via
+ * localStorage `offline-dead-letter-cleanup-v2`, failure-isolated.
  *
  * Resolves with `{ removed }` — the number of rows actually deleted. Never
- * throws: any IDB / localStorage failure is logged via `console.warn` and the
- * helper returns `{ removed: 0 }` so the OfflineProvider mount path is never
- * broken by a cleanup mishap.
+ * throws.
+ */
+export async function runDeadLetterCleanup(): Promise<{ removed: number }> {
+  if (typeof window === 'undefined') return { removed: 0 };
+
+  try {
+    if (window.localStorage?.getItem(CLEANUP_FLAG_KEY) === 'done') {
+      return { removed: 0 };
+    }
+
+    const failed = await getFailedObservations();
+    const candidates = failed.filter(
+      (row) => isPreFixBcsDeadLetter(row) || isTerminalDuplicateDeadLetter(row),
+    );
+
+    for (const row of candidates) {
+      if (row.local_id != null) {
+        await discardFailedObservation(row.local_id);
+      }
+    }
+
+    window.localStorage?.setItem(CLEANUP_FLAG_KEY, 'done');
+    return { removed: candidates.length };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[offline] dead-letter cleanup failed:', err);
+    return { removed: 0 };
+  }
+}
+
+/**
+ * Legacy boot-time driver (Issue #426 / PR #433 — `cleanupPreFixBcsDeadLetters`).
+ *
+ * Handles class-A (pre-fix BCS `INVALID_TYPE`) rows using the original v1
+ * localStorage flag. New call sites should use `runDeadLetterCleanup` instead,
+ * which covers both class A and class B in a single pass.
+ *
+ * This function is preserved with its original contract so existing call sites
+ * (OfflineProvider mount) continue to work without changes.
  */
 export async function cleanupPreFixBcsDeadLetters(): Promise<{ removed: number }> {
   // SSR / non-browser environments: nothing to clean.
   if (typeof window === 'undefined') return { removed: 0 };
 
   try {
-    // Already ran on this device — short-circuit before any IDB work so the
-    // cleanup costs literally one localStorage read on every subsequent boot.
-    if (window.localStorage?.getItem(CLEANUP_FLAG_KEY) === 'done') {
+    // Already ran on this device — short-circuit.
+    if (window.localStorage?.getItem(LEGACY_CLEANUP_FLAG_KEY) === 'done') {
       return { removed: 0 };
     }
 
@@ -106,12 +187,9 @@ export async function cleanupPreFixBcsDeadLetters(): Promise<{ removed: number }
       }
     }
 
-    window.localStorage?.setItem(CLEANUP_FLAG_KEY, 'done');
+    window.localStorage?.setItem(LEGACY_CLEANUP_FLAG_KEY, 'done');
     return { removed: candidates.length };
   } catch (err) {
-    // Defensive — never let a cleanup failure poison the OfflineProvider mount
-    // path. The visible symptom (stuck Failed: N badge) is preferable to a
-    // hard render crash. A re-run on the next boot will retry.
     // eslint-disable-next-line no-console
     console.warn('[offline] BCS pre-fix dead-letter cleanup failed:', err);
     return { removed: 0 };

@@ -25,6 +25,7 @@ import {
   PendingAnimalCreate,
 } from './offline-store';
 import { markSucceeded, markFailed, recordSyncAttempt } from './sync/queue';
+import { classifySyncFailure } from './sync/failure-classifier';
 
 import type { Camp, Animal, AnimalSex, GrazingQuality, WaterStatus, FenceStatus } from './types';
 import type { PrismaAnimal } from './types';
@@ -206,9 +207,16 @@ function truncateError(body: string): string {
  * (HTTP status + truncated body, OR thrown-error message) to
  * `markObservationFailed` so the #209 dead-letter UI has something
  * actionable to show.
+ *
+ * Issue #435 — `auto-resolved` variant. When the server returns 422
+ * DUPLICATE_OBSERVATION with an `existingId`, the row should transition
+ * directly to `synced` using the server's existing id rather than landing
+ * in the failed bucket. This variant carries the resolved remoteId so the
+ * caller can call `markSucceeded` with the correct server-assigned id.
  */
 type UploadResult<T> =
   | { ok: true; value: T }
+  | { ok: 'auto-resolved'; remoteId: string }
   | { ok: false; statusCode: number | null; error: string };
 
 async function uploadObservation(obs: PendingObservation): Promise<UploadResult<string>> {
@@ -233,16 +241,39 @@ async function uploadObservation(obs: PendingObservation): Promise<UploadResult<
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      // Offline-first: caller marks the observation as failed and retries
-      // later. We still log so operators can diagnose why syncing stalls.
-      // Issue #208 — capture status + truncated body so the dead-letter UI
-      // can render "stuck because …".
-      const text = await res.text().catch(() => '');
+      // Issue #435 — run the response through the failure classifier before
+      // deciding whether to mark the row failed. A 422 DUPLICATE_OBSERVATION
+      // with an `existingId` in the body should auto-resolve to `synced`,
+      // not land in the dead-letter bucket.
+      //
+      // Read body as text first (preserves the raw bytes for #208 dead-letter
+      // error message), then try to JSON-parse for the classifier. This avoids
+      // the stream-consumed problem: if json() fails the body is unreadable,
+      // but text() always succeeds and can then be parsed separately.
+      const rawText = await res.text().catch(() => '');
+      let parsedBody: unknown = null;
+      try {
+        if (rawText) parsedBody = JSON.parse(rawText);
+      } catch {
+        // Non-JSON body (e.g. HTML error pages on 5xx) — classifier treats
+        // null body as a retriable error, which is the safe default.
+      }
+
+      const resolution = classifySyncFailure(res.status, parsedBody);
+
+      if (resolution.action === 'mark-succeeded' && resolution.remoteId) {
+        // DUPLICATE_OBSERVATION with existingId — server has the row; mark it
+        // synced using the server's existing id instead of failing the row.
+        return { ok: 'auto-resolved', remoteId: resolution.remoteId };
+      }
+
+      // All other non-ok paths (terminal 422, 5xx, retriable errors) —
+      // preserve the existing #208 dead-letter behavior with the raw text.
       console.warn('[sync] observation upload failed:', res.status, res.statusText);
       return {
         ok: false,
         statusCode: res.status,
-        error: truncateError(text || res.statusText),
+        error: truncateError(rawText || res.statusText),
       };
     }
     const data = await res.json().catch((parseErr) => {
@@ -287,7 +318,7 @@ export async function syncPendingObservations(): Promise<{
 
   for (const obs of pending) {
     const result = await uploadObservation(obs);
-    if (result.ok) {
+    if (result.ok === true) {
       await markSucceeded('observation', obs.local_id!, { id: result.value });
       localToServerId.set(obs.local_id!, result.value);
       synced++;
@@ -296,6 +327,17 @@ export async function syncPendingObservations(): Promise<{
       // animal from the pending_animal_updates marker set so the next
       // refresh is free to orphan-sweep it normally. Observations without
       // an animal_id (farm-wide events) don't touch the marker set.
+      if (obs.animal_id) {
+        await clearPendingAnimalUpdate(obs.animal_id);
+      }
+    } else if (result.ok === 'auto-resolved') {
+      // Issue #435 — 422 DUPLICATE_OBSERVATION with existingId.
+      // The server already has this row; mark it synced using the server's
+      // existing id so the queue drains cleanly and the farmer never sees a
+      // permanently-stuck "Discard only" row for this class of duplicate.
+      await markSucceeded('observation', obs.local_id!, { id: result.remoteId });
+      localToServerId.set(obs.local_id!, result.remoteId);
+      synced++;
       if (obs.animal_id) {
         await clearPendingAnimalUpdate(obs.animal_id);
       }
