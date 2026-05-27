@@ -4,36 +4,39 @@
  *
  * Wave 57 / refs #24 — tenant context leak on the home hero image.
  *
- * Repro: Next.js does not unmount `app/[farmSlug]/home/page.tsx` when the
- * `[farmSlug]` segment changes — only re-renders. HomePage holds `heroImage`
+ * ORIGINAL REPRO (pre-#438):
+ * Next.js does not unmount `app/[farmSlug]/home/page.tsx` when the
+ * `[farmSlug]` segment changes — only re-renders. HomePage held `heroImage`
  * in `useState`, initialized once at mount with `/farm-hero.jpg` and updated
  * via the `onHeroImageLoad` callback fired by AnimatedHero after `/api/farm`
- * resolves. When the user navigates acme-cattle → delta-livestock, the
- * useState retains the basson tenant's resolved `heroImageUrl` until the
- * trio-b fetch resolves. That gap renders basson's hero on a trio-b page.
+ * resolves. When the user navigated acme-cattle → delta-livestock, the
+ * useState retained the first tenant's resolved `heroImageUrl` until the
+ * second tenant's fetch resolved. That gap rendered the wrong tenant's hero.
  *
- * Fix: useState-pair pattern (memory/feedback-react-state-from-props.md) —
- * track the previous farmSlug in state, compare during render, and reset
- * `heroImage` to the neutral default the moment the slug flips.
+ * FIX (issue #438 / PRD #434):
+ * `app/[farmSlug]/home/page.tsx` is now an async RSC. The tenant-leak class
+ * is structurally eliminated: each navigation to `/<slug>/home` is a fresh
+ * server-render with `getFarmIdentity(slug)` called per-request. There is no
+ * `useState`-based hero URL that can persist across slug navigations.
+ *
+ * This test now verifies the NEW contract:
+ *   - `HomePageClient` renders the background image directly from the
+ *     `initialFarmData` prop on first paint — no client-side fetch,
+ *     no loading state, no useState accumulation.
+ *   - Re-rendering `HomePageClient` with a different `initialFarmData`
+ *     immediately reflects the new hero image (no lag / no leak).
+ *   - `AnimatedHero` renders the branded farm name from `initialFarmData`
+ *     on first paint.
+ *
+ * The old `/api/farm` fetch path no longer exists in the component tree.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, act, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, cleanup, act } from "@testing-library/react";
 import React from "react";
+import type { FarmIdentity } from "@/lib/domain/farm/get-farm-identity";
 
-// next/navigation params are read once per render via useParams(). The
-// mutable ref lets each test flip the farmSlug between renders so HomePage
-// re-renders with a new prop-equivalent input — the same shape as the real
-// dynamic-segment navigation that does NOT unmount the page tree.
-const navParams: { farmSlug: string } = { farmSlug: "acme-cattle" };
-vi.mock("next/navigation", () => ({
-  useParams: () => navParams,
-  usePathname: () => `/${navParams.farmSlug}/home`,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-}));
-
-// HomePage uses useFarmMode() — stub the provider so the component tree
-// renders without a real FarmModeProvider mount.
+// HomePageClient uses useFarmMode() — stub the provider.
 vi.mock("@/lib/farm-mode", async () => {
   const actual = await vi.importActual<typeof import("@/lib/farm-mode")>(
     "@/lib/farm-mode",
@@ -65,112 +68,104 @@ vi.mock("@/components/ui/ModeSwitcher", () => ({
   ModeSwitcher: () => null,
 }));
 
-// /api/farm responses keyed by farmSlug. We control resolution timing per
-// test via deferred promises so the assertion can land precisely between
-// the slug flip and the new fetch resolving.
-const farmResponses: Record<
-  string,
-  { farmName: string; breed: string; heroImageUrl: string; animalCount: number; campCount: number }
-> = {
-  "acme-cattle": {
-    farmName: "Acme Cattle",
-    breed: "Bonsmara",
-    heroImageUrl: "/uploads/basson-hero.jpg",
-    animalCount: 103,
-    campCount: 12,
-  },
-  "delta-livestock": {
-    farmName: "Delta Livestock",
-    breed: "Brahman",
-    heroImageUrl: "/uploads/trio-b-hero.jpg",
-    animalCount: 270,
-    campCount: 18,
-  },
-};
-
-type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void };
-function deferred<T>(): Deferred<T> {
-  let resolve!: (v: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-}
-
-let pendingFetches: Deferred<Response>[] = [];
-const mockFetch = vi.fn();
-
-beforeEach(() => {
-  pendingFetches = [];
-  navParams.farmSlug = "acme-cattle";
-  mockFetch.mockReset();
-  // Each call returns a deferred we resolve manually so we can pin the
-  // exact render between "fetch in-flight" and "fetch resolved".
-  mockFetch.mockImplementation((_url: string) => {
-    const slug = navParams.farmSlug;
-    const d = deferred<Response>();
-    pendingFetches.push(d);
-    // Auto-resolve with the slug's payload only when the test explicitly
-    // calls resolveNext(); otherwise the request stays pending.
-    return d.promise.then(() => ({
-      ok: true,
-      json: async () => farmResponses[slug],
-    }));
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = mockFetch;
-});
-
 afterEach(() => {
   cleanup();
 });
 
-async function resolveNext() {
-  const d = pendingFetches.shift();
-  if (!d) throw new Error("no pending fetch to resolve");
-  await act(async () => {
-    d.resolve({} as Response);
-    // Let the .then chain + state setters flush.
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
+const ACME_IDENTITY: FarmIdentity = {
+  farmName: "Acme Cattle",
+  breed: "Bonsmara",
+  heroImageUrl: "/uploads/basson-hero.jpg",
+  animalCount: 103,
+  campCount: 12,
+};
 
-describe("HomePage hero leak across farmSlug navigation (refs #24)", () => {
-  it("does not render the previous tenant's heroImageUrl after the farmSlug flips", async () => {
-    // Late import so vi.mock runs first.
-    const { default: HomePage } = await import("@/app/[farmSlug]/home/page");
+const DELTA_IDENTITY: FarmIdentity = {
+  farmName: "Delta Livestock",
+  breed: "Brahman",
+  heroImageUrl: "/uploads/trio-b-hero.jpg",
+  animalCount: 270,
+  campCount: 18,
+};
+
+describe("HomePageClient hero — no tenant leak across initialFarmData prop changes (refs #24, #438)", () => {
+  it("renders the correct background image from initialFarmData on first paint (no fetch required)", async () => {
+    const { default: HomePageClient } = await import(
+      "@/app/[farmSlug]/home/HomePageClient"
+    );
 
     let result: ReturnType<typeof render>;
     await act(async () => {
-      result = render(<HomePage />);
+      result = render(
+        <HomePageClient farmSlug="acme-cattle" initialFarmData={ACME_IDENTITY} />,
+      );
     });
-
-    // 1. Resolve basson's /api/farm. HomePage's heroImage state now holds
-    //    /uploads/basson-hero.jpg.
-    await resolveNext();
 
     const heroDiv = () => result.container.firstElementChild as HTMLElement;
-    await waitFor(() => {
-      expect(heroDiv().style.backgroundImage).toContain("/uploads/basson-hero.jpg");
-    });
 
-    // 2. Simulate the dynamic-segment navigation — Next.js re-renders the
-    //    same HomePage instance with a new useParams() value.
-    navParams.farmSlug = "delta-livestock";
+    // The background image must be set from the prop on first paint —
+    // no useEffect fetch, no loading gap.
+    expect(heroDiv().style.backgroundImage).toContain("/uploads/basson-hero.jpg");
+  });
+
+  it("immediately reflects new initialFarmData when the prop changes (no stale state leak)", async () => {
+    const { default: HomePageClient } = await import(
+      "@/app/[farmSlug]/home/HomePageClient"
+    );
+
+    let result: ReturnType<typeof render>;
     await act(async () => {
-      result.rerender(<HomePage />);
+      result = render(
+        <HomePageClient farmSlug="acme-cattle" initialFarmData={ACME_IDENTITY} />,
+      );
     });
 
-    // 3. THE LEAK: between the prop flip and the new fetch resolving, the
-    //    rendered hero must NOT still be the basson URL. With the bug the
-    //    state is sticky and basson's URL is rendered on a trio-b page.
+    const heroDiv = () => result.container.firstElementChild as HTMLElement;
+
+    // First render: acme hero
+    expect(heroDiv().style.backgroundImage).toContain("/uploads/basson-hero.jpg");
+
+    // Simulate slug navigation: re-render with the new tenant's initialFarmData.
+    // With the RSC pattern the server provides fresh initialFarmData per slug,
+    // so the client component receives a new prop immediately — no fetch gap.
+    await act(async () => {
+      result.rerender(
+        <HomePageClient
+          farmSlug="delta-livestock"
+          initialFarmData={DELTA_IDENTITY}
+        />,
+      );
+    });
+
+    // The new hero image must be in place immediately — no stale state from ACME_IDENTITY.
+    expect(heroDiv().style.backgroundImage).toContain("/uploads/trio-b-hero.jpg");
     expect(heroDiv().style.backgroundImage).not.toContain("/uploads/basson-hero.jpg");
+  });
 
-    // 4. Sanity: once the new fetch resolves, the trio-b URL takes over.
-    await resolveNext();
-    await waitFor(() => {
-      expect(heroDiv().style.backgroundImage).toContain("/uploads/trio-b-hero.jpg");
+  it("renders branded farm name from initialFarmData in AnimatedHero on first paint", async () => {
+    const { default: HomePageClient } = await import(
+      "@/app/[farmSlug]/home/HomePageClient"
+    );
+
+    let result: ReturnType<typeof render>;
+    await act(async () => {
+      result = render(
+        <HomePageClient farmSlug="delta-livestock" initialFarmData={DELTA_IDENTITY} />,
+      );
     });
+
+    // Farm name must be in the DOM on first paint.
+    expect(result.container.textContent).toContain("Delta Livestock");
+
+    // The subtitle "Brahman Farm Management System" is correctly branded.
+    // What we must NOT see is the legacy standalone fallback "—" that appeared
+    // when the old client-side fetch was in-flight (the subtitle was just
+    // "— Farm Management System" with a bare em-dash). Assert the breed prefix
+    // is part of the subtitle text, not a standalone fallback.
+    expect(result.container.textContent).toContain("Brahman Farm Management System");
+
+    // The solo "—" placeholder that appeared before data loaded must be absent.
+    // The subtitle always starts with a breed name now, never a lone dash.
+    expect(result.container.textContent).not.toMatch(/^—\s+Farm Management System/m);
   });
 });

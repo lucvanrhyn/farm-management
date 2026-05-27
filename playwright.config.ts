@@ -68,6 +68,11 @@ export default defineConfig({
     // may=true). Fixed via useSsrSafeState. Self-skips when E2E_IDENTIFIER /
     // E2E_PASSWORD are unset.
     'no-react-hydration-errors.spec.ts',
+    // Issue #438 (2026-05-27): PRD #434 — server-rendered farm hero regression
+    // guard. Branded farm name must be in the initial HTML on every screenshot
+    // in the first 1.5s after navigation. Locks the fix against the 3-state
+    // loading flicker. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'farm-home-no-flicker.spec.ts',
   ],
   reporter: 'list',
   use: {

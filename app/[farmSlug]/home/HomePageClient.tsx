@@ -1,0 +1,170 @@
+"use client";
+
+/**
+ * app/[farmSlug]/home/HomePageClient.tsx — Client Component
+ *
+ * Handles all interactive/client-only parts of the farm home page:
+ *   - signOut (next-auth/react)
+ *   - useFarmMode hook (reads farmtrack-mode-<slug> cookie)
+ *   - ModeSwitcher visibility (isMultiMode)
+ *   - Section navigation (useRouter inside HomeSectionGrid)
+ *   - Background hero image (set from initialFarmData.heroImageUrl on mount)
+ *
+ * Receives `initialFarmData` from the RSC parent (page.tsx) which calls
+ * getFarmIdentity() server-side. This ensures AnimatedHero renders branded
+ * content on first paint — no useEffect fetch, no placeholder states.
+ *
+ * Issue #438 / PRD #434: 3-state loading flicker root cause + fix.
+ */
+
+import dynamic from "next/dynamic";
+import { signOut } from "next-auth/react";
+import { AnimatedHero } from "@/components/ui/animated-hero";
+import { useFarmMode, type FarmMode } from "@/lib/farm-mode";
+import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
+import type { FarmIdentity } from "@/lib/domain/farm/get-farm-identity";
+
+// Phase M: framer-motion used to be imported statically here for the
+// 3-card section launcher. That dragged ~40 KB of animation library into
+// the first-load JS on /[farmSlug]/home — the first authenticated page
+// a user sees after login. The cards now live in HomeSectionGrid, loaded
+// via next/dynamic({ ssr: false }) so framer lands in a separate chunk
+// that only downloads after first paint.
+//
+// HomeSectionGrid uses framer-motion spring variants that depend on
+// client-only motion state — rendering server-side would either ship
+// framer into the server bundle (no bundle saving) or cause a hydration
+// mismatch. dynamic({ ssr: false }) with a skeleton loading placeholder
+// is the correct pattern here. The skeleton keeps the 3-column grid shape
+// so the page does not jump when the chunk loads.
+const HomeSectionGrid = dynamic(
+  () => import("@/components/home/HomeSectionGrid"),
+  {
+    ssr: false,
+    // Skeleton placeholder keeps the 3-column grid shape so the page
+    // doesn't jump when the chunk loads. Dimensions match the live
+    // cards (minHeight: 140px, grid-cols-3, gap-4).
+    loading: () => (
+      <div
+        className="grid grid-cols-3 gap-4 w-full"
+        aria-hidden
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              minHeight: "140px",
+              borderRadius: "2rem",
+              background: "rgba(5,3,1,0.52)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.40)",
+            }}
+          />
+        ))}
+      </div>
+    ),
+  },
+);
+
+const ADMIN_ICON = (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+  </svg>
+);
+
+const LOGGER_ICON = (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+  </svg>
+);
+
+const MAP_ICON = (
+  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c-.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+  </svg>
+);
+
+// Section descriptions adapt per farm mode
+const MODE_SECTIONS: Record<FarmMode, { admin: string; logger: string; map: string }> = {
+  cattle: { admin: "Herd, camps & data", logger: "Camp rounds", map: "Farm map" },
+  sheep:  { admin: "Flock, camps & data", logger: "Flock rounds", map: "Farm map" },
+  game:   { admin: "Census, hunting & data", logger: "Ecological monitoring", map: "Farm map" },
+};
+
+function getSections(mode: FarmMode) {
+  const desc = MODE_SECTIONS[mode];
+  return [
+    { path: "/admin",  label: "Admin",  icon: ADMIN_ICON,  description: desc.admin },
+    { path: "/logger", label: "Logger", icon: LOGGER_ICON, description: desc.logger },
+    // Issue #256 (2026-05-13): point Map tile at the dedicated tenant map
+    // page (camps + Mapbox satellite tiles). Was `/dashboard` historically,
+    // which is the analytics hub — leaving the deep-link `/<slug>/map` as a
+    // 404 surfaced via the tile label "Map".
+    { path: "/map",    label: "Map",    icon: MAP_ICON,    description: desc.map },
+  ];
+}
+
+export default function HomePageClient({
+  farmSlug,
+  initialFarmData,
+}: {
+  farmSlug: string;
+  initialFarmData: FarmIdentity;
+}) {
+  const { mode, isMultiMode } = useFarmMode();
+  const sections = getSections(mode);
+
+  // The hero image URL comes from the server-rendered initialFarmData — no
+  // client-side fetch or useState-pair slug-tracking needed. The background
+  // is set inline from the server-provided value on first paint.
+  const heroImageUrl = initialFarmData.heroImageUrl;
+
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
+      style={{
+        backgroundImage: `url("${heroImageUrl}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      {/* Dark overlay */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(8,5,2,0.72) 0%, rgba(8,5,2,0.45) 40%, rgba(8,5,2,0.78) 100%)",
+          zIndex: 1,
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative w-full max-w-2xl flex flex-col items-center gap-10" style={{ zIndex: 10 }}>
+        {/* Hero — renders branded content on first paint via initialFarmData */}
+        <AnimatedHero initialFarmData={initialFarmData} />
+
+        {/* Mode switcher — only shown when farm has multiple species enabled */}
+        {isMultiMode && (
+          <ModeSwitcher variant="glass" />
+        )}
+
+        {/* Section cards (framer-motion loaded lazily — see dynamic() above) */}
+        <HomeSectionGrid sections={sections} farmSlug={farmSlug} />
+
+        {/* Logout */}
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex items-center gap-2 text-xs transition-colors duration-200"
+          style={{ color: "#4A3020", fontFamily: "var(--font-sans)", letterSpacing: "0.04em" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#8A5030"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#4A3020"; }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+}
