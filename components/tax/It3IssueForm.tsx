@@ -179,6 +179,46 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
               {formatZar(preview.schedules.totalExpenses)}
             </span>
           </div>
+          {/*
+            Issue #451 — when the calculator was given a stockMovement option,
+            net income includes the (closingStock − openingStock) standard-value
+            delta per First Schedule paragraph 5(1). Without this disclosure a
+            tenant with R0 of in-period transactions but a non-zero stock delta
+            sees an unexplained non-zero net (the original bug repro). The rows
+            are gated on `stockMovementZar !== 0` so legacy callers without
+            stock-movement compute paths render the original preview unchanged.
+          */}
+          {typeof preview.schedules.stockMovementZar === "number" &&
+            preview.schedules.stockMovementZar !== 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span style={{ color: "#1C1815" }}>
+                    Net farming income before stock movement
+                  </span>
+                  <span className="font-semibold" style={{ color: "#1C1815" }}>
+                    {formatZar(
+                      preview.schedules.netFarmingIncomeBeforeStockMovement ?? 0,
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span style={{ color: "#1C1815" }}>
+                    Stock movement (closing − opening, at standard values)
+                  </span>
+                  <span
+                    className="font-semibold"
+                    style={{
+                      color:
+                        preview.schedules.stockMovementZar >= 0
+                          ? "#2D6A4F"
+                          : "#8B3A3A",
+                    }}
+                  >
+                    {formatZar(preview.schedules.stockMovementZar)}
+                  </span>
+                </div>
+              </>
+            )}
           <div
             className="flex items-center justify-between text-sm pt-2"
             style={{ borderTop: "1px solid #E0D5C8" }}
@@ -195,6 +235,14 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
             {preview.schedules.income.length} income line{preview.schedules.income.length === 1 ? "" : "s"} •{" "}
             {preview.schedules.expense.length} expense line{preview.schedules.expense.length === 1 ? "" : "s"}
           </p>
+          {typeof preview.schedules.stockMovementZar === "number" &&
+            preview.schedules.stockMovementZar !== 0 && (
+              <p className="text-[11px] mt-1" style={{ color: "#9C8E7A" }}>
+                Stock movement per First Schedule paragraph 5(1), Income Tax Act
+                58/1962 — livestock valued at SARS-gazetted standard values
+                (GN R1814, 1976-10-08).
+              </p>
+            )}
         </div>
       )}
 
