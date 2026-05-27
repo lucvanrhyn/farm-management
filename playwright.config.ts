@@ -61,6 +61,13 @@ export default defineConfig({
     // control: a `general` write must NOT touch the camps tiles. Self-skips
     // when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'dashboard-counter-stability.spec.ts',
+    // Issue #439 (2026-05-27): React #418 hydration regression guard — walks
+    // 6 routes on both Basson and Trio B tenants and asserts zero hydration
+    // error console events on first paint. Root cause: WeatherWidget.tsx lazy
+    // useState initializer reading navigator.geolocation (SSR=false, client
+    // may=true). Fixed via useSsrSafeState. Self-skips when E2E_IDENTIFIER /
+    // E2E_PASSWORD are unset.
+    'no-react-hydration-errors.spec.ts',
   ],
   reporter: 'list',
   use: {
