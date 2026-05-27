@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import { classifySyncFailure, type SyncToastHint } from "@/lib/sync/failure-classifier";
 import { getCampVisitCompletenessLabel } from "./_lib/camp-condition-done-label";
 import { resolveCampByUrlSegment } from "./_lib/resolve-camp-by-url-segment";
 
@@ -91,6 +92,13 @@ export default function CampInspectionPage({
   // single stored inspection. Regenerated when the camp changes (reset
   // block below) so two distinct visits never collide.
   const [visitClientLocalId, setVisitClientLocalId] = useState<string>(() => crypto.randomUUID());
+  // Issue #436 — transient toast surface for the inline camp-condition
+  // submit path. Populated only when `classifySyncFailure` returns a
+  // user-presentable hint after a synchronous POST to /api/observations.
+  // The copy is owned by the classifier (single source of truth shared
+  // with the background sync path in `lib/sync-manager.ts`) — never
+  // hardcoded here. `null` clears the toast.
+  const [submitToast, setSubmitToast] = useState<SyncToastHint | null>(null);
 
   // useState-pair pattern (memory/feedback-react-state-from-props.md): Next.js
   // does NOT unmount this page when only the [campId] dynamic segment changes
@@ -125,6 +133,9 @@ export default function CampInspectionPage({
     // idempotency key so camp B's "all normal" enqueue never dedupes
     // against camp A's stored inspection on the server upsert.
     setVisitClientLocalId(crypto.randomUUID());
+    // Issue #436 — clear any duplicate-submit toast carried over from
+    // camp A so it never bleeds into camp B's surface.
+    setSubmitToast(null);
   }
 
   // Issue #421 — case-insensitive lookup. libSQL Prisma adapter does NOT
@@ -411,10 +422,15 @@ export default function CampInspectionPage({
     const { photoBlob, clientLocalId, ...obsData } = data;
     const now = new Date().toISOString();
     const loggedBy = session?.user?.name ?? "Logger";
+    const detailsJson = JSON.stringify({ ...obsData, logged_by: loggedBy });
+    // Issue #436 — IDB-queue is unconditional so an offline / mid-flight
+    // network drop can never lose the row. The server upsert on
+    // `clientLocalId` (#206) collapses any subsequent retry against the
+    // inline POST below to a single stored row.
     const localId = await queueObservation({
       type: "camp_condition",
       camp_id: decodedId,
-      details: JSON.stringify({ ...obsData, logged_by: loggedBy }),
+      details: detailsJson,
       created_at: now,
       synced_at: null,
       sync_status: "pending",
@@ -433,7 +449,82 @@ export default function CampInspectionPage({
     });
     await refreshCampsState();
     refreshPendingCount();
-    if (isOnline) syncNow();
+
+    // Issue #436 — inline POST so a 422 DUPLICATE_OBSERVATION surfaces a
+    // visible toast BEFORE the user navigates away. Previously the inline
+    // path queued + fire-and-forget `syncNow()` then `router.push`, so any
+    // duplicate detected during the background sync went to the dead-letter
+    // bucket invisibly (the user had already left the page). The toast copy
+    // is sourced from `classifySyncFailure` — the same single source of
+    // truth used by `lib/sync-manager.ts`'s background sync path — so the
+    // same wire response ALWAYS produces the same user-facing message
+    // whether the 422 hits inline or during a reconnect drain.
+    //
+    // Offline branch: skip the inline POST and fall through to the existing
+    // queue + navigate flow; the background sync's own classifier path will
+    // surface any duplicate via the LoggerStatusBar's existing toast row.
+    if (isOnline) {
+      try {
+        const res = await fetch("/api/observations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Mirrors the body shape `uploadObservation` (lib/sync-manager.ts)
+          // posts during the background sync — same explicit-fields contract
+          // so a future schema change is caught at both call sites.
+          body: JSON.stringify({
+            type: "camp_condition",
+            camp_id: decodedId,
+            animal_id: null,
+            details: detailsJson,
+            created_at: now,
+            clientLocalId,
+          }),
+        });
+        if (!res.ok) {
+          // Read body text first (raw bytes preserved) then JSON-parse for
+          // the classifier — same defensive pattern as sync-manager.ts so
+          // a non-JSON 5xx never throws on the parse path.
+          const rawText = await res.text().catch(() => "");
+          let parsedBody: unknown = null;
+          try {
+            if (rawText) parsedBody = JSON.parse(rawText);
+          } catch {
+            // Non-JSON body — classifier safely treats null as retriable.
+          }
+          const resolution = classifySyncFailure(res.status, parsedBody);
+          if (resolution.toast) {
+            setSubmitToast(resolution.toast);
+          }
+          // On 422 DUPLICATE with `existingId` the server already has the
+          // canonical row. The IDB queue retry will auto-resolve via the
+          // sync-manager's #435 classifier path (`mark-succeeded`), so no
+          // explicit IDB mutation needed here. Navigate back to logger
+          // root so the camp tile shows the existing condition's
+          // colour / last-inspected timestamp — the closest in-app
+          // surface for "the existing record" given there is no
+          // observation detail route. The toast stays visible for the
+          // 4 s TTL while the route transitions (same lifetime as the
+          // LoggerStatusBar's existing sync toasts).
+          if (resolution.action === "mark-succeeded" && resolution.remoteId) {
+            router.push(loggerRoot);
+            return;
+          }
+          // Any other non-ok path (terminal 422, retriable 5xx) leaves
+          // the queued row to be drained by the background sync. Surface
+          // the classifier toast but DO NOT navigate — the user stays on
+          // the camp page so they can react to a recoverable failure.
+          return;
+        }
+      } catch {
+        // Network error mid-submit (fetch threw). The queued row will be
+        // retried by the next sync cycle; treat this exactly like the
+        // offline path and continue to the happy navigate below so the
+        // farmer is not stranded on the modal.
+      }
+      // Successful inline POST OR thrown-network — kick a sync cycle so
+      // any other pending rows drain in the same pass.
+      syncNow();
+    }
     router.push(loggerRoot);
   }
 
@@ -764,6 +855,32 @@ export default function CampInspectionPage({
           onClose={() => { setActiveModal(null); setSelectedMob(null); }}
           isSubmitting={mobMoving}
         />
+      )}
+
+      {/* Issue #436 — inline camp-condition duplicate-submit toast.
+          Renders only when `handleConditionSubmit` populates `submitToast`
+          via `classifySyncFailure` (single-source-of-truth copy shared
+          with the background sync path). `role="alert"` so screen readers
+          announce a same-day duplicate to the farmer. Position mirrors
+          the LoggerStatusBar's existing sync-result toast row so the two
+          surfaces feel coherent during a partial-failure cycle. */}
+      {submitToast && (
+        <div
+          data-testid="camp-condition-submit-toast"
+          role="alert"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
+          style={{
+            backgroundColor:
+              submitToast.kind === "duplicate"
+                ? "#B87333"
+                : submitToast.kind === "invalid"
+                  ? "#B33A3A"
+                  : "#B33A3A",
+            color: "#F5F0E8",
+          }}
+        >
+          {submitToast.message}
+        </div>
       )}
     </div>
   );
