@@ -81,6 +81,15 @@ export default defineConfig({
     // banner instead of 19 misleading "0 animals · Just now" cards.
     // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'species-cache-isolation.spec.ts',
+    // Issue #436 (2026-05-27): PRD #434 — inline camp-condition submit must
+    // surface a visible toast when the server rejects a same-day duplicate
+    // with 422 DUPLICATE_OBSERVATION. Toast copy is sourced from the
+    // shared `classifySyncFailure` classifier (one source of truth with
+    // the background-sync path in `lib/sync-manager.ts`). Locks the
+    // regression class where the inline handler used to silently close
+    // the form after a duplicate. Self-skips when E2E_IDENTIFIER /
+    // E2E_PASSWORD are unset.
+    'camp-condition-duplicate-toast.spec.ts',
   ],
   reporter: 'list',
   use: {
