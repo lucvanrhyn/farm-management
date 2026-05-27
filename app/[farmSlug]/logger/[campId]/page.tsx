@@ -30,14 +30,13 @@ const MobMoveModal = dynamic(() => import("@/components/logger/MobMoveModal"), {
 import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
 import { getGrazingDot, getGrazingTailwindBg } from "@/lib/utils";
 import type { Camp } from "@/lib/types";
-import { getAnimalsByCampCached, queueObservation, queuePhoto, queueCoverReading, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
+import { getAnimalsByCampCached, getPendingObservations, queueObservation, queuePhoto, queueCoverReading, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
-import { campConditionDoneLabel } from "./_lib/camp-condition-done-label";
-import { campConditionDoneCaption } from "./_lib/camp-condition-done-caption";
+import { getCampVisitCompletenessLabel } from "./_lib/camp-condition-done-label";
 import { resolveCampByUrlSegment } from "./_lib/resolve-camp-by-url-segment";
 
 type ModalType = "health" | "movement" | "calving" | "death" | "reproduction" | "condition" | "weigh" | "treat" | "cover" | "mob_move" | null;
@@ -73,6 +72,11 @@ export default function CampInspectionPage({
   const [allNormalDone, setAllNormalDone] = useState(false);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [flaggedAnimalIds, setFlaggedAnimalIds] = useState<Set<string>>(new Set());
+  // Issue #440 — count of observations already queued for this camp today
+  // (persisted in IDB). Seeded from IDB on mount + after each flag so the
+  // banner copy "Done — N observations · all animals normal" stays current
+  // even after navigating away and returning to the same camp.
+  const [visitObsCount, setVisitObsCount] = useState(0);
   const [mobsInCamp, setMobsInCamp] = useState<MobWithCount[]>([]);
   const [selectedMob, setSelectedMob] = useState<MobWithCount | null>(null);
   const [mobDestCamp, setMobDestCamp] = useState("");
@@ -112,6 +116,7 @@ export default function CampInspectionPage({
     setAllNormalDone(false);
     setAnimals([]);
     setFlaggedAnimalIds(new Set());
+    setVisitObsCount(0);
     setMobsInCamp([]);
     setSelectedMob(null);
     setMobDestCamp("");
@@ -139,6 +144,18 @@ export default function CampInspectionPage({
       setAnimals(filtered);
     });
   }, [decodedId, mode]);
+
+  // Issue #440 — seed observation count from IDB for this camp + today.
+  // Runs when campId changes AND after flaggedAnimalIds changes (each submit
+  // marks an animal flagged, so the effect re-fires and picks up the new row).
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    getPendingObservations().then((obs) => {
+      setVisitObsCount(
+        obs.filter((o) => o.camp_id === decodedId && o.created_at.startsWith(today)).length,
+      );
+    });
+  }, [decodedId, flaggedAnimalIds]);
 
   // Load mobs for this camp from API
   useEffect(() => {
@@ -500,41 +517,34 @@ export default function CampInspectionPage({
           </div>
         ) : (
           <>
-            <button
-              onClick={handleCompleteVisit}
-              className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
-              style={{
-                backgroundColor: '#B87333',
-                color: '#F5F0E8',
-                boxShadow: '0 4px 20px rgba(184, 115, 51, 0.4)',
-              }}
-            >
-              <span className="text-xl">✓</span>
-              <span>
-                {flaggedAnimalIds.size > 0
-                  ? `Done — ${flaggedAnimalIds.size} animal${flaggedAnimalIds.size > 1 ? 's' : ''} flagged`
-                  : campConditionDoneLabel(campWithCondition?.grazing_quality)}
-              </span>
-            </button>
-            {/* Issue #406 — TB1: explain in place why the done-button copy
-                varies between "All Normal — Camp Good" (Good veld) and
-                "Done — no animals flagged" (Fair / Poor / Overgrazed veld).
-                Caption only renders when no animals are flagged (the
-                branched-label case) and when grazing quality is one of the
-                four recognised tiers — otherwise `campConditionDoneCaption`
-                returns null and the <p> never mounts. Visually subordinate
-                (smaller text, lower contrast) so it never reads as a
-                tap-target. */}
-            {flaggedAnimalIds.size === 0 &&
-              campConditionDoneCaption(campWithCondition?.grazing_quality) && (
-                <p
-                  data-testid="camp-condition-done-caption"
-                  className="text-xs text-center mt-2 px-2 leading-snug"
-                  style={{ color: 'rgba(210, 180, 140, 0.7)' }}
+            {/* Issue #440 — observation-aware banner. getCampVisitCompletenessLabel
+                returns { label, severity } from the 5-row matrix in the helper.
+                Severity drives the button accent colour reusing the same
+                amber/orange tokens the camp-condition badge already uses:
+                  good      → copper (#B87333, unchanged)
+                  attention → amber  (#B8860B)
+                  critical  → red    (#B83333)
+                The caption (Issue #406) is preserved for the Good-veld baseline. */}
+            {(() => {
+              const { label, severity } = getCampVisitCompletenessLabel({
+                grazingQuality: campWithCondition?.grazing_quality,
+                observationCount: visitObsCount,
+                flaggedCount: flaggedAnimalIds.size,
+              });
+              const btnBg = severity === 'critical' ? '#B83333' : severity === 'attention' ? '#B8860B' : '#B87333';
+              const btnShadow = severity === 'critical' ? '0 4px 20px rgba(184,51,51,0.4)' : severity === 'attention' ? '0 4px 20px rgba(184,134,11,0.4)' : '0 4px 20px rgba(184,115,51,0.4)';
+              return (
+                <button
+                  onClick={handleCompleteVisit}
+                  data-testid="camp-visit-completeness-btn"
+                  className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
+                  style={{ backgroundColor: btnBg, color: '#F5F0E8', boxShadow: btnShadow }}
                 >
-                  {campConditionDoneCaption(campWithCondition?.grazing_quality)}
-                </p>
-              )}
+                  <span className="text-xl">✓</span>
+                  <span>{label}</span>
+                </button>
+              );
+            })()}
           </>
         )}
       </div>
