@@ -44,9 +44,20 @@ const ADMIN_ROUTES = ['/admin', '/admin/camps', '/admin/observations'] as const;
  * out controls are deliberately NOT nav links and are out of scope for #469.
  * All `data-nav-link` elements are icon-only on mobile, so all must satisfy
  * the 44px floor.
+ *
+ * We scope to `:visible` because the multi-species admin nav is a collapsible
+ * accordion: links inside collapsed sections are present in the DOM but
+ * `display:none`, so they have no layout box and are not tappable. The 44px
+ * tap-target floor only applies to links the user can actually reach. The
+ * floor itself is enforced structurally by the shared `min-w-11 min-h-11`
+ * NavLink classes (applied to every link regardless of accordion state), so a
+ * visible sample is representative. Filtering to `:visible` makes the spec
+ * robust across the single-species (flat, all visible) and multi-species
+ * (accordion) nav shapes without misreading a collapsed-section link as an
+ * undersized one.
  */
 function navTargets(nav: Locator): Locator {
-  return nav.locator('[data-nav-link]');
+  return nav.locator('[data-nav-link]:visible');
 }
 
 test.describe('Issue #469 — admin nav tap targets ≥44px on mobile', () => {
@@ -111,7 +122,10 @@ test.describe('Issue #469 — admin nav tap targets ≥44px on mobile', () => {
 
       // The Overview link is always rendered for every mode/tier. Its label
       // text must be visible (proves `hidden md:inline` reveals at md+).
-      const overview = nav.locator('a[data-nav-link][title="Overview"]');
+      // `.first()`-qualified: on the multi-species nav an "Overview" section
+      // header anchor and the Overview link can both carry the title, which
+      // would otherwise trip Playwright strict mode.
+      const overview = nav.locator('a[data-nav-link][title="Overview"]').first();
       await expect(overview).toBeVisible();
       await expect(overview).toContainText('Overview');
 
