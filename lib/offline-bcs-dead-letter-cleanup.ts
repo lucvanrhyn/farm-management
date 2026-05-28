@@ -29,14 +29,23 @@
  * (#324), so even a predicate mis-fire can only drop rows that were already
  * classified as poison.
  *
- * Idempotency
- * ───────────
- * `runDeadLetterCleanup` uses `offline-dead-letter-cleanup-v2` as its flag
- * key. The legacy `offline-cleanup-bcs-pre-fix-422-v1` key from PR #433 is
- * intentionally left untouched on devices that already ran v1; v2's flag is
- * orthogonal, so v2 will still run once on those devices and drain any
- * subsequently-stuck class-B rows. Subsequent calls short-circuit on v2's
- * flag.
+ * Per-mount drain (Issue #457)
+ * ────────────────────────────
+ * The driver previously short-circuited on a GLOBAL (un-tenant-scoped)
+ * localStorage flag `offline-dead-letter-cleanup-v2`: once any farm's mount ran
+ * the sweep, the flag was set and every subsequent invocation returned
+ * `{ removed: 0 }` without touching IDB. In a shared browser profile that
+ * meant a SECOND farm's eligible dead-letter rows (e.g. Trio B's stuck
+ * "Failed: 2") were never drained — the global flag suppressed their sweep
+ * forever. IndexedDB is per-origin, not per-tenant, so the flag could never
+ * tell whether THIS tenant's rows had been handled.
+ *
+ * The run-once short-circuit is therefore removed: the predicate-driven sweep
+ * runs on EVERY invocation. This is cheap (one read of the small `failed`
+ * bucket plus a filtered set of `discardFailedObservation` calls) and
+ * idempotent — `discardFailedObservation` structurally deletes only
+ * terminal-4xx rows, so re-running on every mount can never drop a retryable
+ * row. There is no localStorage flag anymore.
  */
 
 import {
@@ -45,12 +54,6 @@ import {
 } from '@/lib/offline-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-/**
- * v2 flag — set after the first successful generalized cleanup pass.
- * Subsumes v1: if v2 is set, both class A and class B have been handled.
- */
-const CLEANUP_FLAG_KEY = 'offline-dead-letter-cleanup-v2';
 
 /**
  * PR #332 (commit `742cf32`) shipped the registry fix on 2026-05-18. Any BCS
@@ -117,11 +120,18 @@ export function isTerminalDuplicateDeadLetter(row: {
 // ── Drivers ───────────────────────────────────────────────────────────────────
 
 /**
- * Generalized boot-time dead-letter cleanup (Issue #435).
+ * Generalized dead-letter cleanup (Issue #435 + Issue #457).
  *
  * Walks all failed rows, applies both predicates (class A + class B), and
- * discards candidates in a single IDB pass. SSR-safe, idempotent via
- * localStorage `offline-dead-letter-cleanup-v2`, failure-isolated.
+ * discards candidates in a single IDB pass. SSR-safe and failure-isolated.
+ *
+ * Issue #457 — runs on EVERY invocation. There is no run-once localStorage
+ * flag: a global per-origin flag could not distinguish whether THIS tenant's
+ * rows had already been drained, so it suppressed a second farm's sweep in a
+ * shared browser profile. The sweep is cheap and idempotent — the predicates
+ * stay narrow and `discardFailedObservation` structurally deletes only
+ * terminal-4xx rows — so re-running every mount (and on every
+ * `FailedSyncDialog` open) is safe.
  *
  * Resolves with `{ removed }` — the number of rows actually deleted. Never
  * throws.
@@ -130,10 +140,6 @@ export async function runDeadLetterCleanup(): Promise<{ removed: number }> {
   if (typeof window === 'undefined') return { removed: 0 };
 
   try {
-    if (window.localStorage?.getItem(CLEANUP_FLAG_KEY) === 'done') {
-      return { removed: 0 };
-    }
-
     const failed = await getFailedObservations();
     const candidates = failed.filter(
       (row) => isPreFixBcsDeadLetter(row) || isTerminalDuplicateDeadLetter(row),
@@ -145,7 +151,6 @@ export async function runDeadLetterCleanup(): Promise<{ removed: number }> {
       }
     }
 
-    window.localStorage?.setItem(CLEANUP_FLAG_KEY, 'done');
     return { removed: candidates.length };
   } catch (err) {
     console.warn('[offline] dead-letter cleanup failed:', err);

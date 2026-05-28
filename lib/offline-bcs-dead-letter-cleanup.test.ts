@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Issue #435 — generalized dead-letter cleanup pass.
+ * Issue #435 + Issue #457 — generalized dead-letter cleanup pass.
  *
  * This test file extends the existing predicate tests (in
  * `__tests__/offline/bcs-dead-letter-cleanup.test.ts`) with the new
@@ -14,9 +14,14 @@
  *   - The new `isTerminalDuplicateDeadLetter` predicate identifies
  *     DUPLICATE_OBSERVATION rows older than 6h.
  *
- * `runDeadLetterCleanup` replaces `cleanupPreFixBcsDeadLetters` as the
- * boot-time driver: it runs both predicate branches in a single IDB pass,
- * sets a single localStorage flag, and is idempotent on repeated calls.
+ * Issue #457 — the boot-time driver previously short-circuited on a GLOBAL
+ * (un-tenant-scoped) localStorage flag `offline-dead-letter-cleanup-v2`. In a
+ * shared browser profile, once Farm A's mount ran the sweep and set the flag,
+ * Farm B's eligible dead-letter rows were never drained — they sat behind a
+ * permanent "Failed: N" pill. The fix removes the run-once short-circuit
+ * entirely: `runDeadLetterCleanup` now runs the predicate-driven sweep on
+ * EVERY invocation. This is safe and idempotent because `discardFailedObservation`
+ * structurally deletes only terminal-4xx rows.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -31,8 +36,6 @@ vi.mock('@/lib/offline-store', () => ({
   getFailedObservations: mocks.getFailedObservations,
   discardFailedObservation: mocks.discardFailedObservation,
 }));
-
-const CLEANUP_FLAG_KEY = 'offline-dead-letter-cleanup-v2';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +83,28 @@ function makeDuplicateRow(localId = 2, createdAt = OLD_CREATED_AT) {
     firstFailedAt: Date.now() - 9 * 60 * 60 * 1000,
     lastError: '{"error":"DUPLICATE_OBSERVATION","details":{"existingId":"srv-99"}}',
     lastStatusCode: 422,
+  };
+}
+
+/**
+ * Issue #457 — a TRANSIENT (non-terminal) failed row that must NOT be drained:
+ * a 5xx / network error is retryable. Even though it's old, neither predicate
+ * matches it (status is not 422 and there's no DUPLICATE_OBSERVATION /
+ * INVALID_TYPE wire error), so the sweep must leave it intact for retry.
+ */
+function makeTransientRow(localId = 3, statusCode: number | null = 503) {
+  return {
+    local_id: localId,
+    type: 'camp_condition',
+    camp_id: 'B',
+    details: '{"grazing_quality":"Fair"}',
+    created_at: OLD_CREATED_AT,
+    synced_at: null,
+    sync_status: 'failed' as const,
+    attempts: 4,
+    firstFailedAt: Date.now() - 9 * 60 * 60 * 1000,
+    lastError: statusCode === null ? null : 'Service Unavailable',
+    lastStatusCode: statusCode,
   };
 }
 
@@ -228,7 +253,6 @@ describe('runDeadLetterCleanup — generalized cleanup pass', () => {
     expect(mocks.discardFailedObservation).toHaveBeenCalledTimes(2);
     expect(mocks.discardFailedObservation).toHaveBeenCalledWith(101);
     expect(mocks.discardFailedObservation).toHaveBeenCalledWith(102);
-    expect(window.localStorage.getItem(CLEANUP_FLAG_KEY)).toBe('done');
   });
 
   it('leaves a fresh DUPLICATE row (within 6h grace) untouched', async () => {
@@ -243,14 +267,66 @@ describe('runDeadLetterCleanup — generalized cleanup pass', () => {
     expect(mocks.discardFailedObservation).not.toHaveBeenCalled();
   });
 
-  it('is idempotent — second call is a no-op (localStorage flag set)', async () => {
-    window.localStorage.setItem(CLEANUP_FLAG_KEY, 'done');
+  // ── Issue #457 — per-mount drain, no global run-once short-circuit ──────────
+
+  it('drains eligible rows on EVERY call — no run-once suppression', async () => {
+    // Simulate the same browser profile mounting the logger twice. The first
+    // pass drains; the second pass — even though a global flag would have been
+    // "set" by the old code — must still drain freshly-eligible rows.
+    mocks.getFailedObservations
+      .mockResolvedValueOnce([makeDuplicateRow(301, OLD_CREATED_AT)])
+      .mockResolvedValueOnce([makeDuplicateRow(302, OLD_CREATED_AT)]);
+
+    const { runDeadLetterCleanup } = await import('@/lib/offline-bcs-dead-letter-cleanup');
+
+    const first = await runDeadLetterCleanup();
+    expect(first.removed).toBe(1);
+    expect(mocks.discardFailedObservation).toHaveBeenCalledWith(301);
+
+    const second = await runDeadLetterCleanup();
+    // The second invocation must re-walk IDB and drain again — the bug was a
+    // global flag that made this a no-op.
+    expect(second.removed).toBe(1);
+    expect(mocks.getFailedObservations).toHaveBeenCalledTimes(2);
+    expect(mocks.discardFailedObservation).toHaveBeenCalledWith(302);
+  });
+
+  it('a second farm in the same browser session still drains its own eligible rows', async () => {
+    // Farm A's mount drains its dead-letter, "setting" what used to be a
+    // global flag. Then the user switches to Farm B (Trio B) in the SAME
+    // browser profile: Farm B's eligible rows must still drain — the #457 bug
+    // was that the global flag suppressed Farm B's sweep entirely.
+    const farmARow = makeDuplicateRow(401, OLD_CREATED_AT); // Farm A camp
+    const farmBRow = { ...makeDuplicateRow(402, OLD_CREATED_AT), camp_id: 'TrioB-Camp' };
+
+    mocks.getFailedObservations
+      .mockResolvedValueOnce([farmARow])
+      .mockResolvedValueOnce([farmBRow]);
+
+    const { runDeadLetterCleanup } = await import('@/lib/offline-bcs-dead-letter-cleanup');
+
+    // Farm A mount
+    const farmA = await runDeadLetterCleanup();
+    expect(farmA.removed).toBe(1);
+
+    // Farm B mount in the same browser — must NOT be suppressed
+    const farmB = await runDeadLetterCleanup();
+    expect(farmB.removed).toBe(1);
+    expect(mocks.discardFailedObservation).toHaveBeenCalledWith(402);
+  });
+
+  it('leaves transient (5xx / network / null-status) rows intact and retryable', async () => {
+    mocks.getFailedObservations.mockResolvedValueOnce([
+      makeTransientRow(500, 503), // 5xx — retryable
+      makeTransientRow(501, null), // network error — retryable
+      makeTransientRow(502, 429), // rate-limit — retryable
+    ]);
 
     const { runDeadLetterCleanup } = await import('@/lib/offline-bcs-dead-letter-cleanup');
     const result = await runDeadLetterCleanup();
 
     expect(result.removed).toBe(0);
-    expect(mocks.getFailedObservations).not.toHaveBeenCalled();
+    expect(mocks.discardFailedObservation).not.toHaveBeenCalled();
   });
 
   it('is SSR-safe — returns { removed: 0 } when window is undefined', async () => {
