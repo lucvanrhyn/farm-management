@@ -41,6 +41,7 @@ import {
   type PendingAnimalCreate,
   type PendingCoverReading,
 } from '@/lib/offline-store';
+import { runDeadLetterCleanup } from '@/lib/offline-bcs-dead-letter-cleanup';
 import { useOffline } from './OfflineProvider';
 
 type FailedKind = 'observation' | 'animal' | 'cover-reading';
@@ -290,9 +291,24 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
   // re-fetch after every user action (retry / retry-all / syncNow) plus once
   // on open. This keeps the dialog cheap when sitting idle and avoids racing
   // an IDB write the user just triggered.
+  //
+  // Issue #457 — drain dead-letters on open BEFORE loading rows, then re-read.
+  // The mount-time cleanup in OfflineProvider is fire-and-forget, so opening
+  // the dialog soon after mount could otherwise render rows the cleanup would
+  // have drained (e.g. Trio B's stuck "Failed: 2"). Awaiting the cleanup here
+  // (it never throws — resolves `{ removed }`) and re-reading inside `reload`
+  // guarantees a drainable row is gone by render time. The sweep is cheap and
+  // idempotent, so re-running on every open is safe.
   useEffect(() => {
     if (!isOpen) return;
-    void reload();
+    let cancelled = false;
+    void (async () => {
+      await runDeadLetterCleanup();
+      if (!cancelled) await reload();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, reload]);
 
   const onRetryOne = useCallback(
