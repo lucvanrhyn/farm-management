@@ -1,0 +1,51 @@
+-- 0025_backfill_empty_camp_color.sql
+--
+-- Issue #470 (Wave 2 of PRD #464) — backfill empty/blank `Camp.color` to NULL.
+--
+-- Context
+-- -------
+-- Camp identity colours flow into the Mapbox camp-outline paint expression
+-- `["to-color", ["get", "borderColor"]]`. On some tenants the persisted
+-- `Camp.color` column holds an empty string `''` (or whitespace-only) instead
+-- of the canonical "no custom colour" sentinel `NULL`. Those values reached
+-- `to-color`, which fired a "could not parse color" style-expression error and
+-- mis-rendered the affected camps.
+--
+-- Issue #466 (PR #471, runtime half) added the pure normaliser
+-- `normaliseCampColor()` in `components/map/layers/_camp-colors.ts`, which maps
+-- empty / whitespace-only / invalid values to the shared DEFAULT_CAMP_COLOR
+-- before they hit the paint expression. That fixes the symptom at paint time.
+--
+-- This migration is the COMPLEMENTARY data-layer cleanup: it makes the stored
+-- data itself canonical so the runtime normaliser is a belt-and-braces backstop
+-- rather than the only thing standing between dirty data and a crash. After
+-- this runs, `Camp.color` is either NULL ("no custom colour") or a non-blank
+-- string; the empty-string state no longer exists on disk.
+--
+-- ROOT CAUSE (not symptom): pre-#466 write paths persisted `''` as the
+-- "no custom colour" value instead of NULL. We collapse that ambiguity to the
+-- single canonical sentinel.
+--
+-- Discipline notes:
+--   * Pure DATA backfill — a single `UPDATE`. No DDL, so `prisma/schema.prisma`
+--     is unchanged (`Camp.color` is already `String?` / nullable). The migrator
+--     post-apply probe (verifyMigrationApplied, #141) only fires for
+--     ADD COLUMN / CREATE TABLE; it is correctly a no-op here.
+--   * Idempotent two ways: (a) the `WHERE "color" IS NOT NULL AND TRIM(...) = ''`
+--     predicate makes a second run a no-op (the rows it touched are now NULL,
+--     so `IS NOT NULL` excludes them); (b) the migrator's per-tenant
+--     `_migrations` bookkeeping (lib/migrator.ts) runs the file at most once
+--     per tenant inside an atomic batch anyway.
+--   * TRIM catches both `''` and whitespace-only (`'   '`, tabs, newlines).
+--     Non-blank colours — including padded-but-non-blank values like `'  #abc '`
+--     — are preserved verbatim; this migration only nulls the genuinely-empty
+--     set, it does NOT trim or rewrite valid colours.
+--   * Identifier quoting per feedback-quote-sql-keywords-in-migrations.md
+--     (project convention: double-quote table/column identifiers in
+--     hand-written migrations; `Camp`/`color` are not SQL keywords).
+--
+-- Post-condition (verified by __tests__/db/camp-color-backfill-migration.test.ts):
+--   SELECT COUNT(*) FROM "Camp" WHERE "color" IS NOT NULL AND TRIM("color") = ''
+--   must be 0.
+
+UPDATE "Camp" SET "color" = NULL WHERE "color" IS NOT NULL AND TRIM("color") = '';
