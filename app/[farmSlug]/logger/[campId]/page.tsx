@@ -37,6 +37,7 @@ import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { classifySyncFailure, type SyncToastHint } from "@/lib/sync/failure-classifier";
+import { resolvePostSubmitNav, type InlinePostResult } from "@/lib/logger/post-submit-nav";
 import { getCampVisitCompletenessLabel } from "./_lib/camp-condition-done-label";
 import { resolveCampByUrlSegment } from "./_lib/resolve-camp-by-url-segment";
 
@@ -465,9 +466,13 @@ export default function CampInspectionPage({
     // same wire response ALWAYS produces the same user-facing message
     // whether the 422 hits inline or during a reconnect drain.
     //
-    // Offline branch: skip the inline POST and fall through to the existing
-    // queue + navigate flow; the background sync's own classifier path will
-    // surface any duplicate via the LoggerStatusBar's existing toast row.
+    // Offline branch: skip the inline POST entirely. `inlineResult` stays
+    // undefined and the resolver's offline branch (issue #465) returns
+    // `hold` — keeping the user in the logger so OfflineProvider stays
+    // mounted and its `online → syncNow` reconnect auto-drain fires. The
+    // background sync's classifier path surfaces any duplicate via the
+    // LoggerStatusBar's existing toast row when connectivity returns.
+    let inlineResult: InlinePostResult | undefined;
     if (isOnline) {
       try {
         const res = await fetch("/api/observations", {
@@ -485,7 +490,9 @@ export default function CampInspectionPage({
             clientLocalId,
           }),
         });
-        if (!res.ok) {
+        if (res.ok) {
+          inlineResult = { kind: "ok" };
+        } else {
           // Read body text first (raw bytes preserved) then JSON-parse for
           // the classifier — same defensive pattern as sync-manager.ts so
           // a non-JSON 5xx never throws on the parse path.
@@ -500,37 +507,39 @@ export default function CampInspectionPage({
           if (resolution.toast) {
             setSubmitToast(resolution.toast);
           }
+          inlineResult = { kind: "rejected", resolution };
           // On 422 DUPLICATE with `existingId` the server already has the
-          // canonical row. The IDB queue retry will auto-resolve via the
-          // sync-manager's #435 classifier path (`mark-succeeded`), so no
-          // explicit IDB mutation needed here. Navigate back to logger
-          // root so the camp tile shows the existing condition's
-          // colour / last-inspected timestamp — the closest in-app
-          // surface for "the existing record" given there is no
-          // observation detail route. The toast stays visible for the
-          // 4 s TTL while the route transitions (same lifetime as the
-          // LoggerStatusBar's existing sync toasts).
-          if (resolution.action === "mark-succeeded" && resolution.remoteId) {
-            router.push(loggerRoot);
-            return;
-          }
-          // Any other non-ok path (terminal 422, retriable 5xx) leaves
-          // the queued row to be drained by the background sync. Surface
-          // the classifier toast but DO NOT navigate — the user stays on
-          // the camp page so they can react to a recoverable failure.
-          return;
+          // canonical row (resolution.action === "mark-succeeded"); the
+          // resolver below navigates to the logger root so the camp tile
+          // shows the existing condition's colour / last-inspected timestamp.
+          // Any other resolution (terminal 422, retriable 5xx) leaves the
+          // queued row for the background sync and the resolver returns
+          // `hold` — the user stays on the camp page so they can react to
+          // the surfaced toast (which stays visible for its 4 s TTL).
         }
       } catch {
         // Network error mid-submit (fetch threw). The queued row will be
-        // retried by the next sync cycle; treat this exactly like the
-        // offline path and continue to the happy navigate below so the
-        // farmer is not stranded on the modal.
+        // retried by the next sync cycle; treat this like a recoverable
+        // happy path — the resolver navigates so the farmer is not stranded
+        // on the modal.
+        inlineResult = { kind: "threw" };
       }
-      // Successful inline POST OR thrown-network — kick a sync cycle so
-      // any other pending rows drain in the same pass.
+      // A reachable network (committed OR thrown) — kick a sync cycle so any
+      // other pending rows drain in the same pass.
       syncNow();
     }
-    router.push(loggerRoot);
+
+    // Single source of truth for the navigate-vs-hold decision (issue #465).
+    // The unconditional `router.push` was the bug: when offline, the SW
+    // served `/offline` and unmounted the queue-owning OfflineProvider.
+    const decision = resolvePostSubmitNav({ isOnline, loggerRoot, inlineResult });
+    if (decision.action === "navigate") {
+      router.push(decision.to);
+    } else {
+      // Hold: stay in the logger. Close the modal so the user sees the
+      // logger overview + the queued/pending affordance in the status bar.
+      setActiveModal(null);
+    }
   }
 
   if (!campsLoaded) {

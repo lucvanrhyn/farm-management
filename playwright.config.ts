@@ -99,6 +99,13 @@ export default defineConfig({
     // the Trio B + Basson admin camp maps and asserts zero colour-error
     // console events. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'tenant-map-console-clean.spec.ts',
+    // Issue #465 (2026-05-28): an offline camp-condition submit must NOT be
+    // navigated away to the Serwist `/offline` fallback (that navigation
+    // unmounts OfflineProvider — the queue owner — and breaks the
+    // `online → syncNow` reconnect auto-drain). Asserts the user stays in the
+    // logger offline and the queued report auto-drains on reconnect. Self-skips
+    // when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'logger-offline-submit.spec.ts',
   ],
   reporter: 'list',
   use: {
