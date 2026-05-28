@@ -61,6 +61,10 @@ function StatChip({
         background: bg,
         border: `1px solid ${borderColor}`,
         gap: 1,
+        // #467: never let the flex row squeeze a chip — a readable chip you
+        // can scroll to beats four crushed unreadable ones. The chip keeps
+        // its intrinsic width and the strip below scrolls when they overflow.
+        flexShrink: 0,
       }}
     >
       {pulse && (
@@ -148,7 +152,24 @@ export default function DashboardStatsStrip({
       initial="hidden"
       animate="show"
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } } }}
-      style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center" }}
+      style={{
+        display: "flex",
+        gap: 6,
+        flex: 1,
+        justifyContent: "center",
+        // #467: the strip lives in a single non-wrapping flex top bar whose
+        // logotype / weather / controls siblings are all flexShrink:0. Without
+        // `minWidth: 0` the strip's min-content width (chips are nowrap) pins
+        // it open and the overflow is *clipped* off the right edge — the
+        // "Active Alerts" chip vanishes at ≤390px. Allowing the strip to shrink
+        // below its content (`minWidth: 0`) plus turning the overflow into an
+        // intentional horizontal scroll region (`overflowX: auto`) fits the
+        // viewport with no silent clipping. On desktop the chips fit, so no
+        // scrollbar shows and `justifyContent: center` still centers them —
+        // the desktop top-bar layout is unchanged.
+        minWidth: 0,
+        overflowX: "auto",
+      }}
     >
       <StatChip label={primaryLabel} value={totalAnimals} />
       {showDualChip && <StatChip label="Total" value={crossSpeciesTotal} />}

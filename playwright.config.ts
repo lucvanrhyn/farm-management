@@ -119,6 +119,12 @@ export default defineConfig({
     // Root cause: icon-only mobile NavLink had no min hit-area floor (~31×32).
     // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'admin-nav-tap-targets.spec.ts',
+    // Issue #467 (2026-05-28): the mobile dashboard KPI strip must fit the
+    // viewport (or scroll intentionally) rather than clipping the Active
+    // Alerts chip off the right edge at 390px. Asserts the chip is fully
+    // visible and the document is not silently clipped on both the basson and
+    // trio-b dashboards. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'dashboard-mobile-kpi.spec.ts',
   ],
   reporter: 'list',
   use: {
