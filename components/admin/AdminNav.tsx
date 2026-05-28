@@ -244,7 +244,8 @@ function NavLink({
         href={href}
         prefetch={false}
         title={label}
-        className="relative flex items-center justify-center md:justify-start gap-2.5 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-sm font-medium transition-colors"
+        data-nav-link
+        className="relative flex items-center justify-center md:justify-start gap-2.5 min-w-11 min-h-11 md:min-w-0 md:min-h-0 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-sm font-medium transition-colors"
         style={{
           color: isActive ? "#F5EBD4" : "rgba(210,180,140,0.85)",
           background: isActive ? "rgba(139,105,20,0.14)" : "transparent",
@@ -318,7 +319,8 @@ function LockedNavItem({
         type="button"
         title={`${label} — Advanced feature`}
         onClick={onClickLocked}
-        className="relative flex items-center justify-center md:justify-start gap-2.5 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-sm font-medium w-full transition-colors"
+        data-nav-link
+        className="relative flex items-center justify-center md:justify-start gap-2.5 min-w-11 min-h-11 md:min-w-0 md:min-h-0 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-sm font-medium w-full transition-colors"
         style={{ color: "rgba(210,180,140,0.35)", cursor: "pointer" }}
       >
         <Icon className="w-4 h-4 shrink-0" style={{ color: "rgba(210,180,140,0.25)" }} />
@@ -568,6 +570,7 @@ export default function AdminNav({
   return (
     <>
       <nav
+        data-testid="admin-nav"
         className="w-12 md:w-52 shrink-0 min-h-screen p-2 md:p-3 flex flex-col"
         style={{ background: "#1A1510", borderRight: "1px solid rgba(139,105,20,0.15)" }}
       >
@@ -716,7 +719,8 @@ export default function AdminNav({
             <Link
               href="/farms"
               prefetch={false}
-              className="flex items-center justify-center md:justify-start gap-2 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-xs font-medium transition-colors"
+              data-nav-link
+              className="flex items-center justify-center md:justify-start gap-2 min-w-11 min-h-11 md:min-w-0 md:min-h-0 px-2 md:px-2.5 py-2 md:py-1.5 rounded-lg text-xs font-medium transition-colors"
               style={{ color: "rgba(210,180,140,0.7)" }}
               title="Switch farm"
             >
