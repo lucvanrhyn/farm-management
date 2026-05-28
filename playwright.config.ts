@@ -106,6 +106,13 @@ export default defineConfig({
     // logger offline and the queued report auto-drains on reconnect. Self-skips
     // when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'logger-offline-submit.spec.ts',
+    // Issue #468 (2026-05-28): bounding-box regression guard — on a 390px
+    // admin camp map the open Layers panel and the bottom-left action
+    // cluster (Draw Camp Boundary) must NOT intersect, and the Draw button
+    // must be fully visible (the reported truncation was spatial occlusion).
+    // A desktop guard at 1440px proves the bottom-right anchor is unchanged.
+    // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'map-mobile-controls.spec.ts',
   ],
   reporter: 'list',
   use: {
