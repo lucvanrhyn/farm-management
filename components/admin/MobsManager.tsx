@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Camp, Mob } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
+import { useResyncOnPropChange } from "@/lib/client/use-resync-on-prop-change";
 import AddAnimalToMobPicker from "./AddAnimalToMobPicker";
 
 // Narrow membership row: only what's needed to render "in this mob" lists
@@ -37,7 +38,30 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
   // provider, which matches the historical default.
   const { mode } = useFarmModeSafe();
   const router = useRouter();
-  const [mobs, setMobs] = useState<Mob[]>(initialMobs);
+
+  // Issue #459 — `initialMobs` is species-scoped: the page Server Component
+  // (`app/[farmSlug]/admin/mobs/page.tsx`) fetches it via
+  // `scoped(prisma, mode).mob.findMany(...)` and the `Mob` table has a
+  // `species` column. MobsManager renders below `FarmModeProvider`
+  // (app/[farmSlug]/layout.tsx), so flipping the ModeSwitcher calls
+  // `setMode` → `router.refresh()`, which re-renders the page with the new
+  // species' mobs and passes fresh `initialMobs` WITHOUT remounting this
+  // component. A plain `useState(initialMobs)` lazy initializer only reads
+  // the prop at mount, so the mobs table kept rendering the PRIOR species'
+  // rows (e.g. cattle mobs lingering after a flip to an empty sheep mode).
+  //
+  // Same anti-pattern fixed for AnimalsTable in #456. We key the re-sync on
+  // the `initialMobs` prop itself — the very payload whose change drives the
+  // refresh — because the mobs page does not pass a discrete `species` prop.
+  // Next serializes the RSC payload once per render, so the reference is
+  // stable across re-renders that keep the same data: user edits made
+  // through `setMobs` (create/move/rename/delete) persist until the next
+  // server refresh re-seeds them, which is exactly the desired contract
+  // (React's "adjusting state on a prop change" recipe).
+  const [mobs, setMobs] = useResyncOnPropChange<Mob[]>(
+    initialMobs,
+    () => initialMobs,
+  );
   const [modal, setModal] = useState<ModalState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
