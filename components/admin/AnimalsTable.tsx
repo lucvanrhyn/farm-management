@@ -13,6 +13,7 @@ import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/li
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { getSpeciesModule, isValidSpecies } from "@/lib/species/registry";
+import { useResyncOnPropChange } from "@/lib/client/use-resync-on-prop-change";
 
 const PAGE_SIZE = 50;
 
@@ -91,9 +92,23 @@ export default function AnimalsTable({
   // `nextCursor` (or null when the tenant has fewer than PAGE_SIZE). The
   // `loadMore` handler appends subsequent pages from /api/animals and
   // advances the cursor.
-  const [animals, setAnimals] = useState<PrismaAnimal[]>(initialAnimals);
-  const [nextCursor, setNextCursor] = useState<string | null>(
-    initialNextCursor ?? null,
+  //
+  // Issue #456 — keyed on the `species` prop. Flipping the ModeSwitcher calls
+  // `router.refresh()`, which re-renders the page Server Component with fresh
+  // `initialAnimals` / `initialNextCursor` props but does NOT remount this
+  // component. A plain `useState(initialAnimals)` lazy initializer only reads
+  // the prop at mount, so the table body kept rendering the PRIOR species'
+  // rows while the prop-driven header count updated. `useResyncOnPropChange`
+  // re-seeds these back to the fresh props the moment `species` changes —
+  // React's "adjusting state on a prop change" recipe, same pattern as the
+  // `lastFarmSlug` sentinel in `lib/farm-mode.tsx`.
+  const [animals, setAnimals] = useResyncOnPropChange<PrismaAnimal[]>(
+    species,
+    () => initialAnimals,
+  );
+  const [nextCursor, setNextCursor] = useResyncOnPropChange<string | null>(
+    species,
+    () => initialNextCursor ?? null,
   );
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -123,7 +138,12 @@ export default function AnimalsTable({
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, species]);
+    // `setAnimals` / `setNextCursor` are the React `useState` dispatch
+    // functions returned by `useResyncOnPropChange`, so their identity is
+    // stable across renders — listing them keeps `exhaustive-deps` satisfied
+    // now that they no longer come from a literal `useState` call the rule can
+    // special-case as stable.
+  }, [nextCursor, loadingMore, species, setAnimals, setNextCursor]);
 
   // Precompute a lowercase search index so we don't call toLowerCase() on
   // every animal on every keystroke. Keyed off `animals` identity.
@@ -154,10 +174,18 @@ export default function AnimalsTable({
   // local fast-path is preserved: queries that match within `animals` never
   // hit the network. `remoteFor` pins which query produced `remoteResults`
   // so stale rows can't leak when the user keeps typing.
-  const [remoteResults, setRemoteResults] = useState<PrismaAnimal[] | null>(
-    null,
+  //
+  // Issue #456 — also keyed on `species` so a full-herd search result for the
+  // prior species is cleared on a ModeSwitcher flip; otherwise a remote
+  // payload fetched under (e.g.) `species=cattle` could flash into the sheep
+  // catalogue before the effect below re-fires.
+  const [remoteResults, setRemoteResults] = useResyncOnPropChange<
+    PrismaAnimal[] | null
+  >(species, () => null);
+  const [remoteFor, setRemoteFor] = useResyncOnPropChange<string>(
+    species,
+    () => "",
   );
-  const [remoteFor, setRemoteFor] = useState<string>("");
   const [remoteSearching, setRemoteSearching] = useState(false);
 
   const localFiltered = useMemo(() => {
