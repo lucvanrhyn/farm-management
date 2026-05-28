@@ -15,6 +15,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { CampData } from "@/components/map/layers/CampLayer";
+import { normaliseCampColor } from "@/components/map/layers/_camp-colors";
 import AdminMapClient from "./AdminMapClient";
 
 export default async function AdminMapPage({
@@ -66,7 +67,11 @@ export default async function AdminMapPage({
       size_hectares: c.sizeHectares ?? undefined,
       water_source: c.waterSource ?? undefined,
       geojson: c.geojson ?? undefined,
-      color: c.color ?? undefined,
+      // Normalise empty/blank/invalid stored colours to the shared default so
+      // a legacy `color = ''` row never reaches the `to-color` paint
+      // expression on the camp-outline layer (#466). `?? undefined` alone let
+      // `""` slip through and fire a "could not parse color" style error.
+      color: normaliseCampColor(c.color),
     },
     stats: { total: 0, byCategory: {} },
     grazing: "Good",
