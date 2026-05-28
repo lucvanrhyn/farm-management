@@ -90,6 +90,15 @@ export default defineConfig({
     // the form after a duplicate. Self-skips when E2E_IDENTIFIER /
     // E2E_PASSWORD are unset.
     'camp-condition-duplicate-toast.spec.ts',
+    // Issue #466 (2026-05-28): camp identity colours must never reach the
+    // Mapbox `["to-color", ["get", "borderColor"]]` paint expression
+    // unparseable. Root cause: a nullish-coalescing-only guard let a legacy
+    // `color = ''` row slip through ("" ?? x === ""), firing a "could not
+    // parse color" style-expression error on the Trio B admin camp map.
+    // Fixed via the pure `normaliseCampColor` guard on both consumers. Loads
+    // the Trio B + Basson admin camp maps and asserts zero colour-error
+    // console events. Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'tenant-map-console-clean.spec.ts',
   ],
   reporter: 'list',
   use: {

@@ -42,6 +42,34 @@ const GRAZING_COLORS: Record<string, string> = {
 
 const DEFAULT_FALLBACK_COLOR = "#94a3b8";
 
+/**
+ * Valid CSS hex colour: `#` followed by 3, 4, 6, or 8 hex digits
+ * (RGB / RGBA / RRGGBB / RRGGBBAA). Case-insensitive.
+ */
+const HEX_COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/**
+ * Pure camp-colour normaliser (#466).
+ *
+ * Camp identity colours flow into the Mapbox paint expression
+ * `["to-color", ["get", "borderColor"]]` on the camp-outline layer. A
+ * nullish-coalescing-only guard (`camp.color ?? DEFAULT`) lets an empty
+ * string `""` — and whitespace-only / invalid garbage — reach `to-color`,
+ * which then fires a "could not parse color" style-expression error and
+ * mis-renders the affected camps (legacy `color = ''` rows on some tenants).
+ *
+ * This guard maps null / undefined / empty / whitespace-only / invalid values
+ * to the shared {@link DEFAULT_CAMP_COLOR}, and passes a valid hex colour
+ * (lower- or upper-case) through unchanged. Pure: no React/Mapbox imports,
+ * no side-effects.
+ */
+export function normaliseCampColor(color: string | null | undefined): string {
+  if (color == null) return DEFAULT_CAMP_COLOR;
+  const trimmed = color.trim();
+  if (!HEX_COLOR_RE.test(trimmed)) return DEFAULT_CAMP_COLOR;
+  return trimmed;
+}
+
 const WATER_COLORS: Record<string, string> = {
   Good:     "#22c55e",
   Adequate: "#eab308",
@@ -138,7 +166,7 @@ export function buildCampGeoJSON(campData: CampData[], overlay: OverlayMode): Ge
     if (!camp.geojson) continue;
     try {
       const parsed = JSON.parse(camp.geojson) as GeoJSON.Geometry;
-      const identityColor = camp.color ?? DEFAULT_CAMP_COLOR;
+      const identityColor = normaliseCampColor(camp.color);
       features.push({
         type: "Feature",
         geometry: parsed,
