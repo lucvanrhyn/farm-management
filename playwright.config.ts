@@ -113,6 +113,12 @@ export default defineConfig({
     // A desktop guard at 1440px proves the bottom-right anchor is unchanged.
     // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
     'map-mobile-controls.spec.ts',
+    // Issue #469 (2026-05-28): admin nav tap targets must meet the 44×44px
+    // WCAG 2.5.5 minimum on mobile (390px) across every admin layout family
+    // (the rail is shared), without changing the labelled desktop layout.
+    // Root cause: icon-only mobile NavLink had no min hit-area floor (~31×32).
+    // Self-skips when E2E_IDENTIFIER / E2E_PASSWORD are unset.
+    'admin-nav-tap-targets.spec.ts',
   ],
   reporter: 'list',
   use: {
