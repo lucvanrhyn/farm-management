@@ -116,11 +116,20 @@ test.describe('Issue #468 — map controls do not overlap on mobile', () => {
     const panelBox = await bbox(layerPanel);
     const clusterBox = await bbox(actionCluster);
 
+    // Measure the panel's right-edge gap against the layout viewport width
+    // (`document.documentElement.clientWidth`), NOT the raw 1440 device width.
+    // The panel is anchored to the content edge; a vertical scrollbar (~16px on
+    // prod) narrows the content area below 1440, so measuring against 1440
+    // folds the scrollbar width into the gap and falsely trips the 32px anchor
+    // threshold. clientWidth is the true edge the panel docks to — this
+    // subtracts the scrollbar at the root rather than relaxing the tolerance.
+    const layoutWidth = await page.evaluate(() => document.documentElement.clientWidth);
+
     // Desktop: panel stays docked to the bottom-right quadrant.
-    expect(panelBox.x, 'panel left edge sits in the right half on desktop').toBeGreaterThan(1440 / 2);
+    expect(panelBox.x, 'panel left edge sits in the right half on desktop').toBeGreaterThan(layoutWidth / 2);
     expect(
-      1440 - (panelBox.x + panelBox.width),
-      'panel right edge stays within ~32px of the viewport edge (bottom-right anchor)',
+      layoutWidth - (panelBox.x + panelBox.width),
+      'panel right edge stays within ~32px of the content viewport edge (bottom-right anchor)',
     ).toBeLessThanOrEqual(32);
     expect(
       900 - (panelBox.y + panelBox.height),
@@ -128,7 +137,7 @@ test.describe('Issue #468 — map controls do not overlap on mobile', () => {
     ).toBeLessThanOrEqual(40);
 
     // Action cluster stays bottom-left on desktop.
-    expect(clusterBox.x, 'action cluster sits in the left half on desktop').toBeLessThan(1440 / 2);
+    expect(clusterBox.x, 'action cluster sits in the left half on desktop').toBeLessThan(layoutWidth / 2);
 
     // And they still don't intersect on desktop (regression: must remain true).
     expect(rectsIntersect(panelBox, clusterBox), 'no overlap on desktop either').toBe(false);
