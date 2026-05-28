@@ -404,9 +404,11 @@ export default function FarmMap({
         </div>
       )}
 
-      {/* Bottom-left action cluster. A compact vertical stack keeps it narrow
-          so it never reaches the bottom-right Layers panel, even at ~390px. */}
-      <div style={{ position: "absolute", bottom: 36, left: 12, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+      {/* Bottom-left action cluster. A compact vertical stack keeps it narrow.
+          On mobile the bottom-right Layers panel re-anchors to the top-right
+          (see LayerToggle.tsx, issue #468) so the two overlays never intersect
+          and the full "Draw Camp Boundary" label stays visible. */}
+      <div data-testid="map-action-cluster" style={{ position: "absolute", bottom: 36, left: 12, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
         <button
           onClick={() => dispatch({ type: "startMobMove" })}
           style={{

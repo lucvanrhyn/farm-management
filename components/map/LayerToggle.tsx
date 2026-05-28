@@ -106,9 +106,37 @@ interface Props {
   onChange: (patch: Partial<LayerState>) => void;
 }
 
+/**
+ * Mobile re-anchor (issue #468). On desktop the Layers panel sits bottom-right
+ * and the action cluster sits bottom-left — they clear each other with room to
+ * spare. At narrow widths the two overlays meet in the middle of the bottom
+ * band and the panel paints over the *Draw Camp Boundary* button.
+ *
+ * The fix is purely spatial and font-independent: below 640px the panel docks
+ * to the TOP-right (under the Mapbox nav controls) instead of the bottom-right,
+ * which removes any vertical overlap with the bottom-left action cluster. The
+ * `!important` is required to beat the component's inline `bottom`/`right`.
+ * CSS-only ⇒ SSR-safe (no hydration branch) and the desktop layout is byte-for-
+ * byte unchanged (the rule never matches above 640px).
+ */
+const MOBILE_REANCHOR_CSS = `
+@media (max-width: 640px) {
+  .ft-map-layer-toggle {
+    bottom: auto !important;
+    top: 96px !important;
+    max-height: calc(100% - 132px);
+    overflow-y: auto;
+  }
+}
+`;
+
 export default function LayerToggle({ value, onChange }: Props) {
   return (
+    <>
+    <style>{MOBILE_REANCHOR_CSS}</style>
     <div
+      data-testid="map-layer-toggle"
+      className="ft-map-layer-toggle"
       style={{
         position: "absolute",
         bottom: 24,
@@ -166,5 +194,6 @@ export default function LayerToggle({ value, onChange }: Props) {
         </label>
       ))}
     </div>
+    </>
   );
 }
