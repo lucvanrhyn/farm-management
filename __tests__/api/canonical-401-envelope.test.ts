@@ -215,4 +215,24 @@ describe("issue #486 — canonical AUTH_REQUIRED 401 envelope per migrated route
       ),
     );
   });
+
+  // Issue #493 (Epic B) — the feedback route's session-missing arm folds onto
+  // the same canonical envelope as its `ask` sibling did in #486.
+  it("POST /api/einstein/feedback", async () => {
+    const { POST } = await import("@/app/api/einstein/feedback/route");
+    await expectCanonical401(
+      await POST(
+        req("http://localhost/api/einstein/feedback", {
+          method: "POST",
+          body: JSON.stringify({
+            queryLogId: "log-1",
+            feedback: "up",
+            farmSlug: "delta",
+          }),
+          headers: { "Content-Type": "application/json" },
+        }),
+        { params: Promise.resolve({}) },
+      ),
+    );
+  });
 });

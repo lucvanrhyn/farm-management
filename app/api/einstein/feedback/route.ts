@@ -21,6 +21,7 @@ import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
 import { publicHandler } from '@/lib/server/route';
+import { routeError } from '@/lib/server/route/envelope';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,7 +72,16 @@ export const POST = publicHandler({
   handle: async (req: NextRequest): Promise<Response> => {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
+      // Issue #493 (Epic B) — fold the legacy `EINSTEIN_UNAUTHENTICATED`
+      // (`{ code, message }`) onto the canonical ADR-0001 AUTH_REQUIRED
+      // envelope (`{ error, message }`), mirroring the identical fold the
+      // sibling `/api/einstein/ask` route shipped in #486 (Epic B4). 401
+      // status is unchanged. Safe: the only consumer (EinsteinChat's
+      // thumbs-up/down handler) treats feedback as fire-and-forget advisory
+      // telemetry and never reads this response body or its code. The
+      // remaining einstein-domain `jsonError` arms (tier/budget/retriever)
+      // stay on the `{ code, message }` shape that EinsteinChat decodes.
+      return routeError('AUTH_REQUIRED', 'Unauthorized', 401);
     }
 
     let rawBody: unknown;

@@ -17,6 +17,7 @@
 //     this through unchanged (see lib/server/route/tenant-read-slug.ts:18-22).
 
 import { tenantReadSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isPaidTier } from "@/lib/tier";
@@ -74,7 +75,16 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
       });
     } catch (err) {
       if (err instanceof ExportRequestError) {
-        return new Response(JSON.stringify({ error: err.message }), { status: err.status });
+        // Issue #493 (PRD #479 Epic B) — converge on the canonical typed
+        // envelope. The `error` field carries the SCREAMING_SNAKE code
+        // `EXPORT_REQUEST_INVALID`; the developer-authored bail-out sentence
+        // (e.g. "planId is required for rotation-plan export") moves to the
+        // human-readable `message` slot. Previously this echoed `err.message`
+        // straight into `error`, which the error-envelope arch-test
+        // (`scripts/audit-error-envelope.ts`) flags as a raw-message echo.
+        // No client reads this body's `error` field (the export cards only
+        // act on `res.ok`), so moving the sentence to `message` is wire-safe.
+        return routeError("EXPORT_REQUEST_INVALID", err.message, err.status);
       }
       logger.error('[export] Error generating export', err);
       return new Response(JSON.stringify({ error: "Export failed" }), { status: 500 });
