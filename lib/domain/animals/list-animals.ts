@@ -5,9 +5,8 @@
  * construction from the parsed filter params, the unbounded vs cursor
  * `prisma.animal.findMany` split, and the `hasMore`/`nextCursor`
  * computation. The route becomes a thin adapter that parses query params
- * (incl. the `{ error: "Invalid limit" }` 400 — kept at the boundary, see
- * below) and maps the discriminated result back to the byte-identical
- * legacy wire.
+ * (incl. `?limit` validation via the shared `parseLimit` (#485) — see below)
+ * and maps the discriminated result back to the byte-identical legacy wire.
  *
  * Behaviour-preserving. The op returns a JSON-serialisable discriminated
  * union; the discriminator NEVER reaches the wire — the route maps:
@@ -19,9 +18,9 @@
  *
  * `limit` validation stays in the route adapter (boundary parsing — same
  * rationale 316a kept `createCampSchema` in the route). The op receives an
- * already-clamped numeric `limit`; it does NOT own the `"Invalid limit"`
- * literal (legacy sync-manager clients pattern-match it; migrating it to a
- * typed envelope is a deferred future wave, out of scope here).
+ * already-validated, already-clamped numeric `limit`; #485 moved that
+ * boundary check onto the shared `parseLimit` (canonical `INVALID_LIMIT`
+ * 400), so the op still never owns the limit contract.
  *
  * The `timeAsync("query", ...)` perf-telemetry wrapper moves INTO the op so
  * the Server-Timing contract is preserved regardless of caller.

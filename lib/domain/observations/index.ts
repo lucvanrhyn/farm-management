@@ -12,6 +12,8 @@
  */
 export {
   listObservations,
+  OBSERVATIONS_DEFAULT_LIMIT,
+  OBSERVATIONS_MAX_LIMIT,
   type ListObservationsFilters,
 } from "./list-observations";
 export {

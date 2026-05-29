@@ -23,8 +23,11 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import {
   createObservation,
   listObservations,
+  OBSERVATIONS_DEFAULT_LIMIT,
+  OBSERVATIONS_MAX_LIMIT,
   type CreateObservationInput,
 } from "@/lib/domain/observations";
+import { parseLimit } from "@/lib/domain/shared/limit";
 import {
   validateReproductiveState,
   ReproMultiStateError,
@@ -82,11 +85,22 @@ const createObservationSchema = {
 export const GET = tenantRead({
   handle: async (ctx, req) => {
     const { searchParams } = new URL(req.url);
+    // Issue #485 — validate `?limit` at the boundary via the shared
+    // `parseLimit`. A non-finite / ≤0 limit now throws `InvalidLimitError`
+    // → `{ error: "INVALID_LIMIT" }` 400 (mapped by the `tenantRead`
+    // adapter), converging this endpoint on the animals + tasks contract.
+    // Previously `listObservations` SILENTLY clamped a bad limit to the
+    // default 50 — that silent path is the bug #485 closes. An omitted
+    // `?limit` still falls back to 50; a valid value still clamps to 200.
+    const limit = parseLimit(searchParams.get("limit"), {
+      max: OBSERVATIONS_MAX_LIMIT,
+      fallback: OBSERVATIONS_DEFAULT_LIMIT,
+    });
     const result = await listObservations(ctx.prisma, {
       camp: searchParams.get("camp"),
       type: searchParams.get("type"),
       animalId: searchParams.get("animalId"),
-      limit: parseInt(searchParams.get("limit") ?? "50", 10),
+      limit,
       offset: parseInt(searchParams.get("offset") ?? "0", 10),
     });
     return NextResponse.json(result);

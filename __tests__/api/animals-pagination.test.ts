@@ -159,7 +159,7 @@ describe('GET /api/animals — cursor pagination mode', () => {
     );
   });
 
-  it('rejects a non-numeric limit with 400', async () => {
+  it('rejects a non-numeric limit with a typed INVALID_LIMIT 400', async () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=abc');
@@ -167,17 +167,22 @@ describe('GET /api/animals — cursor pagination mode', () => {
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toMatch(/invalid limit/i);
+    // Issue #485 — migrated off the bespoke `{ error: "Invalid limit" }`
+    // literal onto the canonical typed code shared with /api/tasks and
+    // /api/observations.
+    expect(data.error).toBe('INVALID_LIMIT');
     expect(mockFindMany).not.toHaveBeenCalled();
   });
 
-  it('rejects a zero/negative limit with 400', async () => {
+  it('rejects a zero/negative limit with a typed INVALID_LIMIT 400', async () => {
     const { GET } = await import('@/app/api/animals/route');
 
     const req = new NextRequest('http://localhost/api/animals?limit=0');
     const res = await GET(req, { params: Promise.resolve({}) });
+    const data = await res.json();
 
     expect(res.status).toBe(400);
+    expect(data.error).toBe('INVALID_LIMIT');
     expect(mockFindMany).not.toHaveBeenCalled();
   });
 

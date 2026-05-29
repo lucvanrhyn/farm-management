@@ -13,10 +13,16 @@
  * clients code against the 400; do not "improve" it to 404.
  */
 
+// Issue #485 — `InvalidLimitError` / `INVALID_LIMIT` relocated to the shared
+// limit validator (`lib/domain/shared/limit.ts`) so animals + observations +
+// tasks all throw ONE canonical error for a bad `?limit`. Re-exported here so
+// every existing import (this module, `list-tasks.ts`, `index.ts`,
+// `api-errors.ts`'s `instanceof` check) keeps the same single identity.
+export { InvalidLimitError, INVALID_LIMIT } from "@/lib/domain/shared/limit";
+
 export const TASK_NOT_FOUND = "TASK_NOT_FOUND" as const;
 export const INVALID_RECURRENCE_RULE = "INVALID_RECURRENCE_RULE" as const;
 export const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND" as const;
-export const INVALID_LIMIT = "INVALID_LIMIT" as const;
 export const INVALID_CURSOR = "INVALID_CURSOR" as const;
 
 /**
@@ -59,20 +65,6 @@ export class TemplateNotFoundError extends Error {
     super(`Template not found: ${templateId}`);
     this.name = "TemplateNotFoundError";
     this.templateId = templateId;
-  }
-}
-
-/**
- * `limit` query-param is not a positive finite integer. Wire: 400
- * `{ error: "INVALID_LIMIT" }`.
- */
-export class InvalidLimitError extends Error {
-  readonly code = INVALID_LIMIT;
-  readonly received: string;
-  constructor(received: string) {
-    super(`Invalid limit: ${received}`);
-    this.name = "InvalidLimitError";
-    this.received = received;
   }
 }
 
