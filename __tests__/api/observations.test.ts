@@ -155,6 +155,79 @@ describe('POST /api/observations', () => {
     expect(body).toEqual({ error: 'INVALID_TYPE' });
   });
 
+  // Issue #484 — `details` lands in a NON-NULLABLE `String` Prisma column.
+  // A non-string `details` previously flowed through `details ?? ""` into
+  // Prisma and threw PrismaClientValidationError → 500. The create schema
+  // must reject it at the boundary as a typed 400 (VALIDATION_FAILED).
+  it.each([
+    ['an object', { foo: 'bar' }],
+    ['a number', 42],
+    ['an array', ['a', 'b']],
+    ['a boolean', true],
+  ])('returns a typed 400 when details is %s (not a string)', async (_label, badDetails) => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', details: badDetails }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('VALIDATION_FAILED');
+    expect(data.details?.fieldErrors?.details).toBeTruthy();
+    // Critical: the bad value must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid string details (JSON-encoded payload)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        details: JSON.stringify({ status: 'healthy' }),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it('accepts an omitted details (undefined → empty string default)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it('accepts an explicit null details (back-compat, → empty string default)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', details: null }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
   it('returns 401 when unauthenticated', async () => {
     const { getServerSession } = await import('next-auth');
     vi.mocked(getServerSession).mockResolvedValueOnce(null);
