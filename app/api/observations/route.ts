@@ -61,6 +61,14 @@ const createObservationSchema = {
     if (typeof body.camp_id !== "string" || !body.camp_id) {
       errors.camp_id = "camp_id is required";
     }
+    // Issue #484 — `details` is persisted into a NON-NULLABLE `String`
+    // Prisma column via `details ?? ""`. A non-string (object / number /
+    // array / boolean) would otherwise sail past this schema and throw a
+    // PrismaClientValidationError → 500. Reject it at the boundary as a
+    // typed 400. `undefined` / `null` stay valid (they default to `""`).
+    if (body.details != null && typeof body.details !== "string") {
+      errors.details = "details must be a string";
+    }
     if (Object.keys(errors).length > 0) {
       throw new RouteValidationError(
         Object.values(errors)[0] ?? "Invalid body",
