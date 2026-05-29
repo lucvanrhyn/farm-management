@@ -15,7 +15,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantWrite } from "@/lib/server/route";
+import { tenantWrite, routeError } from "@/lib/server/route";
 import { subscribePush, unsubscribePush } from "@/lib/domain/push";
 import type { SubscribePushInput } from "@/lib/domain/push";
 
@@ -27,7 +27,7 @@ export const POST = tenantWrite<SubscribePushInput>({
   handle: async (ctx, body) => {
     const userEmail = ctx.session.user?.email;
     if (!userEmail) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return routeError("AUTH_REQUIRED", "Unauthorized", 401);
     }
     await subscribePush(ctx.prisma, userEmail, body);
     return NextResponse.json({ success: true });

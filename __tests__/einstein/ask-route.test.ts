@@ -258,12 +258,15 @@ beforeEach(() => resetAll());
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/einstein/ask — auth + validation', () => {
-  it('returns 401 EINSTEIN_UNAUTHENTICATED when session is missing', async () => {
+  it('returns 401 canonical AUTH_REQUIRED envelope when session is missing', async () => {
+    // Issue #486 (Epic B4): the legacy `EINSTEIN_UNAUTHENTICATED`
+    // (`{ code, message }`) 401 was folded onto the canonical ADR-0001
+    // `AUTH_REQUIRED` (`{ error, message }`) envelope. Status unchanged.
     mockGetServerSession.mockResolvedValue(null);
     const resp = await POST(createRequest({ question: 'q', farmSlug: 'delta-livestock' }), CTX);
     expect(resp.status).toBe(401);
     const json = await resp.json();
-    expect(json.code).toBe('EINSTEIN_UNAUTHENTICATED');
+    expect(json).toEqual({ error: 'AUTH_REQUIRED', message: 'Unauthorized' });
   });
 
   it('returns 400 EINSTEIN_BAD_REQUEST when body is not valid JSON', async () => {

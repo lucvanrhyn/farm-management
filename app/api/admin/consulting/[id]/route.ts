@@ -7,6 +7,7 @@ import {
   VALID_LEAD_STATUSES,
   type ConsultingLead,
 } from "@/lib/meta-db";
+import { routeError } from "@/lib/server/route";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function PATCH(
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   }
 
   const isAdmin = await isPlatformAdmin(email);

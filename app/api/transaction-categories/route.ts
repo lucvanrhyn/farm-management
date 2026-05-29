@@ -3,10 +3,11 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
+import { routeError } from "@/lib/server/route";
 
 export async function GET(request: NextRequest) {
   const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma } = ctx;
 
   const count = await prisma.transactionCategory.count();
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const ctx = await getFarmContext(request);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).

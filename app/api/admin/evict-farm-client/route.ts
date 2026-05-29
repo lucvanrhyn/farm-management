@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { evictFarmClient } from "@/lib/farm-prisma";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { routeError } from "@/lib/server/route";
 
 // Platform-dev endpoint: evicts the cached Prisma client for any farm
 // the caller is an ADMIN of. Needs the full session.user.farms list
@@ -11,7 +12,7 @@ import { getUserRoleForFarm } from "@/lib/auth";
 // session-consolidation-coverage allowlist.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
 
   const body = await req.json().catch(() => ({}));
   const slug = typeof body?.slug === "string" ? body.slug.trim() : "";

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { routeError } from "@/lib/server/route";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import { withServerTiming, timeAsync } from "@/lib/server/server-timing";
 import { logger } from "@/lib/logger";
@@ -34,7 +35,7 @@ export async function GET() {
     // handler gets the same fast-path. Falls back to getServerSession
     // transparently when the triplet is missing.
     const ctx = await timeAsync("session", () => getFarmContext());
-    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
 
     try {
       const summary = await timeAsync("query", async () => {

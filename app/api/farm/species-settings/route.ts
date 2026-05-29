@@ -3,6 +3,7 @@ import { getFarmContextForSlug } from "@/lib/server/farm-context-slug";
 import { getAllSpeciesConfigs } from "@/lib/species/registry";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
+import { routeError } from "@/lib/server/route";
 
 function getFarmSlugFromRequest(req: NextRequest): string | null {
   return req.nextUrl.searchParams.get("farmSlug");
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
 
   const rows = await ctx.prisma.farmSpeciesSettings.findMany();
   const rowBySpecies = Object.fromEntries(rows.map((r) => [r.species, r]));
@@ -37,7 +38,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, session } = ctx;
 
   if (role !== "ADMIN") {

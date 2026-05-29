@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getFarmSubscription } from '@/lib/meta-db';
+import { routeError } from '@/lib/server/route';
 
 /**
  * GET /api/subscription/status?farm=<slug>
@@ -11,7 +12,7 @@ import { getFarmSubscription } from '@/lib/meta-db';
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return routeError('AUTH_REQUIRED', 'Unauthorized', 401);
   }
 
   const { searchParams } = req.nextUrl;
