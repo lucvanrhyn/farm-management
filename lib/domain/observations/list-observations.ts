@@ -33,6 +33,14 @@ export interface ListObservationsFilters {
   camp?: string | null;
   type?: string | null;
   animalId?: string | null;
+  /**
+   * Issue #491 — OPT-IN species narrowing, mirroring `/api/animals`. When
+   * absent the op stays the cross-species rollup (#356 invariant): the
+   * `species` predicate is applied ONLY when this is present. The column is
+   * already denormalised + indexed on `Observation` (migration 0003), so no
+   * schema/migration is needed.
+   */
+  species?: string | null;
   limit?: number | null;
   offset?: number | null;
 }
@@ -59,6 +67,9 @@ export async function listObservations(
   if (filters.camp) where.campId = filters.camp;
   if (filters.type) where.type = filters.type;
   if (filters.animalId) where.animalId = filters.animalId;
+  // Issue #491 — opt-in species narrowing. Applied ONLY when present so the
+  // default (omitted) path stays the cross-species rollup (#356).
+  if (filters.species) where.species = filters.species;
 
   return crossSpecies(prisma, "analytics-rollup").observation.findMany({
     where,

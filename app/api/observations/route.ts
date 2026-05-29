@@ -100,6 +100,10 @@ export const GET = tenantRead({
       camp: searchParams.get("camp"),
       type: searchParams.get("type"),
       animalId: searchParams.get("animalId"),
+      // Issue #491 — OPT-IN species narrowing, mirroring `/api/animals`. When
+      // omitted the op stays the cross-species rollup (#356 invariant); the
+      // predicate is applied only when the param is present.
+      species: searchParams.get("species"),
       limit,
       offset: parseInt(searchParams.get("offset") ?? "0", 10),
     });
