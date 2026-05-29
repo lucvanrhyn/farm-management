@@ -277,11 +277,15 @@ describe('Integration: full ask → feedback roundtrip', () => {
     expect(createArgs.data.errorCode).toBeNull();
 
     // Step B: POST /api/einstein/feedback for the same log row
+    // Epic D1 (#488): the feedback route now resolves the tenant via the
+    // explicit body slug through the slug-aware, membership-gated resolver
+    // (mirroring /ask) — not a Referer-derived helper.
     mockGetServerSession.mockResolvedValue(validSession);
     mockGetFarmCreds.mockResolvedValue(advancedCreds);
-    mockGetPrismaWithAuth.mockResolvedValue({
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
       prisma: mockPrisma,
       slug: 'delta-livestock',
+      role: 'farm_admin',
     });
     mockRagQueryLogUpdate.mockResolvedValue({ id: 'log-integration-1' });
 
@@ -290,6 +294,7 @@ describe('Integration: full ask → feedback roundtrip', () => {
         queryLogId: 'log-integration-1',
         feedback: 'up',
         note: 'Correct and well-cited',
+        farmSlug: 'delta-livestock',
       }),
       CTX,
     );
@@ -431,15 +436,16 @@ describe('Integration: feedback route edge cases', () => {
   it('returns 404 EINSTEIN_FEEDBACK_NOT_FOUND when Prisma throws P2025', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
     mockGetFarmCreds.mockResolvedValue(advancedCreds);
-    mockGetPrismaWithAuth.mockResolvedValue({
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
       prisma: mockPrisma,
       slug: 'delta-livestock',
+      role: 'farm_admin',
     });
     // Simulate Prisma P2025 — record not found
     mockRagQueryLogUpdate.mockRejectedValue({ code: 'P2025', message: 'Record not found' });
 
     const resp = await feedbackPOST(
-      makeFeedbackRequest({ queryLogId: 'nonexistent-id', feedback: 'down' }),
+      makeFeedbackRequest({ queryLogId: 'nonexistent-id', feedback: 'down', farmSlug: 'delta-livestock' }),
       CTX,
     );
     expect(resp.status).toBe(404);
@@ -461,14 +467,15 @@ describe('Integration: feedback route edge cases', () => {
 
   it('returns 403 EINSTEIN_TIER_LOCKED for Basic-tier farm on feedback route', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
-    mockGetPrismaWithAuth.mockResolvedValue({
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
       prisma: mockPrisma,
       slug: 'delta-livestock',
+      role: 'farm_admin',
     });
     mockGetFarmCreds.mockResolvedValue(basicCreds);
 
     const resp = await feedbackPOST(
-      makeFeedbackRequest({ queryLogId: 'log-1', feedback: 'up' }),
+      makeFeedbackRequest({ queryLogId: 'log-1', feedback: 'up', farmSlug: 'delta-livestock' }),
       CTX,
     );
     expect(resp.status).toBe(403);

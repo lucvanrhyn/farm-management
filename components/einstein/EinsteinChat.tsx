@@ -285,13 +285,16 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
           body: JSON.stringify({
             queryLogId: target.queryLogId,
             feedback: value,
+            // Epic D1 (#488): the feedback route pins the tenant via an explicit
+            // body slug (mirroring /ask), not Referer inference. Send the slug.
+            farmSlug,
           }),
         });
       } catch {
         // Non-fatal — feedback is advisory telemetry, not load-bearing.
       }
     },
-    [messages],
+    [messages, farmSlug],
   );
 
   // ------------------------------------------------------------------
