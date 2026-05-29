@@ -26,6 +26,8 @@ export default function AnimalActions({ animalId, campId, variant = "detail" }: 
   // Death form state
   const [deathDate, setDeathDate] = useState(new Date().toISOString().slice(0, 10));
   const [cause, setCause] = useState("");
+  // Issue #492 — first-class free-text note (Path A) on the death observation.
+  const [deathNotes, setDeathNotes] = useState("");
 
   // Row menu state
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,6 +102,9 @@ export default function AnimalActions({ animalId, campId, variant = "detail" }: 
           animal_id: animalId,
           details: JSON.stringify({ date: deathDate, cause: cause || "Unknown" }),
           created_at: new Date(deathDate).toISOString(),
+          // Issue #492 — top-level free-text note. Omitted when blank so the
+          // row's `notes` column stays null.
+          notes: deathNotes.trim() === "" ? undefined : deathNotes,
         }),
       });
       if (!obsRes.ok) throw new Error("Observation failed");
@@ -266,6 +271,18 @@ export default function AnimalActions({ animalId, campId, variant = "detail" }: 
                   <option value="Birth complications">Birth complications</option>
                   <option value="Predator">Predator</option>
                 </select>
+              </div>
+              {/* Issue #492 — free-text note on the death observation. */}
+              <div>
+                <label className="text-xs text-stone-500 mb-1 block">Notes (optional)</label>
+                <textarea
+                  placeholder="Free-text note — e.g. found in north camp, no predator signs"
+                  value={deathNotes}
+                  onChange={(e) => setDeathNotes(e.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                />
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex gap-2 pt-2">

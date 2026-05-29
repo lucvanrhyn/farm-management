@@ -13,6 +13,7 @@ import {
   DuplicateObservationError,
   InvalidTimestampError,
   InvalidTypeError,
+  NoteTooLongError,
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
 import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
@@ -221,6 +222,17 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidTimestampError) {
     return NextResponse.json({ error: err.code }, { status: 400 });
+  }
+  // Issue #492 — over-length free-text note. 400 (NOT 422): it is a
+  // malformed-input / shape error like INVALID_TIMESTAMP, not a domain
+  // business-rule conflict. Forwards the typed `code` + the `maxLength` so
+  // the UI can surface a precise limit — never the raw note (no user text
+  // leaks into logs; audit-error-envelope clean).
+  if (err instanceof NoteTooLongError) {
+    return NextResponse.json(
+      { error: err.code, details: { maxLength: err.maxLength } },
+      { status: 400 },
+    );
   }
   if (err instanceof CampConditionFieldRequiredError) {
     return NextResponse.json(

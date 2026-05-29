@@ -247,6 +247,89 @@ describe('POST /api/observations', () => {
     const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
   });
+
+  // Issue #492 (PRD #479 backlog) — first-class free-text `notes` (Path A).
+  // The wire schema accepts an OPTIONAL `notes` string (independent of the
+  // #484 `details` string contract) and forwards it into the create input,
+  // which threads it onto the persisted row.
+  it('forwards an optional notes string onto the created row', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        notes: 'coughing in camp 3',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ notes: 'coughing in camp 3' }),
+    });
+  });
+
+  it('accepts an omitted notes (undefined → null on the row)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ notes: null }),
+    });
+  });
+
+  it.each([
+    ['an object', { foo: 'bar' }],
+    ['a number', 42],
+    ['a boolean', true],
+  ])('returns a typed 400 when notes is %s (not a string)', async (_label, badNotes) => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', notes: badNotes }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('VALIDATION_FAILED');
+    expect(data.details?.fieldErrors?.notes).toBeTruthy();
+    // The bad value must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns a typed 400 (NOTE_TOO_LONG) when notes exceeds the cap', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      // 2001 chars — one over the 2000-char cap.
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        notes: 'x'.repeat(2001),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('NOTE_TOO_LONG');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/observations — opt-in ?species filter (#491)', () => {

@@ -180,6 +180,10 @@ export interface PrismaObservation {
   editedAt: string | null;
   editHistory: string | null;
   attachmentUrl: string | null;
+  // Issue #492 (PRD #479 backlog) — first-class free-text note (Path A).
+  // Nullable; surfaced unobtrusively in the admin + sheep timelines and
+  // editable via the observation edit modal.
+  notes: string | null;
 }
 
 // Mirrors the Prisma Animal model (camelCase) — returned by /api/animals

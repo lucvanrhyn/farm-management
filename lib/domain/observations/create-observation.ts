@@ -57,8 +57,43 @@ import {
   InvalidTimestampError,
   InvalidTypeError,
   MobNotFoundError,
+  NoteTooLongError,
 } from "./errors";
 import { OBSERVATION_TYPES } from "./registry";
+
+/**
+ * Issue #492 — maximum length of the free-text `notes` field, measured AFTER
+ * trim. Notes are unbounded free text the farmer types on any observation; a
+ * cap defends the column against an arbitrarily large blob from a stale /
+ * malicious client. 2000 chars comfortably fits the longest realistic field
+ * note ("coughing in camp 3", "lame ewe 402, treated with…") while bounding
+ * row growth + RAG-chunk cost. Shared by the create door + edit door +
+ * wire-schema boundary so the cap is enforced identically at every layer.
+ * Exceeding it throws {@link NoteTooLongError} (→ 400 NOTE_TOO_LONG).
+ */
+export const NOTE_MAX_LENGTH = 2000;
+
+/**
+ * Issue #492 — sanitise an optional free-text note for persistence.
+ *
+ * Trims surrounding whitespace; a note that is absent, null, or blank after
+ * trim normalises to `null` (no empty-string rows). A note exceeding
+ * {@link NOTE_MAX_LENGTH} (post-trim) throws {@link NoteTooLongError} so the
+ * over-length payload is rejected — never silently truncated — at whichever
+ * write boundary (create or edit) is in play. The throw routes through the
+ * canonical typed-error envelope (`NOTE_TOO_LONG`, 400) via `mapApiDomainError`.
+ */
+export function sanitizeNote(
+  notes: string | null | undefined,
+): string | null {
+  if (notes == null) return null;
+  const trimmed = notes.trim();
+  if (trimmed === "") return null;
+  if (trimmed.length > NOTE_MAX_LENGTH) {
+    throw new NoteTooLongError(NOTE_MAX_LENGTH, trimmed.length);
+  }
+  return trimmed;
+}
 
 /**
  * ADR-0006 — the writer client accepted by {@link createObservation}.
@@ -262,6 +297,17 @@ export interface CreateObservationInput {
    * legacy create path — back-compat for callers that pre-date #206.
    */
   clientLocalId?: string | null;
+  /**
+   * Issue #492 (PRD #479 backlog) — optional first-class free-text note (Path
+   * A). Cross-cutting unstructured text the farmer types on ANY observation
+   * type (independent of the structured `details` payload). Sanitised by
+   * {@link sanitizeNote} (trim + {@link NOTE_MAX_LENGTH} cap); blank/absent →
+   * `null`. Written ONLY on the CREATE side of the #206 idempotency upsert —
+   * a replayed retry must NOT mutate the first-written note (audit-trail /
+   * first-write-wins invariant), so it is deliberately absent from the
+   * upsert's `update: {}` clause.
+   */
+  notes?: string | null;
 }
 
 export interface CreateObservationResult {
@@ -362,6 +408,11 @@ export async function createObservation(
     validateWeighingObservation(input.details, getMaxLiveWeightKg(species));
   }
 
+  // Issue #492 — sanitise the optional free-text note BEFORE either write
+  // path. Trim + cap; an over-length note throws NoteTooLongError here so a
+  // duplicate bad note is rejected, never stored. Blank/absent → null.
+  const notes = sanitizeNote(input.notes);
+
   // Issue #206 — idempotent write path. When the client supplies a UUID, route
   // through `upsert` so a retry returns the original row instead of creating a
   // duplicate. The `update: {}` is intentional: the observation contents at
@@ -373,6 +424,9 @@ export async function createObservation(
   if (input.clientLocalId) {
     const record = await client.observation.upsert({
       where: { clientLocalId: input.clientLocalId },
+      // Issue #492 — `notes` is deliberately NOT in `update: {}`. A replayed
+      // retry hits the existing row; first-written notes win and an in-flight
+      // edit to `details` on a retry must not silently mutate the audit trail.
       update: {},
       create: {
         type: input.type,
@@ -384,6 +438,7 @@ export async function createObservation(
         species,
         attachmentUrl: input.attachmentUrl ?? null,
         clientLocalId: input.clientLocalId,
+        notes,
       },
     });
     return { success: true, id: record.id };
@@ -402,6 +457,7 @@ export async function createObservation(
       loggedBy: input.loggedBy,
       species,
       attachmentUrl: input.attachmentUrl ?? null,
+      notes,
     },
   });
 

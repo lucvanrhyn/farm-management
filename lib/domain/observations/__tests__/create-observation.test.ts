@@ -28,7 +28,9 @@ import {
   InvalidTimestampError,
   InvalidTypeError,
   MobNotFoundError,
+  NoteTooLongError,
 } from "../errors";
+import { NOTE_MAX_LENGTH } from "../create-observation";
 
 describe("createObservation(prisma, input)", () => {
   const observationCreate = vi.fn();
@@ -563,5 +565,129 @@ describe("createObservation(prisma, input)", () => {
     expect(observedAt).toBeInstanceOf(Date);
     expect(observedAt.getTime()).toBeGreaterThanOrEqual(before);
     expect(observedAt.getTime()).toBeLessThanOrEqual(after);
+  });
+
+  // Issue #492 (PRD #479 backlog) — first-class free-text `notes` column
+  // (Path A). The door threads an optional `notes` through to BOTH write
+  // paths, sanitises it (trim + length cap), and — critically — only writes
+  // it on the CREATE side of the #206 idempotency upsert. A retry must NOT
+  // mutate the persisted note (first-write-wins / audit-trail integrity).
+  describe("free-text notes (#492)", () => {
+    beforeEach(() => {
+      campFindFirst.mockResolvedValue({ campId: "A", species: null });
+    });
+
+    it("persists notes on the legacy create path (no clientLocalId)", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-note" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: "u@x.co.za",
+        notes: "Coughing seen in the north corner",
+      });
+
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          notes: "Coughing seen in the north corner",
+        }),
+      });
+    });
+
+    it("trims surrounding whitespace before persisting", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-trim" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+        notes: "   lame ewe 402   ",
+      });
+
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ notes: "lame ewe 402" }),
+      });
+    });
+
+    it("coerces an absent / blank-after-trim note to null", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-blank" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+        notes: "   ",
+      });
+
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ notes: null }),
+      });
+    });
+
+    it("defaults notes to null when the field is omitted (back-compat)", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-omit" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+      });
+
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ notes: null }),
+      });
+    });
+
+    it("writes the note on the CREATE side of the upsert ONLY (idempotent retry must not mutate)", async () => {
+      observationUpsert.mockResolvedValue({ id: "obs-idem" });
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: "u@x.co.za",
+        notes: "first-write note wins",
+        clientLocalId: "mount-1",
+      });
+
+      expect(observationUpsert).toHaveBeenCalledTimes(1);
+      const call = observationUpsert.mock.calls[0][0];
+      // First-write-wins: the note is on `create`, NOT on `update` — a replayed
+      // retry hits the existing row and `update: {}` leaves the note untouched.
+      expect(call.create).toEqual(
+        expect.objectContaining({ notes: "first-write note wins" }),
+      );
+      expect(call.update).toEqual({});
+    });
+
+    it("rejects a note longer than NOTE_MAX_LENGTH and writes nothing", async () => {
+      const tooLong = "x".repeat(NOTE_MAX_LENGTH + 1);
+
+      await expect(
+        createObservation(prisma, {
+          type: "camp_check",
+          camp_id: "A",
+          loggedBy: null,
+          notes: tooLong,
+        }),
+      ).rejects.toBeInstanceOf(NoteTooLongError);
+      expect(observationCreate).not.toHaveBeenCalled();
+      expect(observationUpsert).not.toHaveBeenCalled();
+    });
+
+    it("accepts a note exactly at NOTE_MAX_LENGTH (boundary)", async () => {
+      observationCreate.mockResolvedValue({ id: "obs-max" });
+      const atMax = "y".repeat(NOTE_MAX_LENGTH);
+
+      await createObservation(prisma, {
+        type: "camp_check",
+        camp_id: "A",
+        loggedBy: null,
+        notes: atMax,
+      });
+
+      expect(observationCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ notes: atMax }),
+      });
+    });
   });
 });

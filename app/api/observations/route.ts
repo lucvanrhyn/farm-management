@@ -52,6 +52,14 @@ interface CreateObservationBody {
    * via `crypto.randomUUID()` at form mount so retries collapse to one row.
    */
   clientLocalId?: string | null;
+  /**
+   * Issue #492 (PRD #479 backlog) — optional first-class free-text note
+   * (Path A). Independent of the `details` JSON contract; forwarded straight
+   * into the create door, which sanitises + persists it onto the `notes`
+   * column. Rejected at this boundary as `VALIDATION_FAILED` when not a
+   * string and as `NOTE_TOO_LONG` (in the door) when over the length cap.
+   */
+  notes?: string | null;
 }
 
 const createObservationSchema = {
@@ -71,6 +79,16 @@ const createObservationSchema = {
     // typed 400. `undefined` / `null` stay valid (they default to `""`).
     if (body.details != null && typeof body.details !== "string") {
       errors.details = "details must be a string";
+    }
+    // Issue #492 — `notes` is an OPTIONAL free-text string, independent of the
+    // #484 `details` contract. A non-string (object / number / boolean) would
+    // sail past into the create door's `String?` column and throw a
+    // PrismaClientValidationError → 500. Reject it here as a typed 400.
+    // `undefined` / `null` stay valid (they normalise to null in the door).
+    // The length cap is enforced authoritatively in the door (NOTE_TOO_LONG)
+    // — this boundary only shape-checks the type.
+    if (body.notes != null && typeof body.notes !== "string") {
+      errors.notes = "notes must be a string";
     }
     if (Object.keys(errors).length > 0) {
       throw new RouteValidationError(
@@ -185,6 +203,9 @@ export const POST = tenantWrite<CreateObservationBody>({
       // path activates. Falsy values (null, empty string) fall through to the
       // legacy create path, preserving back-compat.
       clientLocalId: body.clientLocalId ?? null,
+      // Issue #492 — forward the optional free-text note. The door sanitises
+      // (trim + cap) and writes it onto the CREATE side of the upsert only.
+      notes: body.notes ?? null,
     };
     const result = await createObservation(ctx.prisma, input);
     // Issue #413 — invalidate camp-scoped caches on camp_condition /

@@ -24,6 +24,8 @@ export interface EditModalProps {
 export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) {
   const parsed = safeParse(obs.details);
   const [details, setDetails] = useState<Record<string, unknown>>(parsed);
+  // Issue #492 — editable free-text note, seeded from the existing column.
+  const [notes, setNotes] = useState<string>(obs.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +45,12 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
       const res = await fetch(`/api/observations/${obs.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ details: JSON.stringify(details) }),
+        // Issue #492 — send `notes` alongside `details`. A blank textarea
+        // sends null (clears the note); the edit door trims + caps it.
+        body: JSON.stringify({
+          details: JSON.stringify(details),
+          notes: notes.trim() === "" ? null : notes,
+        }),
       });
       if (!res.ok) {
         const e = await res.json();
@@ -115,6 +122,29 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
           <DetailsForm details={details} onChange={handleFieldChange} />
         </div>
 
+        {/* Issue #492 — free-text note. Editable on every observation type
+            (cross-cutting, independent of the per-type structured fields), so
+            it is rendered even when the structured `details` are read-only. */}
+        <div>
+          <label
+            htmlFor="observation-notes"
+            className="block text-xs font-semibold mb-2"
+            style={{ color: "#9C8E7A" }}
+          >
+            Notes (optional)
+          </label>
+          <textarea
+            id="observation-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="Free-text note — e.g. “coughing in camp 3”"
+            className="w-full rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2"
+            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", color: "#1C1815" }}
+          />
+        </div>
+
         {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
 
         <div className="flex items-center justify-between gap-2">
@@ -142,16 +172,19 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
             >
               Cancel
             </button>
-            {isEditable && (
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
-                style={{ background: "#4A7C59", color: "#F5EBD4" }}
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            )}
+            {/* Issue #492 — Save is always available now: even when the
+                per-type structured `details` are read-only, the cross-cutting
+                free-text note can still be edited + saved. For read-only types
+                the DetailsForm renders unchanged values, so a save persists
+                only the note. */}
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
+              style={{ background: "#4A7C59", color: "#F5EBD4" }}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
           </div>
         </div>
       </div>

@@ -13,6 +13,9 @@ interface ObservationRow {
   details: string;
   observedAt: string;
   loggedBy: string | null;
+  // Issue #492 — first-class free-text note (Path A); surfaced below the
+  // structured summary.
+  notes: string | null;
 }
 
 interface Props {
@@ -133,6 +136,17 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
             <div className="text-sm" style={{ color: "#1C1815" }}>
               {summary || <span style={{ color: "#9C8E7A" }}>(no details)</span>}
             </div>
+            {/* Issue #492 — free-text note, unobtrusive italic line below the
+                structured summary. */}
+            {o.notes ? (
+              <div
+                className="text-sm italic"
+                data-testid="sheep-observation-note"
+                style={{ color: "#6B5C4E" }}
+              >
+                “{o.notes}”
+              </div>
+            ) : null}
             <div className="text-xs" style={{ color: "#9C8E7A" }}>
               Camp {o.campId}
               {o.animalId ? ` · Animal ${o.animalId}` : ""}

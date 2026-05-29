@@ -25,7 +25,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getPendingObservations: vi.fn(),
-  markSucceeded: vi.fn(async () => {}),
+  // Issue #492 — explicit variadic signature so `markSucceeded.mock.calls[0]`
+  // types as a populated tuple (the real `markSucceeded(kind, id, payload)`
+  // takes three args). The zero-arg `async () => {}` form inferred an empty
+  // tuple, breaking the `[kind, id, payload]` destructure under strict tsc.
+  markSucceeded: vi.fn(async (..._args: unknown[]) => {}),
   markFailed: vi.fn(async () => {}),
   clearPendingAnimalUpdate: vi.fn(async () => {}),
   // Other offline-store exports used by syncPendingObservations indirectly.

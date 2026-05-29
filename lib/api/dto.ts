@@ -161,5 +161,7 @@ export function toPrismaObservationDTO(
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     editHistory: row.editHistory,
     attachmentUrl: row.attachmentUrl,
+    // Issue #492 — first-class free-text note column.
+    notes: row.notes,
   };
 }

@@ -98,6 +98,9 @@ export default function CreateObservationModal({
   const [campId, setCampId] = useState("");
   const [animalId, setAnimalId] = useState("");
   const [details, setDetails] = useState<Record<string, unknown>>({});
+  // Issue #492 — first-class free-text note (Path A), independent of the
+  // per-type structured `details`. Forwarded as a top-level `notes` field.
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // Issue #481 — mount-stable idempotency key. The admin "+ New Entry" modal
@@ -126,6 +129,7 @@ export default function CreateObservationModal({
   function handleTypeSelect(type: ObservationType) {
     setSelectedType(type);
     setDetails({});
+    setNotes("");
     setStep("form");
   }
 
@@ -159,6 +163,9 @@ export default function CreateObservationModal({
           details: JSON.stringify(cleanDetails),
           created_at: new Date().toISOString(),
           clientLocalId,
+          // Issue #492 — top-level free-text note. Omitted when blank so the
+          // row's `notes` column stays null.
+          notes: notes.trim() === "" ? undefined : notes,
         }),
       });
       if (!res.ok) {
@@ -398,12 +405,28 @@ export default function CreateObservationModal({
               </div>
             )}
 
+            {/* Issue #492 — free-text note. Cross-cutting + available for every
+                observation type (rendered after the per-type fields, before the
+                actions). */}
+            <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+              Notes (optional)
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                maxLength={2000}
+                placeholder="Free-text note — e.g. “coughing in camp 3”"
+                style={fieldInput}
+                className="mt-1 block resize-none"
+              />
+            </label>
+
             {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
 
             {/* Actions */}
             <div className="flex items-center justify-between gap-2">
               <button
-                onClick={() => { setStep("type"); setSelectedType(null); setDetails({}); }}
+                onClick={() => { setStep("type"); setSelectedType(null); setDetails({}); setNotes(""); }}
                 className="px-4 py-2 text-sm rounded-xl transition-colors"
                 style={{ color: "#6B5C4E", border: "1px solid #E0D5C8", background: "transparent" }}
               >
