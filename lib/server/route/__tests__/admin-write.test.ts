@@ -232,7 +232,7 @@ describe("adminWrite — body parse", () => {
 });
 
 describe("adminWrite — handle errors + revalidate", () => {
-  it("returns 500 DB_QUERY_FAILED when handle throws an unmapped error", async () => {
+  it("returns 500 DB_QUERY_FAILED with NO raw message when handle throws an unmapped error (#483)", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(adminCtx);
     const handle = vi.fn().mockRejectedValueOnce(new Error("kaboom"));
     const route = adminWrite({ handle });
@@ -240,10 +240,10 @@ describe("adminWrite — handle errors + revalidate", () => {
     const res = await route(makeReq({ body: {} }), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toMatchObject({
-      error: "DB_QUERY_FAILED",
-      message: "kaboom",
-    });
+    const body = await res.json();
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // The raw error message must never reach the client body (#483).
+    expect(JSON.stringify(body)).not.toContain("kaboom");
   });
 
   it("delegates to mapApiDomainError when it returns a response", async () => {

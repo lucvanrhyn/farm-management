@@ -5,7 +5,8 @@
  * beacon, auth catch-all, the `/api/farms/[slug]/select` shortcircuit).
  * No auth, no body parse — the adapter only owns:
  *   - try/catch around `handle` → mapApiDomainError first; fall back to
- *     500 DB_QUERY_FAILED with the underlying message.
+ *     a 500 DB_QUERY_FAILED envelope with NO message (#483 — the raw error
+ *     never reaches the client; it is logged server-side).
  *   - `withServerTiming` instrumentation.
  *
  * Auth-style handlers (e.g. NextAuth catch-all) supply their own
@@ -38,9 +39,10 @@ export function publicHandler<TParams extends RouteParams = RouteParams>(
       } catch (err) {
         const mapped = mapApiDomainError(err);
         if (mapped) return mapped;
-        const message = err instanceof Error ? err.message : String(err);
+        // #483 — never echo a raw err.message to the client; the full error
+        // is preserved in the server log below.
         logger.error("[route] publicHandler handler threw", { error: err });
-        return routeError("DB_QUERY_FAILED", message, 500);
+        return routeError("DB_QUERY_FAILED", undefined, 500);
       }
     });
   };

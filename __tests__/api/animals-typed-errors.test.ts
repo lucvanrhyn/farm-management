@@ -120,16 +120,17 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
     const res = await GET(req, { params: Promise.resolve({}) });
 
     expect(res.status).toBe(500);
-    // Body MUST be valid JSON, not empty. The whole point of this hotfix is
-    // that empty 500 bodies cascade into "Something went wrong" everywhere.
+    // Body MUST be valid JSON, not empty. The whole point of the P0.1 hotfix
+    // is that empty 500 bodies cascade into "Something went wrong" everywhere.
     const text = await res.text();
     expect(text.length).toBeGreaterThan(0);
     const body = JSON.parse(text);
-    expect(body).toMatchObject({ error: "DB_QUERY_FAILED" });
-    expect(typeof body.message).toBe("string");
-    // Underlying Prisma message should be propagated for triage. Operators
-    // need a clue without having to dig into Vercel logs every time.
-    expect(body.message).toMatch(/no such column|speciesData|libsql/i);
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // #483 — the raw libSQL/Prisma message (table/column/payload text) MUST
+    // NOT leak to the client. Operators read the full error from the server
+    // log (logger.error("[route] tenantRead handler threw", { error })); the
+    // client only ever sees the opaque code.
+    expect(text).not.toMatch(/no such column|speciesData|libsql/i);
   });
 
   it("returns 500 with typed JSON body when prisma.findMany throws on the paginated path", async () => {
@@ -143,8 +144,9 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
     const text = await res.text();
     expect(text.length).toBeGreaterThan(0);
     const body = JSON.parse(text);
-    expect(body).toMatchObject({ error: "DB_QUERY_FAILED" });
-    expect(typeof body.message).toBe("string");
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // #483 — no raw connection/driver message leaks to the client.
+    expect(text).not.toMatch(/Connection refused/i);
   });
 
   it("does not change the auth contract — still returns 401 on no session", async () => {

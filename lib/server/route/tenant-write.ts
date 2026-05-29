@@ -95,6 +95,10 @@ export function tenantWrite<
           ? opts.schema.parse(parsed.body)
           : (parsed.body as TBody);
       } catch (err) {
+        // #483 — the VALIDATION_FAILED message is client-safe: schema.parse
+        // validates the CALLER's own request payload (zod issue text /
+        // field-shape sentences), never DB or internal-schema state. The
+        // structured field detail still flows through `extractDetails`.
         const message = err instanceof Error ? err.message : "Validation failed";
         return routeError("VALIDATION_FAILED", message, 400, extractDetails(err));
       }
@@ -107,9 +111,10 @@ export function tenantWrite<
       } catch (err) {
         const mapped = mapApiDomainError(err);
         if (mapped) return mapped;
-        const message = err instanceof Error ? err.message : String(err);
+        // #483 — never echo a raw err.message to the client; the full error
+        // is preserved in the server log below.
         logger.error("[route] tenantWrite handler threw", { error: err });
-        return routeError("DB_QUERY_FAILED", message, 500);
+        return routeError("DB_QUERY_FAILED", undefined, 500);
       }
 
       if (response.status >= 200 && response.status < 300) {

@@ -139,7 +139,7 @@ describe("tenantWrite — body parse and revalidate", () => {
 });
 
 describe("tenantWrite — error path", () => {
-  it("returns 500 DB_QUERY_FAILED when handle throws an unmapped error", async () => {
+  it("returns 500 DB_QUERY_FAILED with NO raw message when handle throws an unmapped error (#483)", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(loggerCtx);
     const handle = vi.fn().mockRejectedValueOnce(new Error("boom"));
     const route = tenantWrite({ handle });
@@ -147,7 +147,10 @@ describe("tenantWrite — error path", () => {
     const res = await route(makeReq(), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toMatchObject({ error: "DB_QUERY_FAILED", message: "boom" });
+    const body = await res.json();
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // The raw error message must never reach the client body (#483).
+    expect(JSON.stringify(body)).not.toContain("boom");
   });
 
   it("delegates to mapApiDomainError when it returns a response", async () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { routeError } from "@/lib/server/route/envelope";
+import { logger } from "@/lib/logger";
 import { CrossSpeciesBlockedError } from "@/lib/species/errors";
 import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import {
@@ -104,7 +105,38 @@ import {
  * validation so every arm reproduces the PRE-extraction literal
  * byte-identical — NOT the canonical SCREAMING_SNAKE direction.
  */
+/**
+ * Issue #483 (Epic B1, security) — Prisma exception class names. We match
+ * by `err.name` (not `instanceof`) so this module never takes a runtime
+ * dependency on `@prisma/client` — same lightweight-detection convention as
+ * `lib/server/alerts/dedup.ts`'s P2002 guard. Any of these classes carries
+ * raw internal-schema text (table/column/payload) in its `message`, which
+ * must NEVER reach an authenticated client. We collapse them all to the
+ * canonical opaque `DB_QUERY_FAILED` envelope and log the full error
+ * server-side.
+ */
+const PRISMA_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "PrismaClientValidationError",
+  "PrismaClientKnownRequestError",
+  "PrismaClientInitializationError",
+  "PrismaClientRustPanicError",
+  "PrismaClientUnknownRequestError",
+]);
+
+function isPrismaError(err: unknown): err is Error {
+  return err instanceof Error && PRISMA_ERROR_NAMES.has(err.name);
+}
+
 export function mapApiDomainError(err: unknown): NextResponse | null {
+  // Issue #483 — sanitize Prisma throws BEFORE the per-adapter fallthrough.
+  // Returns the opaque DB_QUERY_FAILED envelope (no `message`) so no raw
+  // schema text leaks; the full error is preserved in the server log.
+  if (isPrismaError(err)) {
+    logger.error("[api-errors] Prisma error sanitized to DB_QUERY_FAILED", {
+      error: err,
+    });
+    return routeError("DB_QUERY_FAILED", undefined, 500);
+  }
   if (err instanceof MobNotFoundError) {
     return NextResponse.json({ error: "Mob not found" }, { status: 404 });
   }

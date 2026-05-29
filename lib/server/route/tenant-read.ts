@@ -5,7 +5,9 @@
  *   - one-shot `getFarmContext(req)` resolution (auth + tenant-scoped Prisma)
  *   - typed-error envelope on auth failure (`AUTH_REQUIRED`)
  *   - try/catch around `handle`, with `mapApiDomainError` first-priority,
- *     falling back to `{ error: "DB_QUERY_FAILED", message: <err.message> }`
+ *     falling back to a `{ error: "DB_QUERY_FAILED" }` envelope with NO
+ *     message (#483 — the raw error never reaches the client; it is
+ *     logged server-side)
  *   - `withServerTiming` instrumentation (`session` + `total` spans by default;
  *     callers may add their own `query` spans inside `handle` via `timeAsync`)
  *
@@ -54,9 +56,10 @@ export function tenantRead<TParams extends RouteParams = RouteParams>(
       } catch (err) {
         const mapped = mapApiDomainError(err);
         if (mapped) return mapped;
-        const message = err instanceof Error ? err.message : String(err);
+        // #483 — never echo a raw err.message to the client; the full error
+        // is preserved in the server log below.
         logger.error("[route] tenantRead handler threw", { error: err });
-        return routeError("DB_QUERY_FAILED", message, 500);
+        return routeError("DB_QUERY_FAILED", undefined, 500);
       }
     });
   };
