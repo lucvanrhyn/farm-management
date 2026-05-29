@@ -44,8 +44,12 @@ const PRISMA_CLASS_NAMES = [
 describe("mapApiDomainError — Prisma exception sanitization (#483)", () => {
   for (const name of PRISMA_CLASS_NAMES) {
     it(`maps ${name} → 500 DB_QUERY_FAILED with NO message (no schema leak)`, async () => {
+      // NB: use `aggregate()` not `findMany()` here — the audit-findmany-no-take
+      // call-site scanner text-matches `.findMany(` even inside a string literal,
+      // and would flag this mock error message as an unbounded query. The exact
+      // Prisma method is irrelevant to what this test locks (raw-message non-leak).
       const leak =
-        "Invalid `prisma.animal.findMany()` invocation: column `secret_col` does not exist on table `Animal`";
+        "Invalid `prisma.animal.aggregate()` invocation: column `secret_col` does not exist on table `Animal`";
       const res = mapApiDomainError(makePrismaError(name, leak));
 
       expect(res).not.toBeNull();
