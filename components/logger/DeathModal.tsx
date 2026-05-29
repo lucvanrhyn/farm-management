@@ -38,6 +38,11 @@ const DISPOSAL_OPTIONS = [
 export interface DeathSubmitData {
   cause: string;
   carcassDisposal: string;
+  /**
+   * Issue #492 (PRD #479 backlog) — optional first-class free-text note (Path
+   * A). Persisted onto the `Observation.notes` column (NOT the `details` JSON).
+   */
+  notes: string;
 }
 
 interface DeathModalProps {
@@ -68,6 +73,8 @@ export default function DeathModal({
 }: DeathModalProps) {
   const [selectedCause, setSelectedCause] = useState<string | null>(null);
   const [carcassDisposal, setCarcassDisposal] = useState<string>("");
+  // Issue #492 — optional free-text note on the death event.
+  const [notes, setNotes] = useState<string>("");
 
   if (!isOpen) return null;
 
@@ -78,7 +85,7 @@ export default function DeathModal({
     // authoritative backstop (422 DEATH_MULTI_CAUSE / DEATH_DISPOSAL_REQUIRED)
     // — the disabled `canSubmit` button is a usability courtesy.
     if (!selectedCause || !carcassDisposal) return;
-    onSubmit({ cause: selectedCause, carcassDisposal });
+    onSubmit({ cause: selectedCause, carcassDisposal, notes });
   }
 
   return (
@@ -174,6 +181,31 @@ export default function DeathModal({
             </option>
           ))}
         </select>
+
+        {/* Issue #492 — optional free-text note on the death event (e.g.
+            "found in north camp, no predator signs"). Persisted to the
+            first-class `notes` column, not the structured details. */}
+        <label
+          htmlFor="death-notes"
+          className="text-sm font-semibold"
+          style={{ color: "#D2B48C" }}
+        >
+          Notes (optional)
+        </label>
+        <textarea
+          id="death-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          placeholder="e.g. found in north camp, no predator signs"
+          className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+          style={{
+            backgroundColor: "rgba(26, 13, 5, 0.6)",
+            border: "1px solid rgba(92, 61, 46, 0.5)",
+            color: "#F5F0E8",
+          }}
+        />
 
         <StickySubmitBar className="-mx-6 px-6 mt-2">
           <button

@@ -302,7 +302,7 @@ export default function CampInspectionPage({
     setActiveModal(null);
   }
 
-  async function handleDeathSubmit(data: { cause: string; carcassDisposal: string }) {
+  async function handleDeathSubmit(data: { cause: string; carcassDisposal: string; notes: string }) {
     await queueObservation({
       type: "death",
       camp_id: decodedId,
@@ -317,6 +317,11 @@ export default function CampInspectionPage({
         cause: data.cause,
         carcassDisposal: data.carcassDisposal,
       }),
+      // Issue #492 — first-class free-text note (Path A). Queued alongside the
+      // structured death details; replayed verbatim by sync-manager into the
+      // POST body's top-level `notes` field → the `Observation.notes` column.
+      // Omitted when blank so the column stays null.
+      notes: data.notes.trim() === "" ? undefined : data.notes,
       created_at: new Date().toISOString(),
       synced_at: null,
       sync_status: "pending",

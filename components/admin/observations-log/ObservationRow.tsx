@@ -52,6 +52,20 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
             <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
           )}
         </p>
+        {/* Issue #492 — free-text note, surfaced unobtrusively below the
+            structured summary. Italicised + truncated so it never crowds the
+            per-type fields. `whitespace` truncate keeps the row one-line; the
+            full note is on hover (title) and in the edit modal. */}
+        {obs.notes && (
+          <p
+            className="text-xs mt-0.5 italic truncate"
+            data-testid="observation-note"
+            style={{ color: "#6B5C4E" }}
+            title={obs.notes}
+          >
+            “{obs.notes}”
+          </p>
+        )}
         <p className="text-[10px] mt-0.5 font-mono" style={{ color: "#C4B8AA" }}>
           {obs.observedAt.split("T")[0]}{obs.loggedBy ? ` · ${obs.loggedBy}` : ""}
         </p>

@@ -266,6 +266,9 @@ async function uploadObservation(obs: PendingObservation): Promise<UploadResult<
       details: obs.details,
       created_at: obs.created_at,
       clientLocalId: obs.clientLocalId ?? null,
+      // Issue #492 — forward the queued free-text note verbatim. The create
+      // door sanitises (trim + cap) and writes it onto the `notes` column.
+      notes: obs.notes ?? null,
     };
     const res = await fetch('/api/observations', {
       method: 'POST',

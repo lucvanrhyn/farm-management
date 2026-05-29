@@ -17,7 +17,7 @@
  * components.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import type { PrismaObservation } from "@/lib/types";
 
@@ -37,6 +37,7 @@ function obs(partial: Partial<PrismaObservation>): PrismaObservation {
     editedAt: null,
     editHistory: null,
     attachmentUrl: null,
+    notes: null,
     ...partial,
   } as PrismaObservation;
 }
@@ -126,5 +127,79 @@ describe("EditModal — registry-driven per-type detail form", () => {
     expect(numericInputs.length).toBeGreaterThan(0);
     // The 425 weight value is reflected in the input.
     expect((numericInputs[0] as HTMLInputElement).value).toBe("425");
+  });
+
+  // Issue #492 — the free-text note round-trips: it is pre-filled from the
+  // existing column, and a save PATCHes the edited value alongside `details`.
+  describe("free-text notes (#492)", () => {
+    it("pre-fills the notes textarea from obs.notes", () => {
+      render(
+        <EditModal
+          obs={obs({ type: "weighing", details: JSON.stringify({ weight_kg: 100 }), notes: "lame ewe 402" })}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onDeleted={vi.fn()}
+        />,
+      );
+      const textarea = screen.getByLabelText(/notes/i) as HTMLTextAreaElement;
+      expect(textarea.value).toBe("lame ewe 402");
+    });
+
+    it("PATCHes the edited note alongside details on save", async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(JSON.stringify({ id: "o1", type: "weighing" }), { status: 200 }),
+        );
+      const onSaved = vi.fn();
+      render(
+        <EditModal
+          obs={obs({ type: "weighing", details: JSON.stringify({ weight_kg: 100 }), notes: "old" })}
+          onClose={vi.fn()}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />,
+      );
+
+      const textarea = screen.getByLabelText(/notes/i);
+      fireEvent.change(textarea, { target: { value: "new note" } });
+      fireEvent.click(screen.getByText("Save"));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/observations/o1");
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.notes).toBe("new note");
+      expect(typeof body.details).toBe("string");
+
+      fetchMock.mockRestore();
+    });
+
+    it("sends notes:null when the textarea is cleared", async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(JSON.stringify({ id: "o1", type: "weighing" }), { status: 200 }),
+        );
+      render(
+        <EditModal
+          obs={obs({ type: "weighing", details: JSON.stringify({ weight_kg: 100 }), notes: "remove me" })}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onDeleted={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: "  " } });
+      fireEvent.click(screen.getByText("Save"));
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+      );
+      expect(body.notes).toBeNull();
+
+      fetchMock.mockRestore();
+    });
   });
 });

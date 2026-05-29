@@ -149,6 +149,9 @@ describe('DeathModal — submit gating (#254)', () => {
     expect(onSubmit.mock.calls[0][0]).toEqual({
       cause: 'Old age',
       carcassDisposal: 'BURIED',
+      // Issue #492 — the modal now also forwards an optional free-text note;
+      // empty when the farmer leaves it blank.
+      notes: '',
     });
   });
 });

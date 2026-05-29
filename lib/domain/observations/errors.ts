@@ -24,6 +24,7 @@ export const MOB_NOT_FOUND = "MOB_NOT_FOUND" as const;
 export const INVALID_TYPE = "INVALID_TYPE" as const;
 export const INVALID_TIMESTAMP = "INVALID_TIMESTAMP" as const;
 export const DUPLICATE_OBSERVATION = "DUPLICATE_OBSERVATION" as const;
+export const NOTE_TOO_LONG = "NOTE_TOO_LONG" as const;
 
 /**
  * No observation with the given id exists in the tenant. Wire: 404
@@ -164,5 +165,34 @@ export class DuplicateObservationError extends Error {
     );
     this.name = "DuplicateObservationError";
     this.existingId = existingId;
+  }
+}
+
+/**
+ * Issue #492 (PRD #479 backlog) — the free-text `notes` field on an
+ * observation create / edit exceeds {@link NOTE_MAX_LENGTH} characters
+ * (measured AFTER trim). Notes are an unbounded free-text field; without a
+ * cap a stale / malicious client could persist an arbitrarily large blob into
+ * the `notes` column. Rejection (rather than silent truncation) is the
+ * least-surprising rule: a truncated note silently loses the farmer's words,
+ * whereas a rejection surfaces a fixable error.
+ *
+ * Wire: 400 `{ error: "NOTE_TOO_LONG", details: { maxLength } }` (mapped by
+ * `mapApiDomainError`). 400 (not 422) mirrors the schema-shape rejection
+ * family (`VALIDATION_FAILED`, `INVALID_TIMESTAMP`) — it is a malformed-input
+ * error, not a domain business-rule conflict. Thrown from BOTH the create
+ * door and the edit door so the cap holds at every write boundary; forwards
+ * the typed `code` only (never the raw note) so no user text leaks into logs
+ * (audit-error-envelope clean).
+ */
+export class NoteTooLongError extends Error {
+  readonly code = NOTE_TOO_LONG;
+  readonly maxLength: number;
+  readonly received: number;
+  constructor(maxLength: number, received: number) {
+    super(`Note too long: ${received} chars (max ${maxLength})`);
+    this.name = "NoteTooLongError";
+    this.maxLength = maxLength;
+    this.received = received;
   }
 }

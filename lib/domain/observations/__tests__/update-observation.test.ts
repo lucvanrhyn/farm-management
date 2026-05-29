@@ -14,7 +14,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 
 import { updateObservation } from "../update-observation";
-import { ObservationNotFoundError } from "../errors";
+import { NOTE_MAX_LENGTH } from "../create-observation";
+import { NoteTooLongError, ObservationNotFoundError } from "../errors";
 
 describe("updateObservation(prisma, input)", () => {
   const findUnique = vi.fn();
@@ -97,5 +98,98 @@ describe("updateObservation(prisma, input)", () => {
     // Oldest entry (u0) dropped; newest entry kept.
     expect(history[0].editedBy).toBe("u1@x.co.za");
     expect(history[history.length - 1].editedBy).toBe("newu@x.co.za");
+  });
+
+  // Issue #492 (PRD #479 backlog) — the edit door lets an admin change the
+  // free-text `notes` column (round-trip create → display → edit). Notes are
+  // edited INDEPENDENTLY of the structured `details` payload: editing one
+  // never clobbers the other.
+  describe("notes editing (#492)", () => {
+    it("updates notes when supplied, leaving details untouched", async () => {
+      findUnique.mockResolvedValue({
+        id: "obs-1",
+        type: "camp_check",
+        details: "{\"status\":\"healthy\"}",
+        editHistory: null,
+        notes: "old note",
+        species: null,
+      });
+      update.mockResolvedValue({ id: "obs-1", notes: "new note" });
+
+      await updateObservation(prisma, {
+        id: "obs-1",
+        details: "{\"status\":\"healthy\"}",
+        notes: "new note",
+        editedBy: "admin@x.co.za",
+      });
+
+      const call = update.mock.calls[0][0];
+      expect(call.data.notes).toBe("new note");
+      // The structured details payload is preserved verbatim.
+      expect(call.data.details).toBe("{\"status\":\"healthy\"}");
+    });
+
+    it("trims the edited note and coerces blank-after-trim to null", async () => {
+      findUnique.mockResolvedValue({
+        id: "obs-1",
+        type: "camp_check",
+        details: "{}",
+        editHistory: null,
+        notes: "something",
+        species: null,
+      });
+      update.mockResolvedValue({});
+
+      await updateObservation(prisma, {
+        id: "obs-1",
+        details: "{}",
+        notes: "   ",
+        editedBy: null,
+      });
+
+      expect(update.mock.calls[0][0].data.notes).toBeNull();
+    });
+
+    it("does NOT touch notes when the field is omitted (details-only edit)", async () => {
+      findUnique.mockResolvedValue({
+        id: "obs-1",
+        type: "camp_check",
+        details: "{\"v\":1}",
+        editHistory: null,
+        notes: "keep me",
+        species: null,
+      });
+      update.mockResolvedValue({});
+
+      await updateObservation(prisma, {
+        id: "obs-1",
+        details: "{\"v\":2}",
+        editedBy: null,
+      });
+
+      // `notes` key absent from the update data → Prisma leaves the column as-is.
+      expect("notes" in update.mock.calls[0][0].data).toBe(false);
+    });
+
+    it("rejects an over-length edited note and writes nothing", async () => {
+      findUnique.mockResolvedValue({
+        id: "obs-1",
+        type: "camp_check",
+        details: "{}",
+        editHistory: null,
+        notes: null,
+        species: null,
+      });
+
+      await expect(
+        updateObservation(prisma, {
+          id: "obs-1",
+          details: "{}",
+          notes: "z".repeat(NOTE_MAX_LENGTH + 1),
+          editedBy: null,
+        }),
+      ).rejects.toBeInstanceOf(NoteTooLongError);
+      expect(update).not.toHaveBeenCalled();
+    });
   });
 });

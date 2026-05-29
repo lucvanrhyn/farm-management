@@ -1,0 +1,47 @@
+-- 0026_observation_notes.sql
+--
+-- Issue #492 (PRD #479 backlog) — first-class free-text notes on observations.
+--
+-- PRODUCT DECISION: Path A — a first-class, SQL-searchable `notes` column on
+-- `Observation` (NOT a `note` key buried in the `details` JSON blob). Recorded
+-- on issue #492 per acceptance criterion 1. Rationale: free-text field notes
+-- (e.g. "coughing in camp 3", "lame ewe 402") are the single highest-value
+-- UNSTRUCTURED signal for the farm-intelligence layer — Farm Einstein (RAG)
+-- and Disease Radar are flagship features that must ingest them. A first-class
+-- column is LIKE/FTS-searchable; a JSON-buried key requires unindexed
+-- `json_extract` scans. Retrofitting a column AFTER notes are JSON-buried
+-- across every tenant is exactly the costly backfill our migration lessons
+-- warn against — far cheaper to land it now while the table is the right home.
+-- Path A is complementary to #494 (per-observation-TYPE typed `details`
+-- registry): #494 governs structured per-type fields (weight_kg, repro_state…);
+-- notes are cross-cutting free text that belong in their own column.
+--
+-- Adds the nullable `notes` column to the `Observation` table. Death events,
+-- weighings, repro events etc. are all persisted as `Observation` rows; a
+-- dedicated column (vs. JSON-in-details) lets future RAG / Disease Radar
+-- queries `LIKE`-search free text without parsing the JSON details blob.
+--
+-- Discipline notes (mirror 0021_death_carcass_disposal.sql):
+--   * Additive only — pure `ALTER TABLE … ADD COLUMN` on Observation. No
+--     DROP/RENAME, no User/_migrations touch → within promote scope (runs on
+--     promote across every tenant clone; a nullable ADD COLUMN is safe).
+--   * NULLABLE at the SQL level, no backfill, no default. Existing rows keep
+--     `notes = NULL`; notes are an OPTIONAL free-text field, so there is no
+--     regulatory-safe value to backfill (unlike 0021's `carcassDisposal`).
+--     SQLite/libSQL's `ALTER TABLE ADD COLUMN NOT NULL` requires a server-side
+--     default — we want neither a default nor NOT NULL here.
+--   * Idempotency is provided by the migrator's per-tenant `_migrations`
+--     bookkeeping table (`lib/migrator.ts`): each file runs exactly once per
+--     tenant DB inside an atomic batch. SQLite/libSQL has no
+--     `ADD COLUMN IF NOT EXISTS`; re-running is prevented by the bookkeeping
+--     row, not per-statement guards.
+--   * `verifyMigrationApplied` (#141) parses the ALTER and probes
+--     pragma_table_info; on a silent libSQL miss the bookkeeping row is rolled
+--     back so the file re-runs next batch.
+--   * `checkPrismaColumnParity` (#137) verifies the live DB column matches the
+--     Prisma schema declaration in the same commit (`Observation.notes`).
+--   * Identifier quoting per feedback-quote-sql-keywords-in-migrations.md.
+--     `Observation` / `notes` are not SQL keywords, but the project convention
+--     is to double-quote table/column identifiers in hand-written migrations.
+
+ALTER TABLE "Observation" ADD COLUMN "notes" TEXT;

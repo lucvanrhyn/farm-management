@@ -114,6 +114,15 @@ export interface PendingObservation extends PendingQueueFailureMeta {
    * defeat the entire idempotency contract.
    */
   clientLocalId?: string;
+  /**
+   * Issue #492 (PRD #479 backlog) — optional first-class free-text note (Path
+   * A). Queued alongside the structured `details` and replayed verbatim by
+   * `sync-manager.uploadObservation` into the POST body's top-level `notes`
+   * field, where the create door sanitises + persists it onto the
+   * `Observation.notes` column. Absent for rows queued before this slice and
+   * for forms that don't surface a note input.
+   */
+  notes?: string;
 }
 
 export interface PendingAnimalCreate extends PendingQueueFailureMeta {

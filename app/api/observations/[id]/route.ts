@@ -23,6 +23,15 @@ import {
 
 interface PatchObservationBody {
   details: string;
+  /**
+   * Issue #492 (PRD #479 backlog) — optional edit to the free-text `notes`
+   * column. OMITTED leaves the column untouched; present (string or explicit
+   * null) is forwarded to the edit door, which sanitises + persists it. The
+   * `notesProvided` flag distinguishes "absent" from "explicit null" so a
+   * details-only edit never clobbers an existing note.
+   */
+  notes?: string | null;
+  notesProvided: boolean;
 }
 
 const patchObservationSchema = {
@@ -33,7 +42,20 @@ const patchObservationSchema = {
         fieldErrors: { details: "details must be a JSON string" },
       });
     }
-    return { details: body.details };
+    // Issue #492 — `notes`, when present, must be a string (or explicit null
+    // to clear). The length cap is enforced authoritatively in the edit door
+    // (NOTE_TOO_LONG); this boundary only shape-checks the type.
+    const notesProvided = "notes" in body;
+    if (notesProvided && body.notes != null && typeof body.notes !== "string") {
+      throw new RouteValidationError("notes must be a string", {
+        fieldErrors: { notes: "notes must be a string" },
+      });
+    }
+    return {
+      details: body.details,
+      ...(notesProvided ? { notes: body.notes as string | null } : {}),
+      notesProvided,
+    };
   },
 };
 
@@ -47,6 +69,10 @@ export const PATCH = adminWrite<PatchObservationBody, { id: string }>({
     const updated = await updateObservation(ctx.prisma, {
       id: params.id,
       details: body.details,
+      // Issue #492 — forward `notes` ONLY when the caller supplied it, so a
+      // details-only PATCH leaves the column untouched. The door sanitises +
+      // caps; an explicit null clears the note.
+      ...(body.notesProvided ? { notes: body.notes ?? null } : {}),
       editedBy: ctx.session.user?.email ?? null,
     });
     revalidateObservationWrite(ctx.slug, updated.type);
