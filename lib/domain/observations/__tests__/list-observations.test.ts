@@ -57,6 +57,33 @@ describe("listObservations(prisma, filters)", () => {
     });
   });
 
+  // Issue #491 — opt-in `?species` filter, mirroring `/api/animals`.
+  it("narrows the where to { species } when species is present", async () => {
+    findMany.mockResolvedValue([{ id: "obs-sheep" }]);
+
+    const result = await listObservations(prisma, { species: "sheep" });
+
+    expect(result).toEqual([{ id: "obs-sheep" }]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { species: "sheep" },
+      orderBy: { observedAt: "desc" },
+      take: 50,
+      skip: 0,
+    });
+  });
+
+  // Issue #356 invariant — when species is OMITTED the where MUST stay the
+  // cross-species rollup (no `species` key). This locks the default path.
+  it("preserves the cross-species default (no species key) when species is omitted", async () => {
+    findMany.mockResolvedValue([]);
+
+    await listObservations(prisma, { camp: "NORTH-01" });
+
+    const [call] = findMany.mock.calls;
+    expect(call[0].where).not.toHaveProperty("species");
+    expect(call[0].where).toEqual({ campId: "NORTH-01" });
+  });
+
   it("caps limit at 200 (defensive against bursty offline-sync clients)", async () => {
     findMany.mockResolvedValue([]);
 

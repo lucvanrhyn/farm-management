@@ -15,6 +15,9 @@ vi.mock('next-auth', () => ({
 
 // Mock prisma client methods used by the route
 const mockCreate = vi.fn().mockResolvedValue({ id: 'test-obs-id' });
+// Issue #491 — GET path: the `listObservations` domain op reads through the
+// `crossSpecies()` door, which passes straight to `observation.findMany`.
+const mockFindMany = vi.fn().mockResolvedValue([]);
 // Phase A of #28: observations route now uses findFirst (campId is no longer
 // globally unique under the composite UNIQUE on species+campId).
 const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: 'A' });
@@ -25,6 +28,7 @@ const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
 const mockPrisma = {
   observation: {
     create: mockCreate,
+    findMany: mockFindMany,
   },
   camp: {
     findFirst: mockCampFindFirst,
@@ -242,5 +246,43 @@ describe('POST /api/observations', () => {
 
     const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/observations — opt-in ?species filter (#491)', () => {
+  beforeEach(() => {
+    mockFindMany.mockClear();
+  });
+
+  it('narrows the query to { species } when ?species=sheep is present', async () => {
+    const { GET } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest(
+      'http://localhost/api/observations?species=sheep',
+      { method: 'GET' },
+    );
+
+    const res = await GET(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockFindMany).toHaveBeenCalledOnce();
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { species: 'sheep' } }),
+    );
+  });
+
+  // Issue #356 invariant — omitting ?species MUST stay the cross-species
+  // rollup: the where has NO `species` key.
+  it('preserves the cross-species default (no species key) when ?species is omitted', async () => {
+    const { GET } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'GET',
+    });
+
+    const res = await GET(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockFindMany).toHaveBeenCalledOnce();
+    const [call] = mockFindMany.mock.calls;
+    expect(call[0].where).not.toHaveProperty('species');
   });
 });
