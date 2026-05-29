@@ -642,9 +642,40 @@ export type QueueObservationInput = Omit<
 > &
   Partial<PendingQueueFailureMeta>;
 
+/**
+ * Issue #480 — default the durable idempotency key at the single offline-queue
+ * chokepoint. The #206/#207/#281 contract (mount-stable `clientLocalId` →
+ * verbatim sync replay → server upsert on `Observation.clientLocalId`) was wired
+ * into only three forms; every other write path (the weigh/treatment/repro/
+ * health/movement/death Logger handlers plus `submitCalvingObservation` and
+ * `submitMobMove`) queued a KEYLESS row, so a retried POST reached the legacy
+ * non-idempotent `create` and duplicated the row (stress-test H1). Minting here
+ * covers ALL callers in one place: a queued row keeps its key across every sync
+ * retry, so the `0019` UNIQUE-index upsert collapses retries to a single row.
+ *
+ * Scope: this collapses RETRIES of one queued row. Collapsing a same-tick
+ * double-submit into ONE queued row is a distinct concern (the in-flight submit
+ * latch, #482); two genuinely-distinct entries each get their own key here and
+ * correctly remain two rows.
+ *
+ * The guard mirrors `lib/logger-actions.ts` — in the (PWA-secure-context-
+ * impossible) absence of `crypto.randomUUID`, we degrade to the prior keyless
+ * behaviour rather than throw.
+ */
+function withClientLocalId(obs: QueueObservationInput): QueueObservationInput {
+  if (obs.clientLocalId) return obs;
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return { ...obs, clientLocalId: crypto.randomUUID() };
+  }
+  return obs;
+}
+
 export async function queueObservation(obs: QueueObservationInput): Promise<number> {
   const db = await getDB();
-  return db.add('pending_observations', withDefaultedFailureMeta(obs)) as Promise<number>;
+  return db.add(
+    'pending_observations',
+    withDefaultedFailureMeta(withClientLocalId(obs)),
+  ) as Promise<number>;
 }
 
 export async function getPendingObservations(): Promise<PendingObservation[]> {

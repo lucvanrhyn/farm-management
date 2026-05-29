@@ -122,3 +122,72 @@ describe('syncPendingObservations — POST body preserves clientLocalId (#206)',
     ).toBe(uuid);
   });
 });
+
+describe('queueObservation auto-mints clientLocalId when the caller omits it (#480)', () => {
+  // Every Logger handler except the three wired forms (#206/#207/#281) queued a
+  // KEYLESS observation, so a retried POST reached the legacy non-idempotent
+  // `create` and duplicated the row (stress-test H1: 4× identical 486 kg weigh-
+  // ins). Defaulting the key at this single chokepoint makes EVERY observation
+  // type idempotent under sync retry without touching nine call sites.
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  it('mints a v4 UUID for a keyless weighing write', async () => {
+    const { queueObservation, getPendingObservations } = await loadStore();
+
+    await queueObservation({
+      type: 'weighing',
+      camp_id: 'A',
+      animal_id: 'BB-C014',
+      details: JSON.stringify({ weight_kg: 486 }),
+      created_at: '2026-05-28T10:00:00.000Z',
+      synced_at: null,
+      sync_status: 'pending',
+      // deliberately NO clientLocalId — the path every non-wired handler hit
+    });
+
+    const [row] = await getPendingObservations();
+    expect(
+      row.clientLocalId,
+      'queueObservation must mint a key when the caller omits one',
+    ).toMatch(UUID_RE);
+  });
+
+  it('never overwrites a caller-supplied clientLocalId', async () => {
+    const { queueObservation, getPendingObservations } = await loadStore();
+    const uuid = '12121212-1212-4121-8121-121212121212';
+
+    await queueObservation({
+      type: 'weighing',
+      camp_id: 'A',
+      details: '{}',
+      created_at: '2026-05-28T10:00:00.000Z',
+      synced_at: null,
+      sync_status: 'pending',
+      clientLocalId: uuid,
+    });
+
+    const [row] = await getPendingObservations();
+    expect(row.clientLocalId).toBe(uuid);
+  });
+
+  it('mints DISTINCT keys per call so two genuinely-different entries stay two rows', async () => {
+    const { queueObservation, getPendingObservations } = await loadStore();
+    const base = {
+      type: 'weighing',
+      camp_id: 'A',
+      created_at: '2026-05-28T10:00:00.000Z',
+      synced_at: null,
+      sync_status: 'pending' as const,
+    };
+
+    await queueObservation({ ...base, details: JSON.stringify({ weight_kg: 333 }) });
+    await queueObservation({ ...base, details: JSON.stringify({ weight_kg: 334 }) });
+
+    const rows = await getPendingObservations();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].clientLocalId).toBeTruthy();
+    expect(rows[1].clientLocalId).toBeTruthy();
+    expect(rows[0].clientLocalId).not.toBe(rows[1].clientLocalId);
+  });
+});
