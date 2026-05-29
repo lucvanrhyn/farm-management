@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
 import type { ObservationType } from "@/lib/domain/observations/registry";
@@ -187,6 +187,17 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
   // Scrotal circumference
   const [scrotalCm, setScrotalCm] = useState("");
 
+  // #482 — synchronous in-flight latch. Unlike WeighingForm this form had NO
+  // submitting guard at all and `onSubmit` is a fire-and-forget `void` callback
+  // with no promise to await, so a same-tick double-tap fired `onSubmit` twice
+  // → two queued observations → two distinct server rows (post-#480 each retry
+  // is idempotent, but two SEPARATE submits are not collapsed — that is this
+  // latch's job). The ref is set synchronously BEFORE `onSubmit` so the second
+  // same-tick invocation is swallowed. We clear it on the next macrotask: the
+  // form normally unmounts on success, but resetting defensively keeps a
+  // deliberate later submit working if the parent keeps it mounted.
+  const inFlightRef = useRef(false);
+
   // Filter type options based on animal sex
   const TYPE_OPTIONS = BASE_TYPE_OPTIONS.filter(
     (opt) => !opt.maleOnly || animalSex === "Male",
@@ -222,7 +233,13 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
   }
 
   function handleSubmit() {
+    if (inFlightRef.current) return;
     if (!selectedType || !canSubmit()) return;
+
+    inFlightRef.current = true;
+    setTimeout(() => {
+      inFlightRef.current = false;
+    }, 0);
 
     let details: Record<string, string>;
     if (selectedType === "heat_detection") {

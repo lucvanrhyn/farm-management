@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
@@ -51,10 +51,20 @@ export default function WeighingForm({ animalTag, onSubmit, onCancel }: Props) {
   const [error, setError] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
+  // #482 — synchronous in-flight latch. The `submitting` STATE drives the
+  // visible disabled/“Saving…” UX, but state updates are async/batched, so a
+  // second tap fired in the SAME tick still sees `submitting === false` and
+  // would enqueue a second observation. This ref is set synchronously BEFORE
+  // any await, so the same-tick second invocation is swallowed here — the
+  // load-bearing guard. Reset in `finally` so a legitimate later submit works.
+  const inFlightRef = useRef(false);
+
   async function submit() {
+    if (inFlightRef.current) return;
     const weight = parseFloat(weightKg);
     if (isNaN(weight) || weight <= 0) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -64,6 +74,7 @@ export default function WeighingForm({ animalTag, onSubmit, onCancel }: Props) {
     } catch {
       setError("Failed to queue — try again");
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }
