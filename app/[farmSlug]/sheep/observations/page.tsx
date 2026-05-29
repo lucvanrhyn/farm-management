@@ -6,7 +6,6 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import AdminPage from "@/app/_components/AdminPage";
 import SheepObservationsPageClient from "./SheepObservationsPageClient";
-import SheepObservationsTimeline from "./SheepObservationsTimeline";
 
 /**
  * `/[farmSlug]/sheep/observations` — issue #231.
@@ -29,20 +28,16 @@ import SheepObservationsTimeline from "./SheepObservationsTimeline";
  * lives at a separate route through the `crossSpecies()` door
  * (ADR-0005) rather than relaxing the per-species predicate here.
  *
- * Server-rendered timeline rationale
- * ──────────────────────────────────
- * The cattle `/admin/observations` page hands the visible timeline to
- * `<ObservationsLog />`, a client component that fetches
- * `/api/observations` on mount. That API endpoint is species-blind
- * today (`lib/domain/observations/list-observations.ts` filters by
- * camp/type/animalId only). Reusing `<ObservationsLog />` here would
- * paint sheep observations on first render (server data) then flicker
- * cattle observations in on hydration when the API returns. To keep
- * the slice tight and the species axis structurally enforced, we
- * render a small server-side timeline (`SheepObservationsTimeline`)
- * fed directly off the facade — no API hop, no species ambiguity. A
- * follow-up wave can extend `/api/observations` to accept a `species`
- * query param and unify the two timelines.
+ * Species-aware client timeline (#496)
+ * ─────────────────────────────────────
+ * #491 grew `/api/observations` an OPT-IN `?species=<x>` param. The sheep
+ * timeline now consumes `/api/observations?species=sheep` on the client
+ * (`<SheepObservationsTimeline />`) instead of the old SSR facade. The route
+ * IS the species axis (ADR-0003), so the literal "sheep" param scopes the
+ * feed regardless of the farm-mode cookie — there is no cross-species
+ * flicker because the endpoint narrows server-side. This page therefore no
+ * longer SSR-fetches the observation slice; it only prefetches the
+ * animal/camp lists the create-observation modal's autocomplete needs.
  *
  * Allow-list note: the create-observation modal continues to be the
  * client-driven `<ObservationsPageClient />` shape — the modal is
@@ -60,13 +55,10 @@ const SPECIES = "sheep" as const;
 
 export default async function SheepObservationsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ farmSlug: string }>;
-  searchParams?: Promise<{ cursor?: string }>;
 }) {
   const { farmSlug } = await params;
-  const { cursor } = (searchParams ? await searchParams : {}) ?? {};
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {
@@ -86,25 +78,12 @@ export default async function SheepObservationsPage({
 
   const speciesPrisma = scoped(prisma, SPECIES);
 
-  // SSR fetch the observation slice (sheep-only, paginated by observedAt
-  // DESC), plus the animal/camp prefetches the create-observation modal
-  // needs for its autocomplete. All three calls flow through the facade
-  // so the species axis is structurally enforced (ADR-0005).
-  const [observations, prismaAnimals, prismaCamps] = await Promise.all([
-    speciesPrisma.observation.findMany({
-      orderBy: { observedAt: "desc" },
-      take: PAGE_SIZE,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        type: true,
-        campId: true,
-        animalId: true,
-        details: true,
-        observedAt: true,
-        loggedBy: true,
-      },
-    }),
+  // Prefetch the animal/camp lists the create-observation modal's autocomplete
+  // needs. The visible timeline no longer SSR-fetches observations — it consumes
+  // the species-aware `/api/observations?species=sheep` endpoint client-side
+  // (#496). Both prefetch calls flow through the facade so the species axis is
+  // structurally enforced (ADR-0005).
+  const [prismaAnimals, prismaCamps] = await Promise.all([
     speciesPrisma.animal.findMany({
       orderBy: { animalId: "asc" },
       take: PAGE_SIZE,
@@ -129,23 +108,17 @@ export default async function SheepObservationsPage({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Observations</h1>
         <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          {observations.length} recent {observations.length === 1 ? "entry" : "entries"} · sheep flock only
+          Recent entries · sheep flock only
         </p>
       </div>
 
+      {/*
+        #496 — the visible timeline is owned by the page client now: it
+        fetches `/api/observations?species=sheep` and re-fetches on a create
+        (refreshKey bump), so this server component only prefetches the
+        create-modal autocomplete data.
+      */}
       <SheepObservationsPageClient camps={camps} animals={animals} species={SPECIES} />
-
-      <SheepObservationsTimeline
-        observations={observations.map((o) => ({
-          id: o.id,
-          type: o.type,
-          campId: o.campId,
-          animalId: o.animalId,
-          details: o.details,
-          observedAt: o.observedAt.toISOString(),
-          loggedBy: o.loggedBy,
-        }))}
-      />
 
       {/*
         Danger zone parity with the cattle observations page — destroying
