@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { tenantRead, tenantWrite } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import {
@@ -191,7 +192,18 @@ export const POST = tenantWrite<unknown>({
       );
     } catch (err) {
       if (err instanceof CreateAnimalValidationError) {
-        return NextResponse.json({ error: err.message }, { status: 400 });
+        // Issue #493 (PRD #479 Epic B) — converge on the canonical typed
+        // envelope. The `error` field now carries the SCREAMING_SNAKE code
+        // `VALIDATION_FAILED`; the developer-authored validation sentence
+        // moves to the human-readable `message` slot (the same split the
+        // write adapters already use for schema `RouteValidationError`), and
+        // the offending field rides in `details`. Previously this echoed
+        // `err.message` straight into `error`, which the error-envelope
+        // arch-test (`scripts/audit-error-envelope.ts`) flags as a
+        // raw-message echo.
+        return routeError("VALIDATION_FAILED", err.message, 400, {
+          field: err.field,
+        });
       }
       // Wave 316b (#309) — `AnimalRoleForbiddenError` maps to the
       // byte-identical legacy 403 via the shared domain-error mapper (it

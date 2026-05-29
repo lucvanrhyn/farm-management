@@ -1,0 +1,54 @@
+name: audit-error-envelope
+
+# Structural lock on the API error contract (issue #493, PRD #479 Epic B).
+#
+# Fails on any `app/api/**` route handler that builds a NON-canonical error
+# envelope — an `error:` field whose value is either:
+#
+#   (a) a bare string / template LITERAL
+#       (`NextResponse.json({ error: "Unauthorized" })`), or
+#   (b) a raw exception message echo (`{ error: err.message }`) — the
+#       info-leak class (#483).
+#
+# The canonical contract is the typed envelope minted by
+# `routeError(code, message?, status?)` (lib/server/route/envelope.ts) and
+# `mapApiDomainError(err)` (lib/server/api-errors.ts): `{ error: CODE }` where
+# CODE is SCREAMING_SNAKE. Compliant routes either mint via `routeError(...)`,
+# forward a typed `err.code` / `result.reason`, carry an
+# `// audit-allow-error-envelope: <reason>` pragma, or are grandfathered in
+# `.audit-error-envelope-baseline.json` (the deliberate legacy bare-string
+# envelopes — ratchet, can only shrink).
+#
+# NOTE on enforcement: the SAME audit invocation also runs as a step inside
+# the REQUIRED `gate` job (governance-gate.yml) so a violation blocks merge by
+# construction even though this standalone workflow is not (yet) a pinned
+# required status check. This workflow provides fast, isolated signal without
+# spinning up the full Turso clone + build + Playwright stack.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  audit-error-envelope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit API error-envelope contract — no ad-hoc literals / raw-message echoes
+        run: pnpm tsx scripts/audit-error-envelope.ts

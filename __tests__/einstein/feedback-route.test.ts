@@ -123,7 +123,13 @@ beforeEach(() => resetAll());
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/einstein/feedback — auth + validation', () => {
-  it('returns 401 EINSTEIN_UNAUTHENTICATED when session is missing', async () => {
+  it('returns the canonical AUTH_REQUIRED 401 envelope when session is missing', async () => {
+    // Issue #493 (Epic B) — the session-missing arm folds onto the canonical
+    // ADR-0001 `{ error: "AUTH_REQUIRED", message: "Unauthorized" }` envelope,
+    // mirroring the identical fold the sibling `/api/einstein/ask` route
+    // shipped in #486. The legacy `{ code: "EINSTEIN_UNAUTHENTICATED" }` shape
+    // is gone; the only consumer (EinsteinChat thumbs-up/down) is
+    // fire-and-forget and never reads this body.
     mockGetServerSession.mockResolvedValue(null);
     const resp = await POST(
       createRequest({ queryLogId: 'log-1', feedback: 'up', farmSlug: 'delta-livestock' }),
@@ -131,7 +137,8 @@ describe('POST /api/einstein/feedback — auth + validation', () => {
     );
     expect(resp.status).toBe(401);
     const json = await resp.json();
-    expect(json.code).toBe('EINSTEIN_UNAUTHENTICATED');
+    expect(json).toEqual({ error: 'AUTH_REQUIRED', message: 'Unauthorized' });
+    expect(json.code).toBeUndefined();
   });
 
   it('returns 400 EINSTEIN_BAD_REQUEST when body is not valid JSON', async () => {

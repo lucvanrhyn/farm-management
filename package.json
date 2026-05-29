@@ -34,6 +34,7 @@
     "ops:promote-branch": "tsx scripts/branch-clone.ts promote",
     "ops:daily-summary": "tsx scripts/ops-daily-summary.ts",
     "ops:audit-schema-parity": "tsx scripts/audit-schema-parity.ts",
+    "ops:audit-error-envelope": "tsx scripts/audit-error-envelope.ts",
     "ops:post-promote-smoke": "tsx scripts/post-promote-smoke.ts",
     "ops:rollback-promote": "tsx scripts/rollback-promote.ts",
     "test": "vitest run",

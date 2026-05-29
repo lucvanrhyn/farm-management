@@ -69,7 +69,13 @@ export default function RecordBirthButton({ animals, camps }: Props) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to record birth");
+      // Issue #493 — the create-validation 400 now returns the canonical
+      // typed envelope `{ error: "VALIDATION_FAILED", message }`; the
+      // human-readable sentence lives in `message`. Prefer it, then fall
+      // back to the legacy `error` field (still the human string on the
+      // other 4xx arms), then a generic copy.
+      if (!res.ok)
+        throw new Error(data.message ?? data.error ?? "Failed to record birth");
       setOpen(false);
       reset();
       router.refresh();

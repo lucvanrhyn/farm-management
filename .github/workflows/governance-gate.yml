@@ -41,6 +41,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit API error-envelope contract (issue #493)
+        # Structural lock on the API error contract: fails the gate on any
+        # `app/api/**` route that hand-rolls a bare-string error envelope or
+        # echoes a raw `err.message` into the `error` field, instead of the
+        # canonical typed envelope from `lib/server/route/envelope.ts`
+        # (`routeError`) / `lib/server/api-errors.ts` (`mapApiDomainError`).
+        # Grandfathered legacy envelopes live in
+        # `.audit-error-envelope-baseline.json` (ratchet — can only shrink).
+        # Runs inside the REQUIRED `gate` job so a violation blocks merge by
+        # construction; the standalone `audit-error-envelope` workflow mirrors
+        # it for fast standalone signal but is not itself a required check.
+        run: pnpm tsx scripts/audit-error-envelope.ts
+
       - name: Install Turso CLI
         run: curl -sSfL https://get.tur.so/install.sh | bash && echo "$HOME/.turso" >> $GITHUB_PATH
 
