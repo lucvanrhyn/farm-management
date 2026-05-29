@@ -193,14 +193,14 @@ describe("POST /api/observations", () => {
       method: "POST",
       body: JSON.stringify({
         // #321 (PRD #318 wave R4): this case asserts revalidateTag wiring,
-        // not camp_condition semantics. `camp_condition` now requires an
-        // explicit grazing/water/fence payload in `createObservation`, so
-        // `details: {}` would (correctly) be rejected by that guard.
-        // `camp_check` is a valid type with no required-field contract —
-        // the cache-invalidation behaviour under test is unchanged.
+        // not camp_condition semantics. `camp_check` is a valid type with no
+        // required-field contract. #484 requires `details` to be a JSON
+        // STRING (the real wire shape — the offline queue persists it as a
+        // string), so this sends "{}" rather than a bare object; the
+        // cache-invalidation behaviour under test is unchanged.
         type: "camp_check",
         camp_id: "C1",
-        details: {},
+        details: "{}",
       }),
     });
 
