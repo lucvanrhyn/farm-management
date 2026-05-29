@@ -1,14 +1,23 @@
 /**
  * POST /api/einstein/feedback — Phase L Wave 2B thumbs up/down on a RagQueryLog row.
  *
- * Body: { queryLogId: string, feedback: "up" | "down", note?: string }
+ * Body: { queryLogId: string, feedback: "up" | "down", note?: string, farmSlug: string }
  *
- * Auth: next-auth session + isPaidTier gate (mirrors /ask route).
+ * Auth: next-auth session + slug-aware, membership-gated Prisma resolution +
+ * isPaidTier gate (mirrors /api/einstein/ask exactly).
  * Same export discipline — only runtime + POST below.
+ *
+ * Epic D1 (#488): the tenant is pinned via an EXPLICIT `farmSlug` from the
+ * request body resolved through `getPrismaForSlugWithAuth`, NOT inferred from
+ * the `Referer` header (the un-migrated remainder of #393). The membership
+ * gate (session.user.farms) is enforced inside `getPrismaForSlugWithAuth`, so
+ * a foreign slug cannot select another tenant.
  */
 
 import { NextRequest } from 'next/server';
-import { getFarmContext } from '@/lib/server/farm-context';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
 import { publicHandler } from '@/lib/server/route';
@@ -27,6 +36,7 @@ interface FeedbackBody {
   queryLogId: string;
   feedback: 'up' | 'down';
   note?: string;
+  farmSlug: string;
 }
 
 function parseBody(raw: unknown): FeedbackBody | { error: string } {
@@ -40,24 +50,30 @@ function parseBody(raw: unknown): FeedbackBody | { error: string } {
   if (r.feedback !== 'up' && r.feedback !== 'down') {
     return { error: 'feedback must be "up" or "down"' };
   }
+  if (typeof r.farmSlug !== 'string' || r.farmSlug.length === 0) {
+    return { error: 'farmSlug must be a non-empty string' };
+  }
   let note: string | undefined;
   if (r.note !== undefined) {
     if (typeof r.note !== 'string') return { error: 'note must be a string if present' };
     if (r.note.length > 2000) return { error: 'note must be ≤2000 characters' };
     note = r.note;
   }
-  return { queryLogId: r.queryLogId, feedback: r.feedback, note };
+  return { queryLogId: r.queryLogId, feedback: r.feedback, note, farmSlug: r.farmSlug };
 }
 
 /**
  * Wave H3 (#175) — wrapped in `publicHandler` for typed-error envelope on
- * unexpected throws + observability. Tenant resolution is preserved verbatim:
- * the route uses cookie-based `getFarmContext(req)` (active-farm cookie) NOT
- * `getFarmContextForSlug` because the route doesn't accept a `[farmSlug]` URL
- * parameter. Wire-shape, tier gate, and Prisma P2025 mapping all preserved.
+ * unexpected throws + observability. Auth, slug-aware membership gate, tier
+ * gate, and Prisma P2025 mapping are all preserved verbatim inside `handle`.
  */
 export const POST = publicHandler({
   handle: async (req: NextRequest): Promise<Response> => {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
+    }
+
     let rawBody: unknown;
     try {
       rawBody = await req.json();
@@ -70,15 +86,10 @@ export const POST = publicHandler({
       return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
     }
 
-    const ctx = await getFarmContext(req);
-    if (!ctx) {
-      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
-    }
-    const { prisma, slug } = ctx;
-
-    const creds = await getFarmCreds(slug);
+    // Tier gate (must be done before any tenant work).
+    const creds = await getFarmCreds(parsed.farmSlug);
     if (!creds) {
-      return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${slug} not found`, 404);
+      return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${parsed.farmSlug} not found`, 404);
     }
     if (!isPaidTier(creds.tier)) {
       return jsonError(
@@ -87,6 +98,15 @@ export const POST = publicHandler({
         403,
       );
     }
+
+    // Auth the explicit body slug against the session (membership gate). A
+    // foreign / non-member slug is rejected here before any tenant client is
+    // handed back — tenant isolation is enforced by construction.
+    const authed = await getPrismaForSlugWithAuth(session, parsed.farmSlug);
+    if ('error' in authed) {
+      return jsonError('EINSTEIN_FORBIDDEN', authed.error, authed.status);
+    }
+    const { prisma } = authed;
 
     try {
       const updated = await prisma.ragQueryLog.update({

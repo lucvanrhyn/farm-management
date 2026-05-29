@@ -329,7 +329,9 @@ describe("EinsteinChat — feedback", () => {
       );
       expect(feedbackCall).toBeTruthy();
       const body = JSON.parse((feedbackCall![1] as RequestInit).body as string);
-      expect(body).toEqual({ queryLogId: "qlog-abc", feedback: "up" });
+      // Epic D1 (#488): the client now sends the explicit farmSlug so the
+      // feedback route can pin the tenant without Referer inference.
+      expect(body).toEqual({ queryLogId: "qlog-abc", feedback: "up", farmSlug: "farm-x" });
     });
   });
 
