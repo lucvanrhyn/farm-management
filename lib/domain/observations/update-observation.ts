@@ -12,6 +12,9 @@
  */
 import type { Observation, PrismaClient } from "@prisma/client";
 
+import { getMaxLiveWeightKg } from "@/lib/species/breeding-constants";
+import { validateWeighingObservation } from "@/lib/server/validators/weighing";
+
 import { ObservationNotFoundError } from "./errors";
 
 const MAX_HISTORY_ENTRIES = 50;
@@ -32,6 +35,19 @@ export async function updateObservation(
   });
   if (!existing) {
     throw new ObservationNotFoundError(input.id);
+  }
+
+  // Issue #487 (PRD #479, Epic C) — species-aware weight gate at the EDIT
+  // boundary. The existing row already carries the stamped `species` (written
+  // at create time by the ADR-0006 waterfall), so the cap is species-correct.
+  // Validate the INCOMING `details` before persisting, so a stale / malicious
+  // PATCH cannot edit a clean weighing into a 999,999 kg garbage value.
+  // `getMaxLiveWeightKg` is throw-free for a null/unknown species.
+  if (existing.type === "weighing") {
+    validateWeighingObservation(
+      input.details,
+      getMaxLiveWeightKg(existing.species),
+    );
   }
 
   const previousHistory: unknown[] = existing.editHistory

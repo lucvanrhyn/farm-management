@@ -91,7 +91,12 @@ export default function WeighingForm({ animalTag, onSubmit, onCancel }: Props) {
           <input
             type="number"
             step="0.1"
-            min="0"
+            // #487 — client-side UX feedback only; the server (the
+            // `createObservation` door's species-aware weight gate) is the
+            // source of truth. The logger does not know the species in-context,
+            // so 1500 is the absolute ceiling (the heaviest species cap).
+            min="0.1"
+            max="1500"
             value={weightKg}
             onChange={(e) => setWeightKg(e.target.value)}
             placeholder="e.g. 245.5"

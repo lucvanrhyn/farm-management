@@ -47,6 +47,9 @@ import type { PrismaClient, Prisma } from "@prisma/client";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getTenantDayRange } from "@/lib/server/tenant-day";
 
+import { getMaxLiveWeightKg } from "@/lib/species/breeding-constants";
+import { validateWeighingObservation } from "@/lib/server/validators/weighing";
+
 import {
   AnimalNotFoundError,
   CampNotFoundError,
@@ -346,6 +349,17 @@ export async function createObservation(
     species = mob.species;
   } else if (campExists.species) {
     species = campExists.species;
+  }
+
+  // Issue #487 (PRD #479, Epic C) — species-aware weight gate. Runs AFTER the
+  // species-stamping waterfall (so the cap is species-correct) and BEFORE the
+  // upsert/create paths below, so a duplicate bad weight is rejected, never
+  // stored. `getMaxLiveWeightKg` is throw-free for a null/unknown species (it
+  // falls back to the absolute ceiling), so the gate degrades to "reject only
+  // the physically-impossible" rather than failing the write. Other types
+  // carry unrelated `details` shapes and are deliberately untouched.
+  if (input.type === "weighing") {
+    validateWeighingObservation(input.details, getMaxLiveWeightKg(species));
   }
 
   // Issue #206 — idempotent write path. When the client supplies a UUID, route

@@ -32,6 +32,12 @@ export function WeighingFields({ details, onChange }: FieldProps) {
         <input
           type="number"
           step="0.1"
+          // #487 — EditModal weight input. Client-side UX feedback only; the
+          // `updateObservation` door's species-aware weight gate is the source
+          // of truth. `min={1}` blocks negatives / zero; `max={1500}` is the
+          // absolute ceiling (this form has no species context).
+          min={1}
+          max={1500}
           value={(details.weight_kg as number) ?? ""}
           onChange={(e) => onChange("weight_kg", e.target.value ? parseFloat(e.target.value) : "")}
           style={fieldInput}
