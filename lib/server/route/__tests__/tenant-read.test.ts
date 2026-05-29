@@ -82,7 +82,7 @@ describe("tenantRead adapter", () => {
     expect(args[2]).toEqual({ id: "abc" });
   });
 
-  it("returns 500 DB_QUERY_FAILED envelope with message when handle throws", async () => {
+  it("returns 500 DB_QUERY_FAILED envelope with NO raw message when handle throws (#483)", async () => {
     hoisted.getFarmContext.mockResolvedValueOnce(fakeCtx);
     const handle = vi
       .fn()
@@ -93,8 +93,9 @@ describe("tenantRead adapter", () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toMatchObject({ error: "DB_QUERY_FAILED" });
-    expect(body.message).toMatch(/no such column|libsql/i);
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // The raw DB error text (table/column/payload) must never leak (#483).
+    expect(JSON.stringify(body)).not.toMatch(/no such column|libsql/i);
   });
 
   it("delegates to mapApiDomainError when it returns a response", async () => {

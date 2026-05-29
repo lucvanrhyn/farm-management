@@ -12,7 +12,8 @@
  *      VALIDATION_FAILED with details if it's a `RouteValidationError` or
  *      a zod-compatible error with `.issues`.
  *   5. Try/catch around `handle`: `mapApiDomainError` first, fallback
- *      to 500 DB_QUERY_FAILED with the underlying message.
+ *      to a 500 DB_QUERY_FAILED envelope with NO message (#483 — the raw
+ *      error never reaches the client; it is logged server-side).
  *   6. Revalidate-tag fired ONLY when `handle` returns a 2xx.
  *   7. `withServerTiming` instrumentation (`session` + `total` spans).
  *
@@ -136,6 +137,9 @@ export function adminWrite<
           ? opts.schema.parse(parsed.body)
           : (parsed.body as TBody);
       } catch (err) {
+        // #483 — the VALIDATION_FAILED message is client-safe: schema.parse
+        // validates the CALLER's own request payload, never DB internals.
+        // Structured field detail flows through `extractDetails`.
         const message = err instanceof Error ? err.message : "Validation failed";
         return routeError("VALIDATION_FAILED", message, 400, extractDetails(err));
       }
@@ -148,9 +152,10 @@ export function adminWrite<
       } catch (err) {
         const mapped = mapApiDomainError(err);
         if (mapped) return mapped;
-        const message = err instanceof Error ? err.message : String(err);
+        // #483 — never echo a raw err.message to the client; the full error
+        // is preserved in the server log below.
         logger.error("[route] adminWrite handler threw", { error: err });
-        return routeError("DB_QUERY_FAILED", message, 500);
+        return routeError("DB_QUERY_FAILED", undefined, 500);
       }
 
       // Revalidate ONLY on 2xx — auth/validation/business 4xx + 5xx must not

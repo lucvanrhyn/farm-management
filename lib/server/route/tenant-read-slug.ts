@@ -50,9 +50,10 @@ export function tenantReadSlug<
       } catch (err) {
         const mapped = mapApiDomainError(err);
         if (mapped) return mapped;
-        const message = err instanceof Error ? err.message : String(err);
+        // #483 — never echo a raw err.message to the client; the full error
+        // is preserved in the server log below.
         logger.error("[route] tenantReadSlug handler threw", { error: err });
-        return routeError("DB_QUERY_FAILED", message, 500);
+        return routeError("DB_QUERY_FAILED", undefined, 500);
       }
     });
   };

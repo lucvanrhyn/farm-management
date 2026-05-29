@@ -122,7 +122,7 @@ describe("tenantWriteSlug — body parse + validation", () => {
 });
 
 describe("tenantWriteSlug — handle errors + revalidate", () => {
-  it("returns 500 DB_QUERY_FAILED when handle throws unmapped error", async () => {
+  it("returns 500 DB_QUERY_FAILED with NO raw message when handle throws unmapped error (#483)", async () => {
     hoisted.getFarmContextForSlug.mockResolvedValueOnce(loggerCtx);
     const handle = vi.fn().mockRejectedValueOnce(new Error("kaboom"));
     const route = tenantWriteSlug({ handle });
@@ -132,10 +132,10 @@ describe("tenantWriteSlug — handle errors + revalidate", () => {
     });
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toMatchObject({
-      error: "DB_QUERY_FAILED",
-      message: "kaboom",
-    });
+    const body = await res.json();
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // The raw error message must never reach the client body (#483).
+    expect(JSON.stringify(body)).not.toContain("kaboom");
   });
 
   it("calls revalidate(slug) on 2xx response", async () => {

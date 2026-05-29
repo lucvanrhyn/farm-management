@@ -38,7 +38,7 @@ describe("publicHandler — envelope on throw only", () => {
     expect(handle).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 500 DB_QUERY_FAILED when handle throws", async () => {
+  it("returns 500 DB_QUERY_FAILED with NO raw message when handle throws (#483)", async () => {
     const handle = vi.fn().mockRejectedValueOnce(new Error("oops"));
     const route = publicHandler({ handle });
 
@@ -47,10 +47,10 @@ describe("publicHandler — envelope on throw only", () => {
     });
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toMatchObject({
-      error: "DB_QUERY_FAILED",
-      message: "oops",
-    });
+    const body = await res.json();
+    expect(body).toEqual({ error: "DB_QUERY_FAILED" });
+    // The raw error message must never reach the client body (#483).
+    expect(JSON.stringify(body)).not.toContain("oops");
   });
 
   it("delegates to mapApiDomainError when it returns a response", async () => {
