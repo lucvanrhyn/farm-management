@@ -18,15 +18,39 @@
 // 3. Failure mode — if the POST fails (network error, 4xx, 5xx) we fall back
 //    to `console.<level>` and swallow. Observability must never crash the page.
 //
-// 4. keepalive: true — ensures the fetch completes even if the page is
-//    unloading. This is critical for error-boundary and unload-handler sites.
+// 4. Unload-time delivery — for sends that fire as the page tears down
+//    (error boundaries, `pagehide` / `visibilitychange` handlers) pass
+//    `{ unload: true }`. Those use `navigator.sendBeacon`, the browser API
+//    purpose-built to survive unload: the request is handed to the browser's
+//    background-send queue and is not tied to the document's lifetime. When
+//    `sendBeacon` is unavailable (or its queue is full and it returns false)
+//    we fall back to the regular `fetch({ keepalive: true })` path. Non-unload
+//    sends always use `fetch` so the caller can await completion + see HTTP
+//    status (sendBeacon is fire-and-forget with no response). Both paths reach
+//    `/api/telemetry/client-errors`, which bypasses the service worker
+//    (see `lib/sw/telemetry-bypass.ts`) for native, un-aborted delivery.
+//
+// 5. Failure mode parity — `keepalive: true` stays on the fetch fallback so
+//    delivery still completes if the page is unloading and we couldn't use a
+//    beacon. Observability must never crash the page.
 //
 // Usage (canonical form — default export):
 //   import { clientLogger } from "@/lib/client-logger";
 //   clientLogger.error("[register] submit failed", { err });
 //   clientLogger.warn("[onboarding] boundary caught", { error });
+//   clientLogger.error("[unload] last gasp", { err }, { unload: true });
 
 type Level = "debug" | "info" | "warn" | "error";
+
+interface SendOptions {
+  /**
+   * When true, the page may be unloading — prefer `navigator.sendBeacon`,
+   * which the browser delivers from a background queue independent of the
+   * document lifetime. Falls back to `fetch({ keepalive: true })` when
+   * `sendBeacon` is unavailable or refuses the payload.
+   */
+  unload?: boolean;
+}
 
 interface ClientLogPayload {
   level: Level;
@@ -124,10 +148,13 @@ const CONSOLE_MAP: Record<Level, (...args: unknown[]) => void> = {
 
 // ─── Core send ────────────────────────────────────────────────────────────────
 
+const ENDPOINT = "/api/telemetry/client-errors";
+
 async function send(
   level: Level,
   message: string,
   rawPayload?: Record<string, unknown>,
+  options?: SendOptions,
 ): Promise<void> {
   // SSR guard — must be first check in every exported method.
   if (typeof window === "undefined") return;
@@ -143,11 +170,30 @@ async function send(
   const payload = normalizePayload(rawPayload);
   if (payload !== undefined) body.payload = payload;
 
+  const serialized = JSON.stringify(body);
+
+  // Unload-time delivery: prefer sendBeacon (survives page teardown via the
+  // browser's background-send queue, independent of the document lifetime).
+  // Returns false if the user agent could not queue the beacon — fall through
+  // to the fetch path in that case.
+  if (
+    options?.unload &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.sendBeacon === "function"
+  ) {
+    try {
+      const blob = new Blob([serialized], { type: "application/json" });
+      if (navigator.sendBeacon(ENDPOINT, blob)) return;
+    } catch {
+      // fall through to fetch
+    }
+  }
+
   try {
-    const res = await fetch("/api/telemetry/client-errors", {
+    const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: serialized,
       keepalive: true,
     });
 
@@ -164,14 +210,14 @@ async function send(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const clientLogger = {
-  debug: (msg: string, payload?: Record<string, unknown>) =>
-    send("debug", msg, payload),
-  info: (msg: string, payload?: Record<string, unknown>) =>
-    send("info", msg, payload),
-  warn: (msg: string, payload?: Record<string, unknown>) =>
-    send("warn", msg, payload),
-  error: (msg: string, payload?: Record<string, unknown>) =>
-    send("error", msg, payload),
+  debug: (msg: string, payload?: Record<string, unknown>, options?: SendOptions) =>
+    send("debug", msg, payload, options),
+  info: (msg: string, payload?: Record<string, unknown>, options?: SendOptions) =>
+    send("info", msg, payload, options),
+  warn: (msg: string, payload?: Record<string, unknown>, options?: SendOptions) =>
+    send("warn", msg, payload, options),
+  error: (msg: string, payload?: Record<string, unknown>, options?: SendOptions) =>
+    send("error", msg, payload, options),
 };
 
 export default clientLogger;

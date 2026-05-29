@@ -191,6 +191,110 @@ describe("clientLogger — failure fallback to console", () => {
   });
 });
 
+describe("clientLogger — unload-time delivery via sendBeacon", () => {
+  it("uses navigator.sendBeacon (not fetch) for unload-time sends when available", async () => {
+    const beacon = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: beacon,
+      writable: true,
+      configurable: true,
+    });
+
+    const logger = await getLogger();
+    await logger.error("unload boundary", { component: "ErrorBoundary" }, { unload: true });
+
+    expect(beacon).toHaveBeenCalledOnce();
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    const [url, blob] = beacon.mock.calls[0] as [string, Blob];
+    expect(url).toBe("/api/telemetry/client-errors");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("application/json");
+
+    // @ts-expect-error cleanup
+    delete navigator.sendBeacon;
+  });
+
+  it("sends the structured body (level/message/payload) through the beacon blob", async () => {
+    const captured: string[] = [];
+    const beacon = vi.fn((_url: string, blob: Blob) => {
+      // Blob.text() is async; capture synchronously via a FileReader-free path
+      // is not possible, so read the blob in the assertion below instead.
+      captured.push(String(blob.size));
+      return true;
+    });
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: beacon,
+      writable: true,
+      configurable: true,
+    });
+
+    const logger = await getLogger();
+    await logger.warn("boundary caught", { code: 503 }, { unload: true });
+
+    const [, blob] = beacon.mock.calls[0] as [string, Blob];
+    const text = await blob.text();
+    const body = JSON.parse(text) as Record<string, unknown>;
+    expect(body.level).toBe("warn");
+    expect(body.message).toBe("boundary caught");
+    expect(body.payload).toEqual({ code: 503 });
+
+    // @ts-expect-error cleanup
+    delete navigator.sendBeacon;
+  });
+
+  it("falls back to fetch keepalive when sendBeacon is unavailable, even on unload", async () => {
+    // Ensure sendBeacon is absent
+    // @ts-expect-error simulate environment without sendBeacon
+    delete navigator.sendBeacon;
+
+    const logger = await getLogger();
+    await logger.error("unload no-beacon", { x: 1 }, { unload: true });
+
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(opts.keepalive).toBe(true);
+  });
+
+  it("falls back to fetch keepalive when sendBeacon returns false (queue full)", async () => {
+    const beacon = vi.fn().mockReturnValue(false);
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: beacon,
+      writable: true,
+      configurable: true,
+    });
+
+    const logger = await getLogger();
+    await logger.error("unload beacon refused", { x: 1 }, { unload: true });
+
+    expect(beacon).toHaveBeenCalledOnce();
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(opts.keepalive).toBe(true);
+
+    // @ts-expect-error cleanup
+    delete navigator.sendBeacon;
+  });
+
+  it("non-unload sends still use fetch even when sendBeacon is available", async () => {
+    const beacon = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: beacon,
+      writable: true,
+      configurable: true,
+    });
+
+    const logger = await getLogger();
+    await logger.info("regular send");
+
+    expect(beacon).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalledOnce();
+
+    // @ts-expect-error cleanup
+    delete navigator.sendBeacon;
+  });
+});
+
 describe("clientLogger — SSR guard", () => {
   it("is a no-op when window is undefined (SSR context)", async () => {
     // Simulate SSR: temporarily undefine window
