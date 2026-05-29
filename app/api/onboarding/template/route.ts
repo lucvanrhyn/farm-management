@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { NextRequest } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { routeError } from "@/lib/server/route";
 
 export const runtime = "nodejs"; // need node:fs
 
@@ -20,10 +21,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   // hand to logged-in tenants walking through onboarding.
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { "Content-Type": "application/json" } },
-    );
+    return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   }
 
   try {

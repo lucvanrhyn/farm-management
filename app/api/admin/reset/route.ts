@@ -3,10 +3,11 @@ import { revalidatePath } from "next/cache";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { routeError } from "@/lib/server/route";
 
 export async function DELETE(req: NextRequest) {
   const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, slug, session } = ctx;
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {

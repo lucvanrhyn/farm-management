@@ -9,6 +9,7 @@ import {
   type CommitImportResult,
 } from "@/lib/onboarding/commit-import";
 import { logger } from "@/lib/logger";
+import { routeError } from "@/lib/server/route";
 
 /**
  * POST /api/onboarding/commit-import
@@ -74,7 +75,7 @@ type ParsedBody = {
 
 export async function POST(req: NextRequest) {
   const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, slug, role, session } = ctx;
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -23,7 +23,7 @@ import { getPrismaForSlugWithAuth } from '@/lib/farm-prisma';
 import { getFarmCreds } from '@/lib/meta-db';
 import { isPaidTier } from '@/lib/tier';
 import { logger } from '@/lib/logger';
-import { publicHandler } from '@/lib/server/route';
+import { publicHandler, routeError } from '@/lib/server/route';
 import {
   assertWithinBudget,
   stampCostBeforeSend,
@@ -149,7 +149,12 @@ export const POST = publicHandler({
   handle: async (req: NextRequest): Promise<Response> => {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return jsonError('EINSTEIN_UNAUTHENTICATED', 'Sign in required', 401);
+      // Issue #486 (Epic B4): fold the legacy `EINSTEIN_UNAUTHENTICATED`
+      // (`{ code, message }`) onto the canonical ADR-0001 AUTH_REQUIRED
+      // envelope (`{ error, message }`) the route adapters emit. 401 status
+      // unchanged. The remaining EINSTEIN_* codes below are domain-specific
+      // (tier/budget/retriever) and stay on `jsonError`.
+      return routeError('AUTH_REQUIRED', 'Unauthorized', 401);
     }
 
     let rawBody: unknown;

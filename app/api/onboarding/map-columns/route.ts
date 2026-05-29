@@ -9,6 +9,7 @@ import {
 } from "@/lib/onboarding/adaptive-import";
 import { logger } from "@/lib/logger";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { routeError } from "@/lib/server/route";
 
 /**
  * POST /api/onboarding/map-columns
@@ -40,7 +41,7 @@ type MapColumnsBody = {
 
 export async function POST(req: NextRequest) {
   const ctx = await getFarmContext(req);
-  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, slug, role, session } = ctx;
   if (role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
