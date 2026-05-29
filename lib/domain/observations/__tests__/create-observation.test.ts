@@ -241,6 +241,10 @@ describe("createObservation(prisma, input)", () => {
         camp_id: "A",
         animal_id: "BR-001",
         mob_id: "mob-X",
+        // #487 — a weighing now carries a valid weight (the species-aware
+        // weight gate runs after the waterfall); the assertions below still
+        // exercise the most-specific-source-wins waterfall unchanged.
+        details: JSON.stringify({ weight_kg: 420 }),
         loggedBy: null,
       });
 

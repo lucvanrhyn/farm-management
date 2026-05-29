@@ -44,6 +44,15 @@ export interface BreedingConstants {
   youngFemaleCategory: string;
   /** Birth weight (kg) above which the sire is flagged risky for young dams. */
   highBirthWeightKg: number;
+  /**
+   * Issue #487 — species-appropriate live-weight ceiling (kg). The weight
+   * validator (`lib/server/validators/weighing.ts`) rejects any `weighing`
+   * observation above this. Chosen with comfortable headroom above the
+   * heaviest realistic animal of the species so a genuine record-breaker
+   * passes while a fat-fingered / stale-client garbage value (negative,
+   * zero, or 999,999 kg) is rejected at the write boundary.
+   */
+  maxLiveWeightKg: number;
 }
 
 export class UnknownBreedingSpeciesError extends Error {
@@ -61,6 +70,11 @@ const TABLE: Record<SpeciesId, BreedingConstants> = {
     femaleCategories: ["Cow", "Heifer"],
     youngFemaleCategory: "Heifer",
     highBirthWeightKg: 38,
+    // 1500 kg — a mature bull tops out around 1100-1300 kg (a 1300 kg
+    // bull is a heavy but realistic stud), so 1500 leaves headroom for the
+    // heaviest beef breeds (Chianina/Charolais cross) without admitting
+    // anything physically impossible.
+    maxLiveWeightKg: 1500,
   },
   sheep: {
     gestationDays: 150,
@@ -68,6 +82,10 @@ const TABLE: Record<SpeciesId, BreedingConstants> = {
     femaleCategories: ["Ewe", "Maiden Ewe", "Ewe Lamb"],
     youngFemaleCategory: "Maiden Ewe",
     highBirthWeightKg: 7,
+    // 200 kg — the heaviest SA mutton rams sit around 130-160 kg, so 200
+    // is a generous ceiling. A 900 kg "sheep" is obviously a data error
+    // (likely a cattle weight logged on a sheep) and is rejected.
+    maxLiveWeightKg: 200,
   },
   game: {
     // Kudu-class default. Game farms use population-tracking — individual
@@ -78,6 +96,11 @@ const TABLE: Record<SpeciesId, BreedingConstants> = {
     femaleCategories: ["Adult Female", "Sub-adult"],
     youngFemaleCategory: "Sub-adult",
     highBirthWeightKg: 12,
+    // 1000 kg — "game" is a broad category spanning small antelope to
+    // eland (the largest SA antelope, ~900 kg bulls) and buffalo (~850 kg).
+    // 1000 kg covers the heaviest plausible game animal while still
+    // rejecting a 999,999 kg garbage value.
+    maxLiveWeightKg: 1000,
   },
 };
 
@@ -95,4 +118,31 @@ export function getBreedingConstants(species: SpeciesId): BreedingConstants {
     throw new UnknownBreedingSpeciesError(String(species));
   }
   return entry;
+}
+
+/**
+ * Issue #487 — absolute fallback ceiling (kg) when the observation's species
+ * is `null` (back-compat rows the waterfall could not stamp) or an unrecognised
+ * string. It is the MAX of every per-species cap, so a null-species row never
+ * rejects a weight a known species would have accepted — the per-species cap is
+ * a tightening, never a loosening. A 999,999 kg garbage value is still rejected
+ * everywhere because no real species comes anywhere near this.
+ */
+export const ABSOLUTE_MAX_LIVE_WEIGHT_KG = Math.max(
+  ...Object.values(TABLE).map((c) => c.maxLiveWeightKg),
+);
+
+/**
+ * Resolve the species-appropriate live-weight ceiling (kg) for the weight
+ * validator. Unlike {@link getBreedingConstants}, this NEVER throws — a
+ * `null` / unknown species falls back to {@link ABSOLUTE_MAX_LIVE_WEIGHT_KG}
+ * so the weight gate degrades to "reject only the physically-impossible"
+ * rather than failing the whole write. Pass the observation row's stamped
+ * `species` (which is `string | null` at the write boundary).
+ */
+export function getMaxLiveWeightKg(species: string | null | undefined): number {
+  if (species && species in TABLE) {
+    return TABLE[species as SpeciesId].maxLiveWeightKg;
+  }
+  return ABSOLUTE_MAX_LIVE_WEIGHT_KG;
 }

@@ -28,6 +28,18 @@ const REPRODUCTION_EVENTS: string[] = Array.from(
   ),
 );
 
+// #487 — client-side UX-only mirror of the server weight caps in
+// `lib/species/breeding-constants.ts` (`maxLiveWeightKg`). The server gate is
+// the source of truth; these just drive the `<input max>` hint. Kept local (a
+// small literal) rather than importing the server module so the client bundle
+// never pulls in the species `types.ts` PrismaClient type graph.
+const WEIGHT_MAX_BY_SPECIES: Record<string, number> = {
+  cattle: 1500,
+  sheep: 200,
+  game: 1000,
+};
+const ABSOLUTE_WEIGHT_MAX_KG = 1500;
+
 const TREATMENT_TYPES = ["Antibiotic", "Dip", "Deworming", "Vaccination", "Supplement", "Other"];
 const WITHDRAWAL_DEFAULTS: Record<string, number> = {
   Antibiotic: 14, Dip: 7, Deworming: 7, Vaccination: 0, Supplement: 0, Other: 7,
@@ -278,6 +290,12 @@ export default function CreateObservationModal({
                   <input
                     type="number"
                     step="0.1"
+                    // #487 — client-side UX feedback only; the server weight
+                    // gate is the source of truth. `min={1}` blocks negatives /
+                    // zero; the species-aware `max` mirrors the server cap when
+                    // the farm-mode species is known, else the absolute ceiling.
+                    min={1}
+                    max={WEIGHT_MAX_BY_SPECIES[species ?? ""] ?? ABSOLUTE_WEIGHT_MAX_KG}
                     value={(details.weight_kg as number) ?? ""}
                     onChange={(e) => handleFieldChange("weight_kg", e.target.value ? parseFloat(e.target.value) : "")}
                     style={fieldInput}

@@ -16,6 +16,7 @@ import {
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
 import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
+import { WeightOutOfRangeError } from "@/lib/server/validators/weighing";
 import {
   CampHasActiveAnimalsError,
   DuplicateCampError,
@@ -240,6 +241,18 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
       { error: err.code, details: { existingId: err.existingId } },
       { status: 422 },
     );
+  }
+  // Issue #487 (PRD #479, Epic C) — species-aware weight gate. Thrown by the
+  // `createObservation` (before the idempotency upsert) and `updateObservation`
+  // doors for a `weighing` observation whose `weight_kg` is missing, ≤ 0,
+  // non-numeric, or above the species ceiling. 422 (not 400) matches the
+  // sibling observation business-rule rejections (DEATH_*, REPRO_*) and the
+  // offline-sync terminal-status contract: an identical bad-weight payload
+  // re-rejects identically forever, so the row is a poison message the queue
+  // must discard rather than loop. Forwards the typed `err.code` — never the
+  // raw message — so no internal text leaks (audit-error-envelope clean).
+  if (err instanceof WeightOutOfRangeError) {
+    return NextResponse.json({ error: err.code }, { status: 422 });
   }
   // Wave D (#159) — transactions domain typed errors.
   if (err instanceof TransactionNotFoundError) {
