@@ -88,6 +88,18 @@ export default function CreateObservationModal({
   const [details, setDetails] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Issue #481 — mount-stable idempotency key. The admin "+ New Entry" modal
+  // POSTs directly to /api/observations (it does NOT go through the offline
+  // queue that defaults a key per #480), so without this an accidental
+  // double-click — or a network retry — would create two Observation rows.
+  // `useState(() => …)` runs the initializer exactly once per mount, so every
+  // POST from a single modal session shares this UUID; the server upserts on
+  // Observation.clientLocalId (UNIQUE idx, migration 0019), collapsing
+  // duplicates to one row. Both parent pages unmount the modal on success
+  // (showCreate=false), so a fresh "+ New Entry" remounts it and mints a new
+  // key — a deliberate second entry is its own write. Mirrors
+  // CampConditionForm:165 / RecordBirthButton:31.
+  const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
   // The SSR-prefetched `animals` array is a hot-cache of the first PAGE_SIZE
   // rows on the parent page. For animals outside that slice the AnimalPicker
@@ -134,6 +146,7 @@ export default function CreateObservationModal({
           animal_id: animalId || undefined,
           details: JSON.stringify(cleanDetails),
           created_at: new Date().toISOString(),
+          clientLocalId,
         }),
       });
       if (!res.ok) {
