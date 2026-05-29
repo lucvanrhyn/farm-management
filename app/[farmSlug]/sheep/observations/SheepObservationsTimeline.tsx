@@ -1,5 +1,9 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
 import { parseDetails } from "@/components/admin/observations-log/parseDetails";
 import { TYPE_BADGE, TYPE_LABEL } from "@/components/admin/observations-log/constants";
+import { clientLogger } from "@/lib/client-logger";
 
 interface ObservationRow {
   id: string;
@@ -12,26 +16,81 @@ interface ObservationRow {
 }
 
 interface Props {
-  observations: ObservationRow[];
+  /**
+   * Issue #496 — refresh signal. The page bumps this on `router.refresh()`
+   * (after a "+ New Entry" create) so the client timeline re-fetches the
+   * freshly-written row. Absent on the first render.
+   */
+  refreshKey?: number;
 }
 
+const PAGE_SIZE = 50;
+
 /**
- * Server-rendered observations timeline for the sheep namespace.
+ * Sheep observations timeline (#496).
  *
- * Pure presentational component — receives a pre-filtered observation
- * list (sheep-only, species axis enforced by the page-level
- * `scoped(prisma, "sheep")` query). Reuses `parseDetails` and the
- * type-badge styles from the cattle timeline so the visual language is
- * consistent across species.
+ * Migrated off the SSR facade (`scoped(prisma, "sheep").observation.findMany`)
+ * onto the now species-aware `/api/observations?species=sheep` endpoint that
+ * #491 introduced. The route IS the species axis (ADR-0003), so the param is
+ * the literal "sheep" regardless of the farm-mode cookie — a user who
+ * deep-links here while their cookie reads "cattle" still gets sheep rows.
  *
- * Editing / pagination intentionally omitted from this tracer-bullet
- * slice — they require the API layer to grow a species filter
- * (`/api/observations?species=sheep`) which is a follow-up wave. The
- * "+ New Entry" path on this page does work (it's a write to the same
- * species-aware `createObservation` domain op that the cattle page uses,
- * plus a `router.refresh()` to repaint the SSR timeline).
+ * The `?species=sheep` narrowing relies on the OPT-IN behaviour #491 added to
+ * `listObservations`: the `species` predicate is applied only when the param
+ * is present, so this feed shows sheep-only rows while the species-blind
+ * cattle/admin timeline default stays a cross-species rollup.
  */
-export default function SheepObservationsTimeline({ observations }: Props) {
+export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
+  const [observations, setObservations] = useState<ObservationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch lives in a callback (not the effect body) so the React-Compiler
+  // set-state-in-effect rule is satisfied — same shape as the cattle
+  // `ObservationsLog`. The effect just invokes it and wires AbortController.
+  const fetchObs = useCallback(async (signal: AbortSignal) => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set("species", "sheep");
+    params.set("limit", String(PAGE_SIZE));
+    try {
+      const res = await fetch(`/api/observations?${params.toString()}`, { signal });
+      if (!res.ok) {
+        setObservations([]);
+        return;
+      }
+      const data: ObservationRow[] = await res.json();
+      setObservations(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      if ((err as { name?: string }).name !== "AbortError") {
+        clientLogger.error("[SheepObservationsTimeline] Failed to load observations", { err });
+        setObservations([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Re-runs on mount and whenever `refreshKey` is bumped (after a create), so
+  // a newly-logged sheep observation is fetched and painted.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchObs(controller.signal);
+    return () => controller.abort();
+  }, [refreshKey, fetchObs]);
+
+  if (loading) {
+    return (
+      <div
+        className="rounded-xl p-8 text-center"
+        style={{ background: "#FFFFFF", border: "1px solid #E8DFD2" }}
+      >
+        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          Loading sheep observations…
+        </p>
+      </div>
+    );
+  }
+
   if (observations.length === 0) {
     return (
       <div

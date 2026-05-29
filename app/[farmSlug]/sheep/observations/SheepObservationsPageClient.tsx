@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import CreateObservationModal from "@/components/admin/CreateObservationModal";
+import SheepObservationsTimeline from "./SheepObservationsTimeline";
 
 interface Props {
   camps: { id: string; name: string }[];
@@ -16,25 +16,27 @@ interface Props {
 }
 
 /**
- * Sheep observations page client — owns the "+ New Entry" button and the
- * create-observation modal. The visible timeline is server-rendered by
- * `SheepObservationsTimeline` (sibling), so this component is intentionally
- * narrower than the cattle `ObservationsPageClient` — see page.tsx header
- * for the rationale (the `/api/observations` endpoint is species-blind
- * today; SSR-rendering the timeline keeps the species axis structurally
- * enforced for this slice).
+ * Sheep observations page client — owns the "+ New Entry" button, the
+ * create-observation modal, AND the visible timeline.
+ *
+ * #496 — the timeline (`SheepObservationsTimeline`) now consumes the
+ * species-aware `/api/observations?species=sheep` endpoint client-side
+ * (migrated off the SSR facade). Mirroring the cattle
+ * `ObservationsPageClient` → `ObservationsLog` pattern, this client owns a
+ * `refreshKey`: a successful create bumps it, remounting/refetching the
+ * timeline so the new row appears — no `router.refresh()` round-trip needed.
  */
 export default function SheepObservationsPageClient({ camps, animals, species }: Props) {
   const [showCreate, setShowCreate] = useState(false);
-  const router = useRouter();
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // On successful create, refresh the server component so the SSR
-  // timeline picks up the new row. Mirrors how /sheep/animals refreshes
-  // after a record-birth event.
+  // On successful create, bump the refresh key so the client timeline
+  // re-fetches and the new row is painted. Mirrors the cattle page's
+  // `refreshKey` bump on `ObservationsPageClient`.
   const refresh = useCallback(() => {
     setShowCreate(false);
-    router.refresh();
-  }, [router]);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   return (
     <>
@@ -57,6 +59,8 @@ export default function SheepObservationsPageClient({ camps, animals, species }:
           onCancel={() => setShowCreate(false)}
         />
       )}
+
+      <SheepObservationsTimeline refreshKey={refreshKey} />
     </>
   );
 }

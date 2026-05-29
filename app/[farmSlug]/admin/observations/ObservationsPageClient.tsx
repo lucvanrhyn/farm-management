@@ -8,8 +8,11 @@ interface Props {
   camps: { id: string; name: string }[];
   animals: { id: string; tag: string; campId: string }[];
   /**
-   * Active farm-mode species. Forwarded to the create-observation modal so
-   * its server-side animal picker filters to the right species.
+   * Active farm-mode species (SSR-resolved via `getFarmMode` in the page
+   * server component). Forwarded to the create-observation modal so its
+   * server-side animal picker filters to the right species, AND to
+   * `ObservationsLog` (#496) so the timeline requests the species-aware
+   * `/api/observations?species=<active>` on a multi-species tenant.
    */
   species?: string | null;
 }
@@ -45,7 +48,7 @@ export default function ObservationsPageClient({ camps, animals, species }: Prop
         />
       )}
 
-      <ObservationsLog key={refreshKey} />
+      <ObservationsLog key={refreshKey} species={species} />
     </>
   );
 }

@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Camp, ObservationType, PrismaObservation } from "@/lib/types";
 import { clientLogger } from "@/lib/client-logger";
+import { useFarmModeSafe } from "@/lib/farm-mode";
 import { PAGE_SIZE } from "./observations-log/constants";
 import { EditModal } from "./observations-log/EditModal";
 import { Filters } from "./observations-log/Filters";
@@ -26,9 +27,27 @@ export { parseDetails } from "./observations-log/parseDetails";
 
 interface ObservationsLogProps {
   onDeleted?: () => void;
+  /**
+   * Issue #496 — SSR-resolved active farm-mode species (the page server
+   * component reads `getFarmMode(farmSlug)` and threads it down, same source
+   * the create-modal + AnimalsTable already use). When the tenant is genuinely
+   * multi-species AND this is a concrete species, the timeline requests the
+   * species-aware `/api/observations?species=<active>` so a mixed-species
+   * tenant only sees the active species' rows (#491 made the param OPT-IN).
+   *
+   * On a single-species tenant — or when this is absent ("all" / unknown mode)
+   * — the `?species` param is OMITTED so the endpoint stays the cross-species
+   * rollup (#356 invariant) and behaviour is unchanged.
+   */
+  species?: string | null;
 }
 
-export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
+export default function ObservationsLog({ onDeleted, species }: ObservationsLogProps) {
+  // Only narrow on a genuinely multi-species tenant: a single-species farm's
+  // sole species already equals the cross-species set, so omitting `?species`
+  // returns identical rows while preserving the default cross-species path.
+  const { isMultiMode } = useFarmModeSafe();
+  const activeSpecies = isMultiMode && species ? species : null;
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campFilter, setCampFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<ObservationType | "all">("all");
@@ -56,6 +75,10 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
     const params = new URLSearchParams();
     if (campVal !== "all") params.set("camp", campVal);
     if (typeVal !== "all") params.set("type", typeVal);
+    // Issue #496 — opt-in species narrowing. Only set when the tenant is
+    // multi-species and a concrete active species is known; otherwise omitted
+    // so the cross-species rollup (#356) is preserved.
+    if (activeSpecies) params.set("species", activeSpecies);
     params.set("limit", String(PAGE_SIZE + 1));
     params.set("offset", String((pageVal - 1) * PAGE_SIZE));
 
@@ -70,7 +93,7 @@ export default function ObservationsLog({ onDeleted }: ObservationsLogProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeSpecies]);
 
   useEffect(() => {
     fetchObs(campFilter, typeFilter, page);
