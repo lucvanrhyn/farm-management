@@ -34,8 +34,10 @@ import {
   listTaskOccurrences,
   listTasksPaginated,
   listTasksUnbounded,
+  MAX_LIMIT,
   type CreateTaskInput,
 } from "@/lib/domain/tasks";
+import { parseLimit } from "@/lib/domain/shared/limit";
 
 const DEFAULT_LIMIT = 50;
 
@@ -89,11 +91,20 @@ export const GET = tenantRead({
       return NextResponse.json(tasks);
     }
 
-    const rawLimit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
+    // Issue #485 — `?limit` validation routed through the shared
+    // `parseLimit` (canonical `InvalidLimitError` → `INVALID_LIMIT` 400).
+    // Behaviour-preserving for tasks (it was already the typed-error model):
+    // a non-finite / ≤0 limit still rejects, an omitted limit still falls
+    // back to 50, a valid value still clamps to MAX_LIMIT (500). The op's
+    // own defensive clamp remains as belt-and-braces.
+    const limit = parseLimit(limitParam, {
+      max: MAX_LIMIT,
+      fallback: DEFAULT_LIMIT,
+    });
     const result = await timeAsync("query", () =>
       listTasksPaginated(ctx.prisma, {
         filters,
-        limit: rawLimit,
+        limit,
         cursor: cursorParam,
       }),
     );

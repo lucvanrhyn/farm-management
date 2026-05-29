@@ -17,8 +17,17 @@ import type { Observation, PrismaClient } from "@prisma/client";
 
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
+/**
+ * Pagination tunables — exported (#485) so the route adapter can feed the
+ * SAME caps into the shared `parseLimit` validator at the boundary, keeping
+ * one source of truth. `DEFAULT_LIMIT` is the fallback for an omitted
+ * `?limit`; `MAX_LIMIT` is the hard cap a valid limit clamps to.
+ */
+export const OBSERVATIONS_DEFAULT_LIMIT = 50;
+export const OBSERVATIONS_MAX_LIMIT = 200;
+
+const DEFAULT_LIMIT = OBSERVATIONS_DEFAULT_LIMIT;
+const MAX_LIMIT = OBSERVATIONS_MAX_LIMIT;
 
 export interface ListObservationsFilters {
   camp?: string | null;

@@ -7,6 +7,7 @@ import {
   CreateAnimalValidationError,
 } from "@/lib/domain/animals/create-animal";
 import { listAnimals } from "@/lib/domain/animals/list-animals";
+import { parseLimit } from "@/lib/domain/shared/limit";
 
 // Pagination tunables. Default 500/request balances payload size (~100KB JSON
 // for a typical cattle row) against round-trip count on large herds. Max
@@ -35,12 +36,20 @@ const MAX_LIMIT = 2000;
  * Wave 316b (#309) — the fat handler body (baseWhere construction, the
  * unbounded vs cursor `findMany` split, hasMore/nextCursor) moved into the
  * `listAnimals` domain op. The route is now a thin adapter: it parses query
- * params, keeps the `{ error: "Invalid limit" }` 400 at the boundary
- * (legacy sync-manager clients pattern-match the literal — migrating it to
- * a typed envelope is a deferred future wave), then maps the op's
- * discriminated result back to the byte-identical legacy wire (bare array
- * in unbounded mode, `{ items, nextCursor, hasMore }` in cursor mode). The
- * discriminator never reaches the client.
+ * params, validates `?limit` via the shared `parseLimit` (#485), then maps
+ * the op's discriminated result back to the byte-identical legacy wire (bare
+ * array in unbounded mode, `{ items, nextCursor, hasMore }` in cursor mode).
+ * The discriminator never reaches the client.
+ *
+ * Issue #485 — limit validation migrated off the bespoke
+ * `{ error: "Invalid limit" }` literal onto the shared `parseLimit`, which
+ * throws the canonical `InvalidLimitError` → `{ error: "INVALID_LIMIT" }`
+ * 400 (mapped by `mapApiDomainError` inside the `tenantRead` adapter). This
+ * converges the three list endpoints (animals / observations / tasks) on one
+ * typed contract. No client depends on the old literal: `lib/sync-manager.ts`
+ * sends a fixed positive `ANIMALS_PAGE_SIZE` and only reads `res.ok` /
+ * `hasMore` / `nextCursor`; the picker components send fixed `PAGE_LIMIT`
+ * constants. Valid-input behaviour (cap 2000) is unchanged.
  */
 export const GET = tenantRead({
   handle: async (ctx, req) => {
@@ -68,19 +77,15 @@ export const GET = tenantRead({
 
     let limit: number | undefined;
     if (paginated) {
-      const rawLimit = limitParam
-        ? Number.parseInt(limitParam, 10)
-        : DEFAULT_LIMIT;
-      if (!Number.isFinite(rawLimit) || rawLimit <= 0) {
-        // Pre-existing wire shape for query-param validation:
-        // `{ error: "Invalid limit" }`. Kept here at the route boundary
-        // (NOT routed through `routeError`, NOT a domain error) because the
-        // legacy clients (sync-manager) pattern-match on the message. A
-        // future wave can switch this to a typed VALIDATION_FAILED envelope
-        // alongside a client-side flip.
-        return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
-      }
-      limit = Math.min(rawLimit, MAX_LIMIT);
+      // Issue #485 — shared validator. A non-finite / ≤0 `?limit` throws
+      // `InvalidLimitError`, which the `tenantRead` adapter maps to
+      // `{ error: "INVALID_LIMIT" }` 400 via `mapApiDomainError`. A missing
+      // `?limit` (cursor-only pagination) falls back to `DEFAULT_LIMIT`; a
+      // valid value clamps to `MAX_LIMIT` (2000) — both unchanged.
+      limit = parseLimit(limitParam, {
+        max: MAX_LIMIT,
+        fallback: DEFAULT_LIMIT,
+      });
     }
 
     const result = await listAnimals(prisma, {
