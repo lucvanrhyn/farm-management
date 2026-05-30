@@ -103,3 +103,39 @@ export function resolvePostSubmitNav(
   // the user's point of view — hold so the farmer can react to the toast.
   return { action: "hold" };
 }
+
+// ── Navigation hold (issue #447) ─────────────────────────────────────────────
+
+/**
+ * How long (ms) to defer the post-submit navigation so a just-surfaced toast
+ * stays readable on a fast network. Cosmetic only.
+ */
+export const DUPLICATE_TOAST_NAV_HOLD_MS = 1500;
+
+/**
+ * Resolve how long to hold the post-submit navigation so a freshly-rendered
+ * toast is readable before the route transition tears it down (issue #447).
+ *
+ * The auto-resolved same-day duplicate is the ONLY path that both surfaces a
+ * toast (`setSubmitToast`) AND navigates (`mark-succeeded` →
+ * `resolvePostSubmitNav` returns `navigate`). Without a hold, that toast
+ * flashes for ~300-500 ms before `router.push` fires. Every other navigate
+ * path (committed 2xx, thrown fetch, offline) shows no toast, so it returns 0
+ * and navigates synchronously — the happy path is never slowed.
+ *
+ * Pure and dependency-free (mirrors `resolvePostSubmitNav`) so the timing
+ * contract is unit-testable without React, timers, or a router.
+ *
+ * @param inlineResult - The inline POST outcome the page already computed.
+ * @returns Milliseconds to hold before navigating; `0` for an immediate push.
+ */
+export function resolveNavHoldMs(inlineResult?: InlinePostResult): number {
+  if (
+    inlineResult?.kind === "rejected" &&
+    inlineResult.resolution.action === "mark-succeeded" &&
+    inlineResult.resolution.toast?.kind === "duplicate"
+  ) {
+    return DUPLICATE_TOAST_NAV_HOLD_MS;
+  }
+  return 0;
+}
