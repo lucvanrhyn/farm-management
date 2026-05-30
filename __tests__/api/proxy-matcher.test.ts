@@ -149,6 +149,34 @@ const PHASE_K_ROUTES: Array<{
     path: "/api/map/gis/fmd-zones",
     requiresAuth: true,
   },
+
+  // Issue #489 (PRD #479, Epic D) — the observations route family was pulled
+  // OUT of the matcher exclusion so the signed-header middleware runs and
+  // pins tenant from the server-controlled `active_farm_slug` cookie instead
+  // of the `Referer` header. Every path in the family (list/create, edit,
+  // attachment, reset) must now MATCH the proxy regex. The prefix-style
+  // negative-lookahead carve-out used to exclude the whole subtree; these
+  // concrete paths lock the family back IN.
+  {
+    label: "Observations list/create (#489 pinned)",
+    path: "/api/observations",
+    requiresAuth: true,
+  },
+  {
+    label: "Observations edit/delete by id (#489 pinned)",
+    path: "/api/observations/cm9obsid123",
+    requiresAuth: true,
+  },
+  {
+    label: "Observations attachment (#489 pinned)",
+    path: "/api/observations/cm9obsid123/attachment",
+    requiresAuth: true,
+  },
+  {
+    label: "Observations reset (#489 pinned)",
+    path: "/api/observations/reset",
+    requiresAuth: true,
+  },
 ];
 
 // ── Routes that MUST be excluded from proxy (regression guard) ─────────────────
@@ -160,7 +188,10 @@ const KNOWN_PUBLIC_ROUTES: Array<{ label: string; path: string }> = [
   { label: "Inngest webhook (Phase J hotfix)", path: "/api/inngest" },
   { label: "Einstein ask (Phase L Wave 2B)", path: "/api/einstein/ask" },
   { label: "Einstein feedback (Phase L Wave 2B)", path: "/api/einstein/feedback" },
-  { label: "Observations logger (public write)", path: "/api/observations" },
+  // Issue #489 — `/api/observations` is NO LONGER public; it was moved into
+  // PHASE_K_ROUTES above (requiresAuth: true) so the signed-header middleware
+  // pins tenant off the cookie instead of `Referer`. See the family entries
+  // in PHASE_K_ROUTES.
   { label: "PayFast webhook", path: "/api/webhooks/payfast" },
   { label: "Login page", path: "/login" },
   { label: "Register page", path: "/register" },

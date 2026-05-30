@@ -210,9 +210,19 @@ export async function proxy(req: NextRequest) {
  *   agree on what "a tenant page" means.
  * - `/api/...` — every authenticated API route. Specific public endpoints
  *   (`/api/auth/*`, `/api/health`, `/api/einstein/*`, `/api/inngest`,
- *   `/api/observations`, `/api/telemetry`, `/api/webhooks/*`) are already
- *   excluded by the matcher, so they never reach this function in the first
- *   place. Any other `/api/*` path that does reach the proxy IS protected.
+ *   `/api/telemetry`, `/api/webhooks/*`) are already excluded by the matcher,
+ *   so they never reach this function in the first place. Any other `/api/*`
+ *   path that does reach the proxy IS protected.
+ *
+ *   Issue #489 (PRD #479, Epic D — #393 completion part 2): the
+ *   `/api/observations` family was REMOVED from the matcher exclusion above.
+ *   It now flows through the proxy like its sibling cookie-scoped routes
+ *   (`/api/animals`, `/api/camps`, …) so the signed `x-farm-slug` header is
+ *   stamped from the server-controlled `active_farm_slug` cookie — the
+ *   handlers no longer fall back to `Referer`-derived tenant resolution. The
+ *   original March-2026 carve-out (un-authed sync POSTs were 307'd to /login)
+ *   predates the signed-header hop and is obsolete: an authenticated sync
+ *   POST now passes through with its identity stamped.
  *
  * Exported (named export, not a config field) so the proxy-matcher unit test
  * can assert disposition without booting the Edge runtime.
@@ -350,6 +360,6 @@ function withSessionHeaders(
 // between `[` and the string) or the test parser falls over.
 export const config = {
   matcher: [
-    "/((?!login|register|verify-email|subscribe|demo|api/auth|api/csp-report|api/einstein|api/health|api/inngest|api/observations|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
+    "/((?!login|register|verify-email|subscribe|demo|api/auth|api/csp-report|api/einstein|api/health|api/inngest|api/telemetry|api/webhooks|offline|_next/static|_next/image|favicon\\.ico|manifest\\.json|brangus\\.jpg|sw\\.js|.*\\.png|.*\\.jpg|.*\\.ico).*)",
   ],
 };
