@@ -80,7 +80,10 @@ export default async function ConsultingAdminPage({
   // consulting pipeline by visiting /<their-slug>/admin/consulting.
   // Mirror the same `isPlatformAdmin` check the matching PATCH endpoint
   // performs at app/api/admin/consulting/[id]/route.ts:30.
-  await requirePlatformAdmin(session);
+  //
+  // Pass /<farmSlug>/admin as redirectTo so an authenticated farm-ADMIN who
+  // is not a platform admin lands on their farm admin home — not /login.
+  await requirePlatformAdmin(session, `/${farmSlug}/admin`);
 
   const [leads, engagements] = await Promise.all([
     getConsultingLeads({ limit: 50 }),

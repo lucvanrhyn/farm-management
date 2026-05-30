@@ -294,17 +294,17 @@ describe('admin/settings/tasks — requireSession + requireFarmAdmin gate (#523)
     expect(redirected).toBe('/login?next=%2Facme%2Fadmin%2Fsettings%2Ftasks');
   });
 
-  it('redirects to /login when authenticated but not ADMIN', async () => {
+  it('redirects to /<farmSlug>/home when authenticated but not farm ADMIN (role failure, not /login)', async () => {
     const session = makeSession();
     requireSessionMock.mockResolvedValue(session);
     requireFarmAdminMock.mockImplementation(() => {
-      redirectMock('/login');
+      redirectMock('/acme/home');
     });
 
     const { default: Page } = await import('@/app/[farmSlug]/admin/settings/tasks/page');
     const { redirected } = await run(() => Page({ params: Promise.resolve({ farmSlug: 'acme' }) }));
 
-    expect(redirected).toBe('/login');
+    expect(redirected).toBe('/acme/home');
     expect(requireFarmAdminMock).toHaveBeenCalledWith(session, 'acme');
   });
 
@@ -370,17 +370,17 @@ describe('admin/settings/map — requireSession + requireFarmAdmin gate (#523)',
     expect(redirected).toBe('/login?next=%2Facme%2Fadmin%2Fsettings%2Fmap');
   });
 
-  it('redirects to /login when authenticated but not ADMIN', async () => {
+  it('redirects to /<farmSlug>/home when authenticated but not farm ADMIN (role failure, not /login)', async () => {
     const session = makeSession();
     requireSessionMock.mockResolvedValue(session);
     requireFarmAdminMock.mockImplementation(() => {
-      redirectMock('/login');
+      redirectMock('/acme/home');
     });
 
     const { default: Page } = await import('@/app/[farmSlug]/admin/settings/map/page');
     const { redirected } = await run(() => Page({ params: Promise.resolve({ farmSlug: 'acme' }) }));
 
-    expect(redirected).toBe('/login');
+    expect(redirected).toBe('/acme/home');
     expect(requireFarmAdminMock).toHaveBeenCalledWith(session, 'acme');
   });
 

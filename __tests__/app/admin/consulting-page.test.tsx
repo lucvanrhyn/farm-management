@@ -79,30 +79,32 @@ describe('ConsultingAdminPage — platform-admin guard chain (codex P1, #523)', 
     expect(redirected).toBe('/login?next=%2Fany-farm%2Fadmin%2Fconsulting');
   });
 
-  it('redirects a farm-level non-ADMIN via requireFarmAdmin', async () => {
-    // Session resolves OK; requireFarmAdmin fires the redirect
+  it('redirects a farm-level non-ADMIN to /<slug>/home via requireFarmAdmin (not /login)', async () => {
+    // Session resolves OK; requireFarmAdmin fires the redirect to /<slug>/home
     requireSessionMock.mockResolvedValue(makeSession());
     requireFarmAdminMock.mockImplementation(() => {
-      redirectMock('/login');
+      redirectMock('/acme-cattle/home');
     });
 
     const { redirected } = await runPage('acme-cattle');
-    expect(redirected).toBe('/login');
+    expect(redirected).toBe('/acme-cattle/home');
     expect(requireFarmAdminMock).toHaveBeenCalled();
   });
 
-  it('redirects a farm-ADMIN who is NOT a platform admin (requirePlatformAdmin)', async () => {
+  it('redirects a farm-ADMIN who is NOT a platform admin to /<slug>/admin (not /login)', async () => {
+    // The page calls requirePlatformAdmin(session, `/${farmSlug}/admin`), so
+    // the guard redirects to /<farmSlug>/admin rather than /login.
     const session = makeSession('farm-admin@example.com');
     requireSessionMock.mockResolvedValue(session);
     requireFarmAdminMock.mockResolvedValue(undefined); // farm-ADMIN passes
     requirePlatformAdminMock.mockImplementation(() => {
-      // Not a platform admin — redirect to login
-      redirectMock('/login');
+      // Not a platform admin — redirect to farm admin home, not /login
+      redirectMock('/acme-cattle/admin');
     });
 
     const { redirected } = await runPage('acme-cattle');
-    expect(redirected).toBe('/login');
-    expect(requirePlatformAdminMock).toHaveBeenCalledWith(session);
+    expect(redirected).toBe('/acme-cattle/admin');
+    expect(requirePlatformAdminMock).toHaveBeenCalledWith(session, '/acme-cattle/admin');
   });
 
   it('renders for a platform admin (all three guards pass)', async () => {
@@ -130,7 +132,7 @@ describe('ConsultingAdminPage — platform-admin guard chain (codex P1, #523)', 
     requireSessionMock.mockResolvedValue(makeSession('farm-admin@example.com'));
     requireFarmAdminMock.mockResolvedValue(undefined);
     requirePlatformAdminMock.mockImplementation(() => {
-      redirectMock('/login');
+      redirectMock('/acme-cattle/admin');
     });
 
     await runPage('acme-cattle');
