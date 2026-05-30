@@ -109,6 +109,46 @@ export default async function ReproductionPage({
   // serves the predicate.
   const stats = await getReproStats(prisma, { species: mode });
 
+  // #356 — getReproStats is the CATTLE reproduction engine (285d gestation,
+  // calving/insemination/heat_detection semantics, SA cattle benchmarks). It
+  // gates non-cattle modes with `available: false` rather than emit cattle
+  // numbers under a "Lambing"/"Fawning" label. Render an honest empty state
+  // here instead of the cattle KPI cards. Sheep have a dedicated,
+  // species-correct surface at /sheep/reproduction — link straight to it.
+  if (stats.available === false) {
+    return (
+      <AdminPage className="max-w-3xl">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+            {copy.pageTitle}
+          </h1>
+        </div>
+        <div
+          className="rounded-2xl border px-6 py-10 text-center"
+          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        >
+          <p className="text-base font-semibold" style={{ color: "#1C1815" }}>
+            {copy.birthEvent} analytics are not available for {copy.dam}s yet
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "#9C8E7A" }}>
+            This dashboard&rsquo;s reproduction KPIs (pregnancy rate, {copy.birthEventLower}{" "}
+            interval, days open) are calibrated for cattle. Species-specific{" "}
+            {copy.birthEventLower} analytics are coming soon.
+          </p>
+          {mode === "sheep" && (
+            <Link
+              href={`/${farmSlug}/sheep/reproduction`}
+              className="mt-5 inline-block rounded-lg px-4 py-2 text-sm font-medium"
+              style={{ background: "#4A7C59", color: "#FFFFFF" }}
+            >
+              Go to Sheep Reproduction →
+            </Link>
+          )}
+        </div>
+      </AdminPage>
+    );
+  }
+
   // Fetch recent events (last 15) — includes heat/insem/scan/calving
   // Default to 12 months when no date range is selected
   const defaultFrom = new Date();

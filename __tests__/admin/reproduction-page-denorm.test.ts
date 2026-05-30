@@ -86,6 +86,24 @@ describe('reproduction analytics helper — accepts species, not animalIds', () 
   });
 });
 
+describe('reproduction — non-cattle species gate (#356)', () => {
+  it('helper short-circuits a non-cattle species instead of querying cattle', async () => {
+    const src = await readHelper();
+    // The cattle engine must return the gated payload when species is set
+    // and not cattle — guarding against the regression where it ran
+    // `scoped(prisma, "cattle")` regardless of the requested species.
+    expect(src).toMatch(/options\.species\s*!==\s*["']cattle["']/);
+    expect(src).toMatch(/available\s*:\s*false/);
+  });
+
+  it('page renders an explicit not-available state when stats are gated', async () => {
+    const src = await readPage();
+    // The page must branch on the gated discriminant and NOT fall through to
+    // the cattle KPI cards for a non-cattle mode.
+    expect(src).toMatch(/stats\.available\s*===\s*false/);
+  });
+});
+
 describe('DaysOpen table — SSR cap (Phase-I4)', () => {
   it('caps the SSR days-open slice via a `.slice(` or `take:` bound', async () => {
     const src = await readPage();

@@ -44,6 +44,24 @@ export interface DaysOpenRecord {
 }
 
 export interface ReproStats {
+  /**
+   * Whether these stats are meaningful for the requested species (#356).
+   *
+   * This engine is the CATTLE reproduction surface: every KPI below is
+   * derived from cattle-typed observations (`calving` / `insemination` /
+   * `heat_detection`), a 285-day gestation, and SA cattle benchmarks.
+   * Sheep have a separate, species-correct surface
+   * (`/sheep/reproduction` → `sheepModule.getReproStats`, lambing/joining
+   * semantics); game has no reproduction-event vocabulary at all.
+   *
+   * For a non-cattle `options.species` the engine short-circuits and
+   * returns an all-empty payload with `available: false` so callers render
+   * an explicit "not available for this species" state — NEVER cattle
+   * numbers under a sheep/game label. Defaults to `true` (the cattle path,
+   * and any caller that omits the field) so existing consumers are
+   * unaffected.
+   */
+  available?: boolean;
   pregnancyRate: number | null;          // pregnant scans / eligible females × 100
   calvingRate: number | null;            // live calvings / inseminations (12m) × 100
   avgCalvingIntervalDays: number | null; // avg days between consecutive calvings per animal
@@ -124,10 +142,50 @@ function parseDetails(raw: string): Record<string, string> {
   }
 }
 
+/**
+ * The gated payload returned when {@link getReproStats} is asked for a
+ * non-cattle species (#356). Every metric is empty and `available` is
+ * `false`, so a caller renders an explicit "not available for this species"
+ * state instead of cattle-derived numbers. No DB query runs to produce it.
+ */
+const CATTLE_ONLY_REPRO_STATS: ReproStats = {
+  available: false,
+  pregnancyRate: null,
+  calvingRate: null,
+  avgCalvingIntervalDays: null,
+  upcomingCalvings: [],
+  inHeat7d: 0,
+  inseminations30d: 0,
+  calvingsDue30d: 0,
+  scanCounts: { pregnant: 0, empty: 0, uncertain: 0 },
+  conceptionRate: null,
+  pregnancyRateByCycle: [],
+  daysOpen: [],
+  avgDaysOpen: null,
+  weaningRate: null,
+};
+
 export async function getReproStats(
   prisma: PrismaClient,
   options?: { species?: string },
 ): Promise<ReproStats> {
+  // #356 — This is the CATTLE reproduction engine: every KPI below is
+  // derived from cattle-typed observations (`calving` / `insemination` /
+  // `heat_detection`), a 285-day gestation, and SA cattle benchmarks. Sheep
+  // have a separate, species-correct surface (`/sheep/reproduction` →
+  // `sheepModule.getReproStats`); game has no reproduction-event vocabulary.
+  //
+  // When a caller (the /admin/reproduction page, the dashboard fetcher)
+  // passes a NON-cattle mode, we must NOT run a cattle-scoped query and show
+  // the numbers under a "Lambing"/"Fawning" label. Short-circuit to the
+  // gated empty payload — `available: false` — so the caller renders an
+  // explicit "not available for this species" state instead. An omitted /
+  // "cattle" species (export call-sites, cattle mode) falls through to the
+  // real cattle path below, preserving existing behaviour byte-for-byte.
+  if (options?.species != null && options.species !== "cattle") {
+    return CATTLE_ONLY_REPRO_STATS;
+  }
+
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
   const eighteenMonthsAgo = new Date();
@@ -149,10 +207,10 @@ export async function getReproStats(
   // gestation, calving/scan/insemination cattle semantics; the sheep
   // reproduction surface is a separate module). ADR-0005 Wave 2 routes
   // these reads through scoped(prisma, "cattle"), which injects
-  // { species: "cattle" } — superseding the old `options.species`
-  // branching for these calls. `options` is retained in the signature so
-  // callers don't break; it is intentionally no longer consulted here.
-  void options;
+  // { species: "cattle" }. We deliberately scope to cattle (not
+  // `options.species`) here: non-cattle modes are gated out at the top of
+  // this function (#356), so reaching this line means species is cattle (or
+  // the caller omitted it — export call-sites, which produce cattle exports).
   const db = scoped(prisma, "cattle");
 
   const [reproObs, calvingObs, allCamps] = await Promise.all([
@@ -396,6 +454,7 @@ export async function getReproStats(
       : null;
 
   return {
+    available: true,
     pregnancyRate,
     calvingRate,
     avgCalvingIntervalDays,
