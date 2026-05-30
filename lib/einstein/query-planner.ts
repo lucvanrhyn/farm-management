@@ -73,14 +73,46 @@ Rules:
 - isStructuredQuery=true when the user asks for counts, aggregates, "how many", status summaries.
 - isStructuredQuery=false when the user asks open-ended "why/how/what should I" questions.
 - entityTypeFilter: include ONLY types relevant. Omit (or use empty array) if the question is unrestricted.
-- dateRangeFilter: emit only if the question explicitly names a range ("last week", "March 2026", "since weaning"). Otherwise omit.
+- dateRangeFilter: emit only if the question explicitly names a range ("last week", "March 2026", "since weaning", "last two weeks"). Resolve EVERY relative range against the current date stated below — never against any other notion of "now". Otherwise omit.
 - rewrittenQuery: always present, ≤20 words.
 
 Respond with the JSON object ONLY. No leading text, no trailing prose, no \`\`\`json fences.`;
 
+/**
+ * Build the planner system prompt for a given "now".
+ *
+ * The base prompt is static, but relative date expressions ("last two weeks",
+ * "this month") can only be resolved correctly if the model knows the actual
+ * current date. The model's own notion of "now" is its training cutoff, so
+ * without this anchor it resolves "last two weeks" to a date ~a year stale
+ * (observed live 2026-05-29: "last two weeks" → 2025-04, the wrong fortnight
+ * AND year, which then starved the retriever's date-windowed queries).
+ *
+ * We append an explicit, unambiguous current-date line (ISO date + weekday +
+ * year spelled out) so Haiku anchors every relative range to the real today.
+ *
+ * @param now - The current date (injectable for deterministic tests).
+ */
+export function buildPlannerSystemPrompt(now: Date): string {
+  const iso = now.toISOString().slice(0, 10);
+  const human = now.toLocaleDateString('en-ZA', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  return `${PLANNER_SYSTEM_PROMPT}
+
+CURRENT DATE: today is ${iso} (${human}). Resolve all relative date expressions ("today", "yesterday", "last week", "last two weeks", "this month", "since weaning") relative to ${iso}. Do NOT use any other year or month.`;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function planQuery(question: string): Promise<StructuredQueryPlan> {
+export async function planQuery(
+  question: string,
+  now: Date = new Date(),
+): Promise<StructuredQueryPlan> {
   if (typeof question !== 'string' || question.trim().length === 0) {
     throw new QueryPlannerError(
       'QUERY_PLANNER_INVALID_RESPONSE',
@@ -95,7 +127,10 @@ export async function planQuery(question: string): Promise<StructuredQueryPlan> 
     const response = await client.messages.create({
       model: ANTHROPIC_PLANNER_MODEL,
       max_tokens: 400,
-      system: PLANNER_SYSTEM_PROMPT,
+      // Inject the real current date so relative ranges ("last two weeks")
+      // anchor to today, not the model's training-cutoff "now" (the
+      // 2026-05-29 wrong-fortnight/wrong-year retrieval bug).
+      system: buildPlannerSystemPrompt(now),
       messages: [{ role: 'user', content: question }],
     });
     // Concatenate all text blocks (Haiku normally emits one).
