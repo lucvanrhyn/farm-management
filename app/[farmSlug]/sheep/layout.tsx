@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import SheepSubNav from "@/components/sheep/SheepSubNav";
@@ -6,6 +7,10 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import { logger } from "@/lib/logger";
+
+export const metadata: Metadata = {
+  title: "Sheep — FarmTrack",
+};
 
 export default async function SheepLayout({
   children,

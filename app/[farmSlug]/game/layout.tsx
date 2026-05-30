@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import GameSubNav from "@/components/game/GameSubNav";
@@ -6,6 +7,10 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import { logger } from "@/lib/logger";
+
+export const metadata: Metadata = {
+  title: "Game — FarmTrack",
+};
 
 export default async function GameLayout({
   children,

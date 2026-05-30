@@ -293,26 +293,34 @@ function LoginForm() {
             />
           </div>
 
-          {/* Error — role="alert" + aria-live="assertive" so screen readers
-              interrupt and announce the failure immediately (P4). Credential
-              errors are action-blocking, so assertive (not polite) is correct. */}
-          {error && (
-            <p
-              role="alert"
-              aria-live="assertive"
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "#E07060",
-                fontSize: "0.8125rem",
-                background: "rgba(200,60,40,0.10)",
-                border: "1px solid rgba(200,60,40,0.20)",
-                borderRadius: "8px",
-                padding: "0.5rem 0.75rem",
-              }}
-            >
-              {error}
-            </p>
-          )}
+          {/* Error region (#111) — an OUTER role="status" aria-live="polite"
+              container is ALWAYS mounted so assistive tech has a stable live
+              region to watch; the inner role="alert" message is swapped in/out.
+              A bare alert that is only mounted when an error appears is not
+              reliably announced (the region must already exist in the a11y
+              tree when its subtree mutates), and re-submitting with the same
+              error would otherwise produce no second announcement. The inner
+              message keeps aria-live="assertive" because credential errors are
+              action-blocking (P4). */}
+          <div role="status" aria-live="polite">
+            {error && (
+              <p
+                role="alert"
+                aria-live="assertive"
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  color: "#E07060",
+                  fontSize: "0.8125rem",
+                  background: "rgba(200,60,40,0.10)",
+                  border: "1px solid rgba(200,60,40,0.20)",
+                  borderRadius: "8px",
+                  padding: "0.5rem 0.75rem",
+                }}
+              >
+                {error}
+              </p>
+            )}
+          </div>
 
           {/* Submit */}
           {/* aria-busy pairs with `disabled` so AT + Playwright agree on

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import AppShell from "@/components/AppShell";
 
 /**
@@ -5,6 +6,10 @@ import AppShell from "@/components/AppShell";
  * users lose connectivity, so it needs the service-worker bootstrap —
  * which now lives in AppShell after the auth-bundle split.
  */
+export const metadata: Metadata = {
+  title: "Offline — FarmTrack",
+};
+
 export default function OfflineLayout({
   children,
 }: {

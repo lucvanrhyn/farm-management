@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
@@ -67,6 +68,10 @@ async function currentPathname(): Promise<string | null> {
     null
   );
 }
+
+export const metadata: Metadata = {
+  title: "Admin — FarmTrack",
+};
 
 export default async function AdminLayout({
   children,

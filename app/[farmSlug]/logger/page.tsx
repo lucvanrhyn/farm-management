@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+import type { Metadata } from "next";
 import CampSelector from "@/components/logger/CampSelector";
 import { LoggerStatusBar } from "@/components/logger/LoggerStatusBar";
 import { SignOutButton } from "@/components/logger/SignOutButton";
@@ -108,6 +109,10 @@ async function resolveAllowedCampIds(
     return undefined;
   }
 }
+
+export const metadata: Metadata = {
+  title: "Logger — FarmTrack",
+};
 
 export default async function LoggerPage({
   params,
