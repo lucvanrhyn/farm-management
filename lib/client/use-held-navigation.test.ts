@@ -108,4 +108,59 @@ describe("useHeldNavigation (#447)", () => {
     });
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  // Regression: the original implementation re-subscribed the keydown effect on
+  // every render (its `flush` dep churned with `navigate`/`router` identity),
+  // and that effect's cleanup nulled the pending nav + cleared the timer. A
+  // single re-render with a fresh `navigate` mid-hold therefore silently
+  // dropped the navigation — the PR #515 gate flake.
+  it("keeps the pending navigation across a re-render with a new navigate identity (timer path)", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ nav }) => useHeldNavigation(nav),
+      { initialProps: { nav: first } },
+    );
+
+    act(() => {
+      result.current.scheduleHeldNavigation("/farm-x/logger", 1500);
+    });
+    // Fresh identity before the hold elapses — must NOT cancel the pending nav.
+    rerender({ nav: second });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    const calls = [...first.mock.calls, ...second.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe("/farm-x/logger");
+  });
+
+  it("Esc still flushes after a re-render with a new navigate identity (no lost or double nav)", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ nav }) => useHeldNavigation(nav),
+      { initialProps: { nav: first } },
+    );
+
+    act(() => {
+      result.current.scheduleHeldNavigation("/farm-x/logger", 1500);
+    });
+    rerender({ nav: second });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    const afterEsc = [...first.mock.calls, ...second.mock.calls];
+    expect(afterEsc).toHaveLength(1);
+    expect(afterEsc[0][0]).toBe("/farm-x/logger");
+
+    // Timer was cancelled by the Esc flush — no second navigation later.
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(first.mock.calls.length + second.mock.calls.length).toBe(1);
+  });
 });
