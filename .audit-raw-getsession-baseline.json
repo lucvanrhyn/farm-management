@@ -1,16 +1,5 @@
 {
   "allowlist": [
-    "app/[farmSlug]/admin/finansies/page.tsx::0",
-    "app/[farmSlug]/admin/settings/alerts/page.tsx::0",
-    "app/[farmSlug]/admin/settings/map/page.tsx::0",
-    "app/[farmSlug]/admin/settings/tasks/page.tsx::0",
-    "app/[farmSlug]/onboarding/layout.tsx::0",
-    "app/[farmSlug]/subscribe/upgrade/page.tsx::0",
-    "app/[farmSlug]/tools/break-even/page.tsx::0",
-    "app/[farmSlug]/tools/nvd/page.tsx::0",
-    "app/[farmSlug]/tools/rotation-planner/page.tsx::0",
-    "app/[farmSlug]/tools/tax/page.tsx::0",
-    "app/subscribe/page.tsx::0",
     "app/api/admin/consulting/[id]/route.ts::0",
     "app/api/admin/evict-farm-client/route.ts::0",
     "app/api/einstein/ask/route.ts::0",
@@ -23,18 +12,18 @@
     "lib/server/farm-context-slug.ts::1"
   ],
   "_comment": {
-    "page-sites-pending-523": [
-      "app/[farmSlug]/admin/finansies/page.tsx",
-      "app/[farmSlug]/admin/settings/alerts/page.tsx",
-      "app/[farmSlug]/admin/settings/map/page.tsx",
-      "app/[farmSlug]/admin/settings/tasks/page.tsx",
-      "app/[farmSlug]/onboarding/layout.tsx",
-      "app/[farmSlug]/subscribe/upgrade/page.tsx",
-      "app/[farmSlug]/tools/break-even/page.tsx",
-      "app/[farmSlug]/tools/nvd/page.tsx",
-      "app/[farmSlug]/tools/rotation-planner/page.tsx",
-      "app/[farmSlug]/tools/tax/page.tsx",
-      "app/subscribe/page.tsx"
+    "page-sites-migrated-523": [
+      "app/[farmSlug]/admin/finansies/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/admin/settings/alerts/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/admin/settings/map/page.tsx — migrated to requireSession() + requireFarmAdmin() in #523",
+      "app/[farmSlug]/admin/settings/tasks/page.tsx — migrated to requireSession() + requireFarmAdmin() in #523",
+      "app/[farmSlug]/onboarding/layout.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/subscribe/upgrade/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/break-even/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/nvd/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/rotation-planner/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/tax/page.tsx — migrated to requireSession() in #523",
+      "app/subscribe/page.tsx — migrated to getSession() in #523 (renders PublicPlanPicker for anon; no redirect)"
     ],
     "api-routes-exempt": [
       "app/api/admin/consulting/[id]/route.ts — platform-admin endpoint, no farm context; session needed for email lookup",
@@ -51,6 +40,6 @@
       "lib/server/farm-context-errors.ts — error-classifier for getFarmContextForSlug (single dedicated module)",
       "lib/server/farm-context-slug.ts (2 occurrences) — legacy fast-path fallback via getServerSession"
     ],
-    "note": "lib/auth.ts is ALWAYS exempt (the canonical wrapper itself) and is skipped before auditSource runs — no baseline entry needed. Page sites above are pending migration to requireSession() in #523. API/lib entries are intentionally exempt and must be explicitly documented here when added."
+    "note": "lib/auth.ts is ALWAYS exempt (the canonical wrapper itself) and is skipped before auditSource runs — no baseline entry needed. All 11 SSR page-sites migrated to requireSession()/requireFarmAdmin() guards in #523. API/lib entries are intentionally exempt and must be explicitly documented here when added."
   }
 }
