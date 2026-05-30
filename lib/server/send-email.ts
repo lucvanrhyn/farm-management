@@ -179,19 +179,9 @@ const consultingLeadRenderer: Renderer = (data) => {
 // NEXTAUTH_URL deployment environment. No PII other than the token itself
 // appears in the URL — the token is single-use and expires in 24 h.
 
-function getAppBaseUrl(): string {
-  // Prefer NEXT_PUBLIC_APP_URL (canonical app subdomain, e.g. app.farmtrack.app)
-  // over NEXTAUTH_URL (may include /api/auth callback suffix in some setups).
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXTAUTH_URL ??
-    "https://farm-management-lilac.vercel.app"
-  );
-}
-
 const passwordResetRenderer: Renderer = (data) => {
   const token = String(data.token ?? "");
-  const resetUrl = `${getAppBaseUrl()}/reset-password?token=${token}`;
+  const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
   return {
     subject: "Reset your FarmTrack password",
     html: `
