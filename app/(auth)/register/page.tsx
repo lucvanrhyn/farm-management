@@ -356,22 +356,30 @@ export default function RegisterPage() {
             />
           </div>
 
-          {/* Error */}
-          {error && (
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "#E07060",
-                fontSize: "0.8125rem",
-                background: "rgba(200,60,40,0.10)",
-                border: "1px solid rgba(200,60,40,0.20)",
-                borderRadius: "8px",
-                padding: "0.5rem 0.75rem",
-              }}
-            >
-              {error}
-            </p>
-          )}
+          {/* Error region (#111) — permanent OUTER role="status"
+              aria-live="polite" container so assistive tech has a stable live
+              region; the inner role="alert" message is swapped in/out. See the
+              login page for the full rationale (a conditionally-mounted bare
+              alert is not reliably announced). */}
+          <div role="status" aria-live="polite">
+            {error && (
+              <p
+                role="alert"
+                aria-live="assertive"
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  color: "#E07060",
+                  fontSize: "0.8125rem",
+                  background: "rgba(200,60,40,0.10)",
+                  border: "1px solid rgba(200,60,40,0.20)",
+                  borderRadius: "8px",
+                  padding: "0.5rem 0.75rem",
+                }}
+              >
+                {error}
+              </p>
+            )}
+          </div>
 
           {/* Submit */}
           {/*

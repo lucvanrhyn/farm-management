@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import AppShell from "@/components/AppShell";
 
 /**
@@ -6,6 +7,10 @@ import AppShell from "@/components/AppShell";
  * in the shared AppShell so it keeps working after the root layout was
  * slimmed down for the auth-bundle perf phase.
  */
+export const metadata: Metadata = {
+  title: "Subscribe — FarmTrack",
+};
+
 export default function SubscribeLayout({
   children,
 }: {

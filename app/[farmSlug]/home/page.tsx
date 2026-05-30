@@ -21,8 +21,13 @@
  * `generateMetadata`). No named exports beyond those.
  */
 
+import type { Metadata } from "next";
 import { getFarmIdentity } from "@/lib/domain/farm/get-farm-identity";
 import HomePageClient from "./HomePageClient";
+
+export const metadata: Metadata = {
+  title: "Home — FarmTrack",
+};
 
 export default async function HomePage({
   params,

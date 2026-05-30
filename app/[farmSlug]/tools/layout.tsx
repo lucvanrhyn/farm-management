@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
 import { TierProvider } from "@/components/tier-provider";
@@ -5,6 +6,10 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import { logger } from "@/lib/logger";
+
+export const metadata: Metadata = {
+  title: "Tools — FarmTrack",
+};
 
 export default async function ToolsLayout({
   children,

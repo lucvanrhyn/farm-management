@@ -263,16 +263,23 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
       >
         Verification Failed
       </h1>
-      <p
-        style={{
-          color: "#E07060",
-          fontFamily: "var(--font-sans)",
-          fontSize: "0.875rem",
-          textAlign: "center",
-        }}
-      >
-        {errorMessage}
-      </p>
+      {/* Error region (#111) — OUTER role="status" aria-live="polite" wrapper
+          with an inner role="alert" message. See login page for the full
+          rationale. */}
+      <div role="status" aria-live="polite">
+        <p
+          role="alert"
+          aria-live="assertive"
+          style={{
+            color: "#E07060",
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.875rem",
+            textAlign: "center",
+          }}
+        >
+          {errorMessage}
+        </p>
+      </div>
 
       {resendState === "sent" || resendState === "rate-limited" ? (
         <p
@@ -315,17 +322,23 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
             placeholder="you@example.com"
             style={inputStyle}
           />
-          {resendError ? (
-            <p
-              style={{
-                color: "#E07060",
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.75rem",
-              }}
-            >
-              {resendError}
-            </p>
-          ) : null}
+          {/* Resend error (#111) — same permanent-status / inner-alert
+              pattern as the primary error region above. */}
+          <div role="status" aria-live="polite">
+            {resendError ? (
+              <p
+                role="alert"
+                aria-live="assertive"
+                style={{
+                  color: "#E07060",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.75rem",
+                }}
+              >
+                {resendError}
+              </p>
+            ) : null}
+          </div>
           <button
             type="submit"
             disabled={resendState === "sending"}

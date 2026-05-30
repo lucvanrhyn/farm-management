@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import AppShell from "@/components/AppShell";
 
 /**
@@ -6,6 +7,10 @@ import AppShell from "@/components/AppShell";
  * reporting. Split from the root layout as part of the P5 auth-bundle
  * perf work so that unauthenticated routes (under `(auth)`) stay lean.
  */
+export const metadata: Metadata = {
+  title: "Your Farms — FarmTrack",
+};
+
 export default function FarmsLayout({
   children,
 }: {

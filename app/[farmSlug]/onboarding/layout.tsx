@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -187,6 +188,10 @@ function NotAdminPanel({ farmSlug }: { farmSlug: string }) {
 // ---------------------------------------------------------------------------
 // Layout
 // ---------------------------------------------------------------------------
+
+export const metadata: Metadata = {
+  title: "Onboarding — FarmTrack",
+};
 
 export default async function OnboardingLayout({
   children,
