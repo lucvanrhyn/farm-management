@@ -168,28 +168,49 @@ describe('requireFarmAdmin', () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('redirects when the user has LOGGER role for the farm', async () => {
+  it('redirects to /<farmSlug>/home when the user has LOGGER role (authenticated, not ADMIN)', async () => {
     const session = makeSession({
       farms: [{ slug: 'acme', role: 'LOGGER' }],
     } as never);
 
-    await expect(requireFarmAdmin(session, 'acme')).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requireFarmAdmin(session, 'acme');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/acme/home');
   });
 
-  it('redirects when the user has DASHBOARD role for the farm', async () => {
+  it('redirects to /<farmSlug>/home when the user has DASHBOARD role (authenticated, not ADMIN)', async () => {
     const session = makeSession({
       farms: [{ slug: 'acme', role: 'DASHBOARD' }],
     } as never);
 
-    await expect(requireFarmAdmin(session, 'acme')).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requireFarmAdmin(session, 'acme');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/acme/home');
   });
 
-  it('redirects when the user has no role for the farm (null)', async () => {
+  it('redirects to /<farmSlug>/home when the user has no role for the farm (null)', async () => {
     const session = makeSession({
       farms: [],
     } as never);
 
-    await expect(requireFarmAdmin(session, 'acme')).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requireFarmAdmin(session, 'acme');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/acme/home');
   });
 
   it('passes the correct slug to getUserRoleForFarm', async () => {
@@ -205,13 +226,21 @@ describe('requireFarmAdmin', () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('redirects when the session is for a different farm slug', async () => {
+  it('redirects to /<farmSlug>/home when the session is for a different farm slug', async () => {
     const session = makeSession({
       farms: [{ slug: 'other-farm', role: 'ADMIN' }],
     } as never);
 
     // Session has ADMIN on 'other-farm' but we're checking 'requested-farm'
-    await expect(requireFarmAdmin(session, 'requested-farm')).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requireFarmAdmin(session, 'requested-farm');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    // Redirects to the requested farm's home, not /login
+    expect(caughtUrl).toBe('/requested-farm/home');
   });
 });
 
@@ -228,14 +257,35 @@ describe('requirePlatformAdmin', () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('redirects when isPlatformAdmin returns false', async () => {
+  it('redirects to /farms (default) when isPlatformAdmin returns false', async () => {
     const session = makeSession({ email: 'regular@farm.com' });
     isPlatformAdminMock.mockResolvedValueOnce(false);
 
-    await expect(requirePlatformAdmin(session)).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session);
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/farms');
   });
 
-  it('FAIL-CLOSED: redirects when isPlatformAdmin throws (meta-db unreachable)', async () => {
+  it('redirects to a custom redirectTo when provided and isPlatformAdmin returns false', async () => {
+    const session = makeSession({ email: 'farm-admin@example.com' });
+    isPlatformAdminMock.mockResolvedValueOnce(false);
+
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session, '/acme/admin');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/acme/admin');
+  });
+
+  it('FAIL-CLOSED: redirects to /farms (default) when isPlatformAdmin throws (meta-db unreachable)', async () => {
     // ── SECURITY-CRITICAL TEST ──
     // If the meta-store is unreachable, we MUST NOT grant platform-admin
     // access. The guard wraps the call in try/catch and treats ANY error as
@@ -243,22 +293,44 @@ describe('requirePlatformAdmin', () => {
     const session = makeSession({ email: 'attacker@evil.com' });
     isPlatformAdminMock.mockRejectedValueOnce(new Error('meta-db connection refused'));
 
-    await expect(requirePlatformAdmin(session)).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session);
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/farms');
     expect(redirectMock).toHaveBeenCalled();
   });
 
-  it('FAIL-CLOSED: redirects when isPlatformAdmin rejects with a network timeout', async () => {
+  it('FAIL-CLOSED: redirects to custom redirectTo when isPlatformAdmin rejects with a network timeout', async () => {
     const session = makeSession({ email: 'attacker@evil.com' });
     isPlatformAdminMock.mockRejectedValueOnce(new Error('ETIMEDOUT'));
 
-    await expect(requirePlatformAdmin(session)).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session, '/acme/admin');
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    // Fail-closed: redirect fires even on error, to caller-supplied target
+    expect(caughtUrl).toBe('/acme/admin');
   });
 
-  it('FAIL-CLOSED: redirects when isPlatformAdmin rejects with a credentials error', async () => {
+  it('FAIL-CLOSED: redirects to /farms (default) when isPlatformAdmin rejects with a credentials error', async () => {
     const session = makeSession({ email: 'attacker@evil.com' });
     isPlatformAdminMock.mockRejectedValueOnce(new Error('invalid token'));
 
-    await expect(requirePlatformAdmin(session)).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session);
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/farms');
   });
 
   it('calls isPlatformAdmin with the session user email', async () => {
@@ -269,12 +341,19 @@ describe('requirePlatformAdmin', () => {
     expect(isPlatformAdminMock).toHaveBeenCalledWith('luc@farmtrack.app');
   });
 
-  it('redirects when session user has no email (undefined) — no isPlatformAdmin call', async () => {
+  it('redirects to /farms (default) when session user has no email (undefined) — no isPlatformAdmin call', async () => {
     // Edge case: session.user.email is undefined. Guard must redirect without
     // even calling isPlatformAdmin (no email = no lookup possible).
     const session = makeSession({ email: undefined as unknown as string });
 
-    await expect(requirePlatformAdmin(session)).rejects.toThrow('__REDIRECT__:');
+    let caughtUrl = '';
+    try {
+      await requirePlatformAdmin(session);
+    } catch (err) {
+      caughtUrl = extractRedirectUrl(err);
+    }
+
+    expect(caughtUrl).toBe('/farms');
     // isPlatformAdmin should NOT have been called with undefined
     expect(isPlatformAdminMock).not.toHaveBeenCalled();
   });
