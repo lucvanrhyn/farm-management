@@ -50,14 +50,12 @@ const mockPrisma = {
 } as const;
 
 const mockGetPrismaForSlugWithAuth = vi.fn();
-const mockGetPrismaWithAuth = vi.fn().mockResolvedValue({ error: "Forbidden", status: 403 });
 const mockGetPrismaForFarm = vi.fn();
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForSlugWithAuth: (...args: unknown[]) => mockGetPrismaForSlugWithAuth(...args),
-  // Per the alerts.test.ts pattern: tests don't set signed headers so the
-  // fast path never fires; force the cookie lookup to error so the helper
-  // falls through to the slug-validated legacy fallback.
-  getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
+  // Per the alerts.test.ts pattern: tests don't set signed headers, so the
+  // cookie-scoped getFarmContext fast path never fires and (post-#495) returns
+  // null — the helper re-auths against the URL slug via getPrismaForSlugWithAuth.
   getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
   // PR #96/#119: slug-fallback path now wraps prisma in wrapPrismaWithRetry
   // to survive transient Turso disconnects. Test pass-through.

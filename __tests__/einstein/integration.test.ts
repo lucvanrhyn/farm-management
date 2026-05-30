@@ -58,13 +58,11 @@ const mockPrisma = {
 };
 
 const mockGetPrismaForSlugWithAuth = vi.fn();
-const mockGetPrismaWithAuth = vi.fn();
 const mockGetPrismaForFarm = vi.fn();
 
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForSlugWithAuth: (...args: unknown[]) =>
     mockGetPrismaForSlugWithAuth(...args),
-  getPrismaWithAuth: (...args: unknown[]) => mockGetPrismaWithAuth(...args),
   getPrismaForFarm: (...args: unknown[]) => mockGetPrismaForFarm(...args),
 
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
@@ -217,7 +215,6 @@ function resetAll() {
   mockGetServerSession.mockReset();
   mockGetFarmCreds.mockReset();
   mockGetPrismaForSlugWithAuth.mockReset();
-  mockGetPrismaWithAuth.mockReset();
   mockGetPrismaForFarm.mockReset();
   mockAssertWithinBudget.mockReset();
   mockStampCostBeforeSend.mockReset();

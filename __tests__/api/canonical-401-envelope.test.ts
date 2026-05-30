@@ -47,7 +47,6 @@ vi.mock("@/lib/auth-options", () => ({ authOptions: {} }));
 vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForSlugWithAuth: vi.fn(),
   getPrismaForFarm: vi.fn(),
-  getPrismaWithAuth: vi.fn(),
   evictFarmClient: vi.fn(),
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));

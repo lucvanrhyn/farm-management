@@ -10,31 +10,27 @@
  * parameter — a cross-tenant query is impossible by construction:
  *
  *   1. If no signed header is present (anonymous fetch, expired session,
- *      bypassed proxy), `getFarmContext()` returns null → 401.
+ *      bypassed proxy), `getFarmContext()` returns null → 401. Issue #495
+ *      removed the Referer fallback, so an unsigned request has no recovery
+ *      path — this is now the SOLE outcome for a request that skipped the
+ *      proxy's signed-header hop.
  *   2. If a signed header IS present, the route binds prisma to that slug
- *      via `getPrismaWithAuth(session)` (called inside getFarmContext for
- *      the legacy fallback path) or via `getPrismaForFarm(slug)` for the
- *      signed-tuple fast path. Either way, the prisma instance is bound to
- *      the signed slug — search results come from that tenant's DB only.
+ *      via `getPrismaForFarm(slug)` for the signed-tuple fast path, so the
+ *      prisma instance is bound to the signed slug — search results come from
+ *      that tenant's DB only.
  *
- * This test pins the no-auth case (401) so a regression that drops the
- * auth check would fail loud.
+ * This test pins the no-auth case (401) end-to-end through the REAL
+ * `getFarmContext`, so a regression that drops the auth check would fail loud.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// No session → ensures the unsigned/legacy code path returns null.
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue(null),
-}));
-
+// The route imports `@/lib/farm-prisma` (it pulls `getPrismaForFarm` on the
+// signed fast path). Stub it so `@prisma/client` need not be generated in the
+// sandbox; the unsigned request under test never reaches the acquire anyway.
 vi.mock("@/lib/farm-prisma", () => ({
-  // Both helpers reject when called without a session — exercises the
-  // "anonymous request" branch.
-  getPrismaWithAuth: vi.fn().mockResolvedValue(null),
   getPrismaForFarm: vi.fn().mockResolvedValue(null),
-
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

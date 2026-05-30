@@ -24,27 +24,27 @@ function makeReq() {
 
 // ── next-auth session + auth-options stubs ──────────────────────────────────
 
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: "user-1",
-      email: "alice@example.com",
-      farms: [{ slug: "trio-b", role: "ADMIN" }],
+// ── Auth: Issue #495 — cookie-scoped routes authenticate solely through the
+//    proxy-signed `getFarmContext`. The legacy `getServerSession` +
+//    `getPrismaWithAuth` Referer fallback is gone; mock the chokepoint with a
+//    resolved context whose slug lets the cached helper key by tenant. ──────
+
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: "user-1",
+        email: "alice@example.com",
+        farms: [{ slug: "trio-b", role: "ADMIN" }],
+      },
     },
-  }),
-}));
-
-vi.mock("@/lib/auth-options", () => ({ authOptions: {} }));
-
-// ── getPrismaWithAuth: returns slug so the cached helper can key by it ──────
-
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
     prisma: {},
     slug: "trio-b",
     role: "ADMIN",
   }),
+}));
 
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
@@ -95,9 +95,11 @@ describe("GET /api/notifications", () => {
     expect(header).toMatch(/dur=/);
   });
 
-  it("returns 401 when no session is present", async () => {
-    const nextAuth = await import("next-auth");
-    vi.mocked(nextAuth.getServerSession).mockResolvedValueOnce(null);
+  it("returns 401 when no farm context is present", async () => {
+    // Issue #495: an unauthenticated request resolves to a null context
+    // (no Referer fallback).
+    const { getFarmContext } = await import("@/lib/server/farm-context");
+    vi.mocked(getFarmContext).mockResolvedValueOnce(null);
     const { GET } = await import("@/app/api/notifications/route");
     const res = await GET(makeReq(), EMPTY_CTX);
     expect(res.status).toBe(401);

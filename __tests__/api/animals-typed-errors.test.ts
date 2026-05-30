@@ -27,31 +27,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: "user-1",
-      email: "user-1@example.com",
-      role: "admin",
-      farms: [{ slug: "delta-livestock", role: "admin" }],
-    },
-  }),
-}));
-
 const mockFindMany = vi.fn();
 const mockPrisma = {
   animal: { findMany: mockFindMany },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
+// Issue #495: cookie-scoped routes authenticate solely through the
+// proxy-signed `getFarmContext`; the legacy `getServerSession` +
+// `getPrismaWithAuth` Referer fallback is gone. Mock the auth chokepoint
+// directly with a resolved context (the proxy fast-path outcome).
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: "user-1",
+        email: "user-1@example.com",
+        role: "admin",
+        farms: [{ slug: "delta-livestock", role: "admin" }],
+      },
+    },
     prisma: mockPrisma,
     slug: "delta-livestock",
     role: "admin",
   }),
-  // getFarmContext fast-path falls back to legacy when no signed headers,
-  // so we don't need to mock getPrismaForFarm for these tests.
-  getPrismaForFarm: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: vi.fn((_slug, client) => client),
 }));
 
@@ -149,11 +150,12 @@ describe("GET /api/animals — typed-error contract on DB failure", () => {
     expect(text).not.toMatch(/Connection refused/i);
   });
 
-  it("does not change the auth contract — still returns 401 on no session", async () => {
+  it("does not change the auth contract — still returns 401 on no context", async () => {
     // This is a regression-lock — the typed-error wrapper must not swallow
-    // the auth check from getFarmContext.
-    const { getServerSession } = await import("next-auth");
-    vi.mocked(getServerSession).mockResolvedValueOnce(null);
+    // the auth check from getFarmContext. Issue #495: an unauthenticated
+    // request resolves to a null context (no Referer fallback).
+    const { getFarmContext } = await import("@/lib/server/farm-context");
+    vi.mocked(getFarmContext).mockResolvedValueOnce(null);
 
     const { GET } = await import("@/app/api/animals/route");
     const req = new NextRequest("http://localhost/api/animals");

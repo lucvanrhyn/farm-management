@@ -29,16 +29,17 @@ process.env.NEXTAUTH_SECRET = SECRET;
 // ── Mocks ─────────────────────────────────────────────────────────────────
 const getPrismaForFarmMock = vi.fn();
 const getPrismaForSlugWithAuthMock = vi.fn();
-const getPrismaWithAuthMock = vi.fn();
 const getServerSessionMock = vi.fn();
 
 // Spy on wrapPrismaWithRetry so tests can assert it was called on the fallback
 // path. Identity passthrough keeps ctx.prisma === fakePrisma for value checks.
 const wrapPrismaWithRetryMock = vi.fn((_slug: string, client: unknown) => client);
 
+// Issue #495 removed `getPrismaWithAuth` from `@/lib/farm-prisma`.
+// `getFarmContextForSlug` resolves explicit-slug routes through
+// `getPrismaForSlugWithAuth`, never the deleted Referer helper.
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
-  getPrismaWithAuth: getPrismaWithAuthMock,
   getPrismaForSlugWithAuth: getPrismaForSlugWithAuthMock,
   // Wave 4 A5: getFarmContext now wraps the resolved client with one-shot
   // Turso auth-expiry retry. The spy lets us verify the fallback path in
@@ -88,13 +89,8 @@ describe('getFarmContextForSlug', () => {
     vi.resetModules();
     getPrismaForFarmMock.mockReset();
     getPrismaForSlugWithAuthMock.mockReset();
-    getPrismaWithAuthMock.mockReset();
     getServerSessionMock.mockReset();
     wrapPrismaWithRetryMock.mockClear();
-    // Sensible default — the legacy code path inside getFarmContext calls
-    // getPrismaWithAuth when no signed headers are present. Tests that
-    // exercise that path override this explicitly.
-    getPrismaWithAuthMock.mockResolvedValue({ error: 'no-op', status: 400 });
   });
 
   it('(1) proxy-signed slug matches URL slug → returns fast-path context with user.id', async () => {

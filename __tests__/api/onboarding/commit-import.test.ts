@@ -5,17 +5,29 @@ import { NextRequest } from "next/server";
 // Mocks — declared before route import
 // ---------------------------------------------------------------------------
 
+// Issue #495: the route authenticates through the proxy-signed
+// `getFarmContext`; the legacy `getServerSession` + `getPrismaWithAuth` Referer
+// fallback is gone. We keep `getServerSessionMock` + `getPrismaWithAuthMock` as
+// per-test DRIVERS and route them through a `getFarmContext` shim that
+// reproduces the exact legacy resolution chain (null session OR a
+// `{error,status}` from the prisma resolver → null context → 401; otherwise a
+// resolved context whose role the route's own admin check inspects → 403/200).
 const getServerSessionMock = vi.fn();
-vi.mock("next-auth", () => ({
-  getServerSession: (...args: unknown[]) => getServerSessionMock(...args),
-}));
-
 const importJobCreateMock = vi.fn();
 const importJobFindUniqueMock = vi.fn();
 const getPrismaWithAuthMock = vi.fn();
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: (...args: unknown[]) => getPrismaWithAuthMock(...args),
 
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockImplementation(async () => {
+    const session = await getServerSessionMock();
+    if (!session) return null;
+    const db = await getPrismaWithAuthMock(session);
+    if (!db || "error" in db) return null;
+    return { session, prisma: db.prisma, slug: db.slug, role: db.role };
+  }),
+}));
+
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
