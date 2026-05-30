@@ -13,11 +13,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// ── Session mock ──────────────────────────────────────────────────────────────
+// ── Session driver ────────────────────────────────────────────────────────────
+// Issue #495: cookie-scoped routes authenticate through the proxy-signed
+// `getFarmContext`; the legacy `getServerSession` + `getPrismaWithAuth` Referer
+// fallback is gone. `mockGetServerSession` is retained as the per-test session
+// DRIVER — the `getFarmContext` mock below reads its value and yields the
+// resolved context (or null when the session is absent → 401), reproducing the
+// exact auth branches the tests exercise (401 / 403 / 200).
 const mockGetServerSession = vi.fn();
-vi.mock("next-auth", () => ({
-  getServerSession: (...args: unknown[]) => mockGetServerSession(...args),
-}));
 
 vi.mock("next-auth/providers/credentials", () => ({
   default: () => ({ id: "credentials" }),
@@ -101,21 +104,20 @@ const FIELD_SESSION = {
   },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockImplementation((session) => {
+// `getFarmContext` reads the current `mockGetServerSession` value and yields
+// the resolved context the proxy fast path would produce — or null when the
+// session is absent (→ 401). Role is derived from the session's farm
+// membership, mirroring the old `getPrismaWithAuth(session)` derivation.
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockImplementation(async () => {
+    const session = await mockGetServerSession();
+    if (!session) return null;
     const role = session?.user?.farms?.[0]?.role ?? "field_logger";
-    return Promise.resolve({
-      prisma: mockPrisma,
-      slug: "test-farm",
-      role,
-    });
+    return { session, prisma: mockPrisma, slug: "test-farm", role };
   }),
-  getPrismaForRequest: vi.fn().mockResolvedValue({
-    prisma: mockPrisma,
-    slug: "test-farm",
-  }),
-  getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
+}));
 
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

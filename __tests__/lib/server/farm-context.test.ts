@@ -9,9 +9,12 @@
  *    getFarmContext verifies the HMAC and skips the ~80–120ms
  *    `getServerSession` round-trip, resolving the Prisma client directly
  *    from the signed slug.
- *  - If headers are missing (tests, direct fetch bypassing proxy), it
- *    falls back to the legacy `getServerSession` + `getPrismaWithAuth`
- *    path so behaviour is identical.
+ *  - If headers are missing or fail HMAC verification (tests, a direct
+ *    fetch bypassing proxy, or a forged header), getFarmContext returns
+ *    `null` and the caller mints a 401. Issue #495 (PRD #479) removed the
+ *    legacy `getServerSession` + `getPrismaWithAuth` Referer-fallback path:
+ *    the signed-header hop is now the SOLE tenant source for cookie-scoped
+ *    `/api/*` routes, so there is no Referer-based recovery here.
  *  - Unsigned client-supplied headers MUST be ignored — otherwise an
  *    attacker could spoof tenant identity by sending `x-farm-slug`.
  *  - Results are memoised per request so re-entry (nested helper calls
@@ -33,26 +36,13 @@ const getPrismaForFarmMock = vi.fn(async (slug: string) => {
   return mockPrisma as unknown as import('@prisma/client').PrismaClient;
 });
 
-const getPrismaWithAuthMock = vi.fn(async () => ({
-  prisma: mockPrisma as unknown as import('@prisma/client').PrismaClient,
-  slug: 'legacy-farm',
-  role: 'ADMIN',
-}));
-
+// Issue #495: `getFarmContext` no longer falls back to the legacy
+// `getServerSession` + `getPrismaWithAuth` Referer path. The signed-header
+// fast path is the only tenant source, so the farm-prisma surface this test
+// needs is just the slug→client acquire + the retry wrapper.
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
-  getPrismaWithAuth: getPrismaWithAuthMock,
-
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
-}));
-
-const getServerSessionMock = vi.fn();
-vi.mock('next-auth', () => ({
-  getServerSession: getServerSessionMock,
-}));
-
-vi.mock('@/lib/auth-options', () => ({
-  authOptions: {},
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -86,15 +76,6 @@ describe('getFarmContext', () => {
   beforeEach(() => {
     vi.resetModules();
     getPrismaForFarmMock.mockClear();
-    getPrismaWithAuthMock.mockClear();
-    getServerSessionMock.mockReset();
-    getServerSessionMock.mockResolvedValue({
-      user: {
-        id: 'user-1',
-        email: 'user-1@example.com',
-        farms: [{ slug: 'legacy-farm', role: 'ADMIN' }],
-      },
-    });
   });
 
   it('(a) returns {session, prisma, slug} in one await when proxy has signed headers', async () => {
@@ -107,33 +88,20 @@ describe('getFarmContext', () => {
     expect(ctx!.slug).toBe('trio-b');
     expect(ctx!.prisma).toBe(mockPrisma);
     expect(ctx!.session.user?.email).toBe('user-1@example.com');
-    // The whole point of the optimization: legacy session fetch never runs
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('trio-b');
   });
 
-  it('(b) falls back to legacy getServerSession + getPrismaWithAuth when headers absent', async () => {
-    const { getFarmContext } = await import('@/lib/server/farm-context');
-    const req = makeRequest();
-
-    const ctx = await getFarmContext(req);
-
-    expect(ctx).not.toBeNull();
-    expect(ctx!.slug).toBe('legacy-farm');
-    expect(getServerSessionMock).toHaveBeenCalledTimes(1);
-    expect(getPrismaWithAuthMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('(c) unauthorised request (no session, no signed header) returns null without touching Prisma', async () => {
-    getServerSessionMock.mockResolvedValueOnce(null);
+  it('(b) #495: returns null when signed headers are absent — NO Referer fallback', async () => {
+    // Pre-#495 this fell back to getServerSession + getPrismaWithAuth (the
+    // Referer-to-slug path). That dead net is gone: a request that did not
+    // pass through the proxy's signed-header hop is treated as
+    // unauthenticated, and the caller mints a 401. No Prisma is acquired.
     const { getFarmContext } = await import('@/lib/server/farm-context');
     const req = makeRequest();
 
     const ctx = await getFarmContext(req);
 
     expect(ctx).toBeNull();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
   });
 
@@ -160,7 +128,7 @@ describe('getFarmContext', () => {
     expect(ctx).toBeNull();
   });
 
-  it('(f) SECURITY: unsigned client-supplied x-farm-slug is IGNORED — falls through to legacy auth', async () => {
+  it('(f) SECURITY: unsigned client-supplied x-farm-slug is IGNORED → null (#495: no fallback)', async () => {
     const { getFarmContext } = await import('@/lib/server/farm-context');
     const req = makeRequest({
       'x-session-user': 'attacker@example.com',
@@ -170,15 +138,14 @@ describe('getFarmContext', () => {
 
     const ctx = await getFarmContext(req);
 
-    // Unsigned headers must not be trusted; helper falls back to legacy auth
-    expect(getServerSessionMock).toHaveBeenCalledTimes(1);
-    expect(getPrismaWithAuthMock).toHaveBeenCalledTimes(1);
+    // Unsigned headers must not be trusted. Pre-#495 the helper fell back to
+    // the legacy Referer auth path; now the request is simply unauthenticated.
+    // The spoofed slug never reaches a Prisma acquire.
+    expect(ctx).toBeNull();
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
-    // Resulting context uses the legitimate session, not the spoofed slug
-    expect(ctx!.slug).toBe('legacy-farm');
   });
 
-  it('(g) SECURITY: invalid HMAC signature is rejected (treated as unsigned)', async () => {
+  it('(g) SECURITY: invalid HMAC signature is rejected → null (#495: no fallback)', async () => {
     const { getFarmContext } = await import('@/lib/server/farm-context');
     const req = makeRequest({
       'x-session-user': 'user-1@example.com',
@@ -188,9 +155,7 @@ describe('getFarmContext', () => {
 
     const ctx = await getFarmContext(req);
 
-    expect(getServerSessionMock).toHaveBeenCalledTimes(1);
-    expect(getPrismaWithAuthMock).toHaveBeenCalledTimes(1);
+    expect(ctx).toBeNull();
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
-    expect(ctx!.slug).toBe('legacy-farm');
   });
 });

@@ -7,11 +7,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// ── Session mock ────────────────────────────────────────────────────────────
+// ── Session driver ──────────────────────────────────────────────────────────
+// Issue #495: cookie-scoped routes authenticate through the proxy-signed
+// `getFarmContext`; the legacy `getServerSession` + `getPrismaWithAuth` Referer
+// fallback is gone. `mockGetServerSession` is retained as the per-test session
+// DRIVER for the `getFarmContext` mock below (401 / 403 / 200 branches).
 const mockGetServerSession = vi.fn();
-vi.mock("next-auth", () => ({
-  getServerSession: (...args: unknown[]) => mockGetServerSession(...args),
-}));
 
 vi.mock("next-auth/providers/credentials", () => ({
   default: () => ({ id: "credentials" }),
@@ -65,16 +66,16 @@ const FIELD_SESSION = {
   },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockImplementation((session) => {
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockImplementation(async () => {
+    const session = await mockGetServerSession();
+    if (!session) return null;
     const role = session?.user?.farms?.[0]?.role ?? "field_logger";
-    return Promise.resolve({
-      prisma: mockPrisma,
-      slug: "test-farm",
-      role,
-    });
+    return { session, prisma: mockPrisma, slug: "test-farm", role };
   }),
+}));
 
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

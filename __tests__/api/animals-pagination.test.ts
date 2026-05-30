@@ -1,29 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-vi.mock('next-auth', () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: 'user-1',
-      email: 'user-1@example.com',
-      role: 'admin',
-      farms: [{ slug: 'test-farm-slug', role: 'admin' }],
-    },
-  }),
-}));
-
 const mockFindMany = vi.fn();
 const mockPrisma = {
   animal: { findMany: mockFindMany },
 };
 
-vi.mock('@/lib/farm-prisma', () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
+// Issue #495: cookie-scoped routes authenticate exclusively through the
+// proxy-signed `getFarmContext`. The legacy `getServerSession` +
+// `getPrismaWithAuth` Referer fallback is gone, so we mock the auth chokepoint
+// directly and return a resolved context — exactly what the proxy fast path
+// yields for an authenticated request. Auth resolution itself is covered by
+// `__tests__/lib/server/farm-context.test.ts`.
+vi.mock('@/lib/server/farm-context', () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: 'user-1',
+        email: 'user-1@example.com',
+        role: 'admin',
+        farms: [{ slug: 'test-farm-slug', role: 'admin' }],
+      },
+    },
     prisma: mockPrisma,
     slug: 'test-farm-slug',
     role: 'admin',
   }),
+}));
 
+vi.mock('@/lib/farm-prisma', () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

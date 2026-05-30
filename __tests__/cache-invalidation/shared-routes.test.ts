@@ -20,20 +20,6 @@ import { farmTag } from "@/lib/server/cache-tags";
 
 const SLUG = "test-farm";
 
-// ── Session mock ─────────────────────────────────────────────────────────────
-
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: "user-1",
-      email: "user@test.com",
-      farms: [{ slug: SLUG, role: "ADMIN" }],
-    },
-  }),
-}));
-
-vi.mock("@/lib/auth-options", () => ({ authOptions: {} }));
-
 // ── Prisma mock ──────────────────────────────────────────────────────────────
 
 const mockCreate = vi.fn().mockResolvedValue({ animalId: "T001" });
@@ -57,12 +43,27 @@ const mockPrisma = {
   mobAnimal: { create: mockCreate, delete: mockDelete, findFirst: vi.fn().mockResolvedValue(null), deleteMany: vi.fn().mockResolvedValue({}) },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
+// Issue #495: cookie-scoped routes authenticate through the proxy-signed
+// `getFarmContext`; the legacy `getServerSession` + `getPrismaWithAuth` Referer
+// fallback is gone. Mock the chokepoint directly (ADMIN context). The
+// `getFarmContextForSlug` resolver (for any `[farmSlug]` shared route) wraps
+// `getFarmContext`, so a resolved context here covers both.
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: "user-1",
+        email: "user@test.com",
+        farms: [{ slug: SLUG, role: "ADMIN" }],
+      },
+    },
     prisma: mockPrisma,
     slug: SLUG,
     role: "ADMIN",
   }),
+}));
+
+vi.mock("@/lib/farm-prisma", () => ({
   getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
   withFarmPrisma: vi.fn().mockImplementation((_slug: string, fn: (p: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)),
 

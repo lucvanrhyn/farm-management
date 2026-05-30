@@ -17,8 +17,10 @@
  * The signed triplet is ONLY trusted when the HMAC verifies against
  * `NEXTAUTH_SECRET` using `timingSafeEqual`. An unsigned `x-farm-slug`
  * header from a direct fetch (bypassing the middleware) has the same
- * effect as no header at all — the helper falls back to the legacy
- * `getServerSession`/`getPrismaWithAuth` path.
+ * effect as no header at all — the helper returns `null` and the caller
+ * mints a 401. Issue #495 (PRD #479) removed the legacy
+ * `getServerSession`/`getPrismaWithAuth` Referer-fallback path: the signed
+ * header is now the SOLE tenant source for cookie-scoped `/api/*` routes.
  *
  * Per-request memoisation
  * -----------------------
@@ -33,14 +35,12 @@
  */
 
 import { headers as nextHeaders } from 'next/headers';
-import { getServerSession } from 'next-auth';
 import type { Session } from 'next-auth';
 import type { NextRequest } from 'next/server';
 import type { PrismaClient } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { authOptions } from '@/lib/auth-options';
-import { getPrismaForFarm, getPrismaWithAuth, wrapPrismaWithRetry } from '@/lib/farm-prisma';
+import { getPrismaForFarm, wrapPrismaWithRetry } from '@/lib/farm-prisma';
 
 export interface FarmContext {
   session: Session;
@@ -132,7 +132,8 @@ async function readerFromRequest(req: NextRequest | undefined): Promise<HeaderRe
     return (name) => h.get(name);
   } catch {
     // `headers()` throws outside a request scope (tests, background tasks) —
-    // fall back to "no headers" so the legacy path runs.
+    // fall back to "no headers" so verification fails and the resolver
+    // returns null (the caller mints a 401).
     return () => null;
   }
 }
@@ -146,9 +147,13 @@ async function readerFromRequest(req: NextRequest | undefined): Promise<HeaderRe
  * `req` is optional. Passing it is the fastest path (no `next/headers`
  * ALS lookup) and enables per-request memoisation so nested helper calls
  * share a single Prisma acquire. Omitting it lets handlers with the
- * legacy `GET()`/`POST()` signature opt in without a refactor — Next 16's
+ * `GET()`/`POST()` signature opt in without a refactor — Next 16's
  * request-scoped `headers()` supplies the same triplet when proxy.ts
  * injected it.
+ *
+ * Issue #495 (PRD #479): a request that did not pass through the proxy's
+ * signed-header hop (or whose headers fail HMAC verification) resolves to
+ * `null` — there is no Referer-derived recovery.
  */
 export async function getFarmContext(req?: NextRequest): Promise<FarmContext | null> {
   if (req) {
@@ -219,21 +224,11 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
     return { session, prisma: wrapPrismaWithRetry(slug, prisma), slug, role: signedRole };
   }
 
-  // Legacy path: middleware did not (or could not) authenticate. Fall back
-  // to the classic pair. Behaviour is byte-identical to pre-P6 so any route
-  // migrated partially is safe.
-  const session = await getServerSession(authOptions);
-  if (!session) return null;
-
-  const db = await getPrismaWithAuth(session);
-  if ('error' in db) return null;
-
-  // Same wrap on the legacy path so behaviour is uniform regardless of
-  // which authentication branch resolved the context.
-  return {
-    session,
-    prisma: wrapPrismaWithRetry(db.slug, db.prisma),
-    slug: db.slug,
-    role: db.role,
-  };
+  // Issue #495 (PRD #479): the request did not pass through the proxy's
+  // signed-header hop (or its headers failed HMAC verification). There is no
+  // Referer-derived fallback any more — the request is unauthenticated and
+  // the caller mints a 401. Cookie-scoped `/api/*` routes always flow through
+  // the proxy matcher, so a missing signed header here means a direct fetch
+  // bypassing the middleware, never a legitimate caller.
+  return null;
 }

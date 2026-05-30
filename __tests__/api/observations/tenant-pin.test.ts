@@ -18,10 +18,10 @@
  *   2. Behavioural (per-route) — invoking each route handler with a valid
  *      signed-header triplet resolves the tenant from the *signed slug*, with
  *      ZERO `Referer` read and ZERO `getServerSession` round-trip. A request
- *      with no signed headers AND a non-member session falls to the legacy
- *      membership gate and is rejected with the canonical 401 (AUTH_REQUIRED,
- *      per #486). Cross-tenant datasets stay disjoint: the slug handed to the
- *      Prisma acquire is always the signed one, never another tenant's.
+ *      with no signed headers is unauthenticated and is rejected with the
+ *      canonical 401 (AUTH_REQUIRED, per #486). Cross-tenant datasets stay
+ *      disjoint: the slug handed to the Prisma acquire is always the signed
+ *      one, never another tenant's.
  *
  * Mechanism choice (option (a) in the issue): bring the family under the
  * signed-header middleware, mirroring the dominant sibling pattern. The
@@ -33,9 +33,11 @@
  * are required — every caller fires from inside the `/[farmSlug]/` shell where
  * proxy has already set `active_farm_slug`.
  *
- * We deliberately do NOT touch the `slugFromReferer` helper or the `Referer`
- * branch of `getPrismaForRequest` — that deletion is the gated follow-up #495.
- * This wave only stops the observations family from depending on it.
+ * Issue #495 (PRD #479, 2026-05-30) has since DELETED the `slugFromReferer`
+ * helper and the `getPrismaForRequest`/`getPrismaWithAuth` Referer-fallback
+ * path entirely. `getFarmContext` now returns `null` when no signed headers
+ * are present, so the 401 below (a direct fetch bypassing the proxy) is minted
+ * via the unauthenticated branch — never via a Referer-derived membership check.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -48,47 +50,38 @@ const SECRET = 'test-nextauth-secret';
 process.env.NEXTAUTH_SECRET = SECRET;
 
 // ── Mocks — boundary BELOW getFarmContext ───────────────────────────────────
-// We exercise the REAL `getFarmContext` (signed fast path + legacy fallback)
-// so the test proves tenant resolution end-to-end. The Prisma acquire and the
-// legacy session pair are mocked at the `lib/farm-prisma` boundary, mirroring
-// `__tests__/lib/server/farm-context.test.ts`.
-const { prismaMock, getPrismaForFarmMock, getPrismaWithAuthMock, getServerSessionMock } =
-  vi.hoisted(() => {
-    const prisma = {
-      observation: {
-        create: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
-        upsert: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
-        findMany: vi.fn().mockResolvedValue([]),
-        findUnique: vi.fn().mockResolvedValue({ type: 'camp_check' }),
-        update: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
-        delete: vi.fn().mockResolvedValue({ id: 'obs-1' }),
-        deleteMany: vi.fn().mockResolvedValue({ count: 3 }),
-      },
-      camp: { findFirst: vi.fn().mockResolvedValue({ campId: 'A' }) },
-      animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
-    };
-    return {
-      prismaMock: prisma,
-      // Signed fast path resolves Prisma by the signed slug. Capture the slug
-      // it was called with so we can assert the tenant came from the header.
-      getPrismaForFarmMock: vi.fn(async () => prisma),
-      // Legacy fallback (no signed headers) — non-member sessions must reject.
-      getPrismaWithAuthMock: vi.fn(),
-      getServerSessionMock: vi.fn(),
-    };
-  });
+// We exercise the REAL `getFarmContext` (signed fast path → null when unsigned)
+// so the test proves tenant resolution end-to-end. The Prisma acquire is
+// mocked at the `lib/farm-prisma` boundary, mirroring
+// `__tests__/lib/server/farm-context.test.ts`. Since #495 removed the Referer
+// fallback, there is no legacy `getServerSession`/`getPrismaWithAuth` pair to
+// stub — a request with no signed headers resolves to null straight away.
+const { prismaMock, getPrismaForFarmMock } = vi.hoisted(() => {
+  const prisma = {
+    observation: {
+      create: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
+      upsert: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue({ type: 'camp_check' }),
+      update: vi.fn().mockResolvedValue({ id: 'obs-1', type: 'camp_check' }),
+      delete: vi.fn().mockResolvedValue({ id: 'obs-1' }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 3 }),
+    },
+    camp: { findFirst: vi.fn().mockResolvedValue({ campId: 'A' }) },
+    animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
+  };
+  return {
+    prismaMock: prisma,
+    // Signed fast path resolves Prisma by the signed slug. Capture the slug
+    // it was called with so we can assert the tenant came from the header.
+    getPrismaForFarmMock: vi.fn(async () => prisma),
+  };
+});
 
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
-  getPrismaWithAuth: getPrismaWithAuthMock,
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
-
-vi.mock('next-auth', () => ({
-  getServerSession: getServerSessionMock,
-}));
-
-vi.mock('@/lib/auth-options', () => ({ authOptions: {} }));
 
 // revalidatePath/Tag throw outside a request scope in Next 16.
 vi.mock('next/cache', () => ({
@@ -148,11 +141,6 @@ function signedReq(
 beforeEach(() => {
   vi.resetModules();
   getPrismaForFarmMock.mockClear();
-  getPrismaWithAuthMock.mockReset();
-  getServerSessionMock.mockReset();
-  // Default: no legacy session (so the no-signed-header path returns null/401
-  // unless a test arranges otherwise).
-  getServerSessionMock.mockResolvedValue(null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,8 +181,6 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await GET(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 
   it('POST /api/observations resolves the signed slug', async () => {
@@ -206,8 +192,6 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 
   it('PATCH /api/observations/[id] resolves the signed slug', async () => {
@@ -219,8 +203,6 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await PATCH(req, { params: Promise.resolve({ id: 'obs-1' }) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 
   it('DELETE /api/observations/[id] resolves the signed slug', async () => {
@@ -231,8 +213,6 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await DELETE(req, { params: Promise.resolve({ id: 'obs-1' }) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 
   it('PATCH /api/observations/[id]/attachment resolves the signed slug', async () => {
@@ -244,8 +224,6 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await PATCH(req, { params: Promise.resolve({ id: 'obs-1' }) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 
   it('DELETE /api/observations/reset resolves the signed slug', async () => {
@@ -256,29 +234,18 @@ describe('#489 — each route pins tenant to the signed slug (no Referer, no get
     const res = await DELETE(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(getPrismaForFarmMock).toHaveBeenCalledWith('tenant-a');
-    expect(getServerSessionMock).not.toHaveBeenCalled();
-    expect(getPrismaWithAuthMock).not.toHaveBeenCalled();
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. Membership gate — non-member slug → canonical 401, datasets disjoint
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#489 — membership gate preserved (defense-in-depth): non-member → 401', () => {
-  // No signed headers (a direct fetch bypassing the proxy) AND a session that
-  // is NOT a member of the requested farm. The legacy fallback inside
-  // `getFarmContext` calls `getPrismaWithAuth`, which returns a Forbidden
-  // error object → `getFarmContext` maps to null → the adapter mints the
-  // canonical AUTH_REQUIRED 401. The non-member tenant's Prisma client is
-  // NEVER acquired, so datasets stay disjoint.
-  beforeEach(() => {
-    getServerSessionMock.mockResolvedValue({
-      user: { id: 'user-1', email: 'logger@farm.co.za', farms: [{ slug: 'tenant-a', role: 'ADMIN' }] },
-    });
-    // Non-member: the cookie/Referer pointed at a farm the user does not belong
-    // to → getPrismaWithAuth rejects.
-    getPrismaWithAuthMock.mockResolvedValue({ error: 'Forbidden', status: 403 });
-  });
+describe('#495 — direct fetch bypassing the proxy → 401 (no Referer recovery)', () => {
+  // No signed headers (a direct fetch bypassing the proxy), even with a
+  // DELIBERATELY HOSTILE `Referer` pointing at another tenant. Since #495
+  // removed the Referer fallback, `getFarmContext` returns null straight away
+  // → the adapter mints the canonical AUTH_REQUIRED 401. No tenant Prisma
+  // client is ever acquired, so datasets stay disjoint and Referer is inert.
 
   // The route handlers carry varying `RouteHandler<TParams>` param types
   // (`{}`, `{ id }`); the test only fires them with a request + params bag, so
@@ -307,7 +274,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
   }
 
-  it('GET /api/observations → 401 for a non-member', async () => {
+  it('GET /api/observations → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({ handler: (await import('@/app/api/observations/route')).GET }),
       'http://localhost/api/observations',
@@ -315,7 +282,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     );
   });
 
-  it('POST /api/observations → 401 for a non-member', async () => {
+  it('POST /api/observations → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({ handler: (await import('@/app/api/observations/route')).POST }),
       'http://localhost/api/observations',
@@ -323,7 +290,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     );
   });
 
-  it('PATCH /api/observations/[id] → 401 for a non-member', async () => {
+  it('PATCH /api/observations/[id] → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({
         handler: (await import('@/app/api/observations/[id]/route')).PATCH as AnyRouteHandler,
@@ -333,7 +300,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     );
   });
 
-  it('DELETE /api/observations/[id] → 401 for a non-member', async () => {
+  it('DELETE /api/observations/[id] → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({
         handler: (await import('@/app/api/observations/[id]/route')).DELETE as AnyRouteHandler,
@@ -343,7 +310,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     );
   });
 
-  it('PATCH /api/observations/[id]/attachment → 401 for a non-member', async () => {
+  it('PATCH /api/observations/[id]/attachment → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({
         handler: (await import('@/app/api/observations/[id]/attachment/route'))
@@ -354,7 +321,7 @@ describe('#489 — membership gate preserved (defense-in-depth): non-member → 
     );
   });
 
-  it('DELETE /api/observations/reset → 401 for a non-member', async () => {
+  it('DELETE /api/observations/reset → 401 for a direct fetch (no signed headers)', async () => {
     await expect401(
       async () => ({ handler: (await import('@/app/api/observations/reset/route')).DELETE }),
       'http://localhost/api/observations/reset',

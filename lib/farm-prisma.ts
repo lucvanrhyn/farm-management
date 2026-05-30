@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
-import { headers } from "next/headers";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
 import { recordTiming, getTimingBag } from "@/lib/server/server-timing";
@@ -291,87 +290,23 @@ export function evictFarmClient(slug: string): void {
   globalForPrisma.farmClients!.delete(slug);
 }
 
+// Validates a tenant slug before it is used to acquire a Prisma client.
+// Shared by `getPrismaForSlugWithAuth` below.
 const FARM_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-// First path segment after a Referer origin when the user is inside a farm shell.
-// Must stay in sync with proxy.ts's farmRouteMatch regex. Issue #256
-// (2026-05-13) added `map`; issue #393 (2026-05-23) added `map` here too so
-// parity holds when Referer is the sole tenant source.
-const REFERER_SLUG_RE = /^\/([^/]+)\/(admin|dashboard|logger|home|map|tools|sheep|game)/;
-
-function slugFromReferer(referer: string | null): string | null {
-  if (!referer) return null;
-  try {
-    const { pathname } = new URL(referer);
-    const match = pathname.match(REFERER_SLUG_RE);
-    if (!match) return null;
-    const slug = match[1];
-    return FARM_SLUG_RE.test(slug) ? slug : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
- * Resolve a tenant-scoped Prisma client for a request.
+ * Resolve a tenant-scoped Prisma client from an EXPLICIT slug, verifying the
+ * session is a member of that farm. Used by `[farmSlug]` URL routes (via
+ * `getFarmContextForSlug`) and the Einstein routes (which carry the slug in
+ * the request body). The slug is authoritative — there is no cookie- or
+ * Referer-derived inference.
  *
- * Issue #393 (PRD #389, Module 3 — 2026-05-23): the active_farm_slug cookie
- * is no longer trusted as a tenant source. Every server fetcher resolves the
- * tenant from URL-derived signals only — either the explicit `[farmSlug]`
- * URL segment (via `getPrismaForSlugWithAuth`) or the Referer header for the
- * remaining "shared" routes that are excluded from proxy.ts's signed-header
- * hop (Einstein feedback, etc.). The cookie remains for diagnostic /
- * client-picker UI use but is invisible here.
- *
- * Why Referer is safe
- * -------------------
- * Browsers populate Referer from the *actual* page URL the fetch fires
- * from. A user inside `/farm-b/...` cannot make their browser claim to be
- * on `/farm-a/...` without active spoofing tooling. Even then,
- * `getPrismaWithAuth` (the caller) verifies the resolved slug appears in
- * `session.user.farms` before handing back a Prisma client — so Referer
- * spoofing can only widen access to farms the session is ALREADY a member
- * of, never to a non-member tenant.
- *
- * Why the cookie was dropped
- * --------------------------
- * The cookie outlived its useful life as a tenant signal once the URL
- * carried `[farmSlug]` on every tenant page. Reading the cookie here let
- * stale values (e.g., after the user switched farms via the picker but the
- * cookie hadn't been rewritten yet) silently outvote the URL, loading the
- * wrong farm's data on first paint — the bug class #393 closes.
+ * Issue #495 (PRD #479, 2026-05-30): the Referer-to-slug fallback that
+ * previously backed cookie-scoped routes (`getPrismaForRequest` /
+ * `getPrismaWithAuth`) was removed. Tenant identity now flows exclusively
+ * through proxy.ts's signed `x-farm-slug` header (cookie-scoped routes, via
+ * `getFarmContext`) or this explicit-slug door — never inferred from Referer.
  */
-export async function getPrismaForRequest(): Promise<
-  { prisma: PrismaClient; slug: string } | { error: string; status: number }
-> {
-  const headerStore = await headers();
-  const slug = slugFromReferer(headerStore.get("referer"));
-  if (!slug) return { error: "No active farm selected", status: 400 };
-  const prisma = await getPrismaForFarm(slug);
-  if (!prisma) return { error: "Farm not found", status: 404 };
-  return { prisma, slug };
-}
-
-// Same as getPrismaForRequest but also verifies the user has access to the
-// farm selected by the cookie. Returns the farm's role for the session user.
-// Use this in all cookie-scoped API routes (no [farmSlug] in path).
-export async function getPrismaWithAuth(
-  session: Session,
-): Promise<
-  { prisma: PrismaClient; slug: string; role: string } | { error: string; status: number }
-> {
-  const result = await getPrismaForRequest();
-  if ("error" in result) return result;
-
-  const farms = session.user?.farms as SessionFarm[] | undefined;
-  const farm = farms?.find((f) => f.slug === result.slug);
-  if (!farm) return { error: "Forbidden", status: 403 };
-
-  return { ...result, role: farm.role };
-}
-
-// Like getPrismaWithAuth but uses an explicit slug (for [farmSlug] URL routes)
-// rather than the active_farm_slug cookie. This prevents cookie/URL mismatch
-// where the cookie points to farm A but the URL is for farm B.
 export async function getPrismaForSlugWithAuth(
   session: Session,
   slug: string,

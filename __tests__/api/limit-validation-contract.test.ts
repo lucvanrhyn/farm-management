@@ -15,19 +15,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// ── Session mock (admin so every list route authorises) ─────────────────────
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: "user-1",
-      email: "user-1@example.com",
-      role: "admin",
-      farms: [{ slug: "test-farm-slug", role: "admin" }],
-    },
-  }),
-}));
-vi.mock("@/lib/auth-options", () => ({ authOptions: {} }));
-
 // ── Prisma mock — findMany for all three resources ──────────────────────────
 const mockAnimalFindMany = vi.fn().mockResolvedValue([]);
 const mockObservationFindMany = vi.fn().mockResolvedValue([]);
@@ -39,16 +26,27 @@ const mockPrisma = {
   taskOccurrence: { findMany: vi.fn().mockResolvedValue([]) },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
+// ── Auth: Issue #495 — every list route here is cookie-scoped and resolves
+//    auth through the proxy-signed `getFarmContext` (admin so each authorises).
+//    The legacy `getServerSession` + `getPrismaWithAuth` Referer fallback is
+//    gone, so we mock the chokepoint directly. ────────────────────────────────
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: "user-1",
+        email: "user-1@example.com",
+        role: "admin",
+        farms: [{ slug: "test-farm-slug", role: "admin" }],
+      },
+    },
     prisma: mockPrisma,
     slug: "test-farm-slug",
     role: "admin",
   }),
-  getPrismaForRequest: vi
-    .fn()
-    .mockResolvedValue({ prisma: mockPrisma, slug: "test-farm-slug" }),
-  getPrismaForFarm: vi.fn().mockResolvedValue(mockPrisma),
+}));
+
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 

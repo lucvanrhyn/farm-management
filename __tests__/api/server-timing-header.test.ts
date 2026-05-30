@@ -14,17 +14,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("next-auth", () => ({
-  getServerSession: vi.fn().mockResolvedValue({
-    user: {
-      id: "user-1",
-      email: "user-1@example.com",
-      role: "admin",
-      farms: [{ slug: "test-farm-slug", role: "admin" }],
-    },
-  }),
-}));
-
 const mockPrisma = {
   animal: {
     findMany: vi.fn().mockResolvedValue([]),
@@ -44,13 +33,27 @@ const mockPrisma = {
   task: { findMany: vi.fn().mockResolvedValue([]) },
 };
 
-vi.mock("@/lib/farm-prisma", () => ({
-  getPrismaWithAuth: vi.fn().mockResolvedValue({
+// Issue #495: cookie-scoped routes authenticate solely through the
+// proxy-signed `getFarmContext`; the legacy `getServerSession` +
+// `getPrismaWithAuth` Referer fallback is gone. Mock the auth chokepoint
+// directly with a resolved context (the proxy fast-path outcome).
+vi.mock("@/lib/server/farm-context", () => ({
+  getFarmContext: vi.fn().mockResolvedValue({
+    session: {
+      user: {
+        id: "user-1",
+        email: "user-1@example.com",
+        role: "admin",
+        farms: [{ slug: "test-farm-slug", role: "admin" }],
+      },
+    },
     prisma: mockPrisma,
     slug: "test-farm-slug",
     role: "admin",
   }),
+}));
 
+vi.mock("@/lib/farm-prisma", () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
@@ -124,9 +127,10 @@ describe("Server-Timing header on instrumented routes", () => {
   });
 
   it("unauthorised request still returns a well-formed response (header optional)", async () => {
-    // Flip the session mock to null for this single invocation
-    const { getServerSession } = await import("next-auth");
-    vi.mocked(getServerSession).mockResolvedValueOnce(null as never);
+    // Issue #495: flip the auth chokepoint to a null context for this single
+    // invocation (an unauthenticated request — no Referer fallback).
+    const { getFarmContext } = await import("@/lib/server/farm-context");
+    vi.mocked(getFarmContext).mockResolvedValueOnce(null);
 
     const { GET } = await import("@/app/api/farm/route");
     const res = await GET();

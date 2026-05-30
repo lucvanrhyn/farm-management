@@ -218,11 +218,16 @@ export async function proxy(req: NextRequest) {
  *   `/api/observations` family was REMOVED from the matcher exclusion above.
  *   It now flows through the proxy like its sibling cookie-scoped routes
  *   (`/api/animals`, `/api/camps`, …) so the signed `x-farm-slug` header is
- *   stamped from the server-controlled `active_farm_slug` cookie — the
- *   handlers no longer fall back to `Referer`-derived tenant resolution. The
- *   original March-2026 carve-out (un-authed sync POSTs were 307'd to /login)
- *   predates the signed-header hop and is obsolete: an authenticated sync
- *   POST now passes through with its identity stamped.
+ *   stamped from the server-controlled `active_farm_slug` cookie. The original
+ *   March-2026 carve-out (un-authed sync POSTs were 307'd to /login) predates
+ *   the signed-header hop and is obsolete: an authenticated sync POST now
+ *   passes through with its identity stamped.
+ *
+ *   Issue #495 (PRD #479, final): the `Referer`-to-slug tenant fallback that
+ *   `getFarmContext` used when no signed header was present has since been
+ *   DELETED. The signed `x-farm-slug` hop is now the SOLE tenant source for
+ *   every cookie-scoped `/api/*` route — a request that skips this hop is
+ *   unauthenticated (401), with no Referer-derived recovery.
  *
  * Exported (named export, not a config field) so the proxy-matcher unit test
  * can assert disposition without booting the Edge runtime.
