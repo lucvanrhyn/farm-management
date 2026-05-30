@@ -426,5 +426,51 @@ inline per-type validation in the route handler, one `details-schemas.ts`.
 arch-PR sign-off exception in `CLAUDE.md` (architectural / ADR PRs need explicit
 promote sign-off). Implementation — acceptance criteria 3 & 4 — is tracked as a
 dedicated follow-up wave (#513) and ships per the migration path above, off a
-`wave/<NNN>-details-zod-registry` branch. No runtime code changes ship with this
-ADR.
+`wave/<NNN>-details-zod-registry` branch.
+
+### Implementation notes (#513 — wave/513-details-zod-registry)
+
+The registry shipped as `lib/domain/observations/details-schemas.ts` (the ADR's
+proposed `registry.ts`-sibling location — co-located with the write door and the
+`ObservationType` registry it keys off, NOT under `lib/server/`). All nine
+first-adopter types are registered; the ~14 free-form types pass through. `zod`
+(`^4.3.6`) was added as the first runtime dep.
+
+Decisions taken during implementation (worth a reviewer's eye):
+
+- **Wire codes preserved byte-identically.** Each migrated family re-throws its
+  legacy typed error (`WeightOutOfRangeError`, `Death{MultiCause,DisposalRequired}Error`,
+  `Repro{MultiState,Required,FieldRequired}Error`, `CampConditionFieldRequiredError`)
+  rather than the canonical `DetailsValidationError`. `DETAILS_VALIDATION_FAILED`
+  /`DetailsValidationError` ship as the home for FUTURE typed schemas only; the
+  legacy-code → canonical switch remains the separate, signed-off follow-up the
+  ADR describes. The Zod schemas back the shape; the door-facing
+  `validateObservationDetails(type, details, { speciesMax })` translates a parse
+  failure into the legacy error.
+- **`weighing` is a `(speciesMax) => schema` factory** (`weighingDetailsSchema`),
+  resolved in the door from the species-stamping waterfall.
+- **camp_condition kept as a dedicated EARLY door step** (before the timestamp
+  parse + duplicate guard + camp-existence check), now calling
+  `validateCampConditionComplete`. This preserves the exact pre-ADR ordering: an
+  incomplete payload still fails with `CAMP_CONDITION_FIELD_REQUIRED` and is
+  never masked by a later `CampNotFoundError` or a wasted duplicate-guard query.
+  All other typed families validate via the single post-waterfall
+  `validateObservationDetails` call.
+- **death + repro relocated route → door**, closing the `move-mob` /
+  `update-task` coverage gap (ADR-0006's other door callers). The two
+  route-handler try/catch blocks in `app/api/observations/route.ts` are gone;
+  the door throws and `mapApiDomainError` maps the death/repro errors to their
+  byte-identical 422 envelopes (new arms added there — same `routeError(code,
+  message, 422)` minter the route used).
+- **Edit door (`updateObservation`) now validates ALL registered types**, not
+  just `weighing` (ADR §Decision: "and inside the edit door … before its
+  persist"). Behaviour for `weighing` is unchanged; editing a `death` / repro
+  row into an invalid payload is now rejected at the edit boundary too. No
+  existing test edited such a row expecting success, so this is a strict
+  strengthening consistent with the ADR's single-chokepoint goal.
+- **Structural test** `__tests__/architecture/observation-details-validation-single-home.test.ts`
+  (cloned from ADR-0006's `observation-write-no-direct-callers.test.ts`) makes
+  re-defining a per-type validator / `coerceDetails` / typed-error class outside
+  the registry a CI error.
+- The three `lib/server/validators/{weighing,death,reproductive-state}.ts`
+  modules are **deleted** (zero validator modules remain, per §Consequences).

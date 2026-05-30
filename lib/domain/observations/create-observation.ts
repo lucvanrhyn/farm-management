@@ -48,8 +48,13 @@ import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getTenantDayRange } from "@/lib/server/tenant-day";
 
 import { getMaxLiveWeightKg } from "@/lib/species/breeding-constants";
-import { validateWeighingObservation } from "@/lib/server/validators/weighing";
 
+import {
+  CampConditionFieldRequiredError,
+  CAMP_CONDITION_FIELD_REQUIRED,
+  validateCampConditionComplete,
+  validateObservationDetails,
+} from "./details-schemas";
 import {
   AnimalNotFoundError,
   CampNotFoundError,
@@ -122,74 +127,16 @@ export type ObservationWriter = PrismaClient | Prisma.TransactionClient;
  */
 export const VALID_OBSERVATION_TYPES: ReadonlySet<string> = OBSERVATION_TYPES;
 
-/** Wire code for {@link CampConditionFieldRequiredError}. */
-export const CAMP_CONDITION_FIELD_REQUIRED =
-  "CAMP_CONDITION_FIELD_REQUIRED" as const;
-
 /**
- * Issue #321 (PRD #318 stress-test remediation, wave R4).
- *
- * A `camp_condition` observation reached the write boundary without an
- * explicit grazing / water / fence reading. The pre-#321 `CampConditionForm`
- * pre-selected "Good" / "Full" / "Intact" and left Submit permanently
- * enabled, so a zero-interaction (or stale-offline-queued) submit persisted
- * those defaults as the farmer's *answer* — a clean inspection
- * indistinguishable from a deliberate all-good one. The client now emits
- * unselected sentinels, but a stale client can still POST an incomplete
- * payload; this server-side guard rejects it instead of silently writing an
- * implicit reading.
- *
- * `field` names the first missing/blank selection so the caller can surface
- * a precise message rather than a generic 500. It is co-located here (rather
- * than in `./errors`) because the guard itself is `camp_condition`-specific
- * and lives in this domain op; it carries its own SCREAMING_SNAKE `code` so
- * the API error mapper / offline-sync queue can react to it like every other
- * typed observation error.
+ * ADR-0007 (#513) — the camp_condition completeness contract + its typed error
+ * (`CampConditionFieldRequiredError` / `CAMP_CONDITION_FIELD_REQUIRED`) now live
+ * in the per-type details-schema registry (`./details-schemas`) alongside the
+ * other typed observations' `details` rules. Re-exported here so existing
+ * importers — `lib/server/api-errors.ts` (the 422 mapper) and the domain test —
+ * keep their import path. The door consults the registry via
+ * `validateObservationDetails` (below).
  */
-export class CampConditionFieldRequiredError extends Error {
-  readonly code = CAMP_CONDITION_FIELD_REQUIRED;
-  readonly field: "grazing" | "water" | "fence";
-  constructor(field: "grazing" | "water" | "fence") {
-    super(`camp_condition observation is missing required field: ${field}`);
-    this.name = "CampConditionFieldRequiredError";
-    this.field = field;
-  }
-}
-
-/**
- * The required camp_condition selection keys, in the order the farmer
- * answers them in `CampConditionForm`. The persisted `details` payload is
- * `JSON.stringify({ grazing, water, fence, logged_by })` (see the Logger
- * page's `handleConditionSubmit`), so these are the camelCase-free keys to
- * assert on.
- */
-const CAMP_CONDITION_REQUIRED_FIELDS = ["grazing", "water", "fence"] as const;
-
-/**
- * Throws {@link CampConditionFieldRequiredError} unless `details` parses to
- * an object carrying a non-blank value for every required field. Defends
- * against: empty/absent details, malformed JSON, an omitted key, and an
- * explicit `null`/empty-string sentinel (the shape the #321 client now emits
- * for an unanswered group).
- */
-function assertCampConditionComplete(details: string | null | undefined): void {
-  let parsed: unknown;
-  try {
-    parsed = details ? JSON.parse(details) : null;
-  } catch {
-    parsed = null;
-  }
-  const obj =
-    parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
-  for (const field of CAMP_CONDITION_REQUIRED_FIELDS) {
-    const value = obj[field];
-    if (typeof value !== "string" || value.trim() === "") {
-      throw new CampConditionFieldRequiredError(field);
-    }
-  }
-}
+export { CampConditionFieldRequiredError, CAMP_CONDITION_FIELD_REQUIRED };
 
 /**
  * Issue #366 — rejects a byte-identical duplicate `camp_condition` write.
@@ -323,10 +270,15 @@ export async function createObservation(
     throw new InvalidTypeError(input.type);
   }
 
-  // Issue #321 — required-field guard for camp_condition. Other observation
-  // types carry unrelated `details` shapes and are deliberately untouched.
+  // Issue #321 — required-field guard for camp_condition, via the ADR-0007
+  // registry (`validateCampConditionComplete`). Kept as a dedicated EARLY step
+  // (before the timestamp parse + duplicate guard + camp load) so an incomplete
+  // payload is rejected with `CAMP_CONDITION_FIELD_REQUIRED` exactly where it
+  // was pre-ADR-0007 — never masked by a later `CampNotFoundError` or a wasted
+  // duplicate-guard query. Other observation types carry unrelated `details`
+  // shapes and flow through to the post-waterfall `validateObservationDetails`.
   if (input.type === "camp_condition") {
-    assertCampConditionComplete(input.details);
+    validateCampConditionComplete(input.details);
   }
 
   let observedAt: Date;
@@ -397,16 +349,23 @@ export async function createObservation(
     species = campExists.species;
   }
 
-  // Issue #487 (PRD #479, Epic C) — species-aware weight gate. Runs AFTER the
-  // species-stamping waterfall (so the cap is species-correct) and BEFORE the
-  // upsert/create paths below, so a duplicate bad weight is rejected, never
-  // stored. `getMaxLiveWeightKg` is throw-free for a null/unknown species (it
-  // falls back to the absolute ceiling), so the gate degrades to "reject only
-  // the physically-impossible" rather than failing the write. Other types
-  // carry unrelated `details` shapes and are deliberately untouched.
-  if (input.type === "weighing") {
-    validateWeighingObservation(input.details, getMaxLiveWeightKg(species));
-  }
+  // ADR-0007 (#513) — per-type `details` validation, via the schema registry.
+  // ONE chokepoint for every typed observation (weighing, death, repro family;
+  // camp_condition completeness already ran early, above). Runs AFTER the
+  // species-stamping waterfall (so weighing's cap is species-correct) and BEFORE
+  // the upsert/create paths below, so a duplicate bad payload is rejected, never
+  // stored — the placement invariant the #487 weight gate established.
+  //
+  // This is the door step that FIXES the death/repro coverage gap: pre-ADR-0007
+  // those two validated only in `app/api/observations/route.ts`, so a death /
+  // repro row written through the other ADR-0006 door callers (`move-mob`,
+  // `update-task`) skipped validation entirely. The door sees every write.
+  //
+  // `getMaxLiveWeightKg` is throw-free for a null/unknown species (absolute
+  // ceiling fallback); an unregistered type is a no-op (pass-through).
+  validateObservationDetails(input.type, input.details, {
+    speciesMax: getMaxLiveWeightKg(species),
+  });
 
   // Issue #492 — sanitise the optional free-text note BEFORE either write
   // path. Trim + cap; an over-length note throws NoteTooLongError here so a

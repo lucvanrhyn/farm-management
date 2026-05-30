@@ -17,7 +17,18 @@ import {
   ObservationNotFoundError,
 } from "@/lib/domain/observations/errors";
 import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
-import { WeightOutOfRangeError } from "@/lib/server/validators/weighing";
+// ADR-0007 (#513) — per-type `details` validation moved into the write door
+// (`lib/domain/observations/details-schemas.ts`). The weighing error keeps its
+// identity; the death + repro errors are now thrown from the door (previously
+// mapped inline in `app/api/observations/route.ts`) and so must be mapped here.
+import {
+  WeightOutOfRangeError,
+  DeathMultiCauseError,
+  DeathDisposalRequiredError,
+  ReproMultiStateError,
+  ReproRequiredError,
+  ReproFieldRequiredError,
+} from "@/lib/domain/observations/details-schemas";
 import {
   CampHasActiveAnimalsError,
   DuplicateCampError,
@@ -265,6 +276,23 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
   // raw message — so no internal text leaks (audit-error-envelope clean).
   if (err instanceof WeightOutOfRangeError) {
     return NextResponse.json({ error: err.code }, { status: 422 });
+  }
+  // ADR-0007 (#513) — death + reproductive-state details validation. These
+  // moved OUT of `app/api/observations/route.ts` (where they were mapped inline
+  // via `routeError(err.code, err.message, 422)`) INTO the write door
+  // (`validateObservationDetails`), so the door now throws them and they are
+  // mapped here. The envelope is reproduced BYTE-IDENTICALLY — same code, same
+  // human `message`, same 422 — via the very same `routeError` minter the route
+  // used, so the offline-sync `isTerminalStatus` classifier, `FailedSyncDialog`,
+  // and the existing validator test suites see no wire change.
+  if (
+    err instanceof DeathMultiCauseError ||
+    err instanceof DeathDisposalRequiredError ||
+    err instanceof ReproMultiStateError ||
+    err instanceof ReproRequiredError ||
+    err instanceof ReproFieldRequiredError
+  ) {
+    return routeError(err.code, err.message, 422);
   }
   // Wave D (#159) — transactions domain typed errors.
   if (err instanceof TransactionNotFoundError) {

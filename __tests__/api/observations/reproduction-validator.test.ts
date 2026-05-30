@@ -29,7 +29,7 @@ import {
   validateReproductiveState,
   ReproMultiStateError,
   ReproRequiredError,
-} from '@/lib/server/validators/reproductive-state';
+} from '@/lib/domain/observations/details-schemas';
 
 // vi.mock factories hoist above top-level const declarations (per
 // memory/feedback-vi-hoisted-shared-mocks.md), so any state the factories

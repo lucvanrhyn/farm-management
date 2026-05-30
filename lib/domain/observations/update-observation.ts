@@ -13,8 +13,8 @@
 import type { Observation, PrismaClient } from "@prisma/client";
 
 import { getMaxLiveWeightKg } from "@/lib/species/breeding-constants";
-import { validateWeighingObservation } from "@/lib/server/validators/weighing";
 
+import { validateObservationDetails } from "./details-schemas";
 import { sanitizeNote } from "./create-observation";
 import { ObservationNotFoundError } from "./errors";
 
@@ -47,18 +47,18 @@ export async function updateObservation(
     throw new ObservationNotFoundError(input.id);
   }
 
-  // Issue #487 (PRD #479, Epic C) — species-aware weight gate at the EDIT
-  // boundary. The existing row already carries the stamped `species` (written
-  // at create time by the ADR-0006 waterfall), so the cap is species-correct.
+  // ADR-0007 (#513) — per-type `details` validation at the EDIT boundary, via
+  // the same schema registry the create door uses (`validateObservationDetails`).
+  // The existing row already carries the stamped `species` (written at create
+  // time by the ADR-0006 waterfall), so weighing's cap is species-correct.
   // Validate the INCOMING `details` before persisting, so a stale / malicious
-  // PATCH cannot edit a clean weighing into a 999,999 kg garbage value.
+  // PATCH cannot edit a clean payload into a garbage one (e.g. a 999,999 kg
+  // weight, or a death edited to drop its carcassDisposal). An unregistered
+  // type (or a legacy row with no `type`) is a no-op (pass-through);
   // `getMaxLiveWeightKg` is throw-free for a null/unknown species.
-  if (existing.type === "weighing") {
-    validateWeighingObservation(
-      input.details,
-      getMaxLiveWeightKg(existing.species),
-    );
-  }
+  validateObservationDetails(existing.type, input.details, {
+    speciesMax: getMaxLiveWeightKg(existing.species),
+  });
 
   // Issue #492 — sanitise the edited note BEFORE building the update, so an
   // over-length note throws NoteTooLongError and nothing is written. The

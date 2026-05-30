@@ -589,9 +589,15 @@ describe("observationFromTaskCompletion — observation type coverage via PATCH"
   const taskTypeScenarios = [
     {
       taskType: "pregnancy_scan",
-      payload: { result: "positive" },
+      // ADR-0007 (#513) — task-completion observations now flow through the
+      // same per-type `details` registry the logger does (the door is the
+      // single chokepoint). `pregnancy_scan` requires a result in the canonical
+      // {pregnant, empty, uncertain} vocabulary (ReproductionForm's options) —
+      // the prior synthetic `"positive"` was never a real client value and is
+      // now correctly rejected at the door. Use the real contract value.
+      payload: { result: "pregnant" },
       expectedObsType: "pregnancy_scan",
-      expectedDetailsFragment: "positive",
+      expectedDetailsFragment: "pregnant",
     },
     {
       taskType: "vaccination",
