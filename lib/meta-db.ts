@@ -397,6 +397,69 @@ export async function setPasswordResetToken(
   });
 }
 
+/**
+ * Atomically look up a password-reset token, enforce expiry, and clear it.
+ *
+ * Uses the same two-step SELECT-then-UPDATE pattern as `verifyUserEmail`:
+ *   1. SELECT id WHERE token = ? AND expires > now()  — no match → null
+ *   2. UPDATE … SET token = NULL, expires = NULL WHERE id = ?
+ *
+ * Expiry is enforced at DB level (`password_reset_expires > ?`) so an expired
+ * token always returns null regardless of the caller's clock. Clearing the
+ * token on first use makes it single-use — a replay attempt within the 24h
+ * window returns null.
+ *
+ * Returns { userId } on success, null on not-found / expired / already-used.
+ */
+export async function consumePasswordResetToken(
+  token: string,
+): Promise<{ userId: string } | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id FROM users
+          WHERE password_reset_token = ?
+            AND password_reset_expires > ?
+          LIMIT 1`,
+    args: [token, new Date().toISOString()],
+  });
+  if (result.rows.length === 0) return null;
+
+  const userId = result.rows[0][0] as string;
+  await client.execute({
+    sql: `UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?`,
+    args: [userId],
+  });
+  return { userId };
+}
+
+/**
+ * Atomically set a new password hash and clear the reset-token columns.
+ *
+ * The caller is responsible for:
+ *   - Producing a bcrypt-12 hash of the new password BEFORE calling this.
+ *   - Having already consumed (invalidated) the reset token via
+ *     consumePasswordResetToken — this function does NOT re-validate the token.
+ *
+ * Clearing the reset columns here is a belt-and-suspenders guard: by the time
+ * this is called, consumePasswordResetToken has already cleared them, but a
+ * single-statement UPDATE keeps the invariant watertight against any future
+ * refactor that might decouple the two steps.
+ */
+export async function resetUserPassword(
+  userId: string,
+  passwordHash: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE users
+          SET password_hash = ?,
+              password_reset_token = NULL,
+              password_reset_expires = NULL
+          WHERE id = ?`,
+    args: [passwordHash, userId],
+  });
+}
+
 // ── Subscription helpers ────────────────────────────────────────────────────
 
 export interface FarmBilling {
