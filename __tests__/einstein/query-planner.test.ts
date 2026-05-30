@@ -40,9 +40,8 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 });
 
-const { planQuery, parsePlannerResponse, QueryPlannerError } = await import(
-  '@/lib/einstein/query-planner'
-);
+const { planQuery, parsePlannerResponse, QueryPlannerError, buildPlannerSystemPrompt } =
+  await import('@/lib/einstein/query-planner');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -156,6 +155,33 @@ describe('planQuery — happy path', () => {
     expect(plan.dateRangeFilter?.end?.toISOString().slice(0, 10)).toBe('2026-03-31');
   });
 
+  // Root-cause regression for the 2026-05-29 incident: relative ranges ("last
+  // two weeks") resolved to 2025-04 because the planner never received the
+  // current date. The system prompt MUST carry today's date so Haiku anchors
+  // relative expressions correctly. The user message stays the verbatim
+  // question (unchanged contract).
+  it('injects the current date into the system prompt (relative-range anchor)', async () => {
+    messagesCreateMock.mockResolvedValueOnce(
+      mkTextResponse(
+        JSON.stringify({ rewrittenQuery: 'observations last two weeks', isStructuredQuery: true }),
+      ),
+    );
+
+    const now = new Date('2026-05-30T08:00:00.000Z');
+    await planQuery('what happened in the last two weeks?', now);
+
+    const args = messagesCreateMock.mock.calls[0][0] as {
+      system: string;
+      messages: Array<{ role: string; content: string }>;
+    };
+    // The real current date must appear in the system prompt.
+    expect(args.system).toContain('2026-05-30');
+    expect(args.system).toMatch(/current date/i);
+    expect(args.system.toLowerCase()).toContain('relative date');
+    // It must NOT leak into / replace the user message.
+    expect(args.messages[0].content).toBe('what happened in the last two weeks?');
+  });
+
   it('silently drops non-whitelisted entity types from entityTypeFilter', async () => {
     messagesCreateMock.mockResolvedValueOnce(
       mkTextResponse(
@@ -184,6 +210,24 @@ describe('planQuery — happy path', () => {
     const plan = await planQuery('q');
     expect(plan.rewrittenQuery).toBe('fenced');
     expect(plan.isStructuredQuery).toBe(false);
+  });
+});
+
+describe('buildPlannerSystemPrompt — pure date anchor', () => {
+  it('embeds the ISO current date and a relative-resolution instruction', () => {
+    const prompt = buildPlannerSystemPrompt(new Date('2026-05-30T23:30:00.000Z'));
+    expect(prompt).toContain('2026-05-30');
+    expect(prompt).toMatch(/resolve all relative date expressions/i);
+    // Retains the base classifier contract (still emits the JSON schema rules).
+    expect(prompt).toContain('rewrittenQuery');
+    expect(prompt).toContain('isStructuredQuery');
+  });
+
+  it('uses UTC so the embedded date does not drift by timezone', () => {
+    // 23:30 UTC on the 30th must read as the 30th (not roll to the 31st/29th).
+    const prompt = buildPlannerSystemPrompt(new Date('2026-05-30T23:30:00.000Z'));
+    expect(prompt).toContain('2026-05-30');
+    expect(prompt).not.toContain('2026-05-31');
   });
 });
 
