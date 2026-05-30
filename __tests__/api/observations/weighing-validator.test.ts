@@ -35,7 +35,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   validateWeighingObservation,
   WeightOutOfRangeError,
-} from "@/lib/server/validators/weighing";
+} from "@/lib/domain/observations/details-schemas";
 import {
   getMaxLiveWeightKg,
   ABSOLUTE_MAX_LIVE_WEIGHT_KG,

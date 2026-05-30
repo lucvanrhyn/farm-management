@@ -17,7 +17,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantRead, tenantWrite, RouteValidationError, routeError } from "@/lib/server/route";
+import { tenantRead, tenantWrite, RouteValidationError } from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -28,17 +28,6 @@ import {
   type CreateObservationInput,
 } from "@/lib/domain/observations";
 import { parseLimit } from "@/lib/domain/shared/limit";
-import {
-  validateReproductiveState,
-  ReproMultiStateError,
-  ReproRequiredError,
-  ReproFieldRequiredError,
-} from "@/lib/server/validators/reproductive-state";
-import {
-  validateDeathObservation,
-  DeathMultiCauseError,
-  DeathDisposalRequiredError,
-} from "@/lib/server/validators/death";
 
 interface CreateObservationBody {
   type: string;
@@ -147,51 +136,15 @@ export const POST = tenantWrite<CreateObservationBody>({
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    // Wave 1 / #253 — ReproductiveStateValidator. Defends against the
-    // "user toggled In Heat + Pregnant simultaneously" silent-data-loss
-    // path the 2026-05-13 stress test surfaced. The validator is a no-op
-    // for non-reproductive `type`s, so death (Wave 2), weighing, treatment
-    // etc. flow through unchanged. See `lib/server/validators/reproductive-state.ts`
-    // for the full state-counting contract.
-    // Wave 285/286 (PRD #279) — the validator now also enforces per-type
-    // required fields for insemination / BCS / temperament / calving
-    // (mapped to 422 REPRO_FIELD_REQUIRED), closing the offline-queued /
-    // stale-client gap where a pre-filled UI default could persist as the
-    // farmer's answer.
-    try {
-      validateReproductiveState(body.type, body.details ?? null);
-    } catch (err) {
-      if (
-        err instanceof ReproMultiStateError ||
-        err instanceof ReproRequiredError ||
-        err instanceof ReproFieldRequiredError
-      ) {
-        return routeError(err.code, err.message, 422);
-      }
-      throw err;
-    }
-
-    // Wave 3b / #254 — `validateDeathObservation`. Symmetric with the
-    // reproductive validator above: locks out the silent-multi-cause path
-    // and the SARS / NSPCA-required `carcassDisposal` field. The validator
-    // is gated externally on `body.type === 'death'` (vs. the reproductive
-    // validator which gates internally) so its public surface is a pure
-    // details-payload check — see `lib/server/validators/death.ts` for the
-    // scope-discipline rationale.
-    if (body.type === "death") {
-      try {
-        validateDeathObservation(body.details ?? null);
-      } catch (err) {
-        if (
-          err instanceof DeathMultiCauseError ||
-          err instanceof DeathDisposalRequiredError
-        ) {
-          return routeError(err.code, err.message, 422);
-        }
-        throw err;
-      }
-    }
-
+    // ADR-0007 (#513) — per-type `details` validation (reproductive state +
+    // death single-cause/disposal, plus weighing + camp_condition) is no longer
+    // performed here. It moved INTO the write door (`createObservation` →
+    // `validateObservationDetails`), so EVERY observation-write entry point —
+    // this route, `move-mob`, and `update-task` (ADR-0006's other door callers)
+    // — is validated identically. The door throws the same typed errors
+    // (`Death*`, `Repro*`, `WeightOutOfRangeError`, `CampConditionFieldRequiredError`)
+    // and the `tenantWrite` adapter maps them to their byte-identical 422
+    // envelopes via `mapApiDomainError`.
     const input: CreateObservationInput = {
       type: body.type,
       camp_id: body.camp_id,

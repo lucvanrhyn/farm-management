@@ -36,7 +36,7 @@ import {
   DeathMultiCauseError,
   DeathDisposalRequiredError,
   CARCASS_DISPOSAL_VALUES,
-} from '@/lib/server/validators/death';
+} from '@/lib/domain/observations/details-schemas';
 
 // vi.mock factories hoist above top-level const declarations
 // (memory/feedback-vi-hoisted-shared-mocks.md), so any state the factories

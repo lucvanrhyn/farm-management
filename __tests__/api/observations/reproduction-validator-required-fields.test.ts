@@ -31,7 +31,7 @@ import { NextRequest } from 'next/server';
 import {
   validateReproductiveState,
   ReproFieldRequiredError,
-} from '@/lib/server/validators/reproductive-state';
+} from '@/lib/domain/observations/details-schemas';
 
 const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaMock } =
   vi.hoisted(() => {
