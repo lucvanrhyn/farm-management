@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSsrSafeState } from "@/lib/client/use-ssr-safe-state";
+import { parseOpenMeteoForecast } from "@/lib/server/adapters/openmeteo-door";
 
 // ── WMO weather code → icon + label ──────────────────────────────────────────
 
@@ -31,19 +32,11 @@ function wmoToLabel(code: number): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface OpenMeteoResponse {
-  current: {
-    temperature_2m: number;
-    weathercode: number;
-  };
-  daily: {
-    time: string[];
-    temperature_2m_max: number[];
-    temperature_2m_min: number[];
-    precipitation_sum: number[];
-    weathercode: number[];
-  };
-}
+// The raw Open-Meteo forecast shape is now owned by the boundary door
+// (`lib/server/adapters/openmeteo-door.ts`, #525) — the widget no longer
+// hand-rolls an interface + `as` cast for it. The door's `parseOpenMeteoForecast`
+// validates `daily.precipitation_sum` (and `current`) so a provider format
+// change surfaces as a typed error instead of a silently-zeroed widget.
 
 interface WeatherData {
   current: {
@@ -81,6 +74,10 @@ function readCache(cacheKey: string): WeatherData | null {
   try {
     const raw = sessionStorage.getItem(cacheKey);
     if (!raw) return null;
+    // Our OWN sessionStorage cache (written by writeCache), not the Open-Meteo
+    // provider body — the provider response goes through parseOpenMeteoForecast;
+    // a stale/corrupt cache just falls back to a refetch.
+    // audit-allow-external-cast: own sessionStorage cache, not the provider body
     const data = JSON.parse(raw) as WeatherData;
     if (Date.now() - data.fetchedAt > CACHE_TTL_MS) return null;
     return data;
@@ -180,9 +177,16 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
         return fetch(url, { signal: controller.signal })
           .then((res) => {
             if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
-            return res.json() as Promise<OpenMeteoResponse>;
+            return res.json() as Promise<unknown>;
           })
-          .then((raw): WeatherData => {
+          .then((rawJson): WeatherData => {
+            // Boundary door (#525): validate the Open-Meteo shape instead of an
+            // unchecked `as` cast. A dropped / mis-shaped `precipitation_sum`
+            // (or missing `current`) becomes a typed error here → the widget's
+            // catch shows "Weather unavailable" rather than a 0 mm forecast.
+            const parsed = parseOpenMeteoForecast(rawJson);
+            if (!parsed.ok) throw parsed.error;
+            const raw = parsed.value;
             const data: WeatherData = {
               current: {
                 temp: Math.round(raw.current.temperature_2m),
@@ -192,7 +196,10 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
                 date,
                 maxTemp: Math.round(raw.daily.temperature_2m_max[i]),
                 minTemp: Math.round(raw.daily.temperature_2m_min[i]),
-                precip: Math.round(raw.daily.precipitation_sum[i] * 10) / 10,
+                // per-element null (genuine missing day) → 0, mirroring the
+                // server path; the door already rejected a missing ARRAY.
+                precip:
+                  Math.round((raw.daily.precipitation_sum[i] ?? 0) * 10) / 10,
                 code: raw.daily.weathercode[i],
               })),
               fetchedAt: Date.now(),
