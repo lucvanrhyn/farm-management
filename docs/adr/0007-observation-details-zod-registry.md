@@ -1,12 +1,12 @@
 # Per-observation-type `details` validation: a schema registry in the write door
 
-**Status:** Proposed (2026-05-29) — awaiting design sign-off (#494, PRD #479 Epic C Phase 2)
+**Status:** Accepted (2026-05-29) — approved by Luc (#494, PRD #479 Epic C Phase 2); implementation tracked as #513
 
 > This ADR is the deliverable for acceptance criteria 1 & 2 of #494 (registry
 > shape + first-adopter scope). Acceptance criteria 3 & 4 (migrating the
-> validators onto the registry, no behavioural regression) are **deliberately
-> deferred** until this design is approved — the issue gates the implementation
-> on "Once approved." No runtime code changes ship with this ADR.
+> validators onto the registry, no behavioural regression) ship in a dedicated
+> follow-up wave tracked as **#513** — this ADR records the approved design only.
+> No runtime code changes ship with this ADR.
 
 ## Context
 
@@ -422,9 +422,9 @@ inline per-type validation in the route handler, one `details-schemas.ts`.
 
 ## Status
 
-**Proposed.** Held for the owner's design sign-off per the #494 acceptance gate
-("Once approved …") and the arch-PR exception in `CLAUDE.md` (architectural /
-ADR PRs need explicit promote sign-off). Implementation — acceptance criteria 3
-& 4 — is deliberately deferred until this design is approved. On approval, this
-ADR's status updates to Accepted and the migration ships per the path above,
-off a dedicated `wave/<NNN>-details-zod-registry` branch.
+**Accepted (2026-05-29).** Approved by Luc per the #494 acceptance gate and the
+arch-PR sign-off exception in `CLAUDE.md` (architectural / ADR PRs need explicit
+promote sign-off). Implementation — acceptance criteria 3 & 4 — is tracked as a
+dedicated follow-up wave (#513) and ships per the migration path above, off a
+`wave/<NNN>-details-zod-registry` branch. No runtime code changes ship with this
+ADR.
