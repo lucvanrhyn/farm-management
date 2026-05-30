@@ -30,8 +30,12 @@ import React from "react";
 
 import { classifySyncFailure } from "@/lib/sync/failure-classifier";
 
+// Stable push spy (vi.hoisted so the factory can close over it — see
+// memory/feedback-vi-hoisted-shared-mocks.md). Lets the #447 tests assert the
+// post-submit navigation is deferred while the duplicate toast is visible.
+const pushMock = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/farm-x/logger",
 }));
 
@@ -160,6 +164,7 @@ beforeEach(() => {
   fetchCalls.length = 0;
   syncNowMock.mockClear();
   queueObservationMock.mockClear();
+  pushMock.mockClear();
 });
 
 afterEach(() => {
@@ -294,5 +299,66 @@ describe("CampInspectionPage — camp-condition duplicate-submit toast (#436)", 
       details: { existingId: "irrelevant" },
     }).toast!.message;
     expect(result.queryByText(dupCopy)).toBeNull();
+
+    // #447: the happy path shows no toast, so navigation fires immediately
+    // (holdMs = 0) — first-submit flows gain no latency.
+    await waitFor(() =>
+      expect(pushMock).toHaveBeenCalledWith("/farm-x/logger"),
+    );
+  });
+
+  it("#447: holds navigation while the duplicate toast is visible, and Esc skips the wait", async () => {
+    const duplicateBody = {
+      error: "DUPLICATE_OBSERVATION",
+      details: { existingId: "srv-existing-9" },
+    };
+    const expectedToast = classifySyncFailure(422, duplicateBody);
+
+    const fetchMock = makeFetchMock(
+      () =>
+        new Response(JSON.stringify(duplicateBody), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchMock;
+
+    const { default: CampInspectionPage } = await import(
+      "@/app/[farmSlug]/logger/[campId]/page"
+    );
+
+    let result!: ReturnType<typeof render>;
+    await act(async () => {
+      result = render(
+        <CampInspectionPage
+          params={paramsPromise({ farmSlug: "farm-x", campId: "A" })}
+        />,
+      );
+    });
+
+    await openCampConditionForm(result);
+
+    await act(async () => {
+      fireEvent.click(result.getByText(/Submit Camp Report/i));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The toast being up proves the handler reached its post-submit nav
+    // decision — yet the navigation must be HELD, not fired.
+    const message = expectedToast.toast!.message;
+    await waitFor(() => expect(result.getByText(message)).toBeTruthy(), {
+      timeout: 1000,
+    });
+    expect(pushMock).not.toHaveBeenCalled();
+
+    // Esc skips the hold → immediate, single navigation to the logger root.
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await Promise.resolve();
+    });
+    expect(pushMock).toHaveBeenCalledWith("/farm-x/logger");
+    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import AnimalChecklist from "@/components/logger/AnimalChecklist";
@@ -37,7 +37,8 @@ import { useSession } from "next-auth/react";
 import { Animal, GrazingQuality, WaterStatus, FenceStatus } from "@/lib/types";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { classifySyncFailure, type SyncToastHint } from "@/lib/sync/failure-classifier";
-import { resolvePostSubmitNav, type InlinePostResult } from "@/lib/logger/post-submit-nav";
+import { resolvePostSubmitNav, resolveNavHoldMs, type InlinePostResult } from "@/lib/logger/post-submit-nav";
+import { useHeldNavigation } from "@/lib/client/use-held-navigation";
 import { getCampVisitCompletenessLabel } from "./_lib/camp-condition-done-label";
 import { resolveCampByUrlSegment } from "./_lib/resolve-camp-by-url-segment";
 
@@ -66,6 +67,11 @@ export default function CampInspectionPage({
   const loggerRoot = `/${farmSlug}/logger`;
 
   const router = useRouter();
+  // Issue #447 — defer the post-submit navigation while a duplicate toast is
+  // visible (Esc skips the wait). `navigate` is a stable wrapper so the hook's
+  // Esc listener and timer reference one identity across renders.
+  const navigate = useCallback((to: string) => router.push(to), [router]);
+  const { scheduleHeldNavigation } = useHeldNavigation(navigate);
   const { data: session } = useSession();
   const { isOnline, refreshPendingCount, refreshCampsState, camps, campsLoaded, syncNow } = useOffline();
   const { mode } = useFarmModeSafe();
@@ -539,7 +545,11 @@ export default function CampInspectionPage({
     // served `/offline` and unmounted the queue-owning OfflineProvider.
     const decision = resolvePostSubmitNav({ isOnline, loggerRoot, inlineResult });
     if (decision.action === "navigate") {
-      router.push(decision.to);
+      // Issue #447 — the auto-resolved duplicate path both shows a toast and
+      // navigates; hold the push ~1.5s (Esc skips) so the toast is readable.
+      // Every other navigate path returns 0 and pushes synchronously, so the
+      // happy path gains no latency.
+      scheduleHeldNavigation(decision.to, resolveNavHoldMs(inlineResult));
     } else {
       // Hold: stay in the logger. Close the modal so the user sees the
       // logger overview + the queued/pending affordance in the status bar.
