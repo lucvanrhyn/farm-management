@@ -28,6 +28,7 @@ import {
   type CreateObservationInput,
 } from "@/lib/domain/observations";
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
+import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
 import { parseLimit } from "@/lib/domain/shared/limit";
 
 /**
@@ -248,12 +249,50 @@ export const POST = tenantWrite<CreateObservationBody>({
       input.type === "animal_movement"
         ? deriveAnimalMovement(input.details, input.animal_id, input.camp_id)
         : null;
+
+    // Issue #538 — a `death` write is the SOLE carrier of the animal's
+    // `status = "Deceased"` (+ `deceasedAt`) change (the logger's
+    // fire-and-forget `PATCH /api/animals/[id]` was dropped because it was lost
+    // offline with no replay queue — the higher-stakes twin of #100). When the
+    // payload carries a resolvable animal tag, route it through
+    // `performAnimalDeath`, which — mirroring `performAnimalMove` /
+    // `performMobMove` (the caller owns the mutation; the observation door stays
+    // a pure writer) — marks the animal Deceased AND records the observation in
+    // ONE `$transaction`. Because this fires on the REPLAYED observation, an
+    // offline death now survives the reconnect drain; setting status with the
+    // observation's own timestamp as `deceasedAt` is idempotent on a #206
+    // replay.
+    //
+    // LENIENT fall-through (mirrors the #100 movement branch): a `death`
+    // without a resolvable `animal_id` (e.g. the admin CreateObservationModal,
+    // which logs the type without a tagged animal) cannot express the status
+    // mutation — it keeps the unchanged bare-`createObservation` path (a plain
+    // observation row, no status write, no transaction). The logger +
+    // offline-replay always supply the animal tag, so the no-lost-death
+    // guarantee is unaffected.
+    const deathAnimalId =
+      input.type === "death" &&
+      typeof input.animal_id === "string" &&
+      input.animal_id !== ""
+        ? input.animal_id
+        : null;
+
     let result: Awaited<ReturnType<typeof createObservation>>;
     if (movement) {
       result = await performAnimalMove(ctx.prisma, {
         animalId: movement.animalId,
         sourceCampId: movement.sourceCampId,
         destCampId: movement.destCampId,
+        campId: input.camp_id,
+        details: input.details,
+        createdAt: input.created_at,
+        clientLocalId: input.clientLocalId,
+        notes: input.notes,
+        loggedBy: input.loggedBy,
+      });
+    } else if (deathAnimalId) {
+      result = await performAnimalDeath(ctx.prisma, {
+        animalId: deathAnimalId,
         campId: input.camp_id,
         details: input.details,
         createdAt: input.created_at,

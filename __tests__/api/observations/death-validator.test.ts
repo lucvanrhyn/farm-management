@@ -46,11 +46,24 @@ const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaM
     const campFindFirst = vi.fn();
     const observationCreate = vi.fn();
     const observationUpsert = vi.fn();
-    const prisma = {
+    // Issue #538 — a `death` POST now routes through `performAnimalDeath`, which
+    // owns a `$transaction` (the animal `status = "Deceased"` mutation is atomic
+    // with the death observation write, mirroring #100's `performAnimalMove`).
+    // The transaction callback receives a tx client; we pass the same prisma
+    // mock so the door's reads/writes resolve through these spies. The ADR-0007
+    // death `details` validation runs INSIDE the door (before the write), so a
+    // dirty payload still throws out of the `$transaction` callback → the
+    // `tenantWrite` adapter maps it to the same 422 envelope, and neither
+    // `observation.create` nor `observation.upsert` is reached.
+    const prisma: Record<string, unknown> = {
       camp: { findFirst: campFindFirst },
-      animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
+      animal: {
+        findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       observation: { create: observationCreate, upsert: observationUpsert },
     };
+    prisma.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma));
     return {
       campFindFirstMock: campFindFirst,
       observationCreateMock: observationCreate,
