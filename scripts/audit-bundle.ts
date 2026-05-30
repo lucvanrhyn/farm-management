@@ -213,3 +213,10 @@ const isCliEntry = (() => {
   return typeof entry === "string" && entry.endsWith("audit-bundle.ts");
 })();
 if (isCliEntry) main();
+
+// ─── Guard registry (static-audit siblings) ────────────────────────────────
+// Each sibling audit that ships as a standalone script registers here so the
+// full guard suite can be discovered from one place. Import is type-only —
+// no runtime cost when audit-bundle.ts is run as the bundle-size CLI.
+// #522 raw-getServerSession ban-rule:
+export type { RawSessionOffender } from "./audit-raw-getsession";
