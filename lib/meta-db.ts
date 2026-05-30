@@ -378,6 +378,25 @@ export async function verifyUserEmail(token: string): Promise<{ userId: string }
   return { userId };
 }
 
+// ── Password-reset helpers (issue #102) ────────────────────────────────────
+//
+// Separate from the email-verification columns (verification_token /
+// verification_expires) to prevent cross-purpose token confusion: a verify
+// token must never be accepted at the password-reset endpoint and vice versa.
+// The new columns are added by scripts/migrate-meta-password-reset-cols.ts.
+
+export async function setPasswordResetToken(
+  userId: string,
+  token: string,
+  expiresAt: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?`,
+    args: [token, expiresAt, userId],
+  });
+}
+
 // ── Subscription helpers ────────────────────────────────────────────────────
 
 export interface FarmBilling {
