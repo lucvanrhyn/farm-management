@@ -82,14 +82,22 @@ vi.mock('@/components/admin/DateRangePicker', () => ({ default: () => null }));
 vi.mock('@/lib/constants/default-categories', () => ({ DEFAULT_CATEGORIES: [] }));
 vi.mock('@/app/_components/AdminPage', () => ({ default: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('@/components/admin/tasks/TaskSettingsClient', () => ({ default: () => null }));
-vi.mock('@/lib/farm-settings/defaults', () => ({
-  DEFAULT_TASK_SETTINGS: { defaultReminderOffset: 1, autoObservation: false, horizonDays: 30 },
-}));
 vi.mock('@/components/admin/AlertSettingsForm', () => ({ default: () => null }));
 vi.mock('@/components/admin/map/MapSettingsClient', () => ({ default: () => null }));
-vi.mock('@/lib/farm-settings/defaults', () => ({
-  DEFAULT_MAP_SETTINGS: { eskomAreaId: null },
-  DEFAULT_TASK_SETTINGS: { defaultReminderOffset: 1, autoObservation: false, horizonDays: 30 },
+// Single, complete mock for @/lib/farm-settings/defaults.
+//
+// This module is imported by BOTH the tasks page (DEFAULT_TASK_SETTINGS) and
+// the map page (DEFAULT_MAP_SETTINGS). Declaring two separate `vi.mock()` calls
+// for the same path is non-deterministic: vitest hoists both factories and keeps
+// only one in the mock registry, and which one wins flips under pooled execution
+// + vi.resetModules(). When the tasks-only factory won, the map page's
+// `import { DEFAULT_MAP_SETTINGS }` threw "No export defined" (~1-in-3 flake).
+//
+// Spreading the real module via importOriginal guarantees every export
+// (DEFAULT_MAP_SETTINGS, DEFAULT_TASK_SETTINGS, the interfaces + parsers) is
+// always present regardless of hoist ordering or registry state.
+vi.mock('@/lib/farm-settings/defaults', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/farm-settings/defaults')>()),
 }));
 vi.mock('@/lib/map/fmd-zones', () => ({
   computeFarmCentroid: vi.fn().mockReturnValue(null),
