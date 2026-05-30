@@ -107,9 +107,9 @@ export async function requireSession(currentPath?: string): Promise<Session> {
  * Intended to be called with the session returned by `requireSession()` so
  * there is no extra getSession() round-trip.
  *
- * Redirects to `/login` on non-ADMIN (LOGGER, DASHBOARD, or no access).
- * The redirect target can be customised by the caller if needed — for now
- * `/login` is consistent with the existing layout.tsx patterns.
+ * On role failure (LOGGER, DASHBOARD, or no access), redirects to
+ * `/${farmSlug}/home` — the user is authenticated but lacks the ADMIN role,
+ * so sending them to /login would cause a confusing re-login prompt.
  */
 export async function requireFarmAdmin(
   session: Session,
@@ -117,7 +117,7 @@ export async function requireFarmAdmin(
 ): Promise<void> {
   const role = getUserRoleForFarm(session, farmSlug);
   if (role !== "ADMIN") {
-    redirect("/login");
+    redirect(`/${farmSlug}/home`);
   }
 }
 
@@ -128,24 +128,30 @@ export async function requireFarmAdmin(
  * timeout, bad token, meta-db unreachable — is treated as NOT-admin and
  * triggers a redirect. Granting access on an error would be catastrophic.
  *
- * Redirects to `/login` on failure; the platform-admin pages live under a
- * separate `/admin/consulting/**` tree (not farm-scoped) so there is no
- * meaningful `next=` to preserve.
+ * On failure, redirects to `redirectTo` (default `/farms`). Callers should
+ * pass a farm-scoped path (e.g. `/${farmSlug}/admin`) when the user is
+ * authenticated but not a platform admin — sending an authenticated user to
+ * `/login` would cause a confusing re-login prompt.
+ *
+ * @param redirectTo  Where to redirect on role failure. Defaults to `/farms`.
  */
-export async function requirePlatformAdmin(session: Session): Promise<void> {
+export async function requirePlatformAdmin(
+  session: Session,
+  redirectTo = "/farms",
+): Promise<void> {
   const email = session.user?.email;
   // No email in session → cannot be platform admin
   if (!email) {
-    redirect("/login");
+    redirect(redirectTo);
     return;
   }
   try {
     const isAdmin = await isPlatformAdmin(email);
     if (!isAdmin) {
-      redirect("/login");
+      redirect(redirectTo);
     }
   } catch {
     // Meta-store unreachable or threw — fail closed, never allow.
-    redirect("/login");
+    redirect(redirectTo);
   }
 }
