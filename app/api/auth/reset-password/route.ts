@@ -43,7 +43,7 @@ import { hash } from 'bcryptjs';
 
 import { consumePasswordResetToken, resetUserPassword } from '@/lib/meta-db';
 import { logger } from '@/lib/logger';
-import { publicHandler } from '@/lib/server/route';
+import { publicHandler, routeError } from '@/lib/server/route';
 
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -54,10 +54,7 @@ export const POST = publicHandler({
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      return NextResponse.json(
-        { error: 'Request body must be valid JSON' },
-        { status: 400 },
-      );
+      return routeError('INVALID_BODY', 'Request body must be valid JSON');
     }
 
     const { token, password, passwordConfirm } = body;
@@ -67,38 +64,26 @@ export const POST = publicHandler({
     // the one-time token.
 
     if (!token || typeof token !== 'string' || !token.trim()) {
-      return NextResponse.json(
-        { error: 'token is required' },
-        { status: 400 },
-      );
+      return routeError('VALIDATION_FAILED', 'token is required');
     }
 
     if (!password || typeof password !== 'string') {
-      return NextResponse.json(
-        { error: 'password is required' },
-        { status: 400 },
-      );
+      return routeError('VALIDATION_FAILED', 'password is required');
     }
 
     if (!passwordConfirm || typeof passwordConfirm !== 'string') {
-      return NextResponse.json(
-        { error: 'passwordConfirm is required' },
-        { status: 400 },
-      );
+      return routeError('VALIDATION_FAILED', 'passwordConfirm is required');
     }
 
     if (password.length < PASSWORD_MIN_LENGTH) {
-      return NextResponse.json(
-        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` },
-        { status: 400 },
+      return routeError(
+        'VALIDATION_FAILED',
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
       );
     }
 
     if (password !== passwordConfirm) {
-      return NextResponse.json(
-        { error: 'Passwords do not match' },
-        { status: 400 },
-      );
+      return routeError('VALIDATION_FAILED', 'Passwords do not match');
     }
 
     // ── Atomic token consume + expiry check ──────────────────────────────────
@@ -127,10 +112,7 @@ export const POST = publicHandler({
         message,
         stack: err instanceof Error ? err.stack : '',
       });
-      return NextResponse.json(
-        { error: 'Something went wrong. Please try again.' },
-        { status: 500 },
-      );
+      return routeError('INTERNAL_ERROR', 'Something went wrong. Please try again.', 500);
     }
   },
 });

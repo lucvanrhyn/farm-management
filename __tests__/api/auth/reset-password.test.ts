@@ -143,6 +143,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'Password must be at least 8 characters',
+    });
     // Token must not be consumed — validation fires before any DB call
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
@@ -158,6 +162,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'Passwords do not match',
+    });
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
 
@@ -168,6 +176,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'token is required',
+    });
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
 
@@ -178,6 +190,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'password is required',
+    });
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
 
@@ -188,6 +204,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'passwordConfirm is required',
+    });
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
 
@@ -200,6 +220,10 @@ describe('POST /api/auth/reset-password', () => {
 
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'INVALID_BODY',
+      message: 'Request body must be valid JSON',
+    });
     expect(consumePasswordResetTokenMock).not.toHaveBeenCalled();
   });
 
@@ -217,6 +241,10 @@ describe('POST /api/auth/reset-password', () => {
     );
 
     expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: 'INTERNAL_ERROR',
+      message: 'Something went wrong. Please try again.',
+    });
     spy.mockRestore();
   });
 
