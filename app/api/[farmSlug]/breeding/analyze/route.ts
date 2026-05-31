@@ -24,6 +24,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { parseBreedingCompletion } from "@/lib/server/adapters/openai-breeding-door";
 
 export const dynamic = "force-dynamic";
 
@@ -197,18 +198,21 @@ The JSON must have these exact keys: summary, bullRecommendations, calvingAlerts
       );
     }
 
-    const openaiData = await openaiRes.json() as {
-      choices: Array<{ message: { content: string } }>;
-    };
-    const content = openaiData.choices?.[0]?.message?.content ?? "{}";
-
-    let parsed: BreedingAIResponse;
-    try {
-      parsed = JSON.parse(content) as BreedingAIResponse;
-    } catch {
+    // Boundary door (#524, ADR-0007 pattern): validate the untrusted OpenAI
+    // envelope AND its inner breeding JSON with zod instead of a double `as`
+    // cast. The door's failure arm maps to the same 502 the JSON.parse catch
+    // emitted before — wire-identical for malformed JSON, and now also honest
+    // (rather than a silent garbage-200) when the content is a non-object.
+    const parseResult = parseBreedingCompletion(await openaiRes.json());
+    if (!parseResult.ok) {
+      logger.error('[breeding/analyze] OpenAI response parse failed', {
+        code: parseResult.error.code,
+        message: parseResult.error.message,
+      });
       return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 });
     }
 
+    const parsed: BreedingAIResponse = parseResult.value;
     return NextResponse.json(parsed);
   },
 });

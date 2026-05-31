@@ -25,6 +25,11 @@ import zlib from "node:zlib";
 // scripts/audit-preview-hostname.ts.
 export { auditSource as auditPreviewHostname } from "./audit-preview-hostname";
 
+// Re-export the external-provider boundary as-cast guard so it joins the
+// audit-script module surface (issue #525). The guard itself is a standalone
+// CLI in scripts/audit-external-as-cast.ts.
+export { auditSource as auditExternalAsCast } from "./audit-external-as-cast";
+
 // ─── Public types ──────────────────────────────────────────────────────────
 
 export interface RouteBundle {
