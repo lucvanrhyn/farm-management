@@ -98,6 +98,21 @@ function post(body: Record<string, unknown>) {
   });
 }
 
+/**
+ * Build a P2025 ("record to update not found") Prisma exception the way
+ * `lib/server/api-errors.ts` detects it — by `.name`, NOT `instanceof` — so the
+ * route's error path runs end-to-end without a runtime `@prisma/client`
+ * dependency. Mirrors `api-errors-prisma-sanitize.test.ts`'s `makePrismaError`.
+ */
+function makeP2025(): Error {
+  const err = new Error(
+    'An operation failed because it depends on one or more records that were required but not found. Record to update not found.',
+  );
+  err.name = 'PrismaClientKnownRequestError';
+  (err as Error & { code?: string }).code = 'P2025';
+  return err;
+}
+
 describe('POST /api/observations — death marks the animal Deceased (#538)', () => {
   beforeEach(() => {
     mockObsCreate.mockClear();
@@ -165,5 +180,54 @@ describe('POST /api/observations — death marks the animal Deceased (#538)', ()
     expect(mockAnimalUpdate).not.toHaveBeenCalled();
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     expect(mockObsUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('orphan tag (death for an animal that does not exist) currently surfaces a sanitized 500 DB_QUERY_FAILED — parity with the #100 movement sibling', async () => {
+    // DOCUMENTING/LOCKING test (#543 loose end).
+    //
+    // A `death` carrying a resolvable `animal_id` that matches NO existing
+    // animal: `performAnimalDeath`'s `tx.animal.update({ where: { animalId } })`
+    // throws Prisma P2025 ("record to update not found"). The route adapter
+    // catches it via `mapApiDomainError`, which — by the #483 contract — detects
+    // any Prisma exception class BY NAME and collapses it to the opaque
+    // `DB_QUERY_FAILED` 500 envelope (no raw schema text leaks; the full error is
+    // logged server-side). So the orphan-tag death is a 500, NOT a clean 4xx.
+    //
+    // We deliberately MIRROR the movement sibling rather than diverge: the #100
+    // `performAnimalMove` path does the IDENTICAL bare
+    // `tx.animal.update({ where: { animalId } })` and so ALSO 500s on a missing
+    // animal (its route test never simulates the throw — the orphan path is
+    // equally undefined/uncaught there). Giving death a clean typed 404/409 here
+    // would silently fork the two twins' error contracts. Orphan-tag handling is
+    // a SHARED movement+death concern and belongs in ONE follow-up (catch P2025
+    // in both ops, or in a shared helper, and emit a single typed code) so the
+    // siblings stay byte-identical. This test pins the present 500 so that
+    // future change is an INTENTIONAL, reviewed contract shift — not a silent
+    // drift — and it documents the orphan-tag wire shape for the offline-sync
+    // `isTerminalStatus` classifier (a 500 is a transient, retryable status, so
+    // the queued death row is NOT poisoned — it loops on the next drain, which
+    // is the correct behaviour while the animal genuinely does not yet exist on
+    // the server, e.g. a calf created offline whose creation has not yet drained).
+    const { POST } = await import('@/app/api/observations/route');
+
+    // The animal does not exist → the tag-keyed update raises P2025.
+    mockAnimalUpdate.mockRejectedValueOnce(makeP2025());
+
+    const res = await POST(post(deathBody()), { params: Promise.resolve({}) });
+
+    // Current behaviour: sanitized 500, NOT a clean 4xx.
+    expect(res.status).toBe(500);
+    const body = JSON.parse(await res.text()) as Record<string, unknown>;
+    expect(body).toEqual({ error: 'DB_QUERY_FAILED' });
+    // No raw Prisma schema text leaks into the client envelope (#483).
+    expect(JSON.stringify(body)).not.toContain('Record to update not found');
+
+    // The update was attempted inside the route-owned transaction; because it
+    // threw, the door's observation write never committed — no partial write
+    // (no Deceased status without a death observation, nor vice-versa).
+    expect(mockAnimalUpdate).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockObsUpsert).not.toHaveBeenCalled();
+    expect(mockObsCreate).not.toHaveBeenCalled();
   });
 });
