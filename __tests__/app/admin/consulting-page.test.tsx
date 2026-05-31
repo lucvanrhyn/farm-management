@@ -5,23 +5,14 @@
  *
  * Codex deep-audit P1 (2026-05-03): the Consulting CRM page at
  * `app/[farmSlug]/admin/consulting/page.tsx` is platform-wide data — the
- * leads list and engagement totals reach across every tenant. The matching
- * PATCH endpoint at `app/api/admin/consulting/[id]/route.ts` correctly
- * gates on `isPlatformAdmin(email)`, but the SSR page only checks
- * `getUserRoleForFarm(session, farmSlug) === "ADMIN"`.
+ * leads list and engagement totals reach across every tenant.
  *
- * That means any farm-level ADMIN — including a single-farm tenant who
- * happens to share farmSlug with no involvement in our consulting program
- * — can read every other tenant's consulting lead pipeline by visiting
- * `/<their-slug>/admin/consulting`.
- *
- * These tests pin the contract: the page redirects unless the session
- * email is in `PLATFORM_ADMIN_EMAILS` (or whatever `isPlatformAdmin`
- * resolves to true for).
+ * #523: migrated to requireSession() → requireFarmAdmin() → requirePlatformAdmin()
+ * guard chain.  The existing tests remain semantically identical; only the
+ * mocked entry points change to the new guards.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 
 // --- mocks ---------------------------------------------------------------
 
@@ -29,21 +20,21 @@ const redirectMock = vi.fn((url: string) => {
   throw new Error(`__REDIRECT__:${url}`);
 });
 
-const getSessionMock = vi.fn();
-const getUserRoleForFarmMock = vi.fn();
-const isPlatformAdminMock = vi.fn();
+const requireSessionMock = vi.fn();
+const requireFarmAdminMock = vi.fn();
+const requirePlatformAdminMock = vi.fn();
 const getConsultingLeadsMock = vi.fn();
 const getConsultingEngagementsMock = vi.fn();
 
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
 vi.mock('@/lib/auth', () => ({
-  getSession: getSessionMock,
-  getUserRoleForFarm: getUserRoleForFarmMock,
+  requireSession: requireSessionMock,
+  requireFarmAdmin: requireFarmAdminMock,
+  requirePlatformAdmin: requirePlatformAdminMock,
 }));
 
 vi.mock('@/lib/meta-db', () => ({
-  isPlatformAdmin: isPlatformAdminMock,
   getConsultingLeads: getConsultingLeadsMock,
   getConsultingEngagements: getConsultingEngagementsMock,
 }));
@@ -67,7 +58,11 @@ async function runPage(farmSlug: string): Promise<{ redirected: string | null }>
   }
 }
 
-describe('ConsultingAdminPage — platform-admin gate (codex P1)', () => {
+function makeSession(email = 'platform@farmtrack.app') {
+  return { user: { id: 'user-1', email, farms: [{ slug: 'any-farm', role: 'ADMIN' }] }, expires: '2099' };
+}
+
+describe('ConsultingAdminPage — platform-admin guard chain (codex P1, #523)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
@@ -75,53 +70,70 @@ describe('ConsultingAdminPage — platform-admin gate (codex P1)', () => {
     getConsultingEngagementsMock.mockResolvedValue([]);
   });
 
-  it('redirects unauthenticated users to /login', async () => {
-    getSessionMock.mockResolvedValue(null);
-    isPlatformAdminMock.mockResolvedValue(false);
+  it('redirects unauthenticated users to /login?next= (requireSession)', async () => {
+    requireSessionMock.mockImplementation((path: string) => {
+      redirectMock(`/login?next=${encodeURIComponent(path)}`);
+    });
 
     const { redirected } = await runPage('any-farm');
-    expect(redirected).toBe('/login');
+    expect(redirected).toBe('/login?next=%2Fany-farm%2Fadmin%2Fconsulting');
   });
 
-  it('redirects a farm-level ADMIN who is NOT a platform admin', async () => {
-    // This is the codex-P1 scenario: a farm-level ADMIN of `acme-cattle`
-    // visits /acme-cattle/admin/consulting. Without this gate they would
-    // see every tenant's consulting leads and revenue totals.
-    getSessionMock.mockResolvedValue({ user: { email: 'farm-admin@example.com' } });
-    getUserRoleForFarmMock.mockReturnValue('ADMIN');
-    isPlatformAdminMock.mockResolvedValue(false);
+  it('redirects a farm-level non-ADMIN to /<slug>/home via requireFarmAdmin (not /login)', async () => {
+    // Session resolves OK; requireFarmAdmin fires the redirect to /<slug>/home
+    requireSessionMock.mockResolvedValue(makeSession());
+    requireFarmAdminMock.mockImplementation(() => {
+      redirectMock('/acme-cattle/home');
+    });
+
+    const { redirected } = await runPage('acme-cattle');
+    expect(redirected).toBe('/acme-cattle/home');
+    expect(requireFarmAdminMock).toHaveBeenCalled();
+  });
+
+  it('redirects a farm-ADMIN who is NOT a platform admin to /<slug>/admin (not /login)', async () => {
+    // The page calls requirePlatformAdmin(session, `/${farmSlug}/admin`), so
+    // the guard redirects to /<farmSlug>/admin rather than /login.
+    const session = makeSession('farm-admin@example.com');
+    requireSessionMock.mockResolvedValue(session);
+    requireFarmAdminMock.mockResolvedValue(undefined); // farm-ADMIN passes
+    requirePlatformAdminMock.mockImplementation(() => {
+      // Not a platform admin — redirect to farm admin home, not /login
+      redirectMock('/acme-cattle/admin');
+    });
 
     const { redirected } = await runPage('acme-cattle');
     expect(redirected).toBe('/acme-cattle/admin');
+    expect(requirePlatformAdminMock).toHaveBeenCalledWith(session, '/acme-cattle/admin');
   });
 
-  it('redirects a non-ADMIN even if isPlatformAdmin would resolve true (defence-in-depth)', async () => {
-    getSessionMock.mockResolvedValue({ user: { email: 'platform@farmtrack.app' } });
-    getUserRoleForFarmMock.mockReturnValue('LOGGER');
-    isPlatformAdminMock.mockResolvedValue(true);
-
-    const { redirected } = await runPage('any-farm');
-    // Either the farm-role redirect or the platform-admin redirect is
-    // acceptable — what matters is the page does not render.
-    expect(redirected).not.toBeNull();
-  });
-
-  it('renders for a platform admin', async () => {
-    getSessionMock.mockResolvedValue({ user: { email: 'platform@farmtrack.app' } });
-    getUserRoleForFarmMock.mockReturnValue('ADMIN');
-    isPlatformAdminMock.mockResolvedValue(true);
+  it('renders for a platform admin (all three guards pass)', async () => {
+    const session = makeSession('platform@farmtrack.app');
+    requireSessionMock.mockResolvedValue(session);
+    requireFarmAdminMock.mockResolvedValue(undefined);
+    requirePlatformAdminMock.mockResolvedValue(undefined);
 
     const { redirected } = await runPage('any-farm');
     expect(redirected).toBeNull();
   });
 
-  it('does NOT call meta-db data fetchers when the gate fails', async () => {
-    // Defence: the cross-tenant data leak isn't just visual — it's that
-    // the page even queries the meta DB before checking platform-admin
-    // status. Verify the data fetchers don't run for an unauthorised user.
-    getSessionMock.mockResolvedValue({ user: { email: 'farm-admin@example.com' } });
-    getUserRoleForFarmMock.mockReturnValue('ADMIN');
-    isPlatformAdminMock.mockResolvedValue(false);
+  it('does NOT call meta-db data fetchers when requireSession fires', async () => {
+    requireSessionMock.mockImplementation(() => {
+      redirectMock('/login?next=%2Fany-farm%2Fadmin%2Fconsulting');
+    });
+
+    await runPage('any-farm');
+
+    expect(getConsultingLeadsMock).not.toHaveBeenCalled();
+    expect(getConsultingEngagementsMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call meta-db data fetchers when requirePlatformAdmin fires', async () => {
+    requireSessionMock.mockResolvedValue(makeSession('farm-admin@example.com'));
+    requireFarmAdminMock.mockResolvedValue(undefined);
+    requirePlatformAdminMock.mockImplementation(() => {
+      redirectMock('/acme-cattle/admin');
+    });
 
     await runPage('acme-cattle');
 

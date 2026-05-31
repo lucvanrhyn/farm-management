@@ -1,7 +1,5 @@
 export const dynamic = "force-dynamic";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getUserRoleForFarm } from "@/lib/auth";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -13,10 +11,9 @@ export default async function NvdPage({
 }: {
   params: Promise<{ farmSlug: string }>;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
   const { farmSlug } = await params;
+
+  const session = await requireSession(`/${farmSlug}/tools/nvd`);
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth-options';
+import { requireSession } from '@/lib/auth';
 import { computeFarmLsu } from '@/lib/pricing/farm-lsu';
 import { quoteTier } from '@/lib/pricing/calculator';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
@@ -20,9 +19,8 @@ export default async function SubscribeUpgradePage({
   const frequency: 'monthly' | 'annual' =
     sp.frequency === 'annual' ? 'annual' : 'monthly';
 
-  // Auth
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect('/login');
+  // Auth — redirect to /login?next=/<slug>/subscribe/upgrade preserving deep-link
+  const session = await requireSession(`/${farmSlug}/subscribe/upgrade`);
 
   const farm = session.user.farms.find((f) => f.slug === farmSlug);
   if (!farm || !session.user.email) redirect('/farms');

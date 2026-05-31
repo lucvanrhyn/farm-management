@@ -12,14 +12,11 @@ export const dynamic = "force-dynamic";
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession, requireFarmAdmin } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
-import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import MapSettingsClient, {
   type FmdZoneResult,
@@ -50,11 +47,8 @@ export default async function MapSettingsPage({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/login");
-  if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
-    redirect(`/${farmSlug}/home`);
-  }
+  const session = await requireSession(`/${farmSlug}/admin/settings/map`);
+  await requireFarmAdmin(session, farmSlug);
 
   const [prisma, creds] = await Promise.all([
     getPrismaForFarm(farmSlug),
