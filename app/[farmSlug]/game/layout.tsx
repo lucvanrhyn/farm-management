@@ -4,7 +4,7 @@ import AdminNav from "@/components/admin/AdminNav";
 import GameSubNav from "@/components/game/GameSubNav";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
-import { getSession, getUserRoleForFarm } from "@/lib/auth";
+import { requireSession, getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import { logger } from "@/lib/logger";
 
@@ -21,8 +21,9 @@ export default async function GameLayout({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getSession();
-  if (!session?.user) redirect("/login");
+  // requireSession() bounces unauthenticated visitors to
+  // /login?next=/<slug>/game so they return here after sign-in (#544).
+  const session = await requireSession(`/${farmSlug}/game`);
   if (!getUserRoleForFarm(session, farmSlug)) redirect("/farms");
 
   let tier: FarmTier = "basic";

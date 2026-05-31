@@ -6,7 +6,7 @@ import { TierProvider } from "@/components/tier-provider";
 import { AssistantNameProvider } from "@/hooks/useAssistantName";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import {
@@ -82,9 +82,10 @@ export default async function AdminLayout({
 }) {
   const { farmSlug } = await params;
 
-  // Guard: require authenticated ADMIN role for this specific farm
-  const session = await getSession();
-  if (!session?.user) redirect("/login");
+  // Guard: require authenticated ADMIN role for this specific farm.
+  // requireSession() bounces unauthenticated visitors to
+  // /login?next=/<slug>/admin so they land back here after sign-in (#544).
+  const session = await requireSession(`/${farmSlug}/admin`);
   if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
     redirect(`/${farmSlug}/home`);
   }

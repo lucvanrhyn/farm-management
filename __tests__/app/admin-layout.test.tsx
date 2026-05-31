@@ -19,7 +19,7 @@ const headersMock = vi.fn();
 
 const getFarmCredsMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
-const getSessionMock = vi.fn();
+const requireSessionMock = vi.fn();
 const getUserRoleForFarmMock = vi.fn();
 
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
@@ -27,8 +27,12 @@ vi.mock('next/headers', () => ({ headers: headersMock }));
 vi.mock('@/lib/meta-db', () => ({ getFarmCreds: getFarmCredsMock }));
 
 vi.mock('@/lib/farm-prisma', () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
+// #544: layout migrated from getSession() bare-/login redirect to the
+// requireSession(currentPath) guard. We mock requireSession to either return
+// the session (authenticated) or invoke redirect() with the deep-link target
+// (unauthenticated) — mirroring lib/auth.ts behaviour.
 vi.mock('@/lib/auth', () => ({
-  getSession: getSessionMock,
+  requireSession: requireSessionMock,
   getUserRoleForFarm: getUserRoleForFarmMock,
 }));
 
@@ -92,8 +96,8 @@ describe('AdminLayout — onboarding gate (I7)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    // Default: valid ADMIN session
-    getSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test' } });
+    // Default: valid ADMIN session (requireSession resolves with the session)
+    requireSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test', farms: [] } });
     getUserRoleForFarmMock.mockReturnValue('ADMIN');
     getFarmCredsMock.mockResolvedValue({ tier: 'advanced' });
     setHeader(null);
@@ -176,11 +180,14 @@ describe('AdminLayout — onboarding gate (I7)', () => {
     expect(redirected).toBeNull();
   });
 
-  it('still redirects unauthenticated users to /login (ordering preserved)', async () => {
-    getSessionMock.mockResolvedValue(null);
+  it('redirects unauthenticated users to /login?next=/<slug>/admin (deep-link, #544)', async () => {
+    // requireSession redirects to the deep-link target when there is no session.
+    requireSessionMock.mockImplementation((path: string) => {
+      redirectMock(`/login?next=${encodeURIComponent(path)}`);
+    });
 
     const { redirected } = await runLayout('any-farm');
-    expect(redirected).toBe('/login');
+    expect(redirected).toBe('/login?next=%2Fany-farm%2Fadmin');
   });
 
   it('still redirects non-ADMIN users to /home (ordering preserved)', async () => {
