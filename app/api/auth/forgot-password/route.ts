@@ -28,7 +28,7 @@ import { getUserByEmail, setPasswordResetToken } from '@/lib/meta-db';
 import { generatePasswordResetToken, sendPasswordResetEmail } from '@/lib/password-reset';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { publicHandler } from '@/lib/server/route';
+import { publicHandler, routeError } from '@/lib/server/route';
 
 export const POST = publicHandler({
   handle: async (request: NextRequest) => {
@@ -37,10 +37,7 @@ export const POST = publicHandler({
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
     const ipRl = checkRateLimit(`forgot-password-ip:${ip}`, 5, 60 * 60 * 1000);
     if (!ipRl.allowed) {
-      return NextResponse.json(
-        { error: 'Too many requests. Try again later.' },
-        { status: 429 },
-      );
+      return routeError('RATE_LIMITED', 'Too many requests. Try again later.', 429);
     }
 
     // ── Parse + validate body ───────────────────────────────────────────────
@@ -48,19 +45,13 @@ export const POST = publicHandler({
     try {
       body = (await request.json()) as { email?: string };
     } catch {
-      return NextResponse.json(
-        { error: 'Request body must be valid JSON' },
-        { status: 400 },
-      );
+      return routeError('INVALID_BODY', 'Request body must be valid JSON');
     }
 
     const email =
       typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json(
-        { error: 'A valid email address is required' },
-        { status: 400 },
-      );
+      return routeError('VALIDATION_FAILED', 'A valid email address is required');
     }
 
     // ── Per-email rate limit (silent — anti-enumeration preserved) ──────────
@@ -106,10 +97,7 @@ export const POST = publicHandler({
         message,
         stack: err instanceof Error ? err.stack : '',
       });
-      return NextResponse.json(
-        { error: 'Something went wrong. Please try again.' },
-        { status: 500 },
-      );
+      return routeError('INTERNAL_ERROR', 'Something went wrong. Please try again.', 500);
     }
   },
 });
