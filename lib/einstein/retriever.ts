@@ -26,7 +26,7 @@
 import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { embed, embeddingToBytes } from '@/lib/einstein/embeddings';
 import { crossSpecies } from '@/lib/server/species-scoped-prisma';
-import { RETRIEVAL_TOP_K } from './defaults';
+import { RETRIEVAL_TOP_K, STRUCTURED_DETAIL_LIMIT } from './defaults';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -229,6 +229,60 @@ function clampScore(raw: number): number {
   return raw;
 }
 
+/**
+ * Human-readable " between <start> and <now>" suffix for aggregate chunk
+ * text. Returns '' when no date range is set. Shared by the observation,
+ * task, and notification structured handlers so the citation phrasing
+ * stays identical across entity types.
+ */
+function labelFor(dateStart?: Date, dateEnd?: Date): string {
+  if (!dateStart && !dateEnd) return '';
+  return ` between ${dateStart?.toISOString().slice(0, 10) ?? 'start'} and ${
+    dateEnd?.toISOString().slice(0, 10) ?? 'now'
+  }`;
+}
+
+/**
+ * Minimal observation row shape returned by the detail-row findMany. Only the
+ * fields the chunker reads are selected; everything else is irrelevant to the
+ * rendered text. `observedAt` doubles as the chunk's sourceUpdatedAt so the
+ * answer LLM sees the event date (matching the count's axis), not a synthetic
+ * Date.now().
+ */
+interface ObservationDetailRow {
+  id: string;
+  type: string;
+  observedAt: Date | string;
+  campId: string | null;
+  animalId: string | null;
+  details: string | null;
+  loggedBy: string | null;
+}
+
+function fmtYmd(v: Date | string): string {
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
+}
+
+/**
+ * Render one observation detail row to a chunk, MIRRORING the observation
+ * sentence shape in lib/einstein/chunker.ts (renderObservation) so the answer
+ * LLM sees the same familiar structure it was trained on at ingestion. The
+ * structured detail row has no denormalised animalName/campName/species, so we
+ * fall back to ids exactly as the chunker does for the missing-name case:
+ *   observation:<type> @ <YYYY-MM-DD> — animal <id|unknown> (camp <id>): <details> [— by <loggedBy>]
+ */
+function renderObservationDetail(row: ObservationDetailRow): string {
+  const observedAt = fmtYmd(row.observedAt);
+  const animalLabel = row.animalId && row.animalId.length > 0 ? row.animalId : 'unknown';
+  const campLabel = row.campId && row.campId.length > 0 ? row.campId : '';
+  let text = `observation:${row.type} @ ${observedAt} — animal ${animalLabel} (camp ${campLabel}): ${
+    row.details ?? ''
+  }`;
+  if (row.loggedBy && row.loggedBy.length > 0) text += ` — by ${row.loggedBy}`;
+  return text;
+}
+
 // ── Structured retrieval ──────────────────────────────────────────────────────
 
 /**
@@ -236,14 +290,21 @@ function clampScore(raw: number): number {
  * Returns one synthetic chunk per entity type, carrying an aggregate
  * summary string that the answer LLM can cite.
  *
- * Intentionally narrow in scope for Wave 2B — we cover three high-signal
- * paths:
- *   - "animal" → count by species/status
- *   - "camp" → count of camps
- *   - "observation" → count in date range
+ * Covers the high-signal structured paths:
+ *   - "animal" → count by species/status      (crossSpecies door)
+ *   - "camp" → count of camps                  (crossSpecies door)
+ *   - "observation" → count in date range      (crossSpecies door, observedAt)
+ *   - "task" → count in date range             (raw prisma, dueDate axis)
+ *   - "notification" → count in date range     (raw prisma, createdAt axis)
  *
- * Unknown entity types fall through to an empty result (caller falls back
- * to semantic retrieval in that case).
+ * animal/camp/observation are species-bearing models reached via the
+ * crossSpecies() door (ADR-0005). task/notification carry no species axis
+ * and are not guarded by that arch test, so they use raw `prisma`, matching
+ * the rest of the codebase (lib/server/inngest/einstein.ts ingestion).
+ *
+ * task_template + it3_snapshot remain deferred (#516) — they fall through
+ * to semantic-only retrieval. Unknown entity types fall through to an empty
+ * result (caller falls back to semantic retrieval in that case).
  */
 async function structured(
   farmSlug: string,
@@ -294,21 +355,103 @@ async function structured(
           if (dateEnd) rangeClause.lte = dateEnd;
           where.observedAt = rangeClause;
         }
+        // Aggregate count chunk (answers "how many") — kept as-is.
         const count = await crossSpecies(prisma, 'einstein-rag').observation.count({ where });
-        const rangeLabel =
-          dateStart || dateEnd
-            ? ` between ${dateStart?.toISOString().slice(0, 10) ?? 'start'} and ${
-                dateEnd?.toISOString().slice(0, 10) ?? 'now'
-              }`
-            : '';
         chunks.push({
           entityType: 'observation',
           entityId: 'aggregate:observations',
-          text: `Total observations${rangeLabel}: ${count}.`,
+          text: `Total observations${labelFor(dateStart, dateEnd)}: ${count}.`,
+          score: 1,
+          sourceUpdatedAt: new Date(),
+        });
+
+        // Detail-row chunks (#516, Issue 1 — answers "which / what was
+        // observed"). The semantic path filters EinsteinChunk.sourceUpdatedAt
+        // (record-mutation axis); here we fetch the real Observation rows on
+        // the SAME observedAt event axis as the count above, via the SAME
+        // crossSpecies door, so a date-windowed question is grounded by the
+        // events that actually fall inside the window — including ones logged
+        // (or edited) outside it. Capped + most-recent-first so a dense window
+        // can't balloon the answer context.
+        const detailRows = (await crossSpecies(prisma, 'einstein-rag').observation.findMany({
+          where,
+          orderBy: { observedAt: 'desc' },
+          take: STRUCTURED_DETAIL_LIMIT,
+        })) as unknown as ObservationDetailRow[];
+
+        for (const obs of detailRows) {
+          chunks.push({
+            entityType: 'observation',
+            entityId: obs.id,
+            text: renderObservationDetail(obs),
+            // Just below the aggregate count's score of 1 so detail rows are
+            // unambiguously retained by any downstream budget, while the
+            // headline count still sorts first. Citation dedupe is by
+            // entityId, so a detail row sharing an id with a semantic chunk
+            // collapses to one citation downstream (harmless overlap).
+            score: 0.99,
+            sourceUpdatedAt: normaliseDate(obs.observedAt),
+          });
+        }
+
+        if (detailRows.length === STRUCTURED_DETAIL_LIMIT) {
+          // Signal truncation so the LLM knows the detail list is a sample.
+          chunks.push({
+            entityType: 'observation',
+            entityId: 'aggregate:observations:truncated',
+            text: `Showing the ${STRUCTURED_DETAIL_LIMIT} most recent observations${labelFor(
+              dateStart,
+              dateEnd,
+            )} (more exist — see the total count above).`,
+            score: 1,
+            sourceUpdatedAt: new Date(),
+          });
+        }
+      } else if (entityType === 'task') {
+        // Task is NOT a species-bearing model (no `species` column, not
+        // guarded by ADR-0005), so it is reached via raw `prisma.task`,
+        // matching the rest of the codebase (lib/server/inngest/einstein.ts,
+        // lib/domain/tasks/*). The event axis is `dueDate` ("when the task
+        // is relevant"), NOT `createdAt` (the mutation axis). `dueDate` is a
+        // String column storing YYYY-MM-DD, so the range bounds must be
+        // date-strings — passing a Date would compare against String values
+        // and silently match nothing.
+        const where: Record<string, unknown> = {};
+        if (dateStart || dateEnd) {
+          const rangeClause: Record<string, string> = {};
+          if (dateStart) rangeClause.gte = dateStart.toISOString().slice(0, 10);
+          if (dateEnd) rangeClause.lte = dateEnd.toISOString().slice(0, 10);
+          where.dueDate = rangeClause;
+        }
+        const count = await prisma.task.count({ where });
+        chunks.push({
+          entityType: 'task',
+          entityId: 'aggregate:tasks',
+          text: `Total tasks${labelFor(dateStart, dateEnd)}: ${count}.`,
+          score: 1,
+          sourceUpdatedAt: new Date(),
+        });
+      } else if (entityType === 'notification') {
+        // Notification is likewise non-species-scoped → raw `prisma`. The
+        // event axis is `createdAt` (when the notification was raised), a
+        // DateTime column, so Date bounds pass through directly.
+        const where: Record<string, unknown> = {};
+        if (dateStart || dateEnd) {
+          const rangeClause: Record<string, Date> = {};
+          if (dateStart) rangeClause.gte = dateStart;
+          if (dateEnd) rangeClause.lte = dateEnd;
+          where.createdAt = rangeClause;
+        }
+        const count = await prisma.notification.count({ where });
+        chunks.push({
+          entityType: 'notification',
+          entityId: 'aggregate:notifications',
+          text: `Total notifications${labelFor(dateStart, dateEnd)}: ${count}.`,
           score: 1,
           sourceUpdatedAt: new Date(),
         });
       }
+      // task_template + it3_snapshot remain unhandled (deferred — #516).
       // Unknown entity types → silently skipped. Caller is expected to fall
       // back to semantic if the chunks array ends up empty.
     } catch (err) {
