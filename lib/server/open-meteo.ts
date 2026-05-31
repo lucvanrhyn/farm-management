@@ -21,6 +21,7 @@ import {
   computeClimatologyByMonth,
   type MonthClimatology,
 } from '@/lib/calculators/spi';
+import { parseOpenMeteoArchive } from '@/lib/server/adapters/openmeteo-door';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,22 +68,35 @@ export async function fetchHistoricalRainfall(
     );
   }
 
-  const json = (await res.json()) as {
-    daily?: { time: string[]; precipitation_sum: (number | null)[] };
-    error?: boolean;
-    reason?: string;
-  };
+  const raw: unknown = await res.json();
 
-  if (json.error) {
-    throw new Error(`Open-Meteo Archive returned error: ${json.reason ?? 'unknown'}`);
+  // Open-Meteo can answer a 200 with an `{ error: true, reason }` envelope on a
+  // bad request — surface that explicit reason before the schema door (which
+  // would otherwise reject it as "missing daily" with a less useful message).
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    (raw as { error?: unknown }).error
+  ) {
+    const reason = (raw as { reason?: unknown }).reason;
+    throw new Error(
+      `Open-Meteo Archive returned error: ${typeof reason === 'string' ? reason : 'unknown'}`,
+    );
   }
 
-  const times = json.daily?.time ?? [];
-  const sums = json.daily?.precipitation_sum ?? [];
+  // Boundary door (#525): a provider format change that drops / mis-shapes
+  // `daily.precipitation_sum` MUST become a typed error here, NOT a silent
+  // all-zero rainfall that corrupts the SPI / drought math downstream.
+  const parsed = parseOpenMeteoArchive(raw);
+  if (!parsed.ok) {
+    throw parsed.error;
+  }
+
+  const { time: times, precipitation_sum: sums } = parsed.value.daily;
 
   return times.map((date, i) => ({
     date,
-    precipMm: sums[i] ?? 0, // null values (missing data) treated as 0
+    precipMm: sums[i] ?? 0, // per-element null (missing day) → 0 — explicit, legible
   }));
 }
 

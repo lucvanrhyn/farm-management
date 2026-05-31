@@ -8,8 +8,16 @@ import { defineConfig, devices } from '@playwright/test';
  * - webServer block is intentionally absent: CI starts the server explicitly
  *   via `pnpm start` + `wait-on`. For local runs, start the server manually
  *   (`pnpm start`) before running `pnpm smoke`.
+ *
+ * Visual-audit project (Issue #529 / PRD #521 gate #20):
+ * - `globalSetup` logs in via env creds and persists storage-state to
+ *   `e2e/.auth/visual-audit.json`. If creds / base URL are absent it no-ops,
+ *   and the visual-audit spec self-skips (exit 0). The spec is NOT in the
+ *   `testMatch` gate list so it never blocks CI unconditionally; run it
+ *   explicitly: `pnpm exec playwright test e2e/visual-audit.spec.ts`.
  */
 export default defineConfig({
+  globalSetup: './e2e/global-setup.ts',
   testDir: 'e2e',
   // Only run gate-blocking specs. The other e2e/*.spec.ts files use the
   // pre-Playwright `test.skip` placeholder pattern (no import of `test`)
@@ -133,6 +141,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    // Issue #529 — visual-audit project. NOT in testMatch, so it is excluded
+    // from the default `pnpm smoke` / CI governance gate. Run explicitly via:
+    //   pnpm exec playwright test e2e/visual-audit.spec.ts --project=visual-audit
+    // The spec self-skips cleanly when E2E_IDENTIFIER / E2E_PASSWORD are unset
+    // or when globalSetup could not reach the preview server.
+    {
+      name: 'visual-audit',
+      testMatch: 'visual-audit.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
