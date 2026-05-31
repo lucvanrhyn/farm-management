@@ -334,14 +334,18 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    // Issue #538 — local IDB write removes the deceased animal from this camp's
+    // active list immediately (offline-first UX). The SERVER `status =
+    // "Deceased"` (+ `deceasedAt`) advance is now carried by the queued `death`
+    // observation above: on replay, `POST /api/observations` routes it through
+    // `performAnimalDeath`, which sets the status atomically with the
+    // observation write (anchoring `deceasedAt` to the observation's own
+    // timestamp). The old `navigator.onLine` fire-and-forget
+    // `PATCH /api/animals/[id]` was REMOVED — offline it never fired and had no
+    // replay queue, so the death status was silently lost (the #538 bug, the
+    // higher-stakes twin of #100). The observation queue replays idempotently
+    // via `clientLocalId` (#206), so the death now survives a reconnect drain.
     await updateAnimalStatus(selectedAnimalId, "Deceased");
-    if (navigator.onLine) {
-      fetch(`/api/animals/${selectedAnimalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Deceased", deceasedAt: new Date().toISOString() }),
-      }).catch(() => {/* will sync later */});
-    }
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     if (isOnline) syncNow();
