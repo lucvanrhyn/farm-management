@@ -383,7 +383,7 @@ export async function verifyUserEmail(token: string): Promise<{ userId: string }
 // Separate from the email-verification columns (verification_token /
 // verification_expires) to prevent cross-purpose token confusion: a verify
 // token must never be accepted at the password-reset endpoint and vice versa.
-// The new columns are added by scripts/migrate-meta-password-reset-cols.ts.
+// The new columns are added by meta-migrations/0004_password_reset_cols.sql.
 
 export async function setPasswordResetToken(
   userId: string,

@@ -170,16 +170,28 @@ describe('POST /api/auth/forgot-password', () => {
   it('returns 400 when email field is missing', async () => {
     const res = await POST(makeReq({}), CTX);
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'A valid email address is required',
+    });
   });
 
   it('returns 400 when email is not a valid address', async () => {
     const res = await POST(makeReq({ email: 'not-an-email' }), CTX);
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'VALIDATION_FAILED',
+      message: 'A valid email address is required',
+    });
   });
 
   it('returns 400 when request body is malformed JSON', async () => {
     const res = await POST(makeReq('{not json'), CTX);
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'INVALID_BODY',
+      message: 'Request body must be valid JSON',
+    });
   });
 
   // ── Per-IP rate limit ─────────────────────────────────────────────────────
@@ -189,6 +201,10 @@ describe('POST /api/auth/forgot-password', () => {
     const res = await POST(makeReq({ email: 'farmer@example.com' }), CTX);
 
     expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({
+      error: 'RATE_LIMITED',
+      message: 'Too many requests. Try again later.',
+    });
     // No user lookup must happen — the request is blocked before any DB call.
     expect(getUserByEmailMock).not.toHaveBeenCalled();
 
@@ -236,6 +252,10 @@ describe('POST /api/auth/forgot-password', () => {
     const res = await POST(makeReq({ email: 'farmer@example.com' }), CTX);
 
     expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: 'INTERNAL_ERROR',
+      message: 'Something went wrong. Please try again.',
+    });
     spy.mockRestore();
   });
 });
