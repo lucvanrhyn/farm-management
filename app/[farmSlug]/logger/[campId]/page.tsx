@@ -280,14 +280,16 @@ export default function CampInspectionPage({
       sync_status: "pending",
     });
     if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
+    // Issue #100 — local IDB write keeps the moved animal off this camp's list
+    // immediately (offline-first UX). The SERVER `currentCamp` advance is now
+    // carried by the queued `animal_movement` observation above: on replay,
+    // `POST /api/observations` routes it through `performAnimalMove`, which
+    // advances `currentCamp` atomically with the observation write. The old
+    // `navigator.onLine` fire-and-forget `PATCH /api/animals/[id]` was REMOVED
+    // — offline it never fired and had no replay queue, so the move was
+    // silently lost (the #100 bug). The observation queue replays idempotently
+    // via `clientLocalId` (#206), so the move now survives a reconnect drain.
     await updateAnimalCamp(data.animalId, data.destCampId);
-    if (navigator.onLine) {
-      fetch(`/api/animals/${data.animalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentCamp: data.destCampId }),
-      }).catch(() => {/* will sync later */});
-    }
     markAnimalFlagged(data.animalId);
     refreshPendingCount();
     if (isOnline) syncNow();
@@ -332,14 +334,18 @@ export default function CampInspectionPage({
       synced_at: null,
       sync_status: "pending",
     });
+    // Issue #538 — local IDB write removes the deceased animal from this camp's
+    // active list immediately (offline-first UX). The SERVER `status =
+    // "Deceased"` (+ `deceasedAt`) advance is now carried by the queued `death`
+    // observation above: on replay, `POST /api/observations` routes it through
+    // `performAnimalDeath`, which sets the status atomically with the
+    // observation write (anchoring `deceasedAt` to the observation's own
+    // timestamp). The old `navigator.onLine` fire-and-forget
+    // `PATCH /api/animals/[id]` was REMOVED — offline it never fired and had no
+    // replay queue, so the death status was silently lost (the #538 bug, the
+    // higher-stakes twin of #100). The observation queue replays idempotently
+    // via `clientLocalId` (#206), so the death now survives a reconnect drain.
     await updateAnimalStatus(selectedAnimalId, "Deceased");
-    if (navigator.onLine) {
-      fetch(`/api/animals/${selectedAnimalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Deceased", deceasedAt: new Date().toISOString() }),
-      }).catch(() => {/* will sync later */});
-    }
     markAnimalFlagged(selectedAnimalId);
     refreshPendingCount();
     if (isOnline) syncNow();

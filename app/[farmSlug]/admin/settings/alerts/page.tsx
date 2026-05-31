@@ -10,15 +10,13 @@ export const dynamic = "force-dynamic";
  * component contract usable from other placements if we ever move it.
  */
 
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getUserRoleForFarm } from "@/lib/auth";
 import AlertSettingsForm, {
   type AlertPreferenceRow,
   type FarmAlertSettings,
 } from "@/components/admin/AlertSettingsForm";
-import { redirect } from "next/navigation";
 
 
 export default async function AlertsSettingsPage({
@@ -27,12 +25,10 @@ export default async function AlertsSettingsPage({
   params: Promise<{ farmSlug: string }>;
 }) {
   const { farmSlug } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/login");
-  const role = getUserRoleForFarm(session, farmSlug);
+  const session = await requireSession(`/${farmSlug}/admin/settings/alerts`);
   // Layout already enforces ADMIN but we double-check so a direct render
   // outside the layout (tests, future embeds) still behaves correctly.
-  const isAdmin = role === "ADMIN";
+  const isAdmin = getUserRoleForFarm(session, farmSlug) === "ADMIN";
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {

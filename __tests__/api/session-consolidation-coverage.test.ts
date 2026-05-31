@@ -90,6 +90,13 @@ const EXEMPT: ReadonlySet<string> = new Set([
   // full session.user.farms list to verify ADMIN on an arbitrary slug;
   // getFarmContext's fast path scopes to the active farm only.
   'admin/evict-farm-client/route.ts',
+
+  // ── /api/_internal/synthetic-probe — cross-tenant platform-admin probe ──
+  // #135 count-reconciliation health check. Reads an ARBITRARY tenant by
+  // ?farmSlug and gates on isPlatformAdmin(email) (fail-closed) — a
+  // cross-tenant operation the consolidated single-active-farm helpers do
+  // not model. Retains getServerSession for the platform-admin email lookup.
+  '_internal/synthetic-probe/route.ts',
 ]);
 
 function walk(dir: string): string[] {

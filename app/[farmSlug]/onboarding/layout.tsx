@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForSlugWithAuth } from "@/lib/farm-prisma";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { OnboardingProvider } from "@/components/onboarding/OnboardingProvider";
@@ -204,10 +203,7 @@ export default async function OnboardingLayout({
 
   // 1. Auth check — redirect unauthenticated visitors to login, preserving
   //    the return URL so they land back here after sign-in (#103).
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect(`/login?next=${encodeURIComponent(`/${farmSlug}/onboarding`)}`);
-  }
+  const session = await requireSession(`/${farmSlug}/onboarding`);
 
   // 2. Tenant + role check.
   const result = await getPrismaForSlugWithAuth(session, farmSlug);

@@ -39,11 +39,21 @@ const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaM
     const campFindFirst = vi.fn();
     const observationCreate = vi.fn();
     const observationUpsert = vi.fn();
-    const prisma = {
+    // Issue #538 — a clean `death` POST (the scope-discipline smoke below) now
+    // routes through `performAnimalDeath`, which owns a `$transaction` (the
+    // animal `status = "Deceased"` mutation is atomic with the death observation
+    // write, mirroring #100's `performAnimalMove`). The tx callback receives a
+    // tx client; we pass the same prisma mock so the door's reads/writes resolve
+    // through these spies (including the new `animal.update`).
+    const prisma: Record<string, unknown> = {
       camp: { findFirst: campFindFirst },
-      animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
+      animal: {
+        findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       observation: { create: observationCreate, upsert: observationUpsert },
     };
+    prisma.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma));
     return {
       campFindFirstMock: campFindFirst,
       observationCreateMock: observationCreate,

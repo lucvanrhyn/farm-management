@@ -10,11 +10,8 @@ export const dynamic = "force-dynamic";
  * Admin layout above already enforces ADMIN role so this page just fetches.
  */
 
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession, requireFarmAdmin } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getUserRoleForFarm } from "@/lib/auth";
 import TaskSettingsClient, {
   type TaskTemplateRow,
 } from "@/components/admin/tasks/TaskSettingsClient";
@@ -51,11 +48,8 @@ export default async function TasksSettingsPage({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/login");
-  if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
-    redirect(`/${farmSlug}/home`);
-  }
+  const session = await requireSession(`/${farmSlug}/admin/settings/tasks`);
+  await requireFarmAdmin(session, farmSlug);
 
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {

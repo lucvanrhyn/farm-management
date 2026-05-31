@@ -1,0 +1,45 @@
+{
+  "allowlist": [
+    "app/api/admin/consulting/[id]/route.ts::0",
+    "app/api/admin/evict-farm-client/route.ts::0",
+    "app/api/einstein/ask/route.ts::0",
+    "app/api/einstein/feedback/route.ts::0",
+    "app/api/farms/[slug]/select/route.ts::0",
+    "app/api/subscription/status/route.ts::0",
+    "components/AppShell.tsx::0",
+    "lib/server/farm-context-errors.ts::0",
+    "lib/server/farm-context-slug.ts::0",
+    "lib/server/farm-context-slug.ts::1"
+  ],
+  "_comment": {
+    "page-sites-migrated-523": [
+      "app/[farmSlug]/admin/finansies/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/admin/settings/alerts/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/admin/settings/map/page.tsx — migrated to requireSession() + requireFarmAdmin() in #523",
+      "app/[farmSlug]/admin/settings/tasks/page.tsx — migrated to requireSession() + requireFarmAdmin() in #523",
+      "app/[farmSlug]/onboarding/layout.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/subscribe/upgrade/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/break-even/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/nvd/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/rotation-planner/page.tsx — migrated to requireSession() in #523",
+      "app/[farmSlug]/tools/tax/page.tsx — migrated to requireSession() in #523",
+      "app/subscribe/page.tsx — migrated to getSession() in #523 (renders PublicPlanPicker for anon; no redirect)"
+    ],
+    "api-routes-exempt": [
+      "app/api/admin/consulting/[id]/route.ts — platform-admin endpoint, no farm context; session needed for email lookup",
+      "app/api/admin/evict-farm-client/route.ts — needs full session.user.farms for arbitrary-slug ADMIN check",
+      "app/api/einstein/ask/route.ts — RAG endpoint, bypasses proxy middleware",
+      "app/api/einstein/feedback/route.ts — streamed endpoint, bypasses proxy middleware",
+      "app/api/farms/[slug]/select/route.ts — proxy shortcircuits this path before auth hoist",
+      "app/api/subscription/status/route.ts — cross-farm endpoint needs full session.user.farms list"
+    ],
+    "component-exempt": [
+      "components/AppShell.tsx — server component shell, session used only to hydrate SessionProvider"
+    ],
+    "lib-helpers-exempt": [
+      "lib/server/farm-context-errors.ts — error-classifier for getFarmContextForSlug (single dedicated module)",
+      "lib/server/farm-context-slug.ts (2 occurrences) — legacy fast-path fallback via getServerSession"
+    ],
+    "note": "lib/auth.ts is ALWAYS exempt (the canonical wrapper itself) and is skipped before auditSource runs — no baseline entry needed. All 11 SSR page-sites migrated to requireSession()/requireFarmAdmin() guards in #523. API/lib entries are intentionally exempt and must be explicitly documented here when added."
+  }
+}

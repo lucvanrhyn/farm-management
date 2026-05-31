@@ -20,6 +20,16 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 
+// Re-export the dead-preview-host grep guard so it joins the audit-script
+// module surface (issue #528). The guard itself is a standalone CLI in
+// scripts/audit-preview-hostname.ts.
+export { auditSource as auditPreviewHostname } from "./audit-preview-hostname";
+
+// Re-export the external-provider boundary as-cast guard so it joins the
+// audit-script module surface (issue #525). The guard itself is a standalone
+// CLI in scripts/audit-external-as-cast.ts.
+export { auditSource as auditExternalAsCast } from "./audit-external-as-cast";
+
 // ─── Public types ──────────────────────────────────────────────────────────
 
 export interface RouteBundle {
@@ -213,3 +223,10 @@ const isCliEntry = (() => {
   return typeof entry === "string" && entry.endsWith("audit-bundle.ts");
 })();
 if (isCliEntry) main();
+
+// ─── Guard registry (static-audit siblings) ────────────────────────────────
+// Each sibling audit that ships as a standalone script registers here so the
+// full guard suite can be discovered from one place. Import is type-only —
+// no runtime cost when audit-bundle.ts is run as the bundle-size CLI.
+// #522 raw-getServerSession ban-rule:
+export type { RawSessionOffender } from "./audit-raw-getsession";

@@ -14,6 +14,7 @@
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { NOTIFICATION_ERROR_CODES } from "@/lib/server/notifications/error-codes";
+import { getAppBaseUrl } from "@/lib/server/app-url";
 
 function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -26,7 +27,10 @@ function getFrom(): string {
 }
 
 function getBaseUrl(): string {
-  return process.env.NEXTAUTH_URL ?? "https://farm-management-lilac.vercel.app";
+  // Delegates to the single app-URL source of truth (lib/server/app-url.ts).
+  // The fallback host now resolves to the live prod host, not the dead lilac
+  // preview deploy — see issue #528.
+  return getAppBaseUrl();
 }
 
 export type EmailTemplate =

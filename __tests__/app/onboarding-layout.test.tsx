@@ -11,6 +11,9 @@
  * Also verifies that the "logged-in but non-ADMIN" branch still renders an
  * inline panel (not a hard redirect) and that a valid ADMIN session with an
  * empty farm renders the wizard shell.
+ *
+ * #523: layout now uses requireSession() from @/lib/auth instead of raw
+ * getServerSession(authOptions). Mocks updated accordingly.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -20,17 +23,13 @@ const redirectMock = vi.fn((url: string) => {
   throw new Error(`__REDIRECT__:${url}`);
 });
 
-const getServerSessionMock = vi.fn();
+const requireSessionMock = vi.fn();
 const getPrismaForSlugWithAuthMock = vi.fn();
 
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
-vi.mock('next-auth', () => ({
-  getServerSession: getServerSessionMock,
-}));
-
-vi.mock('@/lib/auth-options', () => ({
-  authOptions: {},
+vi.mock('@/lib/auth', () => ({
+  requireSession: requireSessionMock,
 }));
 
 vi.mock('@/lib/farm-prisma', () => ({
@@ -57,6 +56,13 @@ function makePrismaMock(animalCount = 0) {
   };
 }
 
+function makeSession(overrides: Record<string, unknown> = {}) {
+  return {
+    user: { id: 'user-1', email: 'admin@farm.test', ...overrides },
+    expires: '2099',
+  };
+}
+
 async function runLayout(
   farmSlug: string,
 ): Promise<{ redirected: string | null; rendered: boolean }> {
@@ -80,14 +86,16 @@ async function runLayout(
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
-describe('OnboardingLayout — auth gate (#103)', () => {
+describe('OnboardingLayout — auth gate (#103, #523)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
   });
 
   it('redirects to /login?next=/<slug>/onboarding when there is no session', async () => {
-    getServerSessionMock.mockResolvedValue(null);
+    requireSessionMock.mockImplementation((path: string) => {
+      redirectMock(`/login?next=${encodeURIComponent(path)}`);
+    });
 
     const { redirected } = await runLayout('acme-farm');
 
@@ -95,7 +103,7 @@ describe('OnboardingLayout — auth gate (#103)', () => {
   });
 
   it('renders NotAdminPanel (not a redirect) when session exists but user lacks ADMIN role', async () => {
-    getServerSessionMock.mockResolvedValue({ user: { email: 'member@farm.test' } });
+    requireSessionMock.mockResolvedValue(makeSession({ email: 'member@farm.test' }));
     getPrismaForSlugWithAuthMock.mockResolvedValue({
       prisma: makePrismaMock(),
       role: 'MEMBER',
@@ -109,7 +117,7 @@ describe('OnboardingLayout — auth gate (#103)', () => {
   });
 
   it('redirects to /<slug>/admin when ADMIN session + farm already has animals', async () => {
-    getServerSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test' } });
+    requireSessionMock.mockResolvedValue(makeSession({ email: 'admin@farm.test' }));
     getPrismaForSlugWithAuthMock.mockResolvedValue({
       prisma: makePrismaMock(5),
       role: 'ADMIN',
@@ -122,7 +130,7 @@ describe('OnboardingLayout — auth gate (#103)', () => {
   });
 
   it('renders the wizard shell for a valid ADMIN session with an empty farm', async () => {
-    getServerSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test' } });
+    requireSessionMock.mockResolvedValue(makeSession({ email: 'admin@farm.test' }));
     getPrismaForSlugWithAuthMock.mockResolvedValue({
       prisma: makePrismaMock(0),
       role: 'ADMIN',
@@ -136,7 +144,7 @@ describe('OnboardingLayout — auth gate (#103)', () => {
   });
 
   it('redirects to /login when tenant auth lookup returns a non-403 error', async () => {
-    getServerSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test' } });
+    requireSessionMock.mockResolvedValue(makeSession({ email: 'admin@farm.test' }));
     getPrismaForSlugWithAuthMock.mockResolvedValue({
       error: 'Farm not found',
       status: 404,

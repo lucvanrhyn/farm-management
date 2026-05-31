@@ -1,7 +1,5 @@
 export const dynamic = "force-dynamic";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import BreakEvenCalculator from "@/components/tools/BreakEvenCalculator";
@@ -12,10 +10,9 @@ export default async function BreakEvenPage({
 }: {
   params: Promise<{ farmSlug: string }>;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
   const { farmSlug } = await params;
+
+  await requireSession(`/${farmSlug}/tools/break-even`);
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {

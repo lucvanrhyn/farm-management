@@ -6,13 +6,18 @@ import { TierProvider } from "@/components/tier-provider";
 import { AssistantNameProvider } from "@/hooks/useAssistantName";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getUserRoleForFarm } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import {
   effectiveAssistantName,
   parseAiSettings,
 } from "@/lib/einstein/settings-schema";
+import {
+  methodologyCompleteness,
+  type MethodologyCompleteness,
+} from "@/lib/einstein/methodology-completeness";
+import { MethodologyNudgeBanner } from "@/components/einstein/MethodologyNudgeBanner";
 import { logger } from "@/lib/logger";
 
 /**
@@ -82,9 +87,10 @@ export default async function AdminLayout({
 }) {
   const { farmSlug } = await params;
 
-  // Guard: require authenticated ADMIN role for this specific farm
-  const session = await getSession();
-  if (!session?.user) redirect("/login");
+  // Guard: require authenticated ADMIN role for this specific farm.
+  // requireSession() bounces unauthenticated visitors to
+  // /login?next=/<slug>/admin so they land back here after sign-in (#544).
+  const session = await requireSession(`/${farmSlug}/admin`);
   if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
     redirect(`/${farmSlug}/home`);
   }
@@ -93,6 +99,11 @@ export default async function AdminLayout({
   let enabledSpecies: string[] | undefined;
   let onboardingComplete = true; // fail-open: if settings fetch fails, do NOT bounce
   let assistantName: string | null = null; // null → provider falls back to "Einstein"
+  // Methodology-adoption nudge inputs (#526). Defaults are inert: Einstein off
+  // and a fully-"missing" score so the banner renders nothing if settings fail
+  // to load — a DB blip must never spam a farmer with the nudge.
+  let einsteinEnabled = false;
+  let methodologyScore: MethodologyCompleteness = methodologyCompleteness(undefined);
   // Number of farms the authenticated user has access to — used by AdminNav to
   // conditionally render the "← Switch farm" link (only shown when N ≥ 2).
   const farmCount = (session.user.farms ?? []).length;
@@ -150,6 +161,10 @@ export default async function AdminLayout({
       // effectiveAssistantName returns the default when unset — passing the
       // default through the provider is fine (it normalises again).
       assistantName = resolved;
+      // Methodology-nudge inputs (#526): the RAG kill-switch + a score over the
+      // already-parsed blob — no extra round trip, no schema/prompt change.
+      einsteinEnabled = aiBlob.ragConfig?.enabled === true;
+      methodologyScore = methodologyCompleteness(aiBlob.methodology);
     } else {
       logger.error('[AdminLayout] farmSettings.findFirst failed', {
         farmSlug,
@@ -177,7 +192,14 @@ export default async function AdminLayout({
       <TierProvider tier={tier}>
         <div className="flex min-h-screen">
           <AdminNav tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount} />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1">
+            <MethodologyNudgeBanner
+              farmSlug={farmSlug}
+              einsteinEnabled={einsteinEnabled}
+              completeness={methodologyScore}
+            />
+            {children}
+          </main>
         </div>
       </TierProvider>
     </AssistantNameProvider>

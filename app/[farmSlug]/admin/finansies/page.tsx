@@ -1,8 +1,6 @@
 export const dynamic = "force-dynamic";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import FinansiesClient from "@/components/admin/FinansiesClient";
 import FinancialAnalyticsPanelLazy from "@/components/admin/FinancialAnalyticsPanelLazy";
 import FinancialChartsSection from "@/components/admin/FinancialChartsSection";
@@ -32,10 +30,10 @@ export default async function FinansiesPage({
   params: Promise<{ farmSlug: string }>;
   searchParams?: Promise<{ from?: string; to?: string; cogScope?: string; cursor?: string }>;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
   const { farmSlug } = await params;
+
+  await requireSession(`/${farmSlug}/admin/finansies`);
+
   const { from, to, cogScope, cursor } = searchParams ? await searchParams : {};
 
   const creds = await getFarmCreds(farmSlug);
