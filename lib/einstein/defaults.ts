@@ -10,8 +10,13 @@ export const DEFAULT_ASSISTANT_NAME = 'Einstein';
 export const DEFAULT_BUDGET_CAP_ZAR = 100;
 export const DEFAULT_RESPONSE_LANGUAGE: 'en' | 'af' | 'auto' = 'auto';
 
-/** Retrieval top-K for semantic search (per Scope-C lock 2026-04-20). */
-export const RETRIEVAL_TOP_K = 8;
+/**
+ * Retrieval top-K for semantic search (per Scope-C lock 2026-04-20).
+ * Raised 8 → 16 for #516: dense fortnight date windows were under-fetched
+ * at top-8. The change is rank-neutral (top-8 ⊂ top-16, same ORDER BY
+ * distance ASC) and the 50-cap in retriever.ts still bounds the LIMIT.
+ */
+export const RETRIEVAL_TOP_K = 16;
 
 /** Claude Sonnet 4.6 — answer generation model. */
 export const ANTHROPIC_ANSWER_MODEL = 'claude-sonnet-4-6';
