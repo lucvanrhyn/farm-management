@@ -18,6 +18,26 @@ export const DEFAULT_RESPONSE_LANGUAGE: 'en' | 'af' | 'auto' = 'auto';
  */
 export const RETRIEVAL_TOP_K = 16;
 
+/**
+ * Max number of structured *detail* rows the observation handler fetches in
+ * addition to its aggregate count chunk (#516, Issue 1 — observedAt-axis miss).
+ *
+ * Why this exists: the semantic path filters EinsteinChunk on `sourceUpdatedAt`
+ * (the record-mutation axis) while the structured observation handler filters
+ * `Observation.observedAt` (the event axis). A date-windowed question ("what was
+ * observed last week") therefore MISSES an observation that was *recorded*
+ * outside the window even though it was *observed* inside it — the semantic
+ * detail chunk is absent and the structured path returned only a COUNT, leaving
+ * the LLM a bare number with no grounding. We now also return the actual
+ * in-window Observation rows as detail chunks, sourced by the correct event
+ * axis, capped here so a dense fortnight can't balloon the answer context.
+ *
+ * Rows are ordered `observedAt` desc (most-recent-first) and truncated to this
+ * many. 25 comfortably covers a typical dense window while staying well under
+ * the semantic top-K budget the answer LLM already handles.
+ */
+export const STRUCTURED_DETAIL_LIMIT = 25;
+
 /** Claude Sonnet 4.6 — answer generation model. */
 export const ANTHROPIC_ANSWER_MODEL = 'claude-sonnet-4-6';
 

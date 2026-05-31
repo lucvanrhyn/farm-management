@@ -26,7 +26,7 @@
 import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { embed, embeddingToBytes } from '@/lib/einstein/embeddings';
 import { crossSpecies } from '@/lib/server/species-scoped-prisma';
-import { RETRIEVAL_TOP_K } from './defaults';
+import { RETRIEVAL_TOP_K, STRUCTURED_DETAIL_LIMIT } from './defaults';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -242,6 +242,47 @@ function labelFor(dateStart?: Date, dateEnd?: Date): string {
   }`;
 }
 
+/**
+ * Minimal observation row shape returned by the detail-row findMany. Only the
+ * fields the chunker reads are selected; everything else is irrelevant to the
+ * rendered text. `observedAt` doubles as the chunk's sourceUpdatedAt so the
+ * answer LLM sees the event date (matching the count's axis), not a synthetic
+ * Date.now().
+ */
+interface ObservationDetailRow {
+  id: string;
+  type: string;
+  observedAt: Date | string;
+  campId: string | null;
+  animalId: string | null;
+  details: string | null;
+  loggedBy: string | null;
+}
+
+function fmtYmd(v: Date | string): string {
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
+}
+
+/**
+ * Render one observation detail row to a chunk, MIRRORING the observation
+ * sentence shape in lib/einstein/chunker.ts (renderObservation) so the answer
+ * LLM sees the same familiar structure it was trained on at ingestion. The
+ * structured detail row has no denormalised animalName/campName/species, so we
+ * fall back to ids exactly as the chunker does for the missing-name case:
+ *   observation:<type> @ <YYYY-MM-DD> — animal <id|unknown> (camp <id>): <details> [— by <loggedBy>]
+ */
+function renderObservationDetail(row: ObservationDetailRow): string {
+  const observedAt = fmtYmd(row.observedAt);
+  const animalLabel = row.animalId && row.animalId.length > 0 ? row.animalId : 'unknown';
+  const campLabel = row.campId && row.campId.length > 0 ? row.campId : '';
+  let text = `observation:${row.type} @ ${observedAt} — animal ${animalLabel} (camp ${campLabel}): ${
+    row.details ?? ''
+  }`;
+  if (row.loggedBy && row.loggedBy.length > 0) text += ` — by ${row.loggedBy}`;
+  return text;
+}
+
 // ── Structured retrieval ──────────────────────────────────────────────────────
 
 /**
@@ -314,6 +355,7 @@ async function structured(
           if (dateEnd) rangeClause.lte = dateEnd;
           where.observedAt = rangeClause;
         }
+        // Aggregate count chunk (answers "how many") — kept as-is.
         const count = await crossSpecies(prisma, 'einstein-rag').observation.count({ where });
         chunks.push({
           entityType: 'observation',
@@ -322,6 +364,49 @@ async function structured(
           score: 1,
           sourceUpdatedAt: new Date(),
         });
+
+        // Detail-row chunks (#516, Issue 1 — answers "which / what was
+        // observed"). The semantic path filters EinsteinChunk.sourceUpdatedAt
+        // (record-mutation axis); here we fetch the real Observation rows on
+        // the SAME observedAt event axis as the count above, via the SAME
+        // crossSpecies door, so a date-windowed question is grounded by the
+        // events that actually fall inside the window — including ones logged
+        // (or edited) outside it. Capped + most-recent-first so a dense window
+        // can't balloon the answer context.
+        const detailRows = (await crossSpecies(prisma, 'einstein-rag').observation.findMany({
+          where,
+          orderBy: { observedAt: 'desc' },
+          take: STRUCTURED_DETAIL_LIMIT,
+        })) as unknown as ObservationDetailRow[];
+
+        for (const obs of detailRows) {
+          chunks.push({
+            entityType: 'observation',
+            entityId: obs.id,
+            text: renderObservationDetail(obs),
+            // Just below the aggregate count's score of 1 so detail rows are
+            // unambiguously retained by any downstream budget, while the
+            // headline count still sorts first. Citation dedupe is by
+            // entityId, so a detail row sharing an id with a semantic chunk
+            // collapses to one citation downstream (harmless overlap).
+            score: 0.99,
+            sourceUpdatedAt: normaliseDate(obs.observedAt),
+          });
+        }
+
+        if (detailRows.length === STRUCTURED_DETAIL_LIMIT) {
+          // Signal truncation so the LLM knows the detail list is a sample.
+          chunks.push({
+            entityType: 'observation',
+            entityId: 'aggregate:observations:truncated',
+            text: `Showing the ${STRUCTURED_DETAIL_LIMIT} most recent observations${labelFor(
+              dateStart,
+              dateEnd,
+            )} (more exist — see the total count above).`,
+            score: 1,
+            sourceUpdatedAt: new Date(),
+          });
+        }
       } else if (entityType === 'task') {
         // Task is NOT a species-bearing model (no `species` column, not
         // guarded by ADR-0005), so it is reached via raw `prisma.task`,
