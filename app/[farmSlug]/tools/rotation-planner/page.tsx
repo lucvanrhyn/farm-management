@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth-options";
+import { requireSession } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
@@ -17,10 +16,9 @@ export default async function RotationPlannerPage({
 }: {
   params: Promise<{ farmSlug: string }>;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-
   const { farmSlug } = await params;
+
+  await requireSession(`/${farmSlug}/tools/rotation-planner`);
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {

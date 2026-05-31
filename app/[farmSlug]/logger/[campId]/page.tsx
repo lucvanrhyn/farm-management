@@ -280,14 +280,16 @@ export default function CampInspectionPage({
       sync_status: "pending",
     });
     if (photoBlob) await queuePhoto(localId, photoBlob).catch(() => {/* non-fatal */});
+    // Issue #100 — local IDB write keeps the moved animal off this camp's list
+    // immediately (offline-first UX). The SERVER `currentCamp` advance is now
+    // carried by the queued `animal_movement` observation above: on replay,
+    // `POST /api/observations` routes it through `performAnimalMove`, which
+    // advances `currentCamp` atomically with the observation write. The old
+    // `navigator.onLine` fire-and-forget `PATCH /api/animals/[id]` was REMOVED
+    // — offline it never fired and had no replay queue, so the move was
+    // silently lost (the #100 bug). The observation queue replays idempotently
+    // via `clientLocalId` (#206), so the move now survives a reconnect drain.
     await updateAnimalCamp(data.animalId, data.destCampId);
-    if (navigator.onLine) {
-      fetch(`/api/animals/${data.animalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentCamp: data.destCampId }),
-      }).catch(() => {/* will sync later */});
-    }
     markAnimalFlagged(data.animalId);
     refreshPendingCount();
     if (isOnline) syncNow();
