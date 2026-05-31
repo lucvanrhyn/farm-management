@@ -56,6 +56,12 @@ const EXEMPT: ReadonlySet<string> = new Set([
   "admin/evict-farm-client/route.ts",
   "admin/reset/route.ts",
   "subscription/status/route.ts",
+  // #135 synthetic count-reconciliation probe — a CROSS-TENANT platform-admin
+  //   health check: reads ANY tenant by `?farmSlug`, gates on `isPlatformAdmin`
+  //   (fail-closed), and returns JSON envelopes (not SSR redirects). No
+  //   tenant-scoped adapter models a cross-tenant reader, so it is intentionally
+  //   outside the four-adapter contract. See app/api/_internal/synthetic-probe.
+  "_internal/synthetic-probe/route.ts",
 
   // ── Wave B+ migration — see ADR-0001. ──
   // [farmSlug]/** routes (Wave B-G).
