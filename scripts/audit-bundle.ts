@@ -20,6 +20,11 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 
+// Re-export the dead-preview-host grep guard so it joins the audit-script
+// module surface (issue #528). The guard itself is a standalone CLI in
+// scripts/audit-preview-hostname.ts.
+export { auditSource as auditPreviewHostname } from "./audit-preview-hostname";
+
 // Re-export the external-provider boundary as-cast guard so it joins the
 // audit-script module surface (issue #525). The guard itself is a standalone
 // CLI in scripts/audit-external-as-cast.ts.

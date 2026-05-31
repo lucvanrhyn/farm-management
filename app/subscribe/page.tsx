@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getFarmSubscription } from '@/lib/meta-db';
 import { BASIC_DISPLAY_MONTHLY_ZAR } from '@/lib/pricing/compute-total-lsu';
+import { getAppBaseUrl } from '@/lib/server/app-url';
 import PublicPlanPicker from './PublicPlanPicker';
 
 export const dynamic = 'force-dynamic';
@@ -50,11 +51,10 @@ export default async function SubscribePage({
     redirect(`/${farmSlug}/admin`);
   }
 
-  // Build PayFast params server-side — secrets never leave the server
-  const appUrl = (process.env.NEXTAUTH_URL ?? 'https://farm-management-lilac.vercel.app').replace(
-    /\/$/,
-    '',
-  );
+  // Build PayFast params server-side — secrets never leave the server.
+  // getAppBaseUrl() centralises the NEXTAUTH_URL fallback (live prod host,
+  // never the dead lilac preview deploy — issue #528).
+  const appUrl = getAppBaseUrl().replace(/\/$/, '');
 
   const pfParams = buildSubscriptionParams({
     tier: 'basic',

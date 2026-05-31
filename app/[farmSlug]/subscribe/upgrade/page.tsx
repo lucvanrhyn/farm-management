@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { computeFarmLsu } from '@/lib/pricing/farm-lsu';
 import { quoteTier } from '@/lib/pricing/calculator';
 import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
+import { getAppBaseUrl } from '@/lib/server/app-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +49,9 @@ export default async function SubscribeUpgradePage({
   const quote = quoteTier('advanced', lsu);
   const amountZar = frequency === 'annual' ? quote.annualZar : quote.monthlyZar;
 
-  // Build PayFast form
-  const appUrl = (process.env.NEXTAUTH_URL ?? 'https://farm-management-lilac.vercel.app').replace(
-    /\/$/,
-    '',
-  );
+  // Build PayFast form. getAppBaseUrl() centralises the NEXTAUTH_URL fallback
+  // (live prod host, never the dead lilac preview deploy — issue #528).
+  const appUrl = getAppBaseUrl().replace(/\/$/, '');
   const pfParams = buildSubscriptionParams({
     tier: 'advanced',
     amountZar,
