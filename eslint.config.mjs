@@ -23,6 +23,17 @@ const eslintConfig = defineConfig([
     // Playwright traces drop minified vendor JS into resources/.
     ".playwright-cli/**",
   ]),
+  // Workstream F (#113) — silent-failure guard. Block NEW truly-bare
+  // `catch {}` blocks so error-swallowing cannot be introduced going forward.
+  // `allowEmptyCatch: false` means an empty catch is an error; ESLint's
+  // `no-empty` treats a block containing a comment as non-empty by design, so
+  // the existing intentional (commented) catches stay legal — only genuinely
+  // empty blocks fail. Applied repo-wide; the globalIgnores above still hold.
+  {
+    rules: {
+      "no-empty": ["error", { allowEmptyCatch: false }],
+    },
+  },
 ]);
 
 export default eslintConfig;
