@@ -52,6 +52,12 @@ function makeFakePrisma(rows: unknown[], counts: Record<string, number> = {}) {
     observation: {
       count: vi.fn().mockResolvedValue(counts.observations ?? 0),
     },
+    task: {
+      count: vi.fn().mockResolvedValue(counts.tasks ?? 0),
+    },
+    notification: {
+      count: vi.fn().mockResolvedValue(counts.notifications ?? 0),
+    },
     __queryRawUnsafe: queryRawUnsafe, // so tests can inspect invocations
   };
 }
@@ -102,8 +108,8 @@ describe('retrieve.semantic', () => {
     expect(sql).toMatch(/vector_distance_cos\(embedding, vector32\(\?\)\)/);
     expect(sql).toMatch(/ORDER BY distance ASC/);
     expect(sql).toMatch(/LIMIT \?/);
-    // Last arg is topK (default 8)
-    expect(args[args.length - 1]).toBe(8);
+    // Last arg is topK (default 16 — raised from 8 for dense date windows, #516)
+    expect(args[args.length - 1]).toBe(16);
     expect(result.chunks).toHaveLength(2);
     // Distance 0.1 → score 0.9, distance 0.3 → score 0.7
     expect(result.chunks[0].score).toBeCloseTo(0.9, 5);
@@ -243,6 +249,65 @@ describe('retrieve.structured', () => {
     expect(fake.observation.count).toHaveBeenCalledWith({
       where: { observedAt: { gte: start, lte: end } },
     });
+  });
+
+  it('dispatches task counts with date range on dueDate (YYYY-MM-DD string axis)', async () => {
+    const fake = makeFakePrisma([], { tasks: 9 });
+    getPrismaForFarmMock.mockResolvedValue(fake);
+    const start = new Date('2026-03-01');
+    const end = new Date('2026-04-01');
+    const result = await retrieve.structured('delta-livestock', {
+      rewrittenQuery: 'how many tasks',
+      isStructuredQuery: true,
+      entityTypeFilter: ['task'],
+      dateRangeFilter: { start, end },
+    });
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0].entityType).toBe('task');
+    expect(result.chunks[0].entityId).toBe('aggregate:tasks');
+    expect(result.chunks[0].text).toMatch(/9/);
+    expect(result.chunks[0].score).toBe(1);
+    // dueDate is a String column storing YYYY-MM-DD — the range bounds
+    // must be date-strings, not Date objects, or the lexicographic
+    // comparison silently fails to match any row.
+    expect(fake.task.count).toHaveBeenCalledWith({
+      where: { dueDate: { gte: '2026-03-01', lte: '2026-04-01' } },
+    });
+  });
+
+  it('dispatches notification counts with date range on createdAt', async () => {
+    const fake = makeFakePrisma([], { notifications: 23 });
+    getPrismaForFarmMock.mockResolvedValue(fake);
+    const start = new Date('2026-03-01');
+    const end = new Date('2026-04-01');
+    const result = await retrieve.structured('delta-livestock', {
+      rewrittenQuery: 'how many notifications',
+      isStructuredQuery: true,
+      entityTypeFilter: ['notification'],
+      dateRangeFilter: { start, end },
+    });
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0].entityType).toBe('notification');
+    expect(result.chunks[0].entityId).toBe('aggregate:notifications');
+    expect(result.chunks[0].text).toMatch(/23/);
+    expect(result.chunks[0].score).toBe(1);
+    // createdAt is a DateTime column — Date bounds pass through directly.
+    expect(fake.notification.count).toHaveBeenCalledWith({
+      where: { createdAt: { gte: start, lte: end } },
+    });
+  });
+
+  it('dispatches task/notification counts without a date range (no where clause)', async () => {
+    const fake = makeFakePrisma([], { tasks: 5, notifications: 7 });
+    getPrismaForFarmMock.mockResolvedValue(fake);
+    const result = await retrieve.structured('delta-livestock', {
+      rewrittenQuery: 'tasks and notifications',
+      isStructuredQuery: true,
+      entityTypeFilter: ['task', 'notification'],
+    });
+    expect(result.chunks).toHaveLength(2);
+    expect(fake.task.count).toHaveBeenCalledWith({ where: {} });
+    expect(fake.notification.count).toHaveBeenCalledWith({ where: {} });
   });
 
   it('returns empty chunks when no filter matches', async () => {

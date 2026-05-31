@@ -229,6 +229,19 @@ function clampScore(raw: number): number {
   return raw;
 }
 
+/**
+ * Human-readable " between <start> and <now>" suffix for aggregate chunk
+ * text. Returns '' when no date range is set. Shared by the observation,
+ * task, and notification structured handlers so the citation phrasing
+ * stays identical across entity types.
+ */
+function labelFor(dateStart?: Date, dateEnd?: Date): string {
+  if (!dateStart && !dateEnd) return '';
+  return ` between ${dateStart?.toISOString().slice(0, 10) ?? 'start'} and ${
+    dateEnd?.toISOString().slice(0, 10) ?? 'now'
+  }`;
+}
+
 // ── Structured retrieval ──────────────────────────────────────────────────────
 
 /**
@@ -236,14 +249,21 @@ function clampScore(raw: number): number {
  * Returns one synthetic chunk per entity type, carrying an aggregate
  * summary string that the answer LLM can cite.
  *
- * Intentionally narrow in scope for Wave 2B — we cover three high-signal
- * paths:
- *   - "animal" → count by species/status
- *   - "camp" → count of camps
- *   - "observation" → count in date range
+ * Covers the high-signal structured paths:
+ *   - "animal" → count by species/status      (crossSpecies door)
+ *   - "camp" → count of camps                  (crossSpecies door)
+ *   - "observation" → count in date range      (crossSpecies door, observedAt)
+ *   - "task" → count in date range             (raw prisma, dueDate axis)
+ *   - "notification" → count in date range     (raw prisma, createdAt axis)
  *
- * Unknown entity types fall through to an empty result (caller falls back
- * to semantic retrieval in that case).
+ * animal/camp/observation are species-bearing models reached via the
+ * crossSpecies() door (ADR-0005). task/notification carry no species axis
+ * and are not guarded by that arch test, so they use raw `prisma`, matching
+ * the rest of the codebase (lib/server/inngest/einstein.ts ingestion).
+ *
+ * task_template + it3_snapshot remain deferred (#516) — they fall through
+ * to semantic-only retrieval. Unknown entity types fall through to an empty
+ * result (caller falls back to semantic retrieval in that case).
  */
 async function structured(
   farmSlug: string,
@@ -295,20 +315,58 @@ async function structured(
           where.observedAt = rangeClause;
         }
         const count = await crossSpecies(prisma, 'einstein-rag').observation.count({ where });
-        const rangeLabel =
-          dateStart || dateEnd
-            ? ` between ${dateStart?.toISOString().slice(0, 10) ?? 'start'} and ${
-                dateEnd?.toISOString().slice(0, 10) ?? 'now'
-              }`
-            : '';
         chunks.push({
           entityType: 'observation',
           entityId: 'aggregate:observations',
-          text: `Total observations${rangeLabel}: ${count}.`,
+          text: `Total observations${labelFor(dateStart, dateEnd)}: ${count}.`,
+          score: 1,
+          sourceUpdatedAt: new Date(),
+        });
+      } else if (entityType === 'task') {
+        // Task is NOT a species-bearing model (no `species` column, not
+        // guarded by ADR-0005), so it is reached via raw `prisma.task`,
+        // matching the rest of the codebase (lib/server/inngest/einstein.ts,
+        // lib/domain/tasks/*). The event axis is `dueDate` ("when the task
+        // is relevant"), NOT `createdAt` (the mutation axis). `dueDate` is a
+        // String column storing YYYY-MM-DD, so the range bounds must be
+        // date-strings — passing a Date would compare against String values
+        // and silently match nothing.
+        const where: Record<string, unknown> = {};
+        if (dateStart || dateEnd) {
+          const rangeClause: Record<string, string> = {};
+          if (dateStart) rangeClause.gte = dateStart.toISOString().slice(0, 10);
+          if (dateEnd) rangeClause.lte = dateEnd.toISOString().slice(0, 10);
+          where.dueDate = rangeClause;
+        }
+        const count = await prisma.task.count({ where });
+        chunks.push({
+          entityType: 'task',
+          entityId: 'aggregate:tasks',
+          text: `Total tasks${labelFor(dateStart, dateEnd)}: ${count}.`,
+          score: 1,
+          sourceUpdatedAt: new Date(),
+        });
+      } else if (entityType === 'notification') {
+        // Notification is likewise non-species-scoped → raw `prisma`. The
+        // event axis is `createdAt` (when the notification was raised), a
+        // DateTime column, so Date bounds pass through directly.
+        const where: Record<string, unknown> = {};
+        if (dateStart || dateEnd) {
+          const rangeClause: Record<string, Date> = {};
+          if (dateStart) rangeClause.gte = dateStart;
+          if (dateEnd) rangeClause.lte = dateEnd;
+          where.createdAt = rangeClause;
+        }
+        const count = await prisma.notification.count({ where });
+        chunks.push({
+          entityType: 'notification',
+          entityId: 'aggregate:notifications',
+          text: `Total notifications${labelFor(dateStart, dateEnd)}: ${count}.`,
           score: 1,
           sourceUpdatedAt: new Date(),
         });
       }
+      // task_template + it3_snapshot remain unhandled (deferred — #516).
       // Unknown entity types → silently skipped. Caller is expected to fall
       // back to semantic if the chunks array ends up empty.
     } catch (err) {
