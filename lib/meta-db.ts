@@ -397,6 +397,80 @@ export async function setPasswordResetToken(
   });
 }
 
+/**
+ * Atomically validate, consume, and return a password-reset token in a
+ * single UPDATE ... RETURNING statement.
+ *
+ * The prior SELECT-then-UPDATE approach had a TOCTOU window: two concurrent
+ * requests with the same token could both pass the SELECT before either ran
+ * the UPDATE, allowing the token to be used twice.
+ *
+ * The fix collapses both steps into one:
+ *
+ *   UPDATE users
+ *   SET    password_reset_token = NULL,
+ *          password_reset_expires = NULL
+ *   WHERE  password_reset_token = ?
+ *     AND  password_reset_expires > ?         ← expiry enforced atomically
+ *   RETURNING id
+ *
+ * If zero rows are returned the token was not found, already expired, or
+ * already consumed by a prior call — all three failure modes are
+ * indistinguishable (anti-enumeration). Only the first concurrent call that
+ * wins the UPDATE lock gets a row back; all subsequent calls see zero rows.
+ *
+ * RETURNING is available on all libSQL / Turso deployments (SQLite ≥ 3.35,
+ * shipped 2021-03-12; libSQL is based on SQLite 3.37+ and Turso uses libSQL).
+ * The ResultSet.rows array is populated for DML + RETURNING just as for
+ * SELECT. rowsAffected alone is insufficient because we also need the userId.
+ *
+ * Returns { userId } on success, null on not-found / expired / already-used.
+ */
+export async function consumePasswordResetToken(
+  token: string,
+): Promise<{ userId: string } | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `UPDATE users
+          SET    password_reset_token = NULL,
+                 password_reset_expires = NULL
+          WHERE  password_reset_token = ?
+            AND  password_reset_expires > ?
+          RETURNING id`,
+    args: [token, new Date().toISOString()],
+  });
+  if (result.rows.length === 0) return null;
+  return { userId: result.rows[0][0] as string };
+}
+
+/**
+ * Atomically set a new password hash and clear the reset-token columns.
+ *
+ * The caller is responsible for:
+ *   - Producing a bcrypt-12 hash of the new password BEFORE calling this.
+ *   - Having already consumed (invalidated) the reset token via
+ *     consumePasswordResetToken — this function does NOT re-validate the token.
+ *
+ * Clearing the reset columns here is a belt-and-suspenders guard: by the time
+ * this is called, consumePasswordResetToken has already cleared them, but a
+ * single-statement UPDATE keeps the invariant watertight against any future
+ * refactor that might decouple the two steps.
+ */
+export async function resetUserPassword(
+  userId: string,
+  passwordHash: string,
+): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `UPDATE users
+          SET password_hash = ?,
+              password_reset_token = NULL,
+              password_reset_expires = NULL
+          WHERE id = ?`,
+    args: [passwordHash, userId],
+  });
+}
+
 // ── Subscription helpers ────────────────────────────────────────────────────
 
 export interface FarmBilling {
