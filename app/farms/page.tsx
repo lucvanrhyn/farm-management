@@ -1,6 +1,5 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import type { SessionFarm } from "@/types/next-auth";
 import { FarmCard } from "./FarmCard";
 import { getCachedMultiFarmOverview } from "@/lib/server/cached";
@@ -40,8 +39,9 @@ function CardSkeletons({ farms }: { farms: SessionFarm[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function FarmsPage() {
-  const session = await getSession();
-  if (!session?.user) redirect("/login");
+  // requireSession() bounces unauthenticated visitors to /login?next=/farms so
+  // they land back on the farm picker after sign-in (#544).
+  const session = await requireSession("/farms");
 
   const farms: SessionFarm[] = session.user.farms ?? [];
   const isMultiFarm = farms.length >= 2;
