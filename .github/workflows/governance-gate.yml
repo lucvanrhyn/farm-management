@@ -97,6 +97,14 @@ jobs:
         # generated client needs to exist before the suite runs.
         run: pnpm prisma generate
 
+      - name: Bootstrap-schema freshness (H0b / #280)
+        # `lib/farm-schema.ts` is the DDL every NEW tenant is provisioned from.
+        # It is generated from prisma/schema.prisma; if a schema change lands
+        # without regenerating it, freshly onboarded farms are born missing
+        # tables/columns and 500 on first use (the H0b onboarding incident).
+        # Pure static check — no secrets, so it runs on forks too.
+        run: pnpm db:gen-schema:check
+
       - name: Schema parity check (PRD #128)
         # Verifies every prod tenant's `_migrations` table is in lock-step
         # with the migrations shipped in this PR. Catches the "tenant fell
