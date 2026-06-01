@@ -1,10 +1,17 @@
 /**
  * SQL schema for new per-farm databases.
- * Generated from prisma/schema.prisma via:
- *   npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
  *
- * IMPORTANT: Regenerate this file after any Prisma schema change using:
+ * AUTO-GENERATED — DO NOT EDIT BY HAND.
+ * Regenerate after any prisma/schema.prisma change with:
  *   pnpm db:gen-schema
+ * CI fails if this file is stale: pnpm db:gen-schema:check
+ *
+ * Source of truth: prisma/schema.prisma, via
+ *   prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
+ *
+ * Intentionally omitted (operator-provisioned, libSQL-specific DDL Prisma
+ * can't express): EinsteinChunk — see scripts/gen-farm-schema.ts EXCLUDE_TABLES
+ * and scripts/migrate-phase-l-einstein.ts.
  */
 export const FARM_SCHEMA_SQL = `
 -- CreateTable
@@ -30,7 +37,11 @@ CREATE TABLE "Observation" (
     "editedBy" TEXT,
     "editedAt" DATETIME,
     "editHistory" TEXT,
-    "attachmentUrl" TEXT
+    "attachmentUrl" TEXT,
+    "species" TEXT,
+    "clientLocalId" TEXT,
+    "carcassDisposal" TEXT,
+    "notes" TEXT
 );
 
 -- CreateTable
@@ -51,8 +62,16 @@ CREATE TABLE "Animal" (
     "dateAdded" TEXT NOT NULL,
     "deceasedAt" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "species" TEXT NOT NULL DEFAULT 'cattle',
-    "speciesData" TEXT
+    "speciesData" TEXT,
+    "sireNote" TEXT,
+    "damNote" TEXT,
+    "importJobId" TEXT,
+    "tagNumber" TEXT,
+    "brandSequence" TEXT,
+    "clientLocalId" TEXT,
+    CONSTRAINT "Animal_importJobId_fkey" FOREIGN KEY ("importJobId") REFERENCES "ImportJob" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -74,7 +93,8 @@ CREATE TABLE "Transaction" (
     "avgMassKg" REAL,
     "fees" REAL,
     "transportCost" REAL,
-    "animalIds" TEXT
+    "animalIds" TEXT,
+    "isForeign" BOOLEAN DEFAULT false
 );
 
 -- CreateTable
@@ -98,6 +118,10 @@ CREATE TABLE "FarmSettings" (
     "calvingAlertDays" INTEGER NOT NULL DEFAULT 14,
     "daysOpenLimit" INTEGER NOT NULL DEFAULT 365,
     "campGrazingWarningDays" INTEGER NOT NULL DEFAULT 7,
+    "defaultRestDays" INTEGER NOT NULL DEFAULT 60,
+    "defaultMaxGrazingDays" INTEGER NOT NULL DEFAULT 7,
+    "rotationSeasonMode" TEXT NOT NULL DEFAULT 'auto',
+    "dormantSeasonMultiplier" REAL NOT NULL DEFAULT 1.4,
     "latitude" REAL,
     "longitude" REAL,
     "targetStockingRate" REAL,
@@ -106,10 +130,6 @@ CREATE TABLE "FarmSettings" (
     "weaningDate" TEXT,
     "openaiApiKey" TEXT,
     "heroImageUrl" TEXT DEFAULT '/farm-hero.jpg',
-    "defaultRestDays" INTEGER NOT NULL DEFAULT 60,
-    "defaultMaxGrazingDays" INTEGER NOT NULL DEFAULT 7,
-    "rotationSeasonMode" TEXT NOT NULL DEFAULT 'auto',
-    "dormantSeasonMultiplier" REAL NOT NULL DEFAULT 1.4,
     "ownerName" TEXT,
     "ownerIdNumber" TEXT,
     "taxReferenceNumber" TEXT,
@@ -132,6 +152,28 @@ CREATE TABLE "FarmSettings" (
 );
 
 -- CreateTable
+CREATE TABLE "NvdRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "nvdNumber" TEXT NOT NULL,
+    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "saleDate" TEXT NOT NULL,
+    "transactionId" TEXT,
+    "buyerName" TEXT NOT NULL,
+    "buyerAddress" TEXT,
+    "buyerContact" TEXT,
+    "destinationAddress" TEXT,
+    "animalIds" TEXT NOT NULL,
+    "animalSnapshot" TEXT NOT NULL,
+    "sellerSnapshot" TEXT NOT NULL,
+    "declarationsJson" TEXT NOT NULL,
+    "transportJson" TEXT,
+    "generatedBy" TEXT,
+    "pdfHash" TEXT,
+    "voidedAt" DATETIME,
+    "voidReason" TEXT
+);
+
+-- CreateTable
 CREATE TABLE "Camp" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "campId" TEXT NOT NULL,
@@ -140,7 +182,13 @@ CREATE TABLE "Camp" (
     "waterSource" TEXT,
     "geojson" TEXT,
     "color" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "species" TEXT NOT NULL DEFAULT 'cattle',
+    "veldType" TEXT,
+    "restDaysOverride" INTEGER,
+    "maxGrazingDaysOverride" INTEGER,
+    "rotationNotes" TEXT
 );
 
 -- CreateTable
@@ -151,7 +199,9 @@ CREATE TABLE "CampCoverReading" (
     "kgDmPerHa" REAL NOT NULL,
     "useFactor" REAL NOT NULL DEFAULT 0.35,
     "recordedAt" TEXT NOT NULL,
-    "recordedBy" TEXT NOT NULL
+    "recordedBy" TEXT NOT NULL,
+    "attachmentUrl" TEXT,
+    "clientLocalId" TEXT
 );
 
 -- CreateTable
@@ -159,7 +209,8 @@ CREATE TABLE "Mob" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "currentCamp" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "species" TEXT NOT NULL DEFAULT 'cattle'
 );
 
 -- CreateTable
@@ -175,7 +226,49 @@ CREATE TABLE "Task" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "priority" TEXT NOT NULL DEFAULT 'normal',
     "completedAt" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "taskType" TEXT,
+    "lat" REAL,
+    "lng" REAL,
+    "recurrenceRule" TEXT,
+    "reminderOffset" INTEGER,
+    "assigneeIds" TEXT,
+    "templateId" TEXT,
+    "blockedByIds" TEXT,
+    "completedObservationId" TEXT,
+    "recurrenceSource" TEXT,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "TaskTemplate" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "tenantSlug" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "name_af" TEXT,
+    "taskType" TEXT NOT NULL,
+    "description" TEXT,
+    "description_af" TEXT,
+    "priorityDefault" TEXT,
+    "recurrenceRule" TEXT,
+    "reminderOffset" INTEGER,
+    "species" TEXT,
+    "isPublic" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "TaskOccurrence" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "taskId" TEXT NOT NULL,
+    "occurrenceAt" DATETIME NOT NULL,
+    "reminderAt" DATETIME,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "completedAt" DATETIME,
+    "reminderDispatchedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "TaskOccurrence_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -428,25 +521,70 @@ CREATE TABLE "GameVeldCondition" (
 );
 
 -- CreateTable
+CREATE TABLE "VeldAssessment" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "campId" TEXT NOT NULL,
+    "assessmentDate" TEXT NOT NULL,
+    "assessor" TEXT NOT NULL,
+    "palatableSpeciesPct" REAL NOT NULL,
+    "bareGroundPct" REAL NOT NULL,
+    "erosionLevel" INTEGER NOT NULL,
+    "bushEncroachmentLevel" INTEGER NOT NULL,
+    "veldScore" REAL NOT NULL,
+    "biomeAtAssessment" TEXT,
+    "haPerLsu" REAL,
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdBy" TEXT
+);
+
+-- CreateTable
 CREATE TABLE "GameRainfallRecord" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "date" TEXT NOT NULL,
     "rainfallMm" REAL NOT NULL,
     "stationName" TEXT,
     "campId" TEXT,
+    "lat" REAL,
+    "lng" REAL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "RainfallNormal" (
-    "id"          TEXT     NOT NULL PRIMARY KEY,
-    "latitude"    REAL     NOT NULL,
-    "longitude"   REAL     NOT NULL,
-    "monthIdx"    INTEGER  NOT NULL,
-    "meanMm"      REAL     NOT NULL,
-    "stdDevMm"    REAL     NOT NULL,
-    "sampleYears" INTEGER  NOT NULL,
-    "computedAt"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE "RainfallNormal" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "latitude" REAL NOT NULL,
+    "longitude" REAL NOT NULL,
+    "monthIdx" INTEGER NOT NULL,
+    "meanMm" REAL NOT NULL,
+    "stdDevMm" REAL NOT NULL,
+    "sampleYears" INTEGER NOT NULL,
+    "computedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "It3Snapshot" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "taxYear" INTEGER NOT NULL,
+    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "periodStart" TEXT NOT NULL,
+    "periodEnd" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "generatedBy" TEXT,
+    "pdfHash" TEXT,
+    "voidedAt" DATETIME,
+    "voidReason" TEXT
+);
+
+-- CreateTable
+CREATE TABLE "SarsLivestockElection" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "species" TEXT NOT NULL,
+    "ageCategory" TEXT NOT NULL,
+    "electedValueZar" INTEGER NOT NULL,
+    "electedYear" INTEGER NOT NULL,
+    "sarsChangeApprovalRef" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -458,7 +596,28 @@ CREATE TABLE "Notification" (
     "href" TEXT NOT NULL,
     "isRead" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" DATETIME NOT NULL
+    "expiresAt" DATETIME NOT NULL,
+    "dedupKey" TEXT,
+    "payload" TEXT,
+    "collapseKey" TEXT,
+    "updatedAt" DATETIME NOT NULL,
+    "pushDispatchedAt" DATETIME,
+    "digestDispatchedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "AlertPreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "alertType" TEXT,
+    "channel" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "digestMode" TEXT NOT NULL DEFAULT 'realtime',
+    "speciesOverride" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "AlertPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -469,6 +628,45 @@ CREATE TABLE "PushSubscription" (
     "auth" TEXT NOT NULL,
     "userEmail" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "PayfastEvent" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "pfPaymentId" TEXT NOT NULL,
+    "eventTime" DATETIME NOT NULL,
+    "paymentStatus" TEXT NOT NULL,
+    "payloadHash" TEXT NOT NULL,
+    "processedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "appliedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "RotationPlan" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "startDate" DATETIME NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'draft',
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "RotationPlanStep" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "planId" TEXT NOT NULL,
+    "sequence" INTEGER NOT NULL,
+    "campId" TEXT NOT NULL,
+    "mobId" TEXT,
+    "plannedStart" DATETIME NOT NULL,
+    "plannedDays" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "actualStart" DATETIME,
+    "actualEnd" DATETIME,
+    "executedObservationId" TEXT,
+    "notes" TEXT,
+    CONSTRAINT "RotationPlanStep_planId_fkey" FOREIGN KEY ("planId") REFERENCES "RotationPlan" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -484,8 +682,64 @@ CREATE TABLE "Budget" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "ImportJob" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "farmId" TEXT NOT NULL,
+    "sourceFileHash" TEXT NOT NULL,
+    "sourceFilename" TEXT NOT NULL,
+    "mappingJson" TEXT NOT NULL,
+    "rowsImported" INTEGER NOT NULL DEFAULT 0,
+    "rowsFailed" INTEGER NOT NULL DEFAULT 0,
+    "warnings" TEXT,
+    "inputTokens" INTEGER,
+    "outputTokens" INTEGER,
+    "cachedTokens" INTEGER,
+    "costZar" REAL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "confirmedBy" TEXT NOT NULL,
+    "status" TEXT,
+    "completedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "CustomField" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "farmId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "appliesTo" TEXT NOT NULL,
+    "dataType" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "RagQueryLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "assistantName" TEXT NOT NULL,
+    "question" TEXT NOT NULL,
+    "answerText" TEXT,
+    "citations" TEXT NOT NULL,
+    "retrievalLatencyMs" INTEGER NOT NULL,
+    "answerLatencyMs" INTEGER NOT NULL,
+    "inputTokens" INTEGER NOT NULL,
+    "outputTokens" INTEGER NOT NULL,
+    "cachedInputTokens" INTEGER NOT NULL DEFAULT 0,
+    "costZar" REAL NOT NULL,
+    "modelId" TEXT NOT NULL,
+    "feedback" TEXT,
+    "feedbackNote" TEXT,
+    "errorCode" TEXT,
+    "refusedReason" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Observation_clientLocalId_key" ON "Observation"("clientLocalId");
 
 -- CreateIndex
 CREATE INDEX "idx_obs_type_camp_date" ON "Observation"("type", "campId", "observedAt");
@@ -494,7 +748,22 @@ CREATE INDEX "idx_obs_type_camp_date" ON "Observation"("type", "campId", "observ
 CREATE INDEX "idx_obs_type_animal_date" ON "Observation"("type", "animalId", "observedAt");
 
 -- CreateIndex
+CREATE INDEX "idx_obs_camp" ON "Observation"("campId");
+
+-- CreateIndex
+CREATE INDEX "idx_obs_animal" ON "Observation"("animalId");
+
+-- CreateIndex
+CREATE INDEX "idx_obs_logged_by" ON "Observation"("loggedBy");
+
+-- CreateIndex
+CREATE INDEX "idx_observation_species_animal" ON "Observation"("species", "animalId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Animal_animalId_key" ON "Animal"("animalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Animal_clientLocalId_key" ON "Animal"("clientLocalId");
 
 -- CreateIndex
 CREATE INDEX "idx_animal_camp_status" ON "Animal"("currentCamp", "status");
@@ -512,7 +781,28 @@ CREATE INDEX "idx_animal_species_camp_status" ON "Animal"("species", "currentCam
 CREATE INDEX "idx_transaction_date" ON "Transaction"("date");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Camp_campId_key" ON "Camp"("campId");
+CREATE INDEX "idx_transaction_animal" ON "Transaction"("animalId");
+
+-- CreateIndex
+CREATE INDEX "idx_transaction_camp" ON "Transaction"("campId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "NvdRecord_nvdNumber_key" ON "NvdRecord"("nvdNumber");
+
+-- CreateIndex
+CREATE INDEX "idx_nvd_issued_at" ON "NvdRecord"("issuedAt");
+
+-- CreateIndex
+CREATE INDEX "idx_nvd_transaction" ON "NvdRecord"("transactionId");
+
+-- CreateIndex
+CREATE INDEX "Camp_species_idx" ON "Camp"("species");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Camp_species_campId_key" ON "Camp"("species", "campId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CampCoverReading_clientLocalId_key" ON "CampCoverReading"("clientLocalId");
 
 -- CreateIndex
 CREATE INDEX "idx_cover_camp_date" ON "CampCoverReading"("campId", "recordedAt");
@@ -521,10 +811,34 @@ CREATE INDEX "idx_cover_camp_date" ON "CampCoverReading"("campId", "recordedAt")
 CREATE INDEX "idx_mob_camp" ON "Mob"("currentCamp");
 
 -- CreateIndex
+CREATE INDEX "Mob_species_idx" ON "Mob"("species");
+
+-- CreateIndex
 CREATE INDEX "idx_task_assignee_status_date" ON "Task"("assignedTo", "status", "dueDate");
 
 -- CreateIndex
 CREATE INDEX "idx_task_date_status" ON "Task"("dueDate", "status");
+
+-- CreateIndex
+CREATE INDEX "idx_task_type" ON "Task"("taskType");
+
+-- CreateIndex
+CREATE INDEX "idx_task_template" ON "Task"("templateId");
+
+-- CreateIndex
+CREATE INDEX "idx_task_template_tenant_type" ON "TaskTemplate"("tenantSlug", "taskType");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaskTemplate_tenantSlug_name_key" ON "TaskTemplate"("tenantSlug", "name");
+
+-- CreateIndex
+CREATE INDEX "idx_task_occurrence_reminder" ON "TaskOccurrence"("reminderAt", "reminderDispatchedAt");
+
+-- CreateIndex
+CREATE INDEX "idx_task_occurrence_at_status" ON "TaskOccurrence"("occurrenceAt", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaskOccurrence_taskId_occurrenceAt_key" ON "TaskOccurrence"("taskId", "occurrenceAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FarmSpeciesSettings_species_key" ON "FarmSpeciesSettings"("species");
@@ -599,16 +913,49 @@ CREATE INDEX "idx_permit_expiry" ON "GamePermit"("expiryDate");
 CREATE INDEX "idx_veld_camp_date" ON "GameVeldCondition"("campId", "date");
 
 -- CreateIndex
+CREATE INDEX "idx_veld_assessment_camp_date" ON "VeldAssessment"("campId", "assessmentDate");
+
+-- CreateIndex
+CREATE INDEX "idx_veld_assessment_date" ON "VeldAssessment"("assessmentDate");
+
+-- CreateIndex
 CREATE INDEX "idx_rainfall_date" ON "GameRainfallRecord"("date");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "rain_norm_latlng_month" ON "RainfallNormal"("latitude", "longitude", "monthIdx");
+CREATE INDEX "idx_rain_norm_latlng" ON "RainfallNormal"("latitude", "longitude");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "idx_rain_norm_latlng" ON "RainfallNormal"("latitude", "longitude");
+CREATE UNIQUE INDEX "RainfallNormal_latitude_longitude_monthIdx_key" ON "RainfallNormal"("latitude", "longitude", "monthIdx");
+
+-- CreateIndex
+CREATE INDEX "idx_it3_tax_year" ON "It3Snapshot"("taxYear");
+
+-- CreateIndex
+CREATE INDEX "idx_it3_issued_at" ON "It3Snapshot"("issuedAt");
+
+-- CreateIndex
+CREATE INDEX "SarsLivestockElection_class_idx" ON "SarsLivestockElection"("species", "ageCategory");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SarsLivestockElection_species_ageCategory_electedYear_key" ON "SarsLivestockElection"("species", "ageCategory", "electedYear");
 
 -- CreateIndex
 CREATE INDEX "idx_notification_read_date" ON "Notification"("isRead", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_collapseKey_idx" ON "Notification"("collapseKey");
+
+-- CreateIndex
+CREATE INDEX "idx_notification_expires_read_created" ON "Notification"("expiresAt", "isRead", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Notification_type_dedupKey_key" ON "Notification"("type", "dedupKey");
+
+-- CreateIndex
+CREATE INDEX "AlertPreference_userId_idx" ON "AlertPreference"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AlertPreference_userId_category_alertType_channel_speciesOverride_key" ON "AlertPreference"("userId", "category", "alertType", "channel", "speciesOverride");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
@@ -617,8 +964,69 @@ CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpo
 CREATE INDEX "idx_push_user" ON "PushSubscription"("userEmail");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "budget_year_month_category" ON "Budget"("year", "month", "categoryName");
+CREATE UNIQUE INDEX "payfast_events_pf_payment_id_idx" ON "PayfastEvent"("pfPaymentId");
+
+-- CreateIndex
+CREATE INDEX "payfast_events_event_time_idx" ON "PayfastEvent"("eventTime");
+
+-- CreateIndex
+CREATE INDEX "payfast_events_applied_at_idx" ON "PayfastEvent"("appliedAt");
+
+-- CreateIndex
+CREATE INDEX "idx_plan_step_plan_seq" ON "RotationPlanStep"("planId", "sequence");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RotationPlanStep_planId_sequence_key" ON "RotationPlanStep"("planId", "sequence");
 
 -- CreateIndex
 CREATE INDEX "idx_budget_period" ON "Budget"("year", "month");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Budget_year_month_categoryName_key" ON "Budget"("year", "month", "categoryName");
+
+-- CreateIndex
+CREATE INDEX "ImportJob_farmId_createdAt_idx" ON "ImportJob"("farmId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CustomField_farmId_appliesTo_name_key" ON "CustomField"("farmId", "appliesTo", "name");
+
+-- CreateIndex
+CREATE INDEX "idx_rag_query_user_date" ON "RagQueryLog"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "idx_rag_query_date" ON "RagQueryLog"("createdAt");
 `;
+
+/**
+ * Every numbered migration under migrations/ as of generation time. The schema
+ * above already reflects all of their effects, so a freshly provisioned tenant
+ * must have these stamped as applied in `_migrations` (see lib/seed-farm-db.ts):
+ * otherwise `pnpm db:migrate` would try to re-apply them and fail on an
+ * already-existing column or table.
+ */
+export const BASELINE_MIGRATION_NAMES: readonly string[] = [
+  '0001_camp_cover_reading_attachment_url.sql',
+  '0002_notification_expires_index.sql',
+  '0003_add_species_to_observation.sql',
+  '0004_nvd_transport.sql',
+  '0007_transaction_is_foreign.sql',
+  '0008_record_legacy_renames.sql',
+  '0009_camp_mob_species.sql',
+  '0010_sars_livestock_election.sql',
+  '0011_aia_tag_fields.sql',
+  '0012_farmsettings_tax_ref_number.sql',
+  '0013_payfast_events.sql',
+  '0014_einstein_chunker_version.sql',
+  '0015_payfast_events_applied_at.sql',
+  '0016_pre_stamp_animal_species_columns.sql',
+  '0017_animal_species_columns.sql',
+  '0018_it3_snapshot.sql',
+  '0019_observation_idempotency.sql',
+  '0020_animal_cover_idempotency.sql',
+  '0021_death_carcass_disposal.sql',
+  '0022_pre_stamp_farmsettings_parity.sql',
+  '0023_farmsettings_parity.sql',
+  '0024_backfill_observation_species_stragglers.sql',
+  '0025_backfill_empty_camp_color.sql',
+  '0026_observation_notes.sql',
+];
