@@ -251,6 +251,35 @@ async function getAppliedNames(db: Client): Promise<Set<string>> {
 }
 
 /**
+ * Stamp migrations as already-applied WITHOUT running their SQL.
+ *
+ * Used at tenant provisioning (lib/seed-farm-db.ts): a freshly seeded tenant
+ * gets the full bootstrap DDL (lib/farm-schema.ts FARM_SCHEMA_SQL), which is
+ * generated from prisma/schema.prisma and therefore already reflects every
+ * numbered migration's effect. Stamping them as applied is what makes a later
+ * `pnpm db:migrate` a correct no-op for that tenant — without it the runner
+ * would try to `ALTER TABLE … ADD COLUMN` a column the bootstrap already
+ * created and fail.
+ *
+ * Idempotent (`INSERT OR IGNORE`) and safe to call on an already-stamped DB.
+ */
+export async function stampMigrationsApplied(
+  db: Client,
+  names: readonly string[],
+): Promise<void> {
+  await db.execute(CREATE_BOOKKEEPING_TABLE);
+  if (names.length === 0) return;
+  const appliedAt = new Date().toISOString();
+  await db.batch(
+    names.map((name) => ({
+      sql: `INSERT OR IGNORE INTO "_migrations" (name, applied_at) VALUES (?, ?)`,
+      args: [name, appliedAt] as [string, string],
+    })),
+    'write',
+  );
+}
+
+/**
  * Apply any pending migrations to `db`. Safe to call repeatedly — already-
  * applied migrations are skipped. Each migration is applied atomically
  * together with its bookkeeping row: a partial failure rolls back cleanly.

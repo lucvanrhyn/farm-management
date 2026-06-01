@@ -353,12 +353,15 @@ model Task {
   taskType  String?
 }
 `;
-    // Task.taskType IS in LEGACY_DECLARED_BUT_UNCREATED_BASELINE.
+    // Task.taskType is grandfathered by an explicit baseline entry. (The
+    // production LEGACY_DECLARED_BUT_UNCREATED_BASELINE is now empty — the
+    // bootstrap covers every Prisma column — so the *mechanism* is exercised
+    // here with a local fixture rather than the real constant.)
     const result = computeDeclaredButUncreatedColumns({
       prismaSchemaSrc: prisma,
       bootstrapDdl: `CREATE TABLE "Task" ( "id" TEXT NOT NULL PRIMARY KEY );`,
       migrations: [],
-      baseline: LEGACY_DECLARED_BUT_UNCREATED_BASELINE,
+      baseline: ['Task.taskType'],
     });
     expect(result).toEqual([]);
   });
@@ -371,12 +374,14 @@ model VeldAssessment {
   notes  String?
 }
 `;
-    // VeldAssessment.* is baselined → none of its columns fail.
+    // VeldAssessment.* grandfathered via a wildcard baseline entry → none of
+    // its columns fail. (Mechanism exercised with a local fixture; the
+    // production baseline is now empty.)
     const result = computeDeclaredButUncreatedColumns({
       prismaSchemaSrc: prisma,
       bootstrapDdl: `CREATE TABLE "Animal" ( "id" TEXT NOT NULL PRIMARY KEY );`,
       migrations: [],
-      baseline: LEGACY_DECLARED_BUT_UNCREATED_BASELINE,
+      baseline: ['VeldAssessment.*'],
     });
     expect(result).toEqual([]);
   });
@@ -389,12 +394,13 @@ model Task {
   brandNewCol String?
 }
 `;
-    // taskType is baselined; brandNewCol is NOT → only brandNewCol fails.
+    // taskType is grandfathered; brandNewCol is NOT → only brandNewCol fails.
+    // (Mechanism exercised with a local fixture baseline.)
     const result = computeDeclaredButUncreatedColumns({
       prismaSchemaSrc: prisma,
       bootstrapDdl: `CREATE TABLE "Task" ( "id" TEXT NOT NULL PRIMARY KEY );`,
       migrations: [],
-      baseline: LEGACY_DECLARED_BUT_UNCREATED_BASELINE,
+      baseline: ['Task.taskType'],
     });
     expect(result).toEqual([{ table: 'Task', column: 'brandNewCol' }]);
     expect(formatDeclaredButUncreatedColumns(result)).toMatch(/Task\.brandNewCol/);

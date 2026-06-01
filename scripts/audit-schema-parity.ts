@@ -353,34 +353,31 @@ function createTableColumns(sql: string): Map<string, Set<string>> {
 // ─── frozen legacy baseline (the ratchet) ───────────────────────────────────
 //
 // `lib/farm-schema.ts FARM_SCHEMA_SQL` is the canonical tenant bootstrap DDL.
-// It is historically INCOMPLETE relative to `prisma/schema.prisma`: as of
-// this guard's introduction, 61 `table.column` entries are declared in Prisma
-// but created by neither the bootstrap DDL nor any numbered migration. They
-// only ever materialised on tenants that had been `prisma db push`-ed (the
-// forbidden path — see CLAUDE.md "do NOT run prisma db push" and memory
-// `feedback-missing-column-premise-vs-prod-shaped-tenant.md`). This is
-// pre-existing tech debt; failing on the whole backlog would jam the
-// prod-promote pipeline repo-wide for every wave — the exact #280 incident
-// this guard exists to prevent the *recurrence* of.
+// It was historically INCOMPLETE relative to `prisma/schema.prisma`: 61
+// `table.column` entries were declared in Prisma but created by neither the
+// bootstrap DDL nor any numbered migration. They only ever materialised on
+// tenants that had been `prisma db push`-ed — which is exactly the H0b / #280
+// onboarding-drift incident: a freshly provisioned tenant was born missing 14
+// tables (ImportJob, EinsteinChunk, NvdRecord, RotationPlan*, Task*, …) and
+// 500'd on its first import.
 //
-// So the guard is a RATCHET, per `feedback-gate-must-validate-real-pr.md`:
-// these known entries are grandfathered. The gate fails only on a
-// declared-but-uncreated column that is NOT in this frozen set — i.e. a NEW
-// regression of the #280/#282 class. The set lives in source on origin/main,
-// so a PR is diffed against main's baseline (PR-introduced uncreated columns
-// fail; legacy debt does not). Shrinking this list (by fixing the bootstrap
-// DDL / adding migrations in a separate scoped wave) is always safe; growing
-// it requires a deliberate edit and review. `*` = entire table unbacked.
+// That drift was eliminated at its SOURCE (2026-06-01): `lib/farm-schema.ts`
+// is now generated from `prisma/schema.prisma` by `pnpm db:gen-schema` and CI
+// proves it stays current via `pnpm db:gen-schema:check`. With the bootstrap
+// provably equal to Prisma — minus a single deliberate exclusion — the ratchet
+// collapsed from 61 entries to just the EinsteinChunk columns below. The static
+// guard now reads the bootstrap from the WORKING TREE (not origin/main) so a
+// bootstrap-fix PR can actually go green here; `db:gen-schema:check` is the
+// real first line of defence.
+//
+// The remaining entries are NOT drift: `EinsteinChunk` is intentionally omitted
+// from the bootstrap (its `embedding` needs libSQL `F32_BLOB(1536)` + a native
+// `libsql_vector_idx` that Prisma cannot emit — see gen-farm-schema.ts
+// EXCLUDE_TABLES and scripts/migrate-phase-l-einstein.ts, which provisions it).
+// These are the columns Prisma declares for it that no migration ADD COLUMNs.
+// Growing this list with any OTHER table.column means a real declared-but-
+// uncreated regression slipped past `db:gen-schema:check` — root-cause it.
 export const LEGACY_DECLARED_BUT_UNCREATED_BASELINE: ReadonlyArray<string> = [
-  'AlertPreference.*',
-  'Animal.damNote',
-  'Animal.importJobId',
-  'Animal.sireNote',
-  'Camp.maxGrazingDaysOverride',
-  'Camp.restDaysOverride',
-  'Camp.rotationNotes',
-  'Camp.veldType',
-  'CustomField.*',
   'EinsteinChunk.createdAt',
   'EinsteinChunk.embedding',
   'EinsteinChunk.entityId',
@@ -391,48 +388,6 @@ export const LEGACY_DECLARED_BUT_UNCREATED_BASELINE: ReadonlyArray<string> = [
   'EinsteinChunk.sourceUpdatedAt',
   'EinsteinChunk.text',
   'EinsteinChunk.tokensUsed',
-  'GameRainfallRecord.lat',
-  'GameRainfallRecord.lng',
-  'ImportJob.*',
-  'Notification.collapseKey',
-  'Notification.dedupKey',
-  'Notification.digestDispatchedAt',
-  'Notification.payload',
-  'Notification.pushDispatchedAt',
-  'Notification.updatedAt',
-  'NvdRecord.animalIds',
-  'NvdRecord.animalSnapshot',
-  'NvdRecord.buyerAddress',
-  'NvdRecord.buyerContact',
-  'NvdRecord.buyerName',
-  'NvdRecord.declarationsJson',
-  'NvdRecord.destinationAddress',
-  'NvdRecord.generatedBy',
-  'NvdRecord.id',
-  'NvdRecord.issuedAt',
-  'NvdRecord.nvdNumber',
-  'NvdRecord.pdfHash',
-  'NvdRecord.saleDate',
-  'NvdRecord.sellerSnapshot',
-  'NvdRecord.transactionId',
-  'NvdRecord.voidedAt',
-  'NvdRecord.voidReason',
-  'RagQueryLog.*',
-  'RotationPlan.*',
-  'RotationPlanStep.*',
-  'Task.assigneeIds',
-  'Task.blockedByIds',
-  'Task.completedObservationId',
-  'Task.lat',
-  'Task.lng',
-  'Task.recurrenceRule',
-  'Task.recurrenceSource',
-  'Task.reminderOffset',
-  'Task.taskType',
-  'Task.templateId',
-  'TaskOccurrence.*',
-  'TaskTemplate.*',
-  'VeldAssessment.*',
 ];
 
 export interface ComputeDeclaredButUncreatedArgs {
@@ -618,21 +573,9 @@ async function fsLoadMigrationSqlsFromWorkingTreeImpl(): Promise<
   return files.map((m) => ({ name: m.name, sql: m.sql }));
 }
 
-async function gitReadBaseRefBootstrapDdlImpl(): Promise<string | null> {
-  try {
-    const { stdout } = await execFileP(
-      'git',
-      ['show', 'origin/main:lib/farm-schema.ts'],
-      {
-        cwd: fileURLToPath(new URL('..', import.meta.url)),
-        maxBuffer: 16 * 1024 * 1024,
-      },
-    );
-    return stdout;
-  } catch {
-    return null;
-  }
-}
+// (gitReadBaseRefBootstrapDdlImpl removed: the static guard now always reads
+// the bootstrap DDL from the working tree — see main() — so the origin/main
+// reader is no longer needed.)
 
 /** Human-readable report for the CLI / PR comment. Names every offender. */
 export function formatDeclaredButUncreatedColumns(
@@ -724,14 +667,28 @@ async function main(argv: readonly string[]): Promise<number> {
 
   // STATIC declared-but-uncreated guard (issue #282, PRD #279 finding #1).
   // Runs with zero DB access — catches the FarmSettings incident class
-  // (#280) at PR time before any tenant is touched. Inputs (migrations +
-  // bootstrap DDL) come from origin/main for the same false-positive-safety
-  // reason the prisma schema does. Contributes to driftDetected.
+  // (#280) at PR time before any tenant is touched. Contributes to
+  // driftDetected.
+  //
+  // The migration list comes from origin/main (live-tenant lag: a new-in-PR
+  // migration isn't on tenants yet, so it must not count as "expected"). The
+  // bootstrap DDL, however, is taken from the WORKING TREE: it is a static
+  // file with no live-tenant analogue, and reading it from origin/main made
+  // the guard structurally unable to validate a bootstrap-fix PR — the H0b
+  // drift could be fully repaired in a branch yet the gate would keep judging
+  // it against the stale main bootstrap and never go green. New-in-PR Prisma
+  // columns are still shielded from false positives because `prismaSchemaSrc`
+  // (the expected-set) is read from origin/main. `pnpm db:gen-schema:check`
+  // independently proves FARM_SCHEMA_SQL == prisma at PR time.
+  //
+  // The base-ref bootstrap reader is a deliberate no-op (`async () => null`) so
+  // resolveStaticGuardInputs falls straight through to the working-tree value
+  // without an unused `git show origin/main:lib/farm-schema.ts`.
   const { bootstrapDdl, migrations: baseMigrationSqls } =
     await resolveStaticGuardInputs({
       gitReadBaseRefMigrationSqls: gitReadBaseRefMigrationSqlsImpl,
       fsLoadMigrationSqlsFromWorkingTree: fsLoadMigrationSqlsFromWorkingTreeImpl,
-      gitReadBaseRefBootstrapDdl: gitReadBaseRefBootstrapDdlImpl,
+      gitReadBaseRefBootstrapDdl: async () => null,
       fsLoadBootstrapDdlFromWorkingTree: () => FARM_SCHEMA_SQL,
       log: (msg) => console.warn(msg),
     });
