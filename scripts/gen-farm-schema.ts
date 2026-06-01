@@ -39,6 +39,20 @@ const TARGET = join(REPO_ROOT, 'lib', 'farm-schema.ts');
 const PRISMA_BIN = join(REPO_ROOT, 'node_modules', '.bin', 'prisma');
 const MIGRATIONS_DIR = join(REPO_ROOT, 'migrations');
 
+/**
+ * Tables that are declared in prisma/schema.prisma but MUST NOT be created by
+ * the tenant bootstrap, because they require libSQL-specific DDL that Prisma
+ * cannot express. They are operator-provisioned separately.
+ *
+ *  - EinsteinChunk: its `embedding` column must be `F32_BLOB(1536)` and carry a
+ *    native `libsql_vector_idx` ANN index. Prisma only knows it as `Bytes` →
+ *    plain `BLOB` + B-tree indexes, which silently breaks vector search and
+ *    makes `scripts/migrate-phase-l-einstein.ts` (the operator provisioner)
+ *    refuse the tenant. So Einstein's chunk store stays operator-provisioned,
+ *    exactly as it was before this file was regenerated.
+ */
+const EXCLUDE_TABLES: readonly string[] = ['EinsteinChunk'];
+
 /** Run `prisma migrate diff` and return the from-empty DDL for the schema. */
 function generateSchemaSql(): string {
   const out = execFileSync(
@@ -53,7 +67,26 @@ function generateSchemaSql(): string {
     ],
     { cwd: REPO_ROOT, encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 },
   );
-  return out.replace(/\s+$/, '');
+  return stripExcludedTables(out.replace(/\s+$/, ''), EXCLUDE_TABLES);
+}
+
+/**
+ * Drop the `CREATE TABLE` and `CREATE INDEX` blocks for any excluded table.
+ * Prisma emits one statement per blank-line-separated block (`-- CreateTable` /
+ * `-- CreateIndex` header + statement); a block targets an excluded table when
+ * its `CREATE TABLE "X"` or `… ON "X"` names one. Excluded tables have no
+ * inbound foreign keys (verified), so removing them leaves no dangling refs.
+ */
+function stripExcludedTables(sql: string, exclude: readonly string[]): string {
+  if (exclude.length === 0) return sql;
+  const ex = new Set(exclude);
+  const blocks = sql.split(/\n{2,}/);
+  const kept = blocks.filter((block) => {
+    const match =
+      /CREATE TABLE "(\w+)"/.exec(block) ?? /\bON "(\w+)"/.exec(block);
+    return !(match && ex.has(match[1]));
+  });
+  return kept.join('\n\n');
 }
 
 /** Leaf `migrations/NNNN_*.sql` filenames, sorted — same shape loadMigrations uses. */
@@ -80,6 +113,10 @@ function renderFile(schemaSql: string, migrationNames: readonly string[]): strin
  *
  * Source of truth: prisma/schema.prisma, via
  *   prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
+ *
+ * Intentionally omitted (operator-provisioned, libSQL-specific DDL Prisma
+ * can't express): EinsteinChunk — see scripts/gen-farm-schema.ts EXCLUDE_TABLES
+ * and scripts/migrate-phase-l-einstein.ts.
  */
 export const FARM_SCHEMA_SQL = \`
 ${escapeForTemplateLiteral(schemaSql)}

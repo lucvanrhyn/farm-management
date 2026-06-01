@@ -40,13 +40,23 @@ afterEach(() => {
 });
 
 describe('seedFarmDatabase bootstrap completeness', () => {
-  it('FARM_SCHEMA_SQL applies cleanly and creates every prisma-declared table', async () => {
+  // EinsteinChunk is deliberately operator-provisioned (libSQL F32_BLOB +
+  // vector index that Prisma can't emit) — see gen-farm-schema.ts EXCLUDE_TABLES.
+  const BOOTSTRAP_EXCLUDED = new Set(['EinsteinChunk']);
+
+  it('FARM_SCHEMA_SQL applies cleanly and creates every prisma-declared table (bar operator-provisioned ones)', async () => {
     db = createClient({ url: ':memory:' });
     await db.executeMultiple(FARM_SCHEMA_SQL);
 
     const live = await tablesIn(db);
-    const missing = prismaTables().filter((t) => !live.has(t));
+    const missing = prismaTables().filter(
+      (t) => !live.has(t) && !BOOTSTRAP_EXCLUDED.has(t),
+    );
     expect(missing, `tables declared in prisma but not created by bootstrap: ${missing.join(', ')}`).toEqual([]);
+
+    // The exclusion is intentional and narrow — assert it really is absent so a
+    // future accidental inclusion (with Prisma's wrong plain-BLOB DDL) is caught.
+    expect(live.has('EinsteinChunk'), 'EinsteinChunk must stay operator-provisioned').toBe(false);
   });
 
   it('creates the tables/columns the onboarding flow needs (ImportJob, Observation)', async () => {

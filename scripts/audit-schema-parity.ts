@@ -364,16 +364,31 @@ function createTableColumns(sql: string): Map<string, Set<string>> {
 // That drift was eliminated at its SOURCE (2026-06-01): `lib/farm-schema.ts`
 // is now generated from `prisma/schema.prisma` by `pnpm db:gen-schema` and CI
 // proves it stays current via `pnpm db:gen-schema:check`. With the bootstrap
-// provably equal to Prisma, no Prisma-declared column can be uncreated, so the
-// ratchet is empty — exactly the "shrinking this list by fixing the bootstrap
-// DDL is always safe" outcome the prior comment anticipated. The static guard
-// below now reads the bootstrap from the WORKING TREE (not origin/main) so a
-// future bootstrap-fix PR can actually go green here; `db:gen-schema:check` is
-// the real first line of defence. Growing this list again would mean a new
-// declared-but-uncreated column slipped past `db:gen-schema:check` — treat any
-// such addition as a regression to root-cause, not paper over. `*` = whole
-// table unbacked.
-export const LEGACY_DECLARED_BUT_UNCREATED_BASELINE: ReadonlyArray<string> = [];
+// provably equal to Prisma — minus a single deliberate exclusion — the ratchet
+// collapsed from 61 entries to just the EinsteinChunk columns below. The static
+// guard now reads the bootstrap from the WORKING TREE (not origin/main) so a
+// bootstrap-fix PR can actually go green here; `db:gen-schema:check` is the
+// real first line of defence.
+//
+// The remaining entries are NOT drift: `EinsteinChunk` is intentionally omitted
+// from the bootstrap (its `embedding` needs libSQL `F32_BLOB(1536)` + a native
+// `libsql_vector_idx` that Prisma cannot emit — see gen-farm-schema.ts
+// EXCLUDE_TABLES and scripts/migrate-phase-l-einstein.ts, which provisions it).
+// These are the columns Prisma declares for it that no migration ADD COLUMNs.
+// Growing this list with any OTHER table.column means a real declared-but-
+// uncreated regression slipped past `db:gen-schema:check` — root-cause it.
+export const LEGACY_DECLARED_BUT_UNCREATED_BASELINE: ReadonlyArray<string> = [
+  'EinsteinChunk.createdAt',
+  'EinsteinChunk.embedding',
+  'EinsteinChunk.entityId',
+  'EinsteinChunk.entityType',
+  'EinsteinChunk.id',
+  'EinsteinChunk.langTag',
+  'EinsteinChunk.modelId',
+  'EinsteinChunk.sourceUpdatedAt',
+  'EinsteinChunk.text',
+  'EinsteinChunk.tokensUsed',
+];
 
 export interface ComputeDeclaredButUncreatedArgs {
   /** `prisma/schema.prisma` source (from origin/main, see resolver above). */
@@ -558,21 +573,9 @@ async function fsLoadMigrationSqlsFromWorkingTreeImpl(): Promise<
   return files.map((m) => ({ name: m.name, sql: m.sql }));
 }
 
-async function gitReadBaseRefBootstrapDdlImpl(): Promise<string | null> {
-  try {
-    const { stdout } = await execFileP(
-      'git',
-      ['show', 'origin/main:lib/farm-schema.ts'],
-      {
-        cwd: fileURLToPath(new URL('..', import.meta.url)),
-        maxBuffer: 16 * 1024 * 1024,
-      },
-    );
-    return stdout;
-  } catch {
-    return null;
-  }
-}
+// (gitReadBaseRefBootstrapDdlImpl removed: the static guard now always reads
+// the bootstrap DDL from the working tree — see main() — so the origin/main
+// reader is no longer needed.)
 
 /** Human-readable report for the CLI / PR comment. Names every offender. */
 export function formatDeclaredButUncreatedColumns(
@@ -669,7 +672,7 @@ async function main(argv: readonly string[]): Promise<number> {
   //
   // The migration list comes from origin/main (live-tenant lag: a new-in-PR
   // migration isn't on tenants yet, so it must not count as "expected"). The
-  // bootstrap DDL, however, is read from the WORKING TREE: it is a static
+  // bootstrap DDL, however, is taken from the WORKING TREE: it is a static
   // file with no live-tenant analogue, and reading it from origin/main made
   // the guard structurally unable to validate a bootstrap-fix PR — the H0b
   // drift could be fully repaired in a branch yet the gate would keep judging
@@ -677,16 +680,21 @@ async function main(argv: readonly string[]): Promise<number> {
   // columns are still shielded from false positives because `prismaSchemaSrc`
   // (the expected-set) is read from origin/main. `pnpm db:gen-schema:check`
   // independently proves FARM_SCHEMA_SQL == prisma at PR time.
-  const { migrations: baseMigrationSqls } = await resolveStaticGuardInputs({
-    gitReadBaseRefMigrationSqls: gitReadBaseRefMigrationSqlsImpl,
-    fsLoadMigrationSqlsFromWorkingTree: fsLoadMigrationSqlsFromWorkingTreeImpl,
-    gitReadBaseRefBootstrapDdl: gitReadBaseRefBootstrapDdlImpl,
-    fsLoadBootstrapDdlFromWorkingTree: () => FARM_SCHEMA_SQL,
-    log: (msg) => console.warn(msg),
-  });
+  //
+  // The base-ref bootstrap reader is a deliberate no-op (`async () => null`) so
+  // resolveStaticGuardInputs falls straight through to the working-tree value
+  // without an unused `git show origin/main:lib/farm-schema.ts`.
+  const { bootstrapDdl, migrations: baseMigrationSqls } =
+    await resolveStaticGuardInputs({
+      gitReadBaseRefMigrationSqls: gitReadBaseRefMigrationSqlsImpl,
+      fsLoadMigrationSqlsFromWorkingTree: fsLoadMigrationSqlsFromWorkingTreeImpl,
+      gitReadBaseRefBootstrapDdl: async () => null,
+      fsLoadBootstrapDdlFromWorkingTree: () => FARM_SCHEMA_SQL,
+      log: (msg) => console.warn(msg),
+    });
   const declaredButUncreated = computeDeclaredButUncreatedColumns({
     prismaSchemaSrc,
-    bootstrapDdl: FARM_SCHEMA_SQL,
+    bootstrapDdl,
     migrations: baseMigrationSqls,
     baseline: LEGACY_DECLARED_BUT_UNCREATED_BASELINE,
   });

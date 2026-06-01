@@ -8,6 +8,10 @@
  *
  * Source of truth: prisma/schema.prisma, via
  *   prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
+ *
+ * Intentionally omitted (operator-provisioned, libSQL-specific DDL Prisma
+ * can't express): EinsteinChunk — see scripts/gen-farm-schema.ts EXCLUDE_TABLES
+ * and scripts/migrate-phase-l-einstein.ts.
  */
 export const FARM_SCHEMA_SQL = `
 -- CreateTable
@@ -710,22 +714,6 @@ CREATE TABLE "CustomField" (
 );
 
 -- CreateTable
-CREATE TABLE "EinsteinChunk" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "entityType" TEXT NOT NULL,
-    "entityId" TEXT NOT NULL,
-    "langTag" TEXT NOT NULL DEFAULT 'en',
-    "text" TEXT NOT NULL,
-    "embedding" BLOB NOT NULL,
-    "tokensUsed" INTEGER NOT NULL,
-    "modelId" TEXT NOT NULL,
-    "sourceUpdatedAt" DATETIME NOT NULL,
-    "chunkerVersion" TEXT NOT NULL DEFAULT '0',
-    "contentHash" TEXT NOT NULL DEFAULT '',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- CreateTable
 CREATE TABLE "RagQueryLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
@@ -1001,15 +989,6 @@ CREATE INDEX "ImportJob_farmId_createdAt_idx" ON "ImportJob"("farmId", "createdA
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CustomField_farmId_appliesTo_name_key" ON "CustomField"("farmId", "appliesTo", "name");
-
--- CreateIndex
-CREATE INDEX "idx_einstein_chunk_entity" ON "EinsteinChunk"("entityType", "entityId");
-
--- CreateIndex
-CREATE INDEX "idx_einstein_chunk_stale" ON "EinsteinChunk"("sourceUpdatedAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "EinsteinChunk_entityType_entityId_langTag_key" ON "EinsteinChunk"("entityType", "entityId", "langTag");
 
 -- CreateIndex
 CREATE INDEX "idx_rag_query_user_date" ON "RagQueryLog"("userId", "createdAt");
