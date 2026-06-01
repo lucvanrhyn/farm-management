@@ -204,6 +204,14 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   'auth/register/route.ts::POST',
   'auth/resend-verification/route.ts::POST',
   'auth/verify-email/route.ts::GET',
+  // Issue #102 slice 1 — password-reset request route. publicHandler (no-auth
+  // adapter); pre-session entry point. Anti-enumeration: always returns
+  // { ok: true }. No admin gate — structurally identical to resend-verification.
+  'auth/forgot-password/route.ts::POST',
+  // Issue #102 slice 2 — password-reset confirm route. publicHandler (no-auth
+  // adapter); pre-session entry point. Token + password required in body.
+  // Returns { valid: true|false } (200) — no admin gate by design.
+  'auth/reset-password/route.ts::POST',
 
   // Wave H4 (#177) — framework-managed routes wrapped in `publicHandler`.
   // publicHandler is the no-auth adapter. NextAuth's catch-all manages its

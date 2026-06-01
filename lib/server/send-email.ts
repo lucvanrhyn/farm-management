@@ -37,7 +37,8 @@ export type EmailTemplate =
   | "verify-email"
   | "alert-digest"
   | "quote"
-  | "consulting-lead";
+  | "consulting-lead"
+  | "password-reset";
 
 export interface SendEmailOptions<T = Record<string, unknown>> {
   to: string;
@@ -175,11 +176,50 @@ const consultingLeadRenderer: Renderer = (data) => {
   };
 };
 
+// ── Password-reset renderer (issue #102 slice 1) ────────────────────────────
+// Additive — does not modify any existing renderer. The reset link targets
+// /reset-password (the slice-2 confirm page; safe to reference now).
+// getBaseUrl() is used here (same as verify-email) so the link matches the
+// NEXTAUTH_URL deployment environment. No PII other than the token itself
+// appears in the URL — the token is single-use and expires in 24 h.
+
+const passwordResetRenderer: Renderer = (data) => {
+  const token = String(data.token ?? "");
+  const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
+  return {
+    subject: "Reset your FarmTrack password",
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+        <h1 style="color: #1A1510; font-size: 24px;">Reset your password</h1>
+        <p style="color: #4A3A2A; font-size: 16px; line-height: 1.5;">
+          We received a request to reset the password for your FarmTrack account.
+          Click the button below to choose a new password.
+        </p>
+        <a href="${resetUrl}" style="
+          display: inline-block;
+          background: #8B6914;
+          color: #F0DEB8;
+          padding: 12px 24px;
+          border-radius: 8px;
+          text-decoration: none;
+          font-weight: 500;
+          margin: 16px 0;
+        ">Reset Password</a>
+        <p style="color: #8A8A8A; font-size: 13px; margin-top: 24px;">
+          This link expires in 24 hours. If you didn't request a password reset,
+          you can safely ignore this email — your password will not change.
+        </p>
+      </div>
+    `,
+  };
+};
+
 const RENDERERS: Record<EmailTemplate, Renderer> = {
   "verify-email": verifyEmailRenderer,
   "alert-digest": alertDigestRenderer,
   quote: quoteRenderer,
   "consulting-lead": consultingLeadRenderer,
+  "password-reset": passwordResetRenderer,
 };
 
 // ── Public API ──────────────────────────────────────────────────────────────
