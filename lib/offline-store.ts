@@ -608,19 +608,26 @@ export function isTerminalStatus(statusCode: number | null): boolean {
  * bound it replays forever: a poison message that pins the sync queue
  * ("Attempted N times · HTTP 500 · Stuck") and slows every later row.
  *
- * The budget bounds those genuinely-transient retries. After this many failed
- * sync attempts a row is escalated to terminal / dead-letter REGARDLESS of
- * status, so it stops looping and surfaces in the existing dead-letter UI for
- * the user to inspect / discard. A genuinely-transient outage (server briefly
- * down) still retries up to the cap, then gives up gracefully rather than
- * hammering the queue.
+ * The budget bounds retries of a failed row. After this many sync attempts a row
+ * is escalated to terminal / dead-letter REGARDLESS of status, so it stops being
+ * re-armable and surfaces in the dead-letter UI with a Discard control instead of
+ * an endless Retry.
  *
- * 5 is the empirical sweet spot: enough headroom to ride out a short server
- * blip / connectivity flap (each retry is a separate sync cycle, typically
- * minutes apart on a reconnecting device) without letting a deterministic
- * server bug burn an unbounded number of cycles. The `attempts` counter is
- * already persisted (#208) and bumped by `applyFailureMeta` on every drain
- * attempt, so enforcing the cap needs no IDB schema bump.
+ * IMPORTANT — where the loop actually is: failed rows are NOT auto-retried. They
+ * live in their own bucket (#208), excluded from every automatic drain
+ * (`getPendingObservations` is pending-only), so a deterministic-500 row rests
+ * until the user taps "Retry all" in the dead-letter dialog, which flips it back
+ * to `pending` (`markXPending`) for one more attempt. Each such manual retry that
+ * re-fails bumps `attempts` by one (via `applyFailureMeta`). Before OBS-1 a
+ * deterministic 500 was transient-by-status, so "Retry all" could re-arm it
+ * forever ("Attempted N times · HTTP 500 · Stuck") with no terminal state and no
+ * Discard. This cap turns that unbounded MANUAL retry loop into a dead-letter
+ * after 5 attempts.
+ *
+ * 5 gives a user enough manual retries to clear a genuinely-transient failure
+ * (a real outage that has since recovered) without letting a deterministic server
+ * bug be re-armed indefinitely. `attempts` is already persisted (#208) and bumped
+ * by `applyFailureMeta` on every drain attempt, so the cap needs no IDB schema bump.
  */
 export const MAX_SYNC_ATTEMPTS = 5;
 
