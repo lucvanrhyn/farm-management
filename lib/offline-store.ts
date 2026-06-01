@@ -597,14 +597,66 @@ export function isTerminalStatus(statusCode: number | null): boolean {
 }
 
 /**
- * Issue #324 — a failed queue row is "terminal" (a non-retryable poison
- * message) iff its most-recent failure carried a terminal HTTP status. The
- * dead-letter UI uses this to render terminal rows distinctly (no blind
- * "Retry"), and the re-queue helpers use it to refuse to re-arm a poison row.
+ * OBS-1 — retry budget / max-attempts cap.
+ *
+ * `isTerminalStatus` is terminal-by-STATUS only. It cannot see the structural
+ * complement: a PERSISTENT server-side error that surfaces as HTTP 500 (a
+ * schema-mismatch `no such column`, an `AnimalNotFoundError` mapped to an
+ * opaque 500, any deterministic server bug). Such a row is terminal IN REALITY
+ * — replaying the identical payload can never succeed — yet transient BY STATUS
+ * (5xx / `null` / 401 / 403 / 408 / 429 are all retryable above). With no upper
+ * bound it replays forever: a poison message that pins the sync queue
+ * ("Attempted N times · HTTP 500 · Stuck") and slows every later row.
+ *
+ * The budget bounds retries of a failed row. After this many sync attempts a row
+ * is escalated to terminal / dead-letter REGARDLESS of status, so it stops being
+ * re-armable and surfaces in the dead-letter UI with a Discard control instead of
+ * an endless Retry.
+ *
+ * IMPORTANT — where the loop actually is: failed rows are NOT auto-retried. They
+ * live in their own bucket (#208), excluded from every automatic drain
+ * (`getPendingObservations` is pending-only), so a deterministic-500 row rests
+ * until the user taps "Retry all" in the dead-letter dialog, which flips it back
+ * to `pending` (`markXPending`) for one more attempt. Each such manual retry that
+ * re-fails bumps `attempts` by one (via `applyFailureMeta`). Before OBS-1 a
+ * deterministic 500 was transient-by-status, so "Retry all" could re-arm it
+ * forever ("Attempted N times · HTTP 500 · Stuck") with no terminal state and no
+ * Discard. This cap turns that unbounded MANUAL retry loop into a dead-letter
+ * after 5 attempts.
+ *
+ * 5 gives a user enough manual retries to clear a genuinely-transient failure
+ * (a real outage that has since recovered) without letting a deterministic server
+ * bug be re-armed indefinitely. `attempts` is already persisted (#208) and bumped
+ * by `applyFailureMeta` on every drain attempt, so the cap needs no IDB schema bump.
+ */
+export const MAX_SYNC_ATTEMPTS = 5;
+
+/**
+ * Issue #324 + OBS-1 — a failed queue row is "terminal" (a non-retryable poison
+ * message) iff EITHER:
+ *
+ *   - its most-recent failure carried a terminal HTTP status (400/404/422), OR
+ *   - its `attempts` count has reached the retry budget (`MAX_SYNC_ATTEMPTS`).
+ *     An attempts-exhausted transient row (repeated 5xx / network error) is now
+ *     terminal: the deterministic-500 poison message can never drain otherwise.
+ *
+ * This is the SINGLE enforcement seam for the budget. Every consumer that gates
+ * on terminality already routes through here — the three re-queue writers
+ * (`markObservationPending` / `markAnimalCreatePending` /
+ * `markCoverReadingPending`), the dead-letter UI's `isTerminal` flag, and the
+ * `discardFailedX` escape hatches — so capping here dead-letters an exhausted
+ * row across all of them without threading `attempts` through each call site.
+ *
+ * The two pure classifiers (`classifySyncFailure`, `isTerminalStatus`) stay
+ * status-only by design: they have no row context. The budget is a property of
+ * a PERSISTED row's history, so it is enforced at the row-level re-queue seam
+ * (this function), which is exactly the layer the sync drain consults before
+ * re-arming a failed row.
  */
 export function isTerminalFailure(
-  row: Pick<PendingQueueFailureMeta, 'lastStatusCode'>,
+  row: Pick<PendingQueueFailureMeta, 'lastStatusCode' | 'attempts'>,
 ): boolean {
+  if (row.attempts >= MAX_SYNC_ATTEMPTS) return true;
   return isTerminalStatus(row.lastStatusCode ?? null);
 }
 
