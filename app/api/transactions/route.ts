@@ -45,6 +45,31 @@ interface CreateTransactionBody {
   isForeign?: boolean | null;
 }
 
+// api-F4 — the 5 numeric fields. `amount` is required; the rest are optional
+// (guarded only when present and non-null). Downstream `createTransaction`
+// coerces these via parseFloat/parseInt, which silently accept NaN / Infinity
+// / leading-numeric junk ("12abc") — so a non-finite value used to persist and
+// poison every IT3 + finance aggregate. We reject at the input boundary here.
+const NUMERIC_FIELDS: readonly string[] = [
+  "amount",
+  "quantity",
+  "avgMassKg",
+  "fees",
+  "transportCost",
+];
+
+/**
+ * True when `v` is present (non-null/undefined) yet NOT a finite number.
+ * `Number(...)` does whole-string coercion (unlike parseFloat), and an empty
+ * or whitespace-only string is treated as non-finite (Number("") === 0 would
+ * otherwise silently become a zero).
+ */
+function isNonFinite(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string" && v.trim() === "") return true;
+  return !Number.isFinite(typeof v === "number" ? v : Number(v));
+}
+
 const createTransactionSchema = {
   parse(input: unknown): CreateTransactionBody {
     const body = (input ?? {}) as Record<string, unknown>;
@@ -60,6 +85,14 @@ const createTransactionSchema = {
     }
     if (typeof body.date !== "string" || !body.date) {
       fieldErrors.date = "date is required";
+    }
+    // api-F4 finite-guard — runs after presence so "amount required" wins for
+    // the empty/missing case; the rest catch NaN/Infinity/junk on every field.
+    for (const field of NUMERIC_FIELDS) {
+      if (fieldErrors[field]) continue;
+      if (isNonFinite(body[field])) {
+        fieldErrors[field] = `${field} must be a finite number`;
+      }
     }
     if (Object.keys(fieldErrors).length > 0) {
       throw new RouteValidationError(
