@@ -17,6 +17,8 @@ import {
 
 type InsertedAnimal = Record<string, unknown>;
 
+type MockCamp = { campId: string; campName: string; species: string };
+
 type MockState = {
   existingAnimalIds: string[];
   insertedAnimals: InsertedAnimal[];
@@ -25,6 +27,12 @@ type MockState = {
   importJobUpdateError: Error | null;
   importJobUpdateCalls: Array<{ where: unknown; data: unknown }>;
   transactionCalls: number;
+  /** Camps already on the farm (S12 camp resolution). */
+  existingCamps: MockCamp[];
+  /** Camps the import created. */
+  createdCamps: Array<Record<string, unknown>>;
+  /** Queue of errors keyed by campId: next camp.create() for it rejects. */
+  campCreateErrorsByCampId: Map<string, Error>;
 };
 
 function makeMockPrisma(state: MockState) {
@@ -71,10 +79,34 @@ function makeMockPrisma(state: MockState) {
     },
   );
 
+  const campFindMany = vi.fn(
+    async ({ where }: { where?: { species?: { in: string[] } } } = {}) => {
+      const speciesIn = where?.species?.in;
+      return state.existingCamps.filter(
+        (c) => speciesIn === undefined || speciesIn.includes(c.species),
+      );
+    },
+  );
+
+  const campCreate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+    const campId = data.campId as string;
+    const queued = state.campCreateErrorsByCampId.get(campId);
+    if (queued) {
+      state.campCreateErrorsByCampId.delete(campId);
+      throw queued;
+    }
+    state.createdCamps.push(data);
+    return { ...data, id: `camp-cuid-${campId}` };
+  });
+
   const prisma = {
     animal: {
       findMany: animalFindMany,
       create: animalCreate,
+    },
+    camp: {
+      findMany: campFindMany,
+      create: campCreate,
     },
     importJob: {
       update: importJobUpdate,
@@ -82,7 +114,15 @@ function makeMockPrisma(state: MockState) {
     $transaction,
   } as unknown as PrismaClient;
 
-  return { prisma, animalCreate, animalFindMany, importJobUpdate, $transaction };
+  return {
+    prisma,
+    animalCreate,
+    animalFindMany,
+    campFindMany,
+    campCreate,
+    importJobUpdate,
+    $transaction,
+  };
 }
 
 function makeState(overrides: Partial<MockState> = {}): MockState {
@@ -93,6 +133,9 @@ function makeState(overrides: Partial<MockState> = {}): MockState {
     importJobUpdateError: null,
     importJobUpdateCalls: [],
     transactionCalls: 0,
+    existingCamps: [],
+    createdCamps: [],
+    campCreateErrorsByCampId: new Map(),
     ...overrides,
   };
 }
@@ -627,6 +670,176 @@ describe("commitImport", () => {
         earTag: "BAD-ST",
         reason: "invalid status",
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // S12 (H2/OB-006) — referenced camps that don't exist yet are created as
+  // species-scoped placeholders; existing camps are reused, never duplicated.
+  // ---------------------------------------------------------------------------
+  describe("camp resolution (S12 / H2 / OB-006)", () => {
+    it("creates a species-scoped placeholder camp for an unknown reference and assigns its slug", async () => {
+      const state = makeState();
+      const { prisma, campCreate } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-1", currentCamp: "Nuwe Kamp" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(res.inserted).toBe(1);
+      expect(campCreate).toHaveBeenCalledTimes(1);
+      expect(state.createdCamps[0]).toMatchObject({
+        campId: "nuwe-kamp",
+        campName: "Nuwe Kamp",
+        species: "cattle",
+      });
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "C-1",
+        currentCamp: "nuwe-kamp",
+      });
+    });
+
+    it("reuses an existing camp referenced by campId — no duplicate created", async () => {
+      const state = makeState({
+        existingCamps: [
+          { campId: "weiveld-1", campName: "Weiveld 1", species: "cattle" },
+        ],
+      });
+      const { prisma, campCreate } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-2", currentCamp: "weiveld-1" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(campCreate).not.toHaveBeenCalled();
+      expect(state.insertedAnimals[0]).toMatchObject({
+        currentCamp: "weiveld-1",
+      });
+    });
+
+    it("reuses an existing camp matched by display name (trimmed, case-insensitive)", async () => {
+      const state = makeState({
+        existingCamps: [
+          { campId: "bergkamp", campName: "Bergkamp", species: "cattle" },
+        ],
+      });
+      const { prisma, campCreate } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-3", currentCamp: " bergKAMP " }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(campCreate).not.toHaveBeenCalled();
+      expect(state.insertedAnimals[0]).toMatchObject({
+        currentCamp: "bergkamp",
+      });
+    });
+
+    it("creates a sheep camp even when a cattle camp shares the same campId (composite key)", async () => {
+      const state = makeState({
+        existingCamps: [
+          { campId: "north-01", campName: "North 01", species: "cattle" },
+        ],
+      });
+      const { prisma, campCreate } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "S-1", currentCamp: "north-01", species: "sheep" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(campCreate).toHaveBeenCalledTimes(1);
+      expect(state.createdCamps[0]).toMatchObject({
+        campId: "north-01",
+        species: "sheep",
+      });
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "S-1",
+        species: "sheep",
+        currentCamp: "north-01",
+      });
+    });
+
+    it('keeps the "unassigned" sentinel for rows without a camp — nothing created', async () => {
+      const state = makeState();
+      const { prisma, campCreate, campFindMany } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-4" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(1);
+      expect(campCreate).not.toHaveBeenCalled();
+      expect(campFindMany).not.toHaveBeenCalled();
+      expect(state.insertedAnimals[0]).toMatchObject({
+        currentCamp: "unassigned",
+      });
+    });
+
+    it("treats a unique-constraint race on placeholder creation as the camp existing", async () => {
+      const state = makeState();
+      state.campCreateErrorsByCampId.set(
+        "race-kamp",
+        new Error("UNIQUE constraint failed: Camp.species, Camp.campId"),
+      );
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-5", currentCamp: "Race Kamp" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        currentCamp: "race-kamp",
+      });
+    });
+
+    it("drops only the affected rows with a typed reason when placeholder creation fails hard", async () => {
+      const state = makeState();
+      state.campCreateErrorsByCampId.set(
+        "dood-kamp",
+        new Error("SQLITE_IOERR: disk I/O error"),
+      );
+      const { prisma } = makeMockPrisma(state);
+
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await commitImport(prisma, {
+        rows: [
+          { earTag: "OK-CAMP", currentCamp: "Goeie Kamp" },
+          { earTag: "BAD-CAMP", currentCamp: "Dood Kamp" },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+      consoleSpy.mockRestore();
+
+      expect(res.inserted).toBe(1);
+      expect(res.errors).toEqual([
+        {
+          row: 2,
+          earTag: "BAD-CAMP",
+          reason: "camp could not be created",
+        },
+      ]);
+      // The raw driver text must never surface in a per-row reason.
+      expect(JSON.stringify(res.errors)).not.toContain("SQLITE_IOERR");
+      expect(state.insertedAnimals.map((a) => a.animalId)).toEqual(["OK-CAMP"]);
     });
   });
 });

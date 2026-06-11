@@ -68,6 +68,7 @@ const AFRIKAANS_MAPPING = makeProposal([
 
 function makeMockPrisma() {
   const insertedAnimals: Array<Record<string, unknown>> = [];
+  const createdCamps: Array<Record<string, unknown>> = [];
   const animalCreate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
     insertedAnimals.push(data);
     return { ...data, id: `cuid-${String(data.animalId)}` };
@@ -77,6 +78,13 @@ function makeMockPrisma() {
       create: animalCreate,
       findMany: vi.fn(async () => []),
     },
+    camp: {
+      findMany: vi.fn(async () => []),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        createdCamps.push(data);
+        return { ...data, id: `camp-cuid-${String(data.campId)}` };
+      }),
+    },
     importJob: { update: vi.fn(async () => ({})) },
     farmSettings: { upsert: vi.fn(async () => ({})) },
     $transaction: vi.fn(
@@ -84,7 +92,7 @@ function makeMockPrisma() {
         fn({ animal: { create: animalCreate } }),
     ),
   } as unknown as PrismaClient;
-  return { prisma, insertedAnimals };
+  return { prisma, insertedAnimals, createdCamps };
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +207,7 @@ describe("golden round-trip (S11 / H1 / OB-001)", () => {
 
     const rows = materializeRows(rawRows, AFRIKAANS_MAPPING, {}, {});
 
-    const { prisma, insertedAnimals } = makeMockPrisma();
+    const { prisma, insertedAnimals, createdCamps } = makeMockPrisma();
     const res = await commitImport(prisma, {
       rows,
       importJobId: "job-golden",
@@ -208,6 +216,12 @@ describe("golden round-trip (S11 / H1 / OB-001)", () => {
 
     expect(res.errors).toEqual([]);
     expect(res.inserted).toBe(3);
+
+    // S12: the referenced camp didn't exist — created ONCE (deduped across
+    // the two rows that reference it), species-scoped.
+    expect(createdCamps).toEqual([
+      { campId: "weiveld-1", campName: "weiveld-1", species: "cattle" },
+    ]);
 
     const byId = new Map(insertedAnimals.map((a) => [a.animalId, a]));
 

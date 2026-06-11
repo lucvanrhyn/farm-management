@@ -103,6 +103,19 @@ const TRANSACTION_TIMEOUT_MS = 60_000;
  */
 const ALLOWED_SPECIES = new Set(["cattle", "sheep", "goats", "game"]);
 
+/**
+ * Hard bound on the camp-resolution lookup (S12). Real farms hold tens of
+ * camps; this exists purely so the `findMany` is provably bounded
+ * (audit-findmany-no-take) even on a pathological tenant.
+ */
+const CAMP_LOOKUP_LIMIT = 1_000;
+
+/**
+ * Sentinel `Animal.currentCamp` value for rows that reference no camp.
+ * Pre-dates S12; intentionally NOT materialized as a Camp row.
+ */
+const UNASSIGNED_CAMP = "unassigned";
+
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
@@ -375,6 +388,154 @@ function topologicallyOrder(
   return { ordered, errors };
 }
 
+/**
+ * Detect a unique-constraint violation across the shapes we see in practice:
+ * Prisma's typed P2002 and the raw libSQL/SQLite "UNIQUE constraint failed"
+ * driver message.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  ) {
+    return true;
+  }
+  return err instanceof Error && /unique constraint/i.test(err.message);
+}
+
+/** Camp reference -> campId slug, per the wizard contract (lowercase, dashes for spaces). */
+function slugifyCampRef(ref: string): string {
+  return ref.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+/** Composite key for a camp reference: camps are unique per (species, campId). */
+function campKey(species: string, ref: string): string {
+  return `${species} ${ref}`;
+}
+
+/**
+ * Phase 2.5 (S12 / H2 / OB-006) — resolve every referenced camp BEFORE the
+ * insert phase. Previously `currentCamp` was written with no existence
+ * check and no camp was ever created, so imported animals pointed at camps
+ * that did not exist.
+ *
+ * - Existing camps are matched per species by campId (exact or slugified
+ *   reference) or by display name (trimmed, case-insensitive) and reused.
+ * - Unknown references become species-scoped placeholder camps (composite
+ *   (species, campId) key — ADR-0005 / #28 Phase A); the farmer draws the
+ *   boundary post-import.
+ * - A unique-constraint race on placeholder creation means a concurrent
+ *   import won — treat the camp as existing.
+ * - Any other creation failure drops ONLY the affected rows with a typed
+ *   per-row reason (never the raw driver text), so one bad camp cannot
+ *   re-introduce the dangling-reference bug for its rows.
+ *
+ * Returns a NEW row array (rows are never mutated) with `currentCamp`
+ * rewritten to the resolved campId.
+ */
+async function resolveReferencedCamps(
+  prisma: PrismaClient,
+  rows: ValidatedRow[],
+  defaultSpecies: string,
+): Promise<{ resolvedRows: ValidatedRow[]; errors: CommitImportError[] }> {
+  const needed = new Map<string, { species: string; ref: string }>();
+  for (const row of rows) {
+    if (!row.currentCamp) continue;
+    const species = row.species ?? defaultSpecies;
+    needed.set(campKey(species, row.currentCamp), {
+      species,
+      ref: row.currentCamp,
+    });
+  }
+  if (needed.size === 0) {
+    return { resolvedRows: rows, errors: [] };
+  }
+
+  const speciesList = Array.from(
+    new Set(Array.from(needed.values(), (n) => n.species)),
+  );
+  // cross-species by design: one query resolves every species bucket in the
+  // batch; per-species matching happens below against the composite key.
+  const existingCamps = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).camp.findMany({
+    where: { species: { in: speciesList } },
+    select: { campId: true, campName: true, species: true },
+    take: CAMP_LOOKUP_LIMIT,
+  });
+
+  // species -> normalized lookup token -> campId
+  const lookupBySpecies = new Map<string, Map<string, string>>();
+  for (const camp of existingCamps) {
+    const lookup =
+      lookupBySpecies.get(camp.species) ?? new Map<string, string>();
+    lookup.set(camp.campId.toLowerCase(), camp.campId);
+    lookup.set(camp.campName.trim().toLowerCase(), camp.campId);
+    lookupBySpecies.set(camp.species, lookup);
+  }
+
+  const resolvedByKey = new Map<string, string>();
+  const failedKeys = new Set<string>();
+  for (const [key, { species, ref }] of needed) {
+    const lookup = lookupBySpecies.get(species);
+    const matched =
+      lookup?.get(ref.trim().toLowerCase()) ?? lookup?.get(slugifyCampRef(ref));
+    if (matched !== undefined) {
+      resolvedByKey.set(key, matched);
+      continue;
+    }
+
+    const slug = slugifyCampRef(ref);
+    try {
+      // Placeholder camp: no boundary/size yet — the farmer completes it
+      // post-import. `create` carries the species explicitly (the facade
+      // deliberately does not wrap creates — see species-scoped-prisma.ts).
+      await prisma.camp.create({
+        data: { campId: slug, campName: ref.trim(), species },
+      });
+      resolvedByKey.set(key, slug);
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        // Concurrent import created it between lookup and create.
+        resolvedByKey.set(key, slug);
+      } else {
+        logger.error("commitImport: failed to create placeholder camp", {
+          campId: slug,
+          species,
+          error: err instanceof Error ? err.message : err,
+        });
+        failedKeys.add(key);
+      }
+    }
+  }
+
+  const resolvedRows: ValidatedRow[] = [];
+  const errors: CommitImportError[] = [];
+  for (const row of rows) {
+    if (!row.currentCamp) {
+      resolvedRows.push(row);
+      continue;
+    }
+    const key = campKey(row.species ?? defaultSpecies, row.currentCamp);
+    const campId = resolvedByKey.get(key);
+    if (campId === undefined) {
+      errors.push({
+        row: row.originalIndex,
+        earTag: row.earTag,
+        reason: "camp could not be created",
+      });
+      continue;
+    }
+    resolvedRows.push(
+      campId === row.currentCamp ? row : { ...row, currentCamp: campId },
+    );
+  }
+  return { resolvedRows, errors };
+}
+
 // -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
@@ -410,8 +571,20 @@ export async function commitImport(
   // ---------------------------------------------------------------------------
   // Phase 2 — pedigree topo sort
   // ---------------------------------------------------------------------------
-  const { ordered, errors: pedigreeErrors } = topologicallyOrder(validated, onProgress);
+  const { ordered: orderedRaw, errors: pedigreeErrors } = topologicallyOrder(
+    validated,
+    onProgress,
+  );
   errors.push(...pedigreeErrors);
+
+  // ---------------------------------------------------------------------------
+  // Phase 2.5 — camp resolution (S12 / H2 / OB-006): reuse existing camps,
+  // create species-scoped placeholders for the rest, rewrite currentCamp to
+  // the resolved campId so the insert below never dangles.
+  // ---------------------------------------------------------------------------
+  const { resolvedRows: ordered, errors: campErrors } =
+    await resolveReferencedCamps(prisma, orderedRaw, defaultSpecies);
+  errors.push(...campErrors);
 
   // ---------------------------------------------------------------------------
   // Phase 3 — transactional insert
@@ -464,7 +637,7 @@ export async function commitImport(
               dateOfBirth: row.dateOfBirthIso ?? null,
               breed: row.breed ?? "Mixed",
               category: row.category ?? "Unknown",
-              currentCamp: row.currentCamp ?? "unassigned",
+              currentCamp: row.currentCamp ?? UNASSIGNED_CAMP,
               status: row.status ?? "Active",
               registrationNumber: row.registrationNumber ?? null,
               deceasedAt: row.deceasedAtIso ?? null,
