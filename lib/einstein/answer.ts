@@ -43,7 +43,8 @@ export type AnswerErrorCode =
   | 'EINSTEIN_ANSWER_NO_KEY'
   | 'EINSTEIN_ANSWER_API_ERROR'
   | 'EINSTEIN_ANSWER_INVALID_JSON'
-  | 'EINSTEIN_CITATION_FABRICATION';
+  | 'EINSTEIN_CITATION_FABRICATION'
+  | 'EINSTEIN_ANSWER_UNGROUNDED';
 
 export class EinsteinAnswerError extends Error {
   readonly code: AnswerErrorCode;
@@ -249,16 +250,38 @@ export async function* streamAnswer(
     return;
   }
 
-  // Citation validation — every entityId MUST appear in retrieval.chunks.
+  // Grounding enforcement (S20 / ein-M3).
+  //
+  // 1. Citation integrity — every entityId MUST appear in retrieval.chunks.
+  //    Enforced UNCONDITIONALLY: a refusedReason must never bypass the
+  //    fabrication check (the old `&& !refusedReason` guard let any truthy
+  //    refusal smuggle invented citations through).
   const validIds = new Set(retrieval.chunks.map((c) => c.entityId));
   const fabricated = parsed.citations.filter((cit) => !validIds.has(cit.entityId));
-  if (fabricated.length > 0 && !parsed.refusedReason) {
+  if (fabricated.length > 0) {
     yield {
       type: 'error',
       code: 'EINSTEIN_CITATION_FABRICATION',
       message: `Model cited ${fabricated.length} entityId(s) not in retrieval set: ${fabricated
         .map((c) => c.entityId)
         .join(', ')}`,
+    };
+    return;
+  }
+
+  // 2. Grounding contract — a non-empty factual (non-refusal) answer must
+  //    carry at least one valid citation. Zero-citation prose means the model
+  //    free-generated instead of refusing with NO_GROUNDED_EVIDENCE.
+  if (
+    !parsed.refusedReason &&
+    parsed.answer.trim().length > 0 &&
+    parsed.citations.length === 0
+  ) {
+    yield {
+      type: 'error',
+      code: 'EINSTEIN_ANSWER_UNGROUNDED',
+      message:
+        'Model returned a factual answer with no citations — grounding contract requires ≥1 citation or an explicit refusal',
     };
     return;
   }
