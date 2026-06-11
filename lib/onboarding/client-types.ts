@@ -24,7 +24,56 @@ import type { ProposalResult } from "@/lib/onboarding/adaptive-import";
 import type {
   CommitImportProgress,
   CommitImportResult,
+  ImportRow,
 } from "@/lib/onboarding/commit-import";
+
+// ---------------------------------------------------------------------------
+// Canonical import vocabulary (S11 / H1 / OB-001)
+// ---------------------------------------------------------------------------
+
+/**
+ * The ONE canonical set of row-field names for the import pipeline.
+ *
+ * These are the FarmTrack schema names the AI Import Wizard is prompted to
+ * emit as mapping targets (see `schema-dictionary.ts` SYSTEM_PROMPT, "Animal
+ * table" section) AND the names `commitImport` reads at validate/insert time.
+ *
+ * History: pre-S11 the producer (wizard mapping) spoke schema names while the
+ * consumer (`commitImport`) read task-spec names (`birthDate`, `campId`,
+ * `sireEarTag`, `damEarTag`) behind an `as ImportRow` cast — so dateOfBirth,
+ * camp, pedigree, category, and status were silently dropped on every import
+ * (stress-test finding H1/OB-001). This constant + the compile-time assertion
+ * below make that drift a build error instead of silent data loss.
+ */
+export const IMPORT_ROW_FIELDS = [
+  "earTag",
+  "registrationNumber",
+  "breed",
+  "sex",
+  "category",
+  "dateOfBirth",
+  "motherId",
+  "fatherId",
+  "currentCamp",
+  "status",
+  "species",
+  "deceasedAt",
+  "sireNote",
+  "damNote",
+] as const;
+
+export type ImportRowField = (typeof IMPORT_ROW_FIELDS)[number];
+
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Expect<T extends true> = T;
+
+/**
+ * Compile-time guarantee that `ImportRow`'s keys are exactly the canonical
+ * vocabulary above. If either side drifts, `Expect<false>` fails the build.
+ */
+export type AssertImportRowVocabularyIsCanonical = Expect<
+  Exact<keyof ImportRow, ImportRowField>
+>;
 
 // ---------------------------------------------------------------------------
 // Wizard-specific types

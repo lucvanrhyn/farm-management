@@ -437,7 +437,13 @@ function sampleValues(
 
 function checkValueForTarget(target: string, value: string): boolean {
   switch (target) {
+    // Canonical vocabulary is the schema names (S11 / H1 / OB-001 —
+    // `IMPORT_ROW_FIELDS` in client-types.ts). The pre-S11 task-spec names
+    // (sireEarTag/damEarTag/birthDate/campId) are kept as legacy aliases so
+    // a stale cached proposal still gets sanity-checked.
     case "earTag":
+    case "motherId":
+    case "fatherId":
     case "sireEarTag":
     case "damEarTag": {
       if (value.length === 0 || value.length > 30) return false;
@@ -448,6 +454,8 @@ function checkValueForTarget(target: string, value: string): boolean {
         return false;
       return true;
     }
+    case "dateOfBirth":
+    case "deceasedAt":
     case "birthDate": {
       if (DATE_RE.test(value)) return true;
       const d = new Date(value);

@@ -74,7 +74,7 @@ const VALID_PROVENANCE = {
 
 const validBody = {
   rows: [
-    { earTag: "A001", sex: "Female" as const, birthDate: "2023-01-01" },
+    { earTag: "A001", sex: "Female" as const, dateOfBirth: "2023-01-01" },
     { earTag: "A002", sex: "Male" as const },
   ],
   defaultSpecies: "cattle",

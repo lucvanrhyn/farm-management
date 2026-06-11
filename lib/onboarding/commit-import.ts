@@ -5,7 +5,7 @@
  * The calling HTTP route (B4b) wraps this with auth + SSE streaming.
  *
  * Pipeline:
- *  1. Validation   — de-dupe within batch, check earTag/birthDate/sex
+ *  1. Validation   — de-dupe within batch, check earTag/dateOfBirth/sex/status
  *  2. Pedigree     — topological sort so sires/dams are inserted first,
  *                    detect cycles, prune affected rows
  *  3. Inserting    — transactional prisma.animal.create per row; per-row
@@ -13,10 +13,12 @@
  *  4. Done         — update ImportJob with final counts
  *
  * Schema note: this repo's Animal model stores parent ear-tag strings in
- * `fatherId`/`motherId` (no FK). The public ImportRow API mirrors the task
- * spec (`earTag`, `sireEarTag`, `damEarTag`, ...) and we translate to schema
- * names at insert time. Pedigree resolution still runs a topological sort
- * so cycles are rejected and ordering is deterministic.
+ * `fatherId`/`motherId` (no FK). ImportRow speaks the SAME schema-name
+ * vocabulary the AI wizard emits as mapping targets (S11 / H1 / OB-001 —
+ * see `IMPORT_ROW_FIELDS` in client-types.ts): `motherId`/`fatherId` are
+ * ear-tag references resolved against this batch + existing animals.
+ * Pedigree resolution runs a topological sort so cycles are rejected and
+ * ordering is deterministic.
  *
  * ImportJob fields used: `rowsImported`, `rowsFailed`, `warnings`, `status`,
  * `completedAt`.
@@ -25,21 +27,35 @@
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { AFRIKAANS_STATUS_MAP } from "@/lib/onboarding/schema-dictionary";
 
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
 
+/**
+ * One spreadsheet row in the canonical schema-name vocabulary.
+ *
+ * Field names MUST stay in lock-step with `IMPORT_ROW_FIELDS`
+ * (lib/onboarding/client-types.ts) — a compile-time assertion there fails the
+ * build on drift. Enum-ish fields (`sex`, `status`, `category`) are `string`
+ * on the wire and validated here, at the system boundary.
+ */
 export type ImportRow = {
-  earTag: string; // required, unique per animal within farm
-  sex?: "Male" | "Female";
-  birthDate?: Date | string; // ISO or Date
+  earTag: string; // required, unique per animal within farm (Animal.animalId)
+  registrationNumber?: string; // stud book number
   breed?: string;
-  campId?: string; // must reference existing camp.campId
-  sireEarTag?: string; // pedigree — may reference another row in THIS import
-  damEarTag?: string; // pedigree — may reference another row in THIS import
-  notes?: string;
+  sex?: string; // "Male" | "Female" — validated in validateRows
+  category?: string; // Cow/Bull/Heifer/... — free label, defaults "Unknown"
+  dateOfBirth?: Date | string; // ISO or Date
+  motherId?: string; // dam ear-tag ref — may reference another row in THIS import
+  fatherId?: string; // sire ear-tag ref — may reference another row in THIS import
+  currentCamp?: string; // camp reference (campId slug or raw camp name)
+  status?: string; // Active | Sold | Deceased (Afrikaans normalized server-side)
   species?: string; // per-row override of defaultSpecies; validated against ALLOWED_SPECIES
+  deceasedAt?: Date | string; // ISO or Date — only meaningful with status Deceased
+  sireNote?: string; // free-text fallback when the sire isn't in this file
+  damNote?: string; // free-text fallback when the dam isn't in this file
 };
 
 export type CommitImportInput = {
@@ -95,18 +111,26 @@ type ValidatedRow = {
   /** Index in the original input.rows array (1-based for reporting). */
   originalIndex: number;
   earTag: string;
-  sex?: "Male" | "Female";
-  birthDateIso?: string;
+  registrationNumber?: string;
   breed?: string;
-  campId?: string;
-  sireEarTag?: string;
-  damEarTag?: string;
-  notes?: string;
+  sex?: "Male" | "Female";
+  category?: string;
+  dateOfBirthIso?: string;
+  /** Dam ear-tag reference (in-batch or existing animal). */
+  motherId?: string;
+  /** Sire ear-tag reference (in-batch or existing animal). */
+  fatherId?: string;
+  currentCamp?: string;
+  /** Canonical "Active" | "Sold" | "Deceased". */
+  status?: string;
   /** Resolved per-row species (row.species if valid, else undefined — caller applies defaultSpecies at insert). */
   species?: string;
+  deceasedAtIso?: string;
+  sireNote?: string;
+  damNote?: string;
 };
 
-function parseBirthDate(value: Date | string): string | null {
+function parseDateOnly(value: Date | string): string | null {
   if (value instanceof Date) {
     return isNaN(value.getTime()) ? null : value.toISOString().split("T")[0];
   }
@@ -116,6 +140,100 @@ function parseBirthDate(value: Date | string): string | null {
   const parsed = Date.parse(trimmed);
   if (isNaN(parsed)) return null;
   return new Date(parsed).toISOString().split("T")[0];
+}
+
+/**
+ * Trim an optional string field; empty/whitespace-only collapses to undefined.
+ * Rows arrive from a JSON HTTP boundary, so a field typed `string` may carry
+ * any JSON value at runtime — non-strings collapse to undefined instead of
+ * throwing mid-validation.
+ */
+function trimmedOrUndefined(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return value.trim() || undefined;
+}
+
+/**
+ * Validate a single row. Returns the validated shape, or a per-row error.
+ * `seenEarTags` is mutated by the caller AFTER a row is accepted.
+ */
+function validateRow(
+  row: ImportRow,
+  rowNum: number,
+  seenEarTags: ReadonlySet<string>,
+): { ok: ValidatedRow } | { err: CommitImportError } {
+  const rawEarTag = typeof row.earTag === "string" ? row.earTag.trim() : "";
+
+  if (!rawEarTag) {
+    return { err: { row: rowNum, reason: "missing earTag" } };
+  }
+  if (seenEarTags.has(rawEarTag)) {
+    return {
+      err: { row: rowNum, earTag: rawEarTag, reason: "duplicate earTag within import" },
+    };
+  }
+  if (row.sex !== undefined && row.sex !== "Male" && row.sex !== "Female") {
+    return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid sex" } };
+  }
+  if (
+    row.species !== undefined &&
+    row.species !== null &&
+    row.species !== "" &&
+    !ALLOWED_SPECIES.has(row.species)
+  ) {
+    return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid species" } };
+  }
+
+  let dateOfBirthIso: string | undefined;
+  if (row.dateOfBirth !== undefined && row.dateOfBirth !== null && row.dateOfBirth !== "") {
+    const parsed = parseDateOnly(row.dateOfBirth);
+    if (parsed === null) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid dateOfBirth" } };
+    }
+    dateOfBirthIso = parsed;
+  }
+
+  let deceasedAtIso: string | undefined;
+  if (row.deceasedAt !== undefined && row.deceasedAt !== null && row.deceasedAt !== "") {
+    const parsed = parseDateOnly(row.deceasedAt);
+    if (parsed === null) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid deceasedAt" } };
+    }
+    deceasedAtIso = parsed;
+  }
+
+  let status: string | undefined;
+  const rawStatus = trimmedOrUndefined(row.status);
+  if (rawStatus !== undefined) {
+    const normalized = AFRIKAANS_STATUS_MAP[rawStatus.toLowerCase()];
+    if (normalized === undefined) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid status" } };
+    }
+    status = normalized;
+  }
+
+  const resolvedSpecies =
+    row.species && ALLOWED_SPECIES.has(row.species) ? row.species : undefined;
+
+  return {
+    ok: {
+      originalIndex: rowNum,
+      earTag: rawEarTag,
+      registrationNumber: trimmedOrUndefined(row.registrationNumber),
+      breed: trimmedOrUndefined(row.breed),
+      sex: row.sex,
+      category: trimmedOrUndefined(row.category),
+      dateOfBirthIso,
+      motherId: trimmedOrUndefined(row.motherId),
+      fatherId: trimmedOrUndefined(row.fatherId),
+      currentCamp: trimmedOrUndefined(row.currentCamp),
+      status,
+      species: resolvedSpecies,
+      deceasedAtIso,
+      sireNote: trimmedOrUndefined(row.sireNote),
+      damNote: trimmedOrUndefined(row.damNote),
+    },
+  };
 }
 
 /**
@@ -131,58 +249,12 @@ function validateRows(
   const seenEarTags = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 1;
-    const rawEarTag = typeof row.earTag === "string" ? row.earTag.trim() : "";
-
-    if (!rawEarTag) {
-      errors.push({ row: rowNum, reason: "missing earTag" });
-    } else if (seenEarTags.has(rawEarTag)) {
-      errors.push({
-        row: rowNum,
-        earTag: rawEarTag,
-        reason: "duplicate earTag within import",
-      });
-    } else if (row.sex !== undefined && row.sex !== "Male" && row.sex !== "Female") {
-      errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid sex" });
-    } else if (
-      row.species !== undefined &&
-      row.species !== null &&
-      row.species !== "" &&
-      !ALLOWED_SPECIES.has(row.species)
-    ) {
-      errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid species" });
+    const result = validateRow(rows[i], i + 1, seenEarTags);
+    if ("err" in result) {
+      errors.push(result.err);
     } else {
-      let birthDateIso: string | undefined;
-      if (row.birthDate !== undefined && row.birthDate !== null && row.birthDate !== "") {
-        const parsed = parseBirthDate(row.birthDate);
-        if (parsed === null) {
-          errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid birthDate" });
-          // Emit progress before continuing
-          if ((i + 1) % VALIDATE_PROGRESS_INTERVAL === 0) {
-            onProgress?.({ phase: "validating", processed: i + 1, total: rows.length });
-          }
-          continue;
-        }
-        birthDateIso = parsed;
-      }
-
-      const resolvedSpecies =
-        row.species && ALLOWED_SPECIES.has(row.species) ? row.species : undefined;
-
-      seenEarTags.add(rawEarTag);
-      kept.push({
-        originalIndex: rowNum,
-        earTag: rawEarTag,
-        sex: row.sex,
-        birthDateIso,
-        breed: row.breed,
-        campId: row.campId,
-        sireEarTag: row.sireEarTag?.trim() || undefined,
-        damEarTag: row.damEarTag?.trim() || undefined,
-        notes: row.notes,
-        species: resolvedSpecies,
-      });
+      seenEarTags.add(result.ok.earTag);
+      kept.push(result.ok);
     }
 
     if ((i + 1) % VALIDATE_PROGRESS_INTERVAL === 0) {
@@ -204,9 +276,9 @@ function validateRows(
  * parent. Cycles cause every row in the cycle to be dropped with
  * "pedigree cycle".
  *
- * Rows with a sire/dam that references an ear tag not in this batch are
- * unaffected by ordering — they rely on existing DB state, which the insert
- * phase validates.
+ * Rows with a `fatherId`/`motherId` that references an ear tag not in this
+ * batch are unaffected by ordering — they rely on existing DB state, which
+ * the insert phase validates.
  */
 function topologicallyOrder(
   rows: ValidatedRow[],
@@ -222,15 +294,15 @@ function topologicallyOrder(
 
   for (const row of rows) {
     const parents = new Set<string>();
-    if (row.sireEarTag && byEarTag.has(row.sireEarTag)) parents.add(row.sireEarTag);
-    if (row.damEarTag && byEarTag.has(row.damEarTag)) parents.add(row.damEarTag);
+    if (row.fatherId && byEarTag.has(row.fatherId)) parents.add(row.fatherId);
+    if (row.motherId && byEarTag.has(row.motherId)) parents.add(row.motherId);
 
     // Self-reference is a trivial cycle.
     if (parents.has(row.earTag)) {
       // handled below in cycle detection; for now include it
     }
     inBatchParents.set(row.earTag, parents);
-    if (parents.size > 0 || row.sireEarTag || row.damEarTag) {
+    if (parents.size > 0 || row.fatherId || row.motherId) {
       rowsNeedingPedigree.push(row);
     }
   }
@@ -347,8 +419,8 @@ export async function commitImport(
   // Resolve existing ear tags to animalId (the ID stored in fatherId/motherId).
   const parentTags = new Set<string>();
   for (const row of ordered) {
-    if (row.sireEarTag) parentTags.add(row.sireEarTag);
-    if (row.damEarTag) parentTags.add(row.damEarTag);
+    if (row.fatherId) parentTags.add(row.fatherId);
+    if (row.motherId) parentTags.add(row.motherId);
   }
 
   let existingByTag = new Map<string, string>();
@@ -375,40 +447,40 @@ export async function commitImport(
       for (let i = 0; i < ordered.length; i++) {
         const row = ordered[i];
 
-        const fatherId =
-          row.sireEarTag && resolvedByTag.has(row.sireEarTag)
-            ? resolvedByTag.get(row.sireEarTag)!
-            : row.sireEarTag
-              ? null
-              : null;
-        const motherId =
-          row.damEarTag && resolvedByTag.has(row.damEarTag)
-            ? resolvedByTag.get(row.damEarTag)!
-            : row.damEarTag
-              ? null
-              : null;
+        const resolvedSire =
+          row.fatherId && resolvedByTag.has(row.fatherId)
+            ? resolvedByTag.get(row.fatherId)!
+            : null;
+        const resolvedDam =
+          row.motherId && resolvedByTag.has(row.motherId)
+            ? resolvedByTag.get(row.motherId)!
+            : null;
 
         try {
           await tx.animal.create({
             data: {
               animalId: row.earTag,
               sex: row.sex ?? "Unknown",
-              dateOfBirth: row.birthDateIso ?? null,
+              dateOfBirth: row.dateOfBirthIso ?? null,
               breed: row.breed ?? "Mixed",
-              category: "Unknown",
-              currentCamp: row.campId ?? "unassigned",
-              status: "Active",
-              motherId,
-              fatherId,
+              category: row.category ?? "Unknown",
+              currentCamp: row.currentCamp ?? "unassigned",
+              status: row.status ?? "Active",
+              registrationNumber: row.registrationNumber ?? null,
+              deceasedAt: row.deceasedAtIso ?? null,
+              motherId: resolvedDam,
+              fatherId: resolvedSire,
               dateAdded: todayIso,
               species: row.species ?? defaultSpecies,
               importJobId,
-              sireNote: row.sireEarTag && !resolvedByTag.has(row.sireEarTag)
-                ? `Unresolved sire: ${row.sireEarTag}`
-                : null,
-              damNote: row.damEarTag && !resolvedByTag.has(row.damEarTag)
-                ? `Unresolved dam: ${row.damEarTag}`
-                : null,
+              // Unresolved-ref note wins; otherwise pass through any
+              // wizard-provided free-text note for the same slot.
+              sireNote: row.fatherId && !resolvedByTag.has(row.fatherId)
+                ? `Unresolved sire: ${row.fatherId}`
+                : row.sireNote ?? null,
+              damNote: row.motherId && !resolvedByTag.has(row.motherId)
+                ? `Unresolved dam: ${row.motherId}`
+                : row.damNote ?? null,
             },
           });
           inserted += 1;

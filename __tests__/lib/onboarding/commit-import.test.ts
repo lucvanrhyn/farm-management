@@ -170,15 +170,15 @@ describe("commitImport", () => {
     expect(state.insertedAnimals).toHaveLength(1);
   });
 
-  // 4. Invalid birthDate
-  it('skips rows with unparseable birthDate and reports "invalid birthDate"', async () => {
+  // 4. Invalid dateOfBirth
+  it('skips rows with unparseable dateOfBirth and reports "invalid dateOfBirth"', async () => {
     const state = makeState();
     const { prisma } = makeMockPrisma(state);
 
     const res = await commitImport(
       prisma,
       {
-        rows: [mkRow({ earTag: "BAD-DOB", birthDate: "not a date" })],
+        rows: [mkRow({ earTag: "BAD-DOB", dateOfBirth: "not a date" })],
         importJobId: DEFAULT_JOB_ID,
         defaultSpecies: "cattle",
       },
@@ -189,7 +189,7 @@ describe("commitImport", () => {
     expect(res.errors[0]).toMatchObject({
       row: 1,
       earTag: "BAD-DOB",
-      reason: "invalid birthDate",
+      reason: "invalid dateOfBirth",
     });
   });
 
@@ -201,9 +201,7 @@ describe("commitImport", () => {
     const res = await commitImport(
       prisma,
       {
-        rows: [
-          { earTag: "BAD-SEX", sex: "Bull" as unknown as "Male" },
-        ],
+        rows: [{ earTag: "BAD-SEX", sex: "Bull" }],
         importJobId: DEFAULT_JOB_ID,
         defaultSpecies: "cattle",
       },
@@ -226,7 +224,7 @@ describe("commitImport", () => {
     const res = await commitImport(
       prisma,
       {
-        rows: [mkRow({ earTag: "CALF-1", sireEarTag: "EXISTING-SIRE" })],
+        rows: [mkRow({ earTag: "CALF-1", fatherId: "EXISTING-SIRE" })],
         importJobId: DEFAULT_JOB_ID,
         defaultSpecies: "cattle",
       },
@@ -253,7 +251,7 @@ describe("commitImport", () => {
       prisma,
       {
         rows: [
-          mkRow({ earTag: "CHILD", sireEarTag: "SIRE-A", sex: "Female" }),
+          mkRow({ earTag: "CHILD", fatherId: "SIRE-A", sex: "Female" }),
           mkRow({ earTag: "SIRE-A", sex: "Male" }),
         ],
         importJobId: DEFAULT_JOB_ID,
@@ -283,8 +281,8 @@ describe("commitImport", () => {
       prisma,
       {
         rows: [
-          mkRow({ earTag: "A", sireEarTag: "B" }),
-          mkRow({ earTag: "B", sireEarTag: "A" }),
+          mkRow({ earTag: "A", fatherId: "B" }),
+          mkRow({ earTag: "B", fatherId: "A" }),
         ],
         importJobId: DEFAULT_JOB_ID,
         defaultSpecies: "cattle",
@@ -347,7 +345,7 @@ describe("commitImport", () => {
       prisma,
       {
         rows: [
-          mkRow({ earTag: "P-1", sireEarTag: "P-SIRE", sex: "Female" }),
+          mkRow({ earTag: "P-1", fatherId: "P-SIRE", sex: "Female" }),
           mkRow({ earTag: "P-SIRE", sex: "Male" }),
         ],
         importJobId: DEFAULT_JOB_ID,
@@ -498,6 +496,137 @@ describe("commitImport", () => {
     expect(state.insertedAnimals[0]).toMatchObject({
       animalId: "FALLBACK-1",
       species: "goats",
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // S11 (H1/OB-001) — canonical schema-name vocabulary.
+  // The wizard/AI emits schema names (dateOfBirth, currentCamp, motherId,
+  // fatherId, category, status, registrationNumber, deceasedAt). The commit
+  // consumer must read THOSE names — every captured field persists.
+  // ---------------------------------------------------------------------------
+  describe("canonical vocabulary (S11 / H1 / OB-001)", () => {
+    it("persists every schema-named field the wizard captures", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          {
+            earTag: "BB-C001",
+            sex: "Female",
+            breed: "Bonsmara",
+            category: "Cow",
+            dateOfBirth: "2019-03-14",
+            currentCamp: "weiveld-1",
+            status: "Active",
+            registrationNumber: "BSB-2019-04412",
+            motherId: "BB-C000",
+            fatherId: "BB-B001",
+          },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "BB-C001",
+        sex: "Female",
+        breed: "Bonsmara",
+        category: "Cow",
+        dateOfBirth: "2019-03-14",
+        currentCamp: "weiveld-1",
+        status: "Active",
+        registrationNumber: "BSB-2019-04412",
+        // Parents not in batch or DB → notes fallback, never silent loss.
+        sireNote: "Unresolved sire: BB-B001",
+        damNote: "Unresolved dam: BB-C000",
+      });
+    });
+
+    it("persists deceasedAt for a Deceased row (Afrikaans status normalized)", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          {
+            earTag: "BB-C002",
+            sex: "Female",
+            category: "Cow",
+            status: "Gevrek",
+            deceasedAt: "2024-06-01",
+          },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "BB-C002",
+        status: "Deceased",
+        deceasedAt: "2024-06-01",
+      });
+    });
+
+    it("resolves in-batch pedigree through motherId/fatherId ear-tag refs", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          { earTag: "CALF-9", sex: "Female", fatherId: "SIRE-9" },
+          { earTag: "SIRE-9", sex: "Male" },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(2);
+      const order = state.insertedAnimals.map((a) => a.animalId);
+      expect(order).toEqual(["SIRE-9", "CALF-9"]);
+      const calf = state.insertedAnimals.find((a) => a.animalId === "CALF-9")!;
+      expect(calf.fatherId).toBe("SIRE-9");
+      expect(calf.sireNote).toBeNull();
+    });
+
+    it('rejects an unparseable deceasedAt with "invalid deceasedAt"', async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "BAD-DA", deceasedAt: "not a date" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(0);
+      expect(res.errors[0]).toMatchObject({
+        row: 1,
+        earTag: "BAD-DA",
+        reason: "invalid deceasedAt",
+      });
+    });
+
+    it('rejects an unrecognized status with "invalid status"', async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "BAD-ST", status: "vermis" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(0);
+      expect(res.errors[0]).toMatchObject({
+        row: 1,
+        earTag: "BAD-ST",
+        reason: "invalid status",
+      });
     });
   });
 });

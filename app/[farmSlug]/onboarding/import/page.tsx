@@ -23,6 +23,10 @@ import {
   parseSpreadsheet,
 } from "@/lib/onboarding/parse-file";
 import { readAllRows } from "@/lib/onboarding/read-all-rows";
+import {
+  effectiveMappingEntries,
+  materializeRows,
+} from "@/lib/onboarding/materialize-rows";
 import type {
   CommitProgressFrame,
   CommitResultFrame,
@@ -38,67 +42,24 @@ type ViewState =
   | { kind: "error"; message: string };
 
 /**
- * Build ImportRow[] from raw spreadsheet rows by applying:
- *   1. The AI's proposal.mapping (filtered by a non-empty target)
- *   2. User mappingOverrides on top (per-source key wins over the AI default)
- *   3. User unmappedOverrides merged in (source columns the AI left blank)
- *
- * Any target equal to "__ignored__" drops that source column. Empty-string
- * cell values are skipped so downstream validation doesn't reject a row for
- * an empty `sex` that was never populated.
+ * Stable string form of the mapping that was actually applied. Built from
+ * the same canonical-vocabulary filter `materializeRows` uses (S11 /
+ * H1 / OB-001), so the persisted audit trail can never claim a target that
+ * the materializer dropped.
  */
-function materializeRows(
-  rawRows: Record<string, unknown>[],
-  proposal: ProposalResult,
-  mappingOverrides: Record<string, string>,
-  unmappedOverrides: Record<string, string>,
-): ImportRow[] {
-  const effectiveMap = new Map<string, string>();
-
-  for (const m of proposal.proposal.mapping) {
-    const override = mappingOverrides[m.source];
-    const target = override ?? m.target;
-    if (target && target !== "__ignored__") {
-      effectiveMap.set(m.source, target);
-    }
-  }
-  for (const [source, target] of Object.entries(unmappedOverrides)) {
-    if (target && target !== "__ignored__") {
-      effectiveMap.set(source, target);
-    }
-  }
-
-  return rawRows.map((raw) => {
-    const row: Record<string, unknown> = {};
-    for (const [src, tgt] of effectiveMap) {
-      const value = raw[src];
-      if (value !== undefined && value !== null && value !== "") {
-        row[tgt] = value;
-      }
-    }
-    return row as ImportRow;
-  });
-}
-
-/** Stable string form of the mapping that was actually applied. */
 function serializeMapping(
   proposal: ProposalResult,
   mappingOverrides: Record<string, string>,
   unmappedOverrides: Record<string, string>,
 ): string {
-  const entries: Array<{ source: string; target: string }> = [];
-  for (const m of proposal.proposal.mapping) {
-    const target = mappingOverrides[m.source] ?? m.target;
-    if (target && target !== "__ignored__") {
-      entries.push({ source: m.source, target });
-    }
-  }
-  for (const [source, target] of Object.entries(unmappedOverrides)) {
-    if (target && target !== "__ignored__") {
-      entries.push({ source, target });
-    }
-  }
-  return JSON.stringify({ version: 1, entries });
+  return JSON.stringify({
+    version: 1,
+    entries: effectiveMappingEntries(
+      proposal,
+      mappingOverrides,
+      unmappedOverrides,
+    ),
+  });
 }
 
 export default function OnboardingImportPage() {
