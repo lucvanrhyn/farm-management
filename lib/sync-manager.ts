@@ -786,9 +786,17 @@ export async function syncAndRefresh(
   const animalsBefore = await getPendingAnimalCreates();
   const coversBefore = await getPendingCoverReadings();
 
-  const [obsResult, animalsResult, coversResult] = await Promise.all([
+  // S4 / OS-1 — drain ORDER is load-bearing. Animal creates must complete
+  // before the first observation POST: an observation can reference an
+  // animal that is itself still queued (the offline-calf case), and the
+  // previous concurrent `Promise.all` let the observation race ahead, hit
+  // the server's 404 not-found path, classify terminal-by-status, and
+  // permanently dead-letter a row that would have succeeded moments later.
+  // Cover readings are camp-scoped (no animal dependency) so they may drain
+  // concurrently with observations.
+  const animalsResult = await syncPendingAnimals();
+  const [obsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
-    syncPendingAnimals(),
     syncPendingCoverReadings(),
   ]);
   const photoResult = await syncPendingPhotos(obsResult.localToServerId);
