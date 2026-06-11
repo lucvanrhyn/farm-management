@@ -19,7 +19,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { ANTHROPIC_ANSWER_MODEL } from './defaults';
+import { ANTHROPIC_ANSWER_MODEL, DEFAULT_ASSISTANT_NAME } from './defaults';
 import type { Citation, RetrievalResult } from './retriever';
 import type { EinsteinConfidence, EinsteinRefusalReason } from './defaults';
 
@@ -119,6 +119,17 @@ Emit a single fenced \`\`\`json block at the end containing:
 
 You may write a brief streaming narration before the JSON block, but the FINAL ANSWER the farmer sees is the \`answer\` field inside the JSON. The JSON block MUST appear at the end, wrapped in \`\`\`json ... \`\`\`.`;
 
+/**
+ * Consumer-side bound on serialized methodology (S22 / ein-L1). The write
+ * path caps each of the 6 methodology fields at 10k chars
+ * (app/api/[farmSlug]/farm-settings/methodology/route.ts → MAX_FIELD_LEN),
+ * so 60k is the legitimate raw ceiling; the remainder is headroom for JSON
+ * syntax + string escaping. Anything larger is a rogue/legacy blob and gets
+ * clamped deterministically (same input → same output, so the cached
+ * methodology prefix stays stable).
+ */
+export const METHODOLOGY_MAX_CHARS = 80_000;
+
 export function buildMethodologySection(methodology: unknown): string {
   if (!methodology || typeof methodology !== 'object') {
     return 'Farm Methodology Object: (not yet configured)';
@@ -128,6 +139,9 @@ export function buildMethodologySection(methodology: unknown): string {
     serialised = JSON.stringify(methodology, null, 2);
   } catch {
     return 'Farm Methodology Object: (unserialisable)';
+  }
+  if (serialised.length > METHODOLOGY_MAX_CHARS) {
+    serialised = `${serialised.slice(0, METHODOLOGY_MAX_CHARS)}\n…[methodology truncated at ${METHODOLOGY_MAX_CHARS} characters]`;
   }
   return `Farm Methodology Object (farmer-supplied data):\n${wrapUntrusted(serialised)}`;
 }
@@ -177,14 +191,23 @@ export async function* streamAnswer(
   // every other field's checking.
   const systemBlocks = [
     {
+      // Static instructions FIRST — byte-identical across tenants/renames so
+      // the cache prefix never churns (S22 / ein-L1).
       type: 'text' as const,
-      text: `Assistant name: ${assistantName || 'Einstein'}\n\n${BASE_INSTRUCTIONS}`,
+      text: BASE_INSTRUCTIONS,
       cache_control: { type: 'ephemeral' as const },
     },
     {
       type: 'text' as const,
       text: buildMethodologySection(methodology),
       cache_control: { type: 'ephemeral' as const },
+    },
+    {
+      // Volatile per-tenant display name — deliberately AFTER the last
+      // cache_control breakpoint so renaming the assistant doesn't invalidate
+      // the instructions+methodology cache (S22 / ein-L1).
+      type: 'text' as const,
+      text: `Assistant name: ${assistantName || DEFAULT_ASSISTANT_NAME}`,
     },
   ] as unknown as Anthropic.TextBlockParam[];
 

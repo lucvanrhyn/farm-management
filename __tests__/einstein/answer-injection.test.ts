@@ -45,7 +45,9 @@ vi.mock('@anthropic-ai/sdk', () => {
   return { default: AnthropicMock };
 });
 
-const { streamAnswer } = await import('@/lib/einstein/answer');
+const { streamAnswer, METHODOLOGY_MAX_CHARS } = await import(
+  '@/lib/einstein/answer'
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -115,7 +117,8 @@ async function runAndCapture(opts: {
   for await (const _ev of gen) {
     void _ev;
   }
-  return streamMock.mock.calls[0][0] as CapturedCall;
+  // Latest call — lets a single test run streamAnswer more than once.
+  return streamMock.mock.calls[streamMock.mock.calls.length - 1][0] as CapturedCall;
 }
 
 function lastUserDataBlock(call: CapturedCall): string {
@@ -260,5 +263,93 @@ describe('S19 (ein-M2) — prompt-injection hardening', () => {
     expect(call.messages[0]).toEqual({ role: 'user', content: 'prev q' });
     expect(call.messages[1]).toEqual({ role: 'assistant', content: 'prev a' });
     expect(call.messages[2].role).toBe('user');
+  });
+});
+
+// ── S22 / ein-L1 — stable cache prefix + consumer methodology clamp ──────────
+
+describe('S22 (ein-L1) — prompt-cache prefix stability', () => {
+  const METHODOLOGY = { farmerNotes: 'veld-first rotation, weigh monthly' };
+
+  it('cached system prefix is byte-identical across assistant renames', async () => {
+    const call1 = await runAndCapture({
+      assistantName: 'Einstein',
+      methodology: METHODOLOGY,
+      retrieval: mkRetrieval([]),
+    });
+    const call2 = await runAndCapture({
+      assistantName: 'Aartappel',
+      methodology: METHODOLOGY,
+      retrieval: mkRetrieval([]),
+    });
+
+    // Both cached blocks (instructions + methodology) must not change when
+    // the assistant display name changes — otherwise every rename
+    // invalidates the whole prompt-cache prefix.
+    expect(call1.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(call1.system[1].cache_control).toEqual({ type: 'ephemeral' });
+    expect(call2.system[0].text).toBe(call1.system[0].text);
+    expect(call2.system[1].text).toBe(call1.system[1].text);
+    expect(call2.system[0].text + call2.system[1].text).not.toContain('Aartappel');
+  });
+
+  it('assistant name rides in an uncached block AFTER the cached prefix', async () => {
+    const call = await runAndCapture({
+      assistantName: 'Aartappel',
+      methodology: METHODOLOGY,
+      retrieval: mkRetrieval([]),
+    });
+
+    const nameIdx = call.system.findIndex((b) => b.text.includes('Aartappel'));
+    expect(nameIdx).toBeGreaterThanOrEqual(2);
+    expect(call.system[nameIdx].cache_control).toBeUndefined();
+  });
+
+  it('empty assistant name falls back to the default in the uncached block', async () => {
+    const call = await runAndCapture({
+      assistantName: '',
+      methodology: METHODOLOGY,
+      retrieval: mkRetrieval([]),
+    });
+
+    const nameBlock = call.system.find((b) =>
+      b.text.startsWith('Assistant name:'),
+    );
+    expect(nameBlock).toBeDefined();
+    expect(nameBlock!.text).toContain('Einstein');
+    expect(nameBlock!.cache_control).toBeUndefined();
+  });
+});
+
+describe('S22 (ein-L1) — consumer methodology clamp', () => {
+  it('oversized methodology is clamped with a truncation notice', async () => {
+    const call = await runAndCapture({
+      methodology: { farmerNotes: 'x'.repeat(METHODOLOGY_MAX_CHARS + 40_000) },
+      retrieval: mkRetrieval([]),
+    });
+
+    const methodologyBlock = call.system.find((b) =>
+      b.text.startsWith('Farm Methodology Object'),
+    );
+    expect(methodologyBlock).toBeDefined();
+    // Bound = clamp cap + label/envelope/notice overhead (small constant).
+    expect(methodologyBlock!.text.length).toBeLessThanOrEqual(
+      METHODOLOGY_MAX_CHARS + 400,
+    );
+    expect(methodologyBlock!.text).toContain('truncated');
+  });
+
+  it('legitimately-sized methodology passes through unclamped', async () => {
+    const call = await runAndCapture({
+      methodology: { farmerNotes: 'rotate camps every 14 days' },
+      retrieval: mkRetrieval([]),
+    });
+
+    const methodologyBlock = call.system.find((b) =>
+      b.text.startsWith('Farm Methodology Object'),
+    );
+    expect(methodologyBlock).toBeDefined();
+    expect(methodologyBlock!.text).not.toContain('truncated');
+    expect(methodologyBlock!.text).toContain('rotate camps every 14 days');
   });
 });
