@@ -291,8 +291,21 @@ describe('POST /api/einstein/ask — auth + validation', () => {
 });
 
 describe('POST /api/einstein/ask — tier gate', () => {
-  it('returns 404 EINSTEIN_FARM_NOT_FOUND when meta DB has no creds', async () => {
-    mockGetServerSession.mockResolvedValue(validSession);
+  it('returns 404 EINSTEIN_FARM_NOT_FOUND when a MEMBER farm has no meta creds', async () => {
+    // ein-M1: the membership gate now runs first, so the 404 branch is only
+    // reachable by a member whose farm vanished from the meta DB (race guard).
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'farmer@example.com',
+        farms: [{ slug: 'ghost', role: 'farm_admin' }],
+      },
+    });
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      prisma: mockPrisma,
+      slug: 'ghost',
+      role: 'farm_admin',
+    });
     mockGetFarmCreds.mockResolvedValue(null);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'ghost' }),
@@ -303,8 +316,15 @@ describe('POST /api/einstein/ask — tier gate', () => {
     expect(json.code).toBe('EINSTEIN_FARM_NOT_FOUND');
   });
 
-  it('returns 403 EINSTEIN_TIER_LOCKED for basic tier', async () => {
+  it('returns 403 EINSTEIN_TIER_LOCKED for basic tier (member)', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
+    // ein-M1: tier gate runs after the membership gate, so members must pass
+    // authz before the tier is ever consulted.
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      prisma: mockPrisma,
+      slug: 'delta-livestock',
+      role: 'farm_admin',
+    });
     mockGetFarmCreds.mockResolvedValue(basicCreds);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
@@ -329,6 +349,58 @@ describe('POST /api/einstein/ask — tier gate', () => {
     expect(resp.status).toBe(403);
     const json = await resp.json();
     expect(json.code).toBe('EINSTEIN_FORBIDDEN');
+  });
+});
+
+describe('POST /api/einstein/ask — authz precedes existence/tier probing (ein-M1)', () => {
+  // Stress-test finding ein-M1: getFarmCreds (404) and isPaidTier (403) used to
+  // run BEFORE the membership gate, so any logged-in user could enumerate farm
+  // existence + tier for farms they cannot access by diffing the responses.
+  // The route must consult the membership gate FIRST and return ONE uniform
+  // response to non-members regardless of whether the farm exists or what
+  // tier it is on.
+  const nonMemberSession = {
+    user: {
+      id: 'user-2',
+      email: 'intruder@example.com',
+      farms: [{ slug: 'other-farm', role: 'farm_admin' }],
+    },
+  };
+
+  async function probeAsNonMember(
+    creds: unknown,
+  ): Promise<{ status: number; body: string }> {
+    resetAll();
+    mockGetServerSession.mockResolvedValue(nonMemberSession);
+    mockGetFarmCreds.mockResolvedValue(creds);
+    // farm-prisma's membership check runs before any meta-DB lookup, so a
+    // non-member gets the same Forbidden shape whether or not the farm exists.
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      error: 'Forbidden',
+      status: 403,
+    });
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'target-farm' }),
+      CTX,
+    );
+    return { status: resp.status, body: await resp.text() };
+  }
+
+  it('non-member gets a byte-identical response for missing vs basic vs advanced farms', async () => {
+    const missing = await probeAsNonMember(null);
+    const basic = await probeAsNonMember(basicCreds);
+    const advanced = await probeAsNonMember(advancedCreds);
+    expect(basic).toEqual(missing);
+    expect(advanced).toEqual(missing);
+    expect(missing.status).toBe(403);
+    expect((JSON.parse(missing.body) as { code: string }).code).toBe(
+      'EINSTEIN_FORBIDDEN',
+    );
+  });
+
+  it('never touches the meta DB for a non-member (no existence/tier probe)', async () => {
+    await probeAsNonMember(advancedCreds);
+    expect(mockGetFarmCreds).not.toHaveBeenCalled();
   });
 });
 

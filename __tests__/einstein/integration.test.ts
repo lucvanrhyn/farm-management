@@ -316,6 +316,13 @@ describe('Integration: full ask → feedback roundtrip', () => {
 describe('Integration: tier lock', () => {
   it('returns 403 EINSTEIN_TIER_LOCKED for Basic tier (integration, not mocked at budget level)', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
+    // ein-M1: the membership gate now runs before the tier gate, so the
+    // member's authz resolution must succeed for the tier branch to be hit.
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      prisma: mockPrisma,
+      slug: 'delta-livestock',
+      role: 'farm_admin',
+    });
     mockGetFarmCreds.mockResolvedValue(basicCreds);
 
     const resp = await askPOST(

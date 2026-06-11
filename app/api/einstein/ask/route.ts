@@ -7,8 +7,11 @@
  *
  * Flow:
  *   1. Auth session → 401 if missing.
- *   2. Tier gate (isPaidTier) → 403 EINSTEIN_TIER_LOCKED if basic.
- *   3. assertWithinBudget → 429 EINSTEIN_BUDGET_EXHAUSTED.
+ *   2. Membership/authz gate (getPrismaForSlugWithAuth) → uniform 403
+ *      EINSTEIN_FORBIDDEN for non-members (ein-M1: runs BEFORE any farm
+ *      existence/tier probe so non-members cannot enumerate farms).
+ *   3. Tier gate (isPaidTier) → 403 EINSTEIN_TIER_LOCKED if basic.
+ *   4. assertWithinBudget → 429 EINSTEIN_BUDGET_EXHAUSTED.
  *   4. planQuery → Haiku classifier.
  *   5. retrieve (structured or semantic) based on plan.
  *   6. stampCostBeforeSend (mark-before-send) BEFORE Anthropic streaming call.
@@ -169,7 +172,19 @@ export const POST = publicHandler({
       return jsonError('EINSTEIN_BAD_REQUEST', parsed.error, 400);
     }
 
-    // Tier gate (must be done before any further work).
+    // Membership/authz gate FIRST (ein-M1). getPrismaForSlugWithAuth checks
+    // session membership before any meta-DB lookup, so a non-member receives
+    // ONE uniform Forbidden response regardless of whether the farm exists or
+    // what tier it is on — no farm-existence/tier enumeration surface.
+    const authed = await getPrismaForSlugWithAuth(session, parsed.farmSlug);
+    if ('error' in authed) {
+      return jsonError('EINSTEIN_FORBIDDEN', authed.error, authed.status);
+    }
+    const { prisma } = authed;
+
+    // Tier gate — members only (runs strictly after authz so tier is never
+    // disclosed to non-members). The 404 branch is a defensive race guard:
+    // a member whose farm vanished from the meta DB between authz and here.
     const creds = await getFarmCreds(parsed.farmSlug);
     if (!creds) {
       return jsonError('EINSTEIN_FARM_NOT_FOUND', `Farm ${parsed.farmSlug} not found`, 404);
@@ -181,13 +196,6 @@ export const POST = publicHandler({
         403,
       );
     }
-
-    // Auth the slug against the session (farm access verification).
-    const authed = await getPrismaForSlugWithAuth(session, parsed.farmSlug);
-    if ('error' in authed) {
-      return jsonError('EINSTEIN_FORBIDDEN', authed.error, authed.status);
-    }
-    const { prisma } = authed;
 
     // Budget assertion (consulting → bypass).
     try {
