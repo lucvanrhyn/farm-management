@@ -331,4 +331,80 @@ describe("POST /api/onboarding/map-columns", () => {
     const json = await res.json();
     expect(json.error).toMatch(/import/i);
   });
+
+  // -------------------------------------------------------------------------
+  // S16 (OB-002/M2) — input caps: column-string length, row-key length, and
+  // total payload bytes must be rejected with a typed 400 BEFORE the rate
+  // limit is charged and BEFORE anything reaches the LLM call.
+  // -------------------------------------------------------------------------
+  describe("input caps (S16 / OB-002)", () => {
+    it("returns a typed 400 when a parsedColumns entry exceeds the cell-char cap", async () => {
+      primeHappyMocks();
+      const { POST } = await import("@/app/api/onboarding/map-columns/route");
+      const res = await POST(
+        makeReq({
+          ...validBody,
+          parsedColumns: ["Oormerk", "x".repeat(513)],
+        })
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe("VALIDATION_FAILED");
+      expect(json.details?.cap).toBe("maxCellChars");
+      expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+      expect(checkRateLimitMock).not.toHaveBeenCalled();
+    });
+
+    it("returns a typed 400 when a sampleRows KEY exceeds the cell-char cap", async () => {
+      primeHappyMocks();
+      const { POST } = await import("@/app/api/onboarding/map-columns/route");
+      const res = await POST(
+        makeReq({
+          ...validBody,
+          sampleRows: [{ ["k".repeat(513)]: "value" }],
+        })
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe("VALIDATION_FAILED");
+      expect(json.details?.cap).toBe("maxCellChars");
+      expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+      expect(checkRateLimitMock).not.toHaveBeenCalled();
+    });
+
+    it("returns a typed 400 when the total payload exceeds the byte cap even if every field passes per-field caps", async () => {
+      primeHappyMocks();
+      const { POST } = await import("@/app/api/onboarding/map-columns/route");
+      // 20 rows x 30 keys x 512-char values ≈ 307 KB > 256 KiB cap, while
+      // every individual field stays within its own cap.
+      const wideRow = Object.fromEntries(
+        Array.from({ length: 30 }, (_, i) => [`k${i}`, "v".repeat(512)])
+      );
+      const res = await POST(
+        makeReq({
+          ...validBody,
+          sampleRows: Array.from({ length: 20 }, () => ({ ...wideRow })),
+        })
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe("VALIDATION_FAILED");
+      expect(json.details?.cap).toBe("maxPayloadBytes");
+      expect(proposeColumnMappingMock).not.toHaveBeenCalled();
+      expect(checkRateLimitMock).not.toHaveBeenCalled();
+    });
+
+    it("still accepts a column name of exactly the cell-char cap (boundary)", async () => {
+      primeHappyMocks();
+      const { POST } = await import("@/app/api/onboarding/map-columns/route");
+      const res = await POST(
+        makeReq({
+          ...validBody,
+          parsedColumns: ["Oormerk", "x".repeat(512)],
+        })
+      );
+      expect(res.status).toBe(200);
+      expect(proposeColumnMappingMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
