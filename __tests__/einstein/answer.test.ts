@@ -168,12 +168,21 @@ describe('streamAnswer — happy path', () => {
       }),
     );
     const call = streamMock.mock.calls[0][0] as {
-      messages: Array<{ role: string; content: string }>;
+      messages: Array<{
+        role: string;
+        content: string | Array<{ type: string; text: string }>;
+      }>;
     };
     expect(call.messages).toHaveLength(3);
     expect(call.messages[0]).toEqual({ role: 'user', content: 'prev q' });
     expect(call.messages[1]).toEqual({ role: 'assistant', content: 'prev a' });
-    expect(call.messages[2]).toEqual({ role: 'user', content: 'follow up' });
+    // Final turn: [retrieval data block, question] — the question is the
+    // trailing text block (S19 moved retrieval into the user turn).
+    const lastTurn = call.messages[2];
+    expect(lastTurn.role).toBe('user');
+    const blocks = lastTurn.content as Array<{ type: string; text: string }>;
+    expect(Array.isArray(blocks)).toBe(true);
+    expect(blocks[blocks.length - 1].text).toBe('follow up');
   });
 });
 
