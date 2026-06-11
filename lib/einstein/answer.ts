@@ -181,6 +181,10 @@ export async function* streamAnswer(
 
   let fullText = '';
   let usage: AnswerUsage | null = null;
+  // message_delta reports the CUMULATIVE output count; tracked separately and
+  // merged after the loop (reassigning `usage` in terms of itself inside the
+  // async-generator loop trips tsc 5.9's circular-CFA fallback).
+  let cumulativeOutputTokens: number | null = null;
 
   try {
     const stream = client.messages.stream({
@@ -219,12 +223,10 @@ export async function* streamAnswer(
           outputTokens: u.output_tokens ?? 0,
         };
       } else if (event.type === 'message_delta') {
-        // message_delta carries the CUMULATIVE output token count — the
-        // final one supersedes message_start's initial figure.
         const cumulative = (event.usage as { output_tokens?: number } | undefined)
           ?.output_tokens;
-        if (usage && typeof cumulative === 'number') {
-          usage = { ...usage, outputTokens: cumulative };
+        if (typeof cumulative === 'number') {
+          cumulativeOutputTokens = cumulative;
         }
       }
     }
@@ -239,9 +241,19 @@ export async function* streamAnswer(
 
   // Surface real usage BEFORE tail-JSON parsing/citation validation: the
   // tokens were consumed even when the answer is subsequently rejected, so
-  // the caller must be able to reconcile cost on those error paths too.
+  // the caller must be able to reconcile cost on those error paths too. The
+  // final cumulative message_delta output count supersedes message_start's
+  // initial figure.
   if (usage) {
-    yield { type: 'usage', usage };
+    yield {
+      type: 'usage',
+      usage: {
+        inputTokens: usage.inputTokens,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens,
+        cacheReadInputTokens: usage.cacheReadInputTokens,
+        outputTokens: cumulativeOutputTokens ?? usage.outputTokens,
+      },
+    };
   }
 
   // Parse the tail JSON block.

@@ -455,7 +455,7 @@ describe('POST /api/einstein/ask — budget branch', () => {
 describe('POST /api/einstein/ask — happy path (advanced)', () => {
   it('returns 200 + text/event-stream; stamps cost BEFORE stream; writes RagQueryLog', async () => {
     happyPathDefaults();
-    mockStreamAnswer.mockImplementation((params) => {
+    mockStreamAnswer.mockImplementation(() => {
       return buildStreamEvents([
         { type: 'token', text: 'Hello ' },
         { type: 'token', text: 'world' },
