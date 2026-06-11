@@ -28,6 +28,7 @@ import type { PrismaClient } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { AFRIKAANS_STATUS_MAP } from "@/lib/onboarding/schema-dictionary";
+import { sanitizeCellString } from "@/lib/onboarding/sanitize-cells";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -167,6 +168,18 @@ function trimmedOrUndefined(value: string | undefined): string | undefined {
 }
 
 /**
+ * Trim + formula-injection-neutralize a persisted free-text field
+ * (S15 / M3). The client sanitizes parsed files, but a direct API POST
+ * bypasses the client — the server boundary must do it itself. Sanitize
+ * AFTER trim so a leading-space payload (" =1+1") is still caught, and
+ * idempotently (a client-prefixed "'=x" is never double-prefixed).
+ */
+function sanitizedOrUndefined(value: string | undefined): string | undefined {
+  const trimmed = trimmedOrUndefined(value);
+  return trimmed === undefined ? undefined : sanitizeCellString(trimmed);
+}
+
+/**
  * Validate a single row. Returns the validated shape, or a per-row error.
  * `seenEarTags` is mutated by the caller AFTER a row is accepted.
  */
@@ -175,7 +188,8 @@ function validateRow(
   rowNum: number,
   seenEarTags: ReadonlySet<string>,
 ): { ok: ValidatedRow } | { err: CommitImportError } {
-  const rawEarTag = typeof row.earTag === "string" ? row.earTag.trim() : "";
+  const rawEarTag =
+    typeof row.earTag === "string" ? sanitizeCellString(row.earTag.trim()) : "";
 
   if (!rawEarTag) {
     return { err: { row: rowNum, reason: "missing earTag" } };
@@ -232,19 +246,22 @@ function validateRow(
     ok: {
       originalIndex: rowNum,
       earTag: rawEarTag,
-      registrationNumber: trimmedOrUndefined(row.registrationNumber),
-      breed: trimmedOrUndefined(row.breed),
+      // Free-text fields are sanitized at this boundary (S15 / M3);
+      // sex/status are closed enums (invalid payloads already rejected
+      // above) and dates are re-emitted as ISO strings.
+      registrationNumber: sanitizedOrUndefined(row.registrationNumber),
+      breed: sanitizedOrUndefined(row.breed),
       sex: row.sex,
-      category: trimmedOrUndefined(row.category),
+      category: sanitizedOrUndefined(row.category),
       dateOfBirthIso,
-      motherId: trimmedOrUndefined(row.motherId),
-      fatherId: trimmedOrUndefined(row.fatherId),
-      currentCamp: trimmedOrUndefined(row.currentCamp),
+      motherId: sanitizedOrUndefined(row.motherId),
+      fatherId: sanitizedOrUndefined(row.fatherId),
+      currentCamp: sanitizedOrUndefined(row.currentCamp),
       status,
       species: resolvedSpecies,
       deceasedAtIso,
-      sireNote: trimmedOrUndefined(row.sireNote),
-      damNote: trimmedOrUndefined(row.damNote),
+      sireNote: sanitizedOrUndefined(row.sireNote),
+      damNote: sanitizedOrUndefined(row.damNote),
     },
   };
 }

@@ -810,6 +810,23 @@ describe("commitImport", () => {
       });
     });
 
+    it("sanitizes a formula-payload camp reference before it becomes a placeholder camp", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [{ earTag: "C-INJ", currentCamp: "=HYPERLINK(evil)" }],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(1);
+      expect(state.createdCamps[0]).toMatchObject({
+        campId: "'=hyperlink(evil)",
+        campName: "'=HYPERLINK(evil)",
+      });
+    });
+
     it("drops only the affected rows with a typed reason when placeholder creation fails hard", async () => {
       const state = makeState();
       state.campCreateErrorsByCampId.set(
@@ -840,6 +857,93 @@ describe("commitImport", () => {
       // The raw driver text must never surface in a per-row reason.
       expect(JSON.stringify(res.errors)).not.toContain("SQLITE_IOERR");
       expect(state.insertedAnimals.map((a) => a.animalId)).toEqual(["OK-CAMP"]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // S15 (M3) — formula-injection sanitization runs SERVER-SIDE in the commit
+  // path. The client sanitizes parsed files, but a direct API POST bypasses
+  // the client entirely — the boundary must neutralize `= + - @ \t \r`
+  // prefixes itself before anything persists.
+  // ---------------------------------------------------------------------------
+  describe("server-side formula sanitization (S15 / M3)", () => {
+    it("neutralizes formula-trigger prefixes on every persisted free-text field", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          {
+            earTag: "=cmd|' /C calc'!A0",
+            registrationNumber: "+SUM(A1:A9)",
+            breed: "@evil",
+            category: "-2+3+cmd",
+            sireNote: "=IMPORTXML(http://x)",
+            // Whitespace-cloaked payload: trim strips the tab, then the
+            // sanitizer must still catch the exposed "=".
+            damNote: "\t=TAB-PAYLOAD",
+          },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "'=cmd|' /C calc'!A0",
+        registrationNumber: "'+SUM(A1:A9)",
+        breed: "'@evil",
+        category: "'-2+3+cmd",
+        sireNote: "'=IMPORTXML(http://x)",
+        damNote: "'=TAB-PAYLOAD",
+      });
+    });
+
+    it("leaves legitimate values untouched and is idempotent on pre-sanitized input", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          {
+            earTag: "BB-C001",
+            breed: "Bonsmara",
+            sireNote: "'=already-sanitized-client-side",
+          },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "BB-C001",
+        breed: "Bonsmara",
+        // Already prefixed by the client — must NOT be double-prefixed.
+        sireNote: "'=already-sanitized-client-side",
+      });
+    });
+
+    it("keeps in-batch pedigree refs consistent when both sides carry a formula prefix", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [
+          { earTag: "=SIRE", sex: "Male" },
+          { earTag: "CALF-X", sex: "Female", fatherId: "=SIRE" },
+        ],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([]);
+      expect(res.inserted).toBe(2);
+      const calf = state.insertedAnimals.find((a) => a.animalId === "CALF-X")!;
+      // Sanitized symmetrically on both sides — the ref still resolves.
+      expect(calf.fatherId).toBe("'=SIRE");
+      expect(calf.sireNote).toBeNull();
     });
   });
 });
