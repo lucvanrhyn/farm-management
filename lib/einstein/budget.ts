@@ -35,7 +35,8 @@ import { DEFAULT_BUDGET_CAP_ZAR } from './defaults';
 export type BudgetErrorCode =
   | 'EINSTEIN_BUDGET_EXHAUSTED'
   | 'EINSTEIN_BUDGET_FARM_NOT_FOUND'
-  | 'EINSTEIN_BUDGET_SETTINGS_MISSING';
+  | 'EINSTEIN_BUDGET_SETTINGS_MISSING'
+  | 'EINSTEIN_BUDGET_BAD_DELTA';
 
 export class EinsteinBudgetError extends Error {
   readonly code: BudgetErrorCode;
@@ -223,6 +224,67 @@ export async function stampCostBeforeSend(
   // json_set() here — the column is a plain String, not SQLite JSON1
   // functions. Rewriting the whole blob is O(few-KB) and avoids edge cases
   // where the blob was null or malformed.
+  await prisma.farmSettings.updateMany({
+    data: { aiSettings: JSON.stringify(nextBlob) },
+  });
+}
+
+/**
+ * POST-SEND RECONCILIATION (api-F1/EIN-2): after the Anthropic call completes
+ * the caller knows the REAL cost from returned usage; apply
+ * `deltaZar = actual − pre-stamped estimate` so the monthly counter reflects
+ * real consumption instead of the pessimistic guess. A negative delta credits
+ * back the over-stamp; the counter clamps at 0.
+ *
+ * Storage is the same read-modify-write blob as stampCostBeforeSend —
+ * making the counter atomic under concurrency is EIN-1 (slice S23, schema
+ * change behind the gate), deliberately out of scope here.
+ */
+export async function reconcileCostAfterSend(
+  farmSlug: string,
+  deltaZar: number,
+): Promise<void> {
+  if (!Number.isFinite(deltaZar)) {
+    throw new EinsteinBudgetError(
+      'EINSTEIN_BUDGET_BAD_DELTA',
+      'deltaZar must be a finite number',
+    );
+  }
+
+  const creds = await getFarmCreds(farmSlug);
+  if (!creds) {
+    throw new EinsteinBudgetError(
+      'EINSTEIN_BUDGET_FARM_NOT_FOUND',
+      `Farm ${farmSlug} not found in meta DB`,
+    );
+  }
+  // Consulting is budget-exempt — nothing was stamped, nothing to reconcile.
+  if (isBudgetExempt(creds.tier as FarmTier)) return;
+
+  const prisma = await getPrismaForFarm(farmSlug);
+  if (!prisma) {
+    throw new EinsteinBudgetError(
+      'EINSTEIN_BUDGET_FARM_NOT_FOUND',
+      `Tenant DB for ${farmSlug} not reachable`,
+    );
+  }
+
+  const settings = await readAiSettings(prisma);
+  const rag = settings.ragConfig ?? defaultRagConfig();
+  const now = new Date();
+  const thisMonth = currentMonthKey(now);
+  const rolledOver = rag.currentMonthKey !== thisMonth;
+
+  const next: RagConfig = {
+    enabled: rag.enabled ?? true,
+    budgetCapZarPerMonth: rag.budgetCapZarPerMonth ?? DEFAULT_BUDGET_CAP_ZAR,
+    // Clamp at 0: a credit larger than the stamped spend (e.g. after a
+    // mid-flight monthly rollover) must never drive the counter negative.
+    monthSpentZar: Math.max(0, (rolledOver ? 0 : rag.monthSpentZar) + deltaZar),
+    currentMonthKey: thisMonth,
+  };
+  const nextBlob: AiSettingsBlob = { ...settings, ragConfig: next };
+
   await prisma.farmSettings.updateMany({
     data: { aiSettings: JSON.stringify(nextBlob) },
   });

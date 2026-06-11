@@ -37,6 +37,7 @@ const budgetMod = await import('@/lib/einstein/budget');
 const {
   assertWithinBudget,
   stampCostBeforeSend,
+  reconcileCostAfterSend,
   resetMonthlyBudget,
   EinsteinBudgetError,
   currentMonthKey,
@@ -262,6 +263,115 @@ describe('stampCostBeforeSend — mark-before-send ordering', () => {
     };
     // Stale 99 ZAR discarded; new spend starts at 5.
     expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(5, 5);
+    expect(parsed.ragConfig.currentMonthKey).toBe(currentMonthKey(new Date()));
+  });
+});
+
+describe('reconcileCostAfterSend — post-send reconciliation (api-F1/EIN-2)', () => {
+  // After the Anthropic call the route knows REAL cost; the counter must be
+  // adjusted by delta = actual − pre-stamped estimate so the monthly budget
+  // reflects real consumption (negative delta credits back the over-stamp).
+  function advancedCreds() {
+    getFarmCredsMock.mockResolvedValue({
+      tursoUrl: 'x',
+      tursoAuthToken: 'y',
+      tier: 'advanced',
+    });
+  }
+
+  it('applies a positive delta on top of the stamped spend', async () => {
+    advancedCreds();
+    const updateManyCalls: unknown[] = [];
+    const fake = makeFakePrisma(
+      { ragConfig: mkRagConfig({ monthSpentZar: 13 }) },
+      { updateManyCalls },
+    );
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    await reconcileCostAfterSend('delta-livestock', 2);
+    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
+    const parsed = JSON.parse(stamped.data.aiSettings) as {
+      ragConfig: { monthSpentZar: number };
+    };
+    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(15, 5);
+  });
+
+  it('credits back a negative delta (actual cost below the pessimistic stamp)', async () => {
+    advancedCreds();
+    const updateManyCalls: unknown[] = [];
+    const fake = makeFakePrisma(
+      { ragConfig: mkRagConfig({ monthSpentZar: 13 }) },
+      { updateManyCalls },
+    );
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    await reconcileCostAfterSend('delta-livestock', -2.5);
+    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
+    const parsed = JSON.parse(stamped.data.aiSettings) as {
+      ragConfig: { monthSpentZar: number };
+    };
+    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(10.5, 5);
+  });
+
+  it('clamps the counter at zero on an over-credit', async () => {
+    advancedCreds();
+    const updateManyCalls: unknown[] = [];
+    const fake = makeFakePrisma(
+      { ragConfig: mkRagConfig({ monthSpentZar: 1 }) },
+      { updateManyCalls },
+    );
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    await reconcileCostAfterSend('delta-livestock', -5);
+    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
+    const parsed = JSON.parse(stamped.data.aiSettings) as {
+      ragConfig: { monthSpentZar: number };
+    };
+    expect(parsed.ragConfig.monthSpentZar).toBe(0);
+  });
+
+  it('consulting tier returns without writing (budget-exempt)', async () => {
+    getFarmCredsMock.mockResolvedValue({
+      tursoUrl: 'x',
+      tursoAuthToken: 'y',
+      tier: 'consulting',
+    });
+    await reconcileCostAfterSend('mega-farm', -3);
+    expect(getPrismaForFarmMock).not.toHaveBeenCalled();
+  });
+
+  it('throws EINSTEIN_BUDGET_BAD_DELTA on a non-finite delta', async () => {
+    try {
+      await reconcileCostAfterSend('delta-livestock', Number.NaN);
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(EinsteinBudgetError);
+      expect((err as InstanceType<typeof EinsteinBudgetError>).code).toBe(
+        'EINSTEIN_BUDGET_BAD_DELTA',
+      );
+    }
+  });
+
+  it('rolls over a stale month key — delta applies to a fresh counter', async () => {
+    advancedCreds();
+    const updateManyCalls: unknown[] = [];
+    const fake = makeFakePrisma(
+      {
+        ragConfig: mkRagConfig({
+          monthSpentZar: 99,
+          currentMonthKey: '1999-01', // stale
+        }),
+      },
+      { updateManyCalls },
+    );
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    await reconcileCostAfterSend('delta-livestock', 4);
+    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
+    const parsed = JSON.parse(stamped.data.aiSettings) as {
+      ragConfig: { monthSpentZar: number; currentMonthKey: string };
+    };
+    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(4, 5);
     expect(parsed.ragConfig.currentMonthKey).toBe(currentMonthKey(new Date()));
   });
 });
