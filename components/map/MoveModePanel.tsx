@@ -34,9 +34,14 @@ function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: bool
     fetch("/api/mobs", { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : []))
       .then((all: MobInfo[]) => {
-        const inCamp = all
-          .filter((m) => m.current_camp === campId)
-          .filter((m) => (m.species ?? "cattle") === mode);
+        // S7 / sp-M3 — no client-side species filter here. /api/mobs never
+        // returns a `species` field (wire shape: id/name/current_camp/
+        // animal_count) and already scopes the list server-side via the
+        // farmtrack-mode cookie. The old `(m.species ?? "cattle") === mode`
+        // filter therefore discarded EVERY mob in sheep/game mode. `mode`
+        // stays in the fetch key so a mode switch refetches the
+        // server-scoped list.
+        const inCamp = all.filter((m) => m.current_camp === campId);
         setResult({ key, mobs: inCamp });
       })
       .catch((err: unknown) => {

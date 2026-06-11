@@ -66,6 +66,15 @@ function mapPrismaAnimal(a: PrismaAnimal): Animal {
     category: a.category,
     current_camp: a.currentCamp,
     status: a.status,
+    // S7 / MS-1 — species must survive the seed. Logger consumers filter the
+    // cached herd with `(a.species ?? "cattle") === mode`; dropping the field
+    // here made every seeded row default to "cattle" and emptied the logger
+    // on sheep/game farms. The /api/animals seed fetch itself stays
+    // CROSS-species on purpose: `seedAnimals` orphan-sweeps rows missing from
+    // the payload and the `animals` store is not mode-partitioned, so a
+    // species-scoped seed would wipe the other species' herd from the device
+    // (the camps bug class from #437).
+    species: a.species,
     mother_id: a.motherId ?? undefined,
     father_id: a.fatherId ?? undefined,
     date_added: a.dateAdded,
