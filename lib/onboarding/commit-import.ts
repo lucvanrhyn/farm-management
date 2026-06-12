@@ -422,6 +422,31 @@ function isUniqueViolation(err: unknown): boolean {
   return err instanceof Error && /unique constraint/i.test(err.message);
 }
 
+/**
+ * Map a per-row insert failure to a TYPED, user-safe reason
+ * (S17 / OB-005 / api-F2). These reasons stream to the SSE client and
+ * persist into `ImportJob.warnings`, so the raw Prisma/driver message —
+ * which carries internal schema text (table/column names, invocation
+ * payload) — must never be forwarded. Same convention as
+ * `mapApiDomainError`'s DB_QUERY_FAILED sanitization (#483): typed message
+ * to the caller, full error to the server log.
+ *
+ * Two branches, each with its own code path:
+ *  - unique violation → the actionable duplicate message (expected user
+ *    error: the animal is already registered; no server log needed);
+ *  - anything else    → opaque generic reason + full server-side log.
+ */
+function insertFailureReason(err: unknown, earTag: string): string {
+  if (isUniqueViolation(err)) {
+    return "earTag already exists";
+  }
+  logger.error("commitImport: row insert failed", {
+    earTag,
+    error: err instanceof Error ? err.message : err,
+  });
+  return "database error — row not inserted";
+}
+
 /** Camp reference -> campId slug, per the wizard contract (lowercase, dashes for spaces). */
 function slugifyCampRef(ref: string): string {
   return ref.trim().toLowerCase().replace(/\s+/g, "-");
@@ -676,11 +701,12 @@ export async function commitImport(
           inserted += 1;
           resolvedByTag.set(row.earTag, row.earTag);
         } catch (err) {
-          const reason = err instanceof Error ? err.message : "unknown insert error";
+          // S17 (OB-005/api-F2): never forward the raw driver/Prisma
+          // message — typed reason out, full error to the server log.
           errors.push({
             row: row.originalIndex,
             earTag: row.earTag,
-            reason,
+            reason: insertFailureReason(err, row.earTag),
           });
         }
 

@@ -365,9 +365,12 @@ describe("commitImport", () => {
     expect(res.inserted).toBe(2);
     expect(res.skipped).toBe(1);
     expect(res.errors).toHaveLength(1);
+    // S17 (OB-005/api-F2): the reason is the TYPED duplicate message — the
+    // raw driver text ("UNIQUE constraint failed: Animal.animalId") carries
+    // internal schema names and must never surface.
     expect(res.errors[0]).toMatchObject({
       earTag: "WILL-FAIL",
-      reason: expect.stringContaining("UNIQUE"),
+      reason: "earTag already exists",
     });
 
     const inserted = state.insertedAnimals.map((a) => a.animalId);
@@ -857,6 +860,143 @@ describe("commitImport", () => {
       // The raw driver text must never surface in a per-row reason.
       expect(JSON.stringify(res.errors)).not.toContain("SQLITE_IOERR");
       expect(state.insertedAnimals.map((a) => a.animalId)).toEqual(["OK-CAMP"]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // S17 (OB-005/api-F2) — per-row insert failures must surface TYPED,
+  // user-safe reasons. The raw Prisma/driver message carries internal schema
+  // text (table/column/invocation payload) and is streamed to the SSE client
+  // AND persisted into ImportJob.warnings — it must never leave the server.
+  // Same convention as mapApiDomainError's DB_QUERY_FAILED sanitization
+  // (#483): typed message out, full error to the server log.
+  // ---------------------------------------------------------------------------
+  describe("insert-error sanitization (S17 / OB-005 / api-F2)", () => {
+    const PRISMA_LEAK =
+      "Invalid `prisma.animal.create()` invocation: column `secret_col` does not exist on table `Animal`";
+
+    function makePrismaError(message: string): Error {
+      const err = new Error(message);
+      err.name = "PrismaClientKnownRequestError";
+      return err;
+    }
+
+    it("never forwards raw Prisma text in a per-row reason — typed generic reason instead", async () => {
+      const state = makeState();
+      state.createErrorsByAnimalId.set("LEAK-1", makePrismaError(PRISMA_LEAK));
+      const { prisma } = makeMockPrisma(state);
+
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "LEAK-1" }), mkRow({ earTag: "OK-AFTER" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+      consoleSpy.mockRestore();
+
+      expect(res.inserted).toBe(1);
+      expect(res.skipped).toBe(1);
+      expect(res.errors).toEqual([
+        {
+          row: 1,
+          earTag: "LEAK-1",
+          reason: "database error — row not inserted",
+        },
+      ]);
+      // The raw message must not appear ANYWHERE in the client-bound result.
+      const serialized = JSON.stringify(res.errors);
+      expect(serialized).not.toContain("secret_col");
+      expect(serialized).not.toContain("prisma.animal");
+      expect(serialized).not.toContain(PRISMA_LEAK);
+    });
+
+    it("keeps the persisted ImportJob.warnings free of raw driver text too", async () => {
+      const state = makeState();
+      state.createErrorsByAnimalId.set("LEAK-2", makePrismaError(PRISMA_LEAK));
+      const { prisma } = makeMockPrisma(state);
+
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      await commitImport(prisma, {
+        rows: [mkRow({ earTag: "LEAK-2" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+      consoleSpy.mockRestore();
+
+      const call = state.importJobUpdateCalls[0];
+      const warnings = (call.data as { warnings: string }).warnings;
+      expect(warnings).toContain("database error — row not inserted");
+      expect(warnings).not.toContain("secret_col");
+      expect(warnings).not.toContain("prisma.animal");
+    });
+
+    it("logs the full insert error server-side so debugging detail is not lost", async () => {
+      const { logger } = await import("@/lib/logger");
+      const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+      const state = makeState();
+      state.createErrorsByAnimalId.set("LOGGED", makePrismaError(PRISMA_LEAK));
+      const { prisma } = makeMockPrisma(state);
+
+      try {
+        await commitImport(prisma, {
+          rows: [mkRow({ earTag: "LOGGED" })],
+          importJobId: DEFAULT_JOB_ID,
+          defaultSpecies: "cattle",
+        });
+        const insertLog = spy.mock.calls.find(([msg]) =>
+          String(msg).includes("row insert failed"),
+        );
+        expect(insertLog).toBeDefined();
+        const [, meta] = insertLog! as [string, { error?: unknown }];
+        expect(meta.error).toBe(PRISMA_LEAK);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("maps a typed P2002 unique violation to the duplicate reason", async () => {
+      const state = makeState();
+      const p2002 = Object.assign(new Error("\nUnique constraint failed on the fields: (`animalId`)"), {
+        code: "P2002",
+        name: "PrismaClientKnownRequestError",
+      });
+      state.createErrorsByAnimalId.set("DUP-DB", p2002);
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "DUP-DB" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.errors).toEqual([
+        { row: 1, earTag: "DUP-DB", reason: "earTag already exists" },
+      ]);
+      expect(JSON.stringify(res.errors)).not.toContain("Unique constraint");
+    });
+
+    it("maps a non-Error throw to the typed generic reason", async () => {
+      const state = makeState();
+      // Drivers occasionally reject with plain objects/strings.
+      state.createErrorsByAnimalId.set(
+        "WEIRD",
+        "SQLITE_CONSTRAINT: stringly-typed driver failure" as unknown as Error,
+      );
+      const { prisma } = makeMockPrisma(state);
+
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "WEIRD" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+      consoleSpy.mockRestore();
+
+      expect(res.errors).toEqual([
+        { row: 1, earTag: "WEIRD", reason: "database error — row not inserted" },
+      ]);
+      expect(JSON.stringify(res.errors)).not.toContain("SQLITE_CONSTRAINT");
     });
   });
 
