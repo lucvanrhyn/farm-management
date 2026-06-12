@@ -197,4 +197,39 @@ describe('POST /api/observations — animal_movement applies currentCamp (#100)'
     expect(mockAnimalUpdate).not.toHaveBeenCalled();
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it('orphan tag (movement for an animal that does not exist) is a TYPED 404 ANIMAL_NOT_FOUND (S5/OBS-2)', async () => {
+    // The byte-identical sibling of the death orphan-tag contract (see
+    // observations-death.test.ts): `performAnimalMove`'s bare
+    // `tx.animal.update({ where: { animalId } })` raises Prisma P2025 when the
+    // tag resolves to no row. Pre-S5 the raw P2025 escaped and the #483
+    // sanitizer collapsed it to an opaque 500 → the offline queue looped the
+    // row forever (OBS-2). The op now translates P2025 into the
+    // observations-domain `AnimalNotFoundError` → 404
+    // `{ error: "ANIMAL_NOT_FOUND" }` → terminal-for-this-row on the client.
+    const { POST } = await import('@/app/api/observations/route');
+
+    // The animal does not exist → the tag-keyed update raises P2025.
+    const p2025 = new Error(
+      'An operation failed because it depends on one or more records that were required but not found. Record to update not found.',
+    );
+    p2025.name = 'PrismaClientKnownRequestError';
+    (p2025 as Error & { code?: string }).code = 'P2025';
+    mockAnimalUpdate.mockRejectedValueOnce(p2025);
+
+    const res = await POST(post(movementBody()), { params: Promise.resolve({}) });
+
+    expect(res.status).toBe(404);
+    const body = JSON.parse(await res.text()) as Record<string, unknown>;
+    expect(body).toEqual({ error: 'ANIMAL_NOT_FOUND' });
+    // No raw Prisma schema text leaks into the client envelope (#483 holds).
+    expect(JSON.stringify(body)).not.toContain('Record to update not found');
+
+    // The update threw inside the route-owned transaction → the observation
+    // write never committed (no orphan movement row on a missing animal).
+    expect(mockAnimalUpdate).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockObsUpsert).not.toHaveBeenCalled();
+    expect(mockObsCreate).not.toHaveBeenCalled();
+  });
 });

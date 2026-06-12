@@ -12,9 +12,17 @@
  * input does not resolve. They are intentionally "fail loud" — a
  * referential-integrity violation has no graceful degradation path, and
  * the pre-ADR-0006 silent `species: null` coercion was the hole this
- * wave closes. The api-errors mapper does NOT special-case them; an
- * uncaught throw surfaces a 500 with the typed `code` in logs, which
- * is the correct behaviour for a "this should never happen" rail.
+ * wave closes.
+ *
+ * S5 / OBS-2 update — `AnimalNotFoundError` is no longer a "this should
+ * never happen" 500 rail: the offline replay made missing-animal a
+ * REACHABLE wire case (an animal deleted server-side while a death/move
+ * sat in the queue), and `performAnimalDeath`/`performAnimalMove` now
+ * throw it for their tag-keyed P2025 too. `mapApiDomainError` maps it to
+ * 404 `{ error: "ANIMAL_NOT_FOUND" }`, which `classifySyncFailure`
+ * treats as terminal-for-this-row (dead-letter, no retry loop).
+ * `MobNotFoundError` stays unmapped (500 rail) — its replay-reachable
+ * sibling case is carried by the mobs-domain class instead.
  */
 
 export const OBSERVATION_NOT_FOUND = "OBSERVATION_NOT_FOUND" as const;
