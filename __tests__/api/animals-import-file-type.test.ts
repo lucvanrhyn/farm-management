@@ -107,15 +107,26 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
     expect(body.code).toBe("FILE_TYPE_UNSUPPORTED");
   });
 
-  it("does not blow up when someone uploads a renamed CSV with .xlsx extension — the shim throws and the route surfaces 400", async () => {
-    // A CSV that the user renamed `data.xlsx` will pass the extension check
-    // but fail at readWorkbook. The route MUST translate that to a typed 400,
-    // not let it fall through as a 500. (silent-failure-pattern.md.)
+  it("does not blow up when someone uploads renamed binary garbage with .xlsx extension — the shim throws and the route surfaces 400", async () => {
+    // A corrupt download (or any non-spreadsheet binary) renamed `data.xlsx`
+    // passes the extension check but fails at readWorkbook. The route MUST
+    // translate that to a typed 400, not let it fall through as a 500.
+    // (silent-failure-pattern.md.)
+    //
+    // S13 / OB-csv note: this scenario originally used renamed CSV *text*,
+    // which threw when the shim was xlsx-only. readWorkbook now sniffs bytes
+    // and parses text payloads through its CSV path (same row model), so a
+    // renamed CSV no longer throws — binary garbage pins the catch path.
     const { POST } = await import("@/app/api/animals/import/route");
 
-    const fakeXlsx = new File(["animal_id,sex\nA001,Male\n"], "data.xlsx", {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
+    // PNG magic bytes — invalid UTF-8 lead byte, not a zip container.
+    const fakeXlsx = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      "data.xlsx",
+      {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+    );
     const res = await POST(makeFormDataReq(fakeXlsx), { params: Promise.resolve({}) });
 
     expect(res.status).toBe(400);

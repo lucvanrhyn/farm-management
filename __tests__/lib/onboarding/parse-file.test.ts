@@ -32,6 +32,38 @@ describe("parseSpreadsheet", () => {
   });
 
   // -------------------------------------------------------------------------
+  // CSV path — S13 / OB-csv: a .csv upload must produce the same parsed
+  // result as the equivalent .xlsx upload.
+  // -------------------------------------------------------------------------
+
+  it("parses a .csv file to the identical result as the equivalent .xlsx", async () => {
+    const xlsxFile = await buildXlsxFile(TINY_ROWS);
+    const csvText = TINY_ROWS.map((row) => row.join(",")).join("\n") + "\n";
+    const csvFile = new File([csvText], "herd.csv", { type: "text/csv" });
+
+    const fromXlsx = await parseSpreadsheet(xlsxFile);
+    const fromCsv = await parseSpreadsheet(csvFile);
+
+    expect(fromCsv).toEqual(fromXlsx);
+  });
+
+  it("parses a semicolon-delimited .csv (ZA locale export)", async () => {
+    const csvFile = new File(
+      ["Oorplaatjie;Geslag\nA001;Vroulik\n"],
+      "kudde.csv",
+      { type: "text/csv" },
+    );
+    const result = await parseSpreadsheet(csvFile);
+
+    expect(result.parsedColumns).toEqual(["Oorplaatjie", "Geslag"]);
+    expect(result.fullRowCount).toBe(1);
+    expect(result.sampleRows[0]).toMatchObject({
+      Oorplaatjie: "A001",
+      Geslag: "Vroulik",
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Error paths
   // -------------------------------------------------------------------------
 

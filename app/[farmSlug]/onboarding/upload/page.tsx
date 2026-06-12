@@ -11,6 +11,10 @@
  *
  * Parse + hash run in parallel so the user waits on the slower of the two.
  * Parse errors surface as `validation-error` fallbacks.
+ *
+ * S13 / OB-csv: the dropzone `accept` attribute is advisory only (drag-and-
+ * drop bypasses it), so unsupported file types are rejected here — at the
+ * boundary — before any parse/hash work starts.
  */
 
 import { useCallback, useState } from "react";
@@ -23,7 +27,11 @@ import {
 } from "@/components/onboarding/TemplateFallback";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import { hashFile, parseSpreadsheet } from "@/lib/onboarding/parse-file";
+import { isSupportedSpreadsheetFile, SPREADSHEET_ACCEPT } from "@/lib/xlsx-shim";
 import type { ProposalResult } from "@/lib/onboarding/client-types";
+
+const UNSUPPORTED_FILE_MESSAGE =
+  "Unsupported file type — upload an Excel (.xlsx) or CSV (.csv) file.";
 
 type ViewState =
   | { kind: "idle" }
@@ -39,6 +47,17 @@ export default function OnboardingUploadPage() {
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (!isSupportedSpreadsheetFile(file.name, file.type)) {
+        setView({
+          kind: "fallback",
+          reason: {
+            kind: "validation-error",
+            message: UNSUPPORTED_FILE_MESSAGE,
+          },
+        });
+        return;
+      }
+
       setView({ kind: "loading" });
 
       let parsed: Awaited<ReturnType<typeof parseSpreadsheet>>;
@@ -143,7 +162,7 @@ export default function OnboardingUploadPage() {
       }
       lead={
         <>
-          Any format is fine — we&apos;ll figure the columns out. The file is parsed
+          Excel (.xlsx) or CSV — we&apos;ll figure the columns out. The file is parsed
           in your browser and only the header plus a 20-row preview are sent to the AI.
         </>
       }
@@ -154,7 +173,11 @@ export default function OnboardingUploadPage() {
           onRetry={() => setView({ kind: "idle" })}
         />
       ) : (
-        <FileDropzone onFile={handleFile} isLoading={view.kind === "loading"} />
+        <FileDropzone
+          onFile={handleFile}
+          isLoading={view.kind === "loading"}
+          accept={SPREADSHEET_ACCEPT}
+        />
       )}
     </StepShell>
   );
