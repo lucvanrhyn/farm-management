@@ -129,13 +129,23 @@ export const POST = publicHandler({
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (err) {
-      // Prisma P2025 → row not found.
-      const code =
-        err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === 'P2025'
-          ? 'EINSTEIN_FEEDBACK_NOT_FOUND'
-          : 'EINSTEIN_FEEDBACK_FAILED';
-      const status = code === 'EINSTEIN_FEEDBACK_NOT_FOUND' ? 404 : 500;
-      return jsonError(code, err instanceof Error ? err.message : 'feedback update failed', status);
+      // Prisma P2025 → row not found. Typed 404 with a STATIC message —
+      // api-M1 (S27): the raw Prisma message carries internal schema text
+      // and must never be echoed to the client.
+      const isRowNotFound =
+        err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === 'P2025';
+      if (isRowNotFound) {
+        return jsonError('EINSTEIN_FEEDBACK_NOT_FOUND', 'Query log row not found', 404);
+      }
+      // api-M1 (S27) — every other throw is rethrown to the `publicHandler`
+      // wrapper, which routes it through `mapApiDomainError` (#483): Prisma
+      // exception classes collapse to the opaque 500 DB_QUERY_FAILED
+      // envelope and the full error is logged server-side. The previous arm
+      // echoed `err.message` verbatim (raw table/column text) at 500
+      // EINSTEIN_FEEDBACK_FAILED; the only consumer (EinsteinChat's
+      // fire-and-forget thumbs handler) never reads this body, so the
+      // envelope swap is wire-safe.
+      throw err;
     }
   },
 });

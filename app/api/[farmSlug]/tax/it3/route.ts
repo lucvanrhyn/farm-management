@@ -22,6 +22,7 @@
 import { NextResponse } from "next/server";
 
 import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
+import { mapApiDomainError } from "@/lib/server/api-errors";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -125,6 +126,18 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
       });
       return NextResponse.json(record, { status: 201 });
     } catch (err) {
+      // api-M1 (S27) — sanitize Prisma/DB throws via the canonical mapper
+      // (#483) BEFORE the message echo: this catch sits inside the
+      // `tenantWriteSlug` adapter, so the adapter's own sanitization never
+      // sees the throw. Prisma exception classes collapse to the opaque 500
+      // DB_QUERY_FAILED envelope (full error logged server-side by the
+      // mapper) instead of echoing raw table/column text into the IT3 toast.
+      const mapped = mapApiDomainError(err);
+      if (mapped) return mapped;
+      // The deliberate business-rule throw from `issueIt3Snapshot`
+      // (duplicate active snapshot — its developer-authored message IS the
+      // user-facing toast copy) keeps the verbatim 422 `{ error: <sentence> }`
+      // wire shape from Wave G8.
       const message = err instanceof Error ? err.message : "Failed to issue IT3 snapshot";
       return NextResponse.json({ error: message }, { status: 422 });
     }

@@ -299,3 +299,88 @@ describe('POST /api/einstein/feedback — happy path', () => {
     expect(json.code).toBe('EINSTEIN_FEEDBACK_NOT_FOUND');
   });
 });
+
+// ── api-M1 (S27) — Prisma/DB error text must NEVER reach the client ──────────
+//
+// The pre-fix catch arm echoed `err.message` verbatim into the response body
+// for every `Error` instance (`jsonError(code, err.message, status)`), so a
+// raw Prisma message — which carries internal schema text (table/column/
+// payload) — leaked to authenticated clients on both the P2025 → 404 arm and
+// the generic 500 arm. Contract now: the P2025 arm keeps its typed 404 with a
+// STATIC message; every other throw is rethrown to the `publicHandler`
+// wrapper, which routes it through `mapApiDomainError` (#483) → the opaque
+// `DB_QUERY_FAILED` envelope, with the full error preserved server-side.
+describe('POST /api/einstein/feedback — Prisma/DB error sanitization (api-M1)', () => {
+  /** Error shaped like a real Prisma exception: name + code + leaky message. */
+  function makePrismaError(name: string, message: string, code?: string): Error {
+    const err = new Error(message) as Error & { code?: string };
+    err.name = name;
+    if (code !== undefined) err.code = code;
+    return err;
+  }
+
+  const FEEDBACK_BODY = {
+    queryLogId: 'log-1',
+    feedback: 'down',
+    farmSlug: 'delta-livestock',
+  };
+
+  it('does NOT echo the raw Prisma message on the P2025 → 404 arm', async () => {
+    happyPathDefaults();
+    const leak =
+      'An operation failed because it depends on one or more records that were required but not found. No `RagQueryLog` record (column `secret_col`) was found.';
+    mockRagQueryLogUpdate.mockRejectedValue(
+      makePrismaError('PrismaClientKnownRequestError', leak, 'P2025'),
+    );
+    const resp = await POST(createRequest(FEEDBACK_BODY), CTX);
+    expect(resp.status).toBe(404);
+    const text = await resp.text();
+    expect(JSON.parse(text).code).toBe('EINSTEIN_FEEDBACK_NOT_FOUND');
+    expect(text).not.toContain('RagQueryLog');
+    expect(text).not.toContain('secret_col');
+  });
+
+  it('collapses a non-P2025 Prisma error to the opaque DB_QUERY_FAILED envelope', async () => {
+    happyPathDefaults();
+    const { logger } = await import('@/lib/logger');
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    try {
+      const leak =
+        'Unique constraint failed on the fields: (`feedbackNote`) on table `RagQueryLog`';
+      mockRagQueryLogUpdate.mockRejectedValue(
+        makePrismaError('PrismaClientKnownRequestError', leak, 'P2002'),
+      );
+      const resp = await POST(createRequest(FEEDBACK_BODY), CTX);
+      expect(resp.status).toBe(500);
+      const text = await resp.text();
+      expect(JSON.parse(text)).toEqual({ error: 'DB_QUERY_FAILED' });
+      expect(text).not.toContain('RagQueryLog');
+      expect(text).not.toContain('feedbackNote');
+      // The full error is preserved server-side (mapApiDomainError logs it).
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('sanitizes a generic unexpected throw (no raw message echo)', async () => {
+    happyPathDefaults();
+    const { logger } = await import('@/lib/logger');
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    try {
+      mockRagQueryLogUpdate.mockRejectedValue(
+        new Error('connect ECONNREFUSED 10.0.0.5:5432 (tenant libsql url)'),
+      );
+      const resp = await POST(createRequest(FEEDBACK_BODY), CTX);
+      expect(resp.status).toBe(500);
+      const text = await resp.text();
+      expect(JSON.parse(text)).toEqual({ error: 'DB_QUERY_FAILED' });
+      expect(text).not.toContain('ECONNREFUSED');
+      expect(text).not.toContain('libsql');
+      // publicHandler logs the unexpected throw server-side.
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
