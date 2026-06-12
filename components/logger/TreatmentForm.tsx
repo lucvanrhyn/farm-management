@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
 
@@ -84,9 +84,20 @@ export default function TreatmentForm({ animalTag, onSubmit, onCancel }: Props) 
     setWithdrawalDays(DEFAULT_WITHDRAWAL_DAYS[treatmentType]);
   }, [treatmentType]);
 
+  // S6 / OS-3 (#482 WeighingForm pattern) — synchronous in-flight latch. The
+  // `submitting` STATE drives the disabled/“Saving…” UX, but state updates are
+  // async/batched, so a second tap fired in the SAME tick still sees
+  // `submitting === false` and would enqueue a second observation (each
+  // enqueue mints its own clientLocalId → two server rows). The ref is set
+  // synchronously BEFORE any await; reset in `finally` so a legitimate later
+  // submit works after success OR failure.
+  const inFlightRef = useRef(false);
+
   async function submit() {
+    if (inFlightRef.current) return;
     if (!product.trim() || !dose.trim()) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -99,6 +110,7 @@ export default function TreatmentForm({ animalTag, onSubmit, onCancel }: Props) 
     } catch {
       setError("Failed to queue — try again");
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }

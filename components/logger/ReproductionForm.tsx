@@ -34,7 +34,11 @@ interface Props {
   animalId: string;
   animalSex?: "Male" | "Female";
   onClose: () => void;
-  onSubmit: (data: ReproSubmitData) => void;
+  // S6 / obs-L1 — widened to accept a promise so the in-flight latch can hold
+  // until the parent's async queue write settles (see the latch comment in the
+  // component body). The Logger page handler is an async function; the old
+  // `void` signature silently dropped its promise.
+  onSubmit: (data: ReproSubmitData) => void | Promise<void>;
 }
 
 function BottomSheet({
@@ -80,6 +84,33 @@ function BottomSheet({
         <div className="overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
+  );
+}
+
+// S6 / obs-L1 — shared submit button for the seven repro sub-flows. Disables
+// and shows "Saving..." while a submit is in flight: the cross-render half of
+// the latch (the synchronous `inFlightRef` in `handleSubmit` is the same-tick
+// half). Extracted so the in-flight wiring exists once, not seven times.
+function ReproSubmitButton({
+  label,
+  submitting,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  submitting: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled || submitting}
+      className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+    >
+      {submitting ? "Saving..." : label}
+    </button>
   );
 }
 
@@ -187,16 +218,19 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
   // Scrotal circumference
   const [scrotalCm, setScrotalCm] = useState("");
 
-  // #482 — synchronous in-flight latch. Unlike WeighingForm this form had NO
-  // submitting guard at all and `onSubmit` is a fire-and-forget `void` callback
-  // with no promise to await, so a same-tick double-tap fired `onSubmit` twice
-  // → two queued observations → two distinct server rows (post-#480 each retry
-  // is idempotent, but two SEPARATE submits are not collapsed — that is this
-  // latch's job). The ref is set synchronously BEFORE `onSubmit` so the second
-  // same-tick invocation is swallowed. We clear it on the next macrotask: the
-  // form normally unmounts on success, but resetting defensively keeps a
-  // deliberate later submit working if the parent keeps it mounted.
+  // #482 → S6 / obs-L1 — synchronous in-flight latch, strengthened. The
+  // original #482 variant cleared the ref on the next macrotask
+  // (`setTimeout(0)`), which only swallowed a SAME-tick second tap — a real
+  // double-tap lands ~100-300ms later, after the 0ms reset, and fired
+  // `onSubmit` again → two queued observations → two server rows (each enqueue
+  // mints its own clientLocalId, #480). Now the latch follows the WeighingForm
+  // pattern: `onSubmit` is awaited and the ref is held until it SETTLES (the
+  // `submitting` state covers the cross-render window by disabling the
+  // button). Reset in `finally` so a legitimate later submit works after
+  // success OR failure if the parent keeps the form mounted.
   const inFlightRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   // Filter type options based on animal sex
   const TYPE_OPTIONS = BASE_TYPE_OPTIONS.filter(
@@ -232,14 +266,13 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
     }
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (inFlightRef.current) return;
     if (!selectedType || !canSubmit()) return;
 
     inFlightRef.current = true;
-    setTimeout(() => {
-      inFlightRef.current = false;
-    }, 0);
+    setSubmitting(true);
+    setError("");
 
     let details: Record<string, string>;
     if (selectedType === "heat_detection") {
@@ -267,7 +300,14 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
       };
     }
 
-    onSubmit({ type: selectedType, details, photoBlob });
+    try {
+      await onSubmit({ type: selectedType, details, photoBlob });
+    } catch {
+      setError("Failed to queue — try again");
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   const title =
@@ -339,14 +379,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               ))}
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Heat"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Heat
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -390,14 +428,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               />
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Insemination"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Insemination
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -439,14 +475,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               ))}
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Scan Result"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Scan Result
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -490,14 +524,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               />
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Calving"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Calving
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -526,14 +558,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               })}
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record BCS"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record BCS
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -557,14 +587,12 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               ))}
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Temperament"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Temperament
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
         )}
@@ -597,16 +625,20 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               />
             </div>
             <StickySubmitBar>
-              <button
-                onClick={handleSubmit}
+              <ReproSubmitButton
+                label="Record Scrotal Circumference"
+                submitting={submitting}
                 disabled={!canSubmit()}
-                className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
-              >
-                Record Scrotal Circumference
-              </button>
+                onClick={handleSubmit}
+              />
             </StickySubmitBar>
           </>
+        )}
+
+        {/* S6 / obs-L1 — queue-write failure surfaced; latch released in
+            `finally` so this is always paired with a re-enabled button. */}
+        {step === "details" && error && (
+          <p className="text-sm text-center" style={{ color: "#C0574C" }}>{error}</p>
         )}
 
         {/* Photo capture — shown on the details step */}
