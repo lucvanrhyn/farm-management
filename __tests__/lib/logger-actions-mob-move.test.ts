@@ -25,8 +25,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+/**
+ * The queued-observation shape `submitMobMove` enqueues (the subset the
+ * assertions read). Typing the mock's parameter — instead of casting
+ * `mock.calls` — keeps `mock.calls[0]` correctly inferred by tsc.
+ */
+interface QueuedMobMovementRow {
+  readonly type: string;
+  readonly camp_id: string;
+  readonly details: string;
+  readonly sync_status: string;
+}
+
 const { queueObservationMock } = vi.hoisted(() => ({
-  queueObservationMock: vi.fn(async () => 1),
+  queueObservationMock: vi.fn<(obs: QueuedMobMovementRow) => Promise<number>>(
+    async () => 1,
+  ),
 }));
 
 vi.mock("@/lib/offline-store", () => ({
@@ -56,14 +70,7 @@ function makeCtx(isOnline: boolean) {
 /** The queued payload the route's replay branch derives the move from. */
 function expectMobMovementQueued() {
   expect(queueObservationMock).toHaveBeenCalledTimes(1);
-  const [queued] = queueObservationMock.mock.calls[0] as [
-    {
-      type: string;
-      camp_id: string;
-      details: string;
-      sync_status: string;
-    },
-  ];
+  const [queued] = queueObservationMock.mock.calls[0];
   expect(queued.type).toBe("mob_movement");
   expect(queued.camp_id).toBe("camp-source");
   expect(queued.sync_status).toBe("pending");
