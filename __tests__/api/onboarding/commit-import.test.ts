@@ -15,7 +15,27 @@ import { NextRequest } from "next/server";
 const getServerSessionMock = vi.fn();
 const importJobCreateMock = vi.fn();
 const importJobFindUniqueMock = vi.fn();
-const importJobUpdateManyMock = vi.fn();
+
+/**
+ * The `importJob.updateMany` arg the route sends (claim: re-claimable ->
+ * "running"; release: "running" -> "failed"). Typing the mock through the
+ * vi.fn generic — instead of annotating destructured tuples at the
+ * call-sites — keeps `mock.calls` correctly inferred by tsc (an untyped
+ * vi.fn() yields any[][] calls, which rejects inline tuple annotations
+ * with TS2769).
+ */
+interface ImportJobUpdateManyArg {
+  readonly where: {
+    readonly id: string;
+    readonly status?: string;
+    readonly OR?: ReadonlyArray<Record<string, unknown>>;
+  };
+  readonly data: { readonly status: string };
+}
+
+const importJobUpdateManyMock = vi.fn<
+  (arg: ImportJobUpdateManyArg) => Promise<{ count: number }>
+>();
 const getPrismaWithAuthMock = vi.fn();
 
 vi.mock("@/lib/server/farm-context", () => ({
@@ -575,8 +595,7 @@ describe("POST /api/onboarding/commit-import", () => {
     // S14: the claim is released (running -> failed) so a retry can
     // re-claim the job instead of 409ing forever against a dead run.
     const release = importJobUpdateManyMock.mock.calls.find(
-      ([arg]: [{ data?: { status?: string } }]) =>
-        arg?.data?.status === "failed",
+      ([arg]) => arg.data.status === "failed",
     );
     expect(release).toBeDefined();
     expect(release![0].where).toMatchObject({
