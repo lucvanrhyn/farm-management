@@ -421,6 +421,12 @@ const REPRO_REQUIRED_FIELD_TYPES: ReadonlySet<string> = new Set([
   "body_condition_score",
   "temperament_score",
   "calving",
+  // S24 / obs-M1 — the ReproductionForm's measured sub-flow that was missing
+  // from this family: its payload feeds breeding scoring
+  // (`lib/server/breeding/trait-profile.ts` reads `details.measurement_cm`)
+  // but had NO server-side gate, so a stale / offline-queued client could
+  // persist a missing, NaN, or absurd measurement.
+  "scrotal_circumference",
 ]);
 
 const REPRO_TYPES: ReadonlySet<string> = new Set([
@@ -436,6 +442,19 @@ const SCORE_BOUNDS: Record<string, { min: number; max: number }> = {
   body_condition_score: { min: 1, max: 9 },
   temperament_score: { min: 1, max: 5 },
 };
+
+/**
+ * S24 / obs-M1 — inclusive bounds (cm) for a `scrotal_circumference`
+ * observation's `measurement_cm`. Mirrors the UI input contract the client
+ * already advertises (`components/logger/ReproductionForm.tsx`,
+ * `<input min="20" max="50">`) so the server enforces the same range the
+ * form does — closing the client-side-only gap for the field that feeds
+ * breeding scoring (`lib/server/breeding/{trait-profile,scoring}.ts`).
+ */
+export const SCROTAL_CIRCUMFERENCE_BOUNDS_CM = {
+  min: 20,
+  max: 50,
+} as const;
 
 /** Truthy in the colloquial sense — `true`, `"true"`, `1`, `"1"`. */
 function isTruthyFlag(value: unknown): boolean {
@@ -523,6 +542,25 @@ function validateRequiredField(
     return;
   }
 
+  if (type === "scrotal_circumference") {
+    // S24 / obs-M1 — the measurement is the observation's single actively
+    // entered answer; it must be numeric (the queue stringifies, so a
+    // numeric string is fine) and within the UI-advertised 20..50 cm range.
+    // A missing / NaN / out-of-range value would otherwise flow straight
+    // into the bull trait profile (`parseFloat(d.measurement_cm)`).
+    const cm = parseScore(details?.measurement_cm);
+    if (
+      cm === null ||
+      cm < SCROTAL_CIRCUMFERENCE_BOUNDS_CM.min ||
+      cm > SCROTAL_CIRCUMFERENCE_BOUNDS_CM.max
+    ) {
+      throw new ReproFieldRequiredError(
+        `scrotal_circumference requires a measurement_cm between ${SCROTAL_CIRCUMFERENCE_BOUNDS_CM.min} and ${SCROTAL_CIRCUMFERENCE_BOUNDS_CM.max} cm.`,
+      );
+    }
+    return;
+  }
+
   const bounds = SCORE_BOUNDS[type];
   if (bounds) {
     const score = parseScore(details?.score);
@@ -587,8 +625,9 @@ export type DetailsSchemaEntry =
 /**
  * Registry of per-type details schemas. A type ABSENT from this map has no
  * structured contract yet — its details pass through unvalidated (pass-through
- * default). Only the nine first-adopter typed observations (ADR-0007 scope) are
- * registered; the ~14 free-form types fall through to pass-through.
+ * default). The nine first-adopter typed observations (ADR-0007 scope) plus
+ * `scrotal_circumference` (S24 / obs-M1, the repro sub-flow ADR-0007 missed)
+ * are registered; the remaining free-form types fall through to pass-through.
  *
  * The schemas here are the declarative shape; the door-facing
  * {@link validateObservationDetails} drives them and translates a parse failure
@@ -606,6 +645,7 @@ export const DETAILS_SCHEMAS: Partial<
   body_condition_score: z.record(z.string(), z.unknown()),
   temperament_score: z.record(z.string(), z.unknown()),
   calving: z.record(z.string(), z.unknown()),
+  scrotal_circumference: z.record(z.string(), z.unknown()),
 };
 
 /**
@@ -663,6 +703,7 @@ export function validateObservationDetails(
     case "body_condition_score":
     case "temperament_score":
     case "calving":
+    case "scrotal_circumference":
       validateReproductiveState(type, details);
       return;
     default:

@@ -194,6 +194,65 @@ describe('validateReproductiveState — calving requires calf identity (#285)', 
   });
 });
 
+// ── scrotal_circumference (S24 / obs-M1) ───────────────────────────────────
+describe('validateReproductiveState — scrotal_circumference requires measurement_cm (obs-M1)', () => {
+  it('passes for a valid in-range measurement (number or numeric string)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: '36' }),
+    ).not.toThrow();
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 36.5 }),
+    ).not.toThrow();
+    // Inclusive bounds — the exact UI input limits (min=20, max=50).
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 20 }),
+    ).not.toThrow();
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 50 }),
+    ).not.toThrow();
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is missing', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', {}),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is out of range (mirrors UI 20..50 cm)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: '19.9' }),
+    ).toThrow(ReproFieldRequiredError);
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 50.1 }),
+    ).toThrow(ReproFieldRequiredError);
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: -36 }),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is non-numeric (NaN would poison breeding scoring)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 'big' }),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when details is null (offline stale client)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', null),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('error carries the canonical 422 wire code', () => {
+    try {
+      validateReproductiveState('scrotal_circumference', {});
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ReproFieldRequiredError);
+      expect((err as ReproFieldRequiredError).code).toBe('REPRO_FIELD_REQUIRED');
+    }
+  });
+});
+
 // ── scope discipline — existing types still behave ─────────────────────────
 describe('validateReproductiveState — existing types unaffected', () => {
   it('still no-ops for death / weighing / treatment', () => {
