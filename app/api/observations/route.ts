@@ -29,6 +29,7 @@ import {
 } from "@/lib/domain/observations";
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
 import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
+import { performMobMove } from "@/lib/domain/mobs/move-mob";
 import { parseLimit } from "@/lib/domain/shared/limit";
 
 /**
@@ -94,6 +95,62 @@ function deriveAnimalMovement(
       ? obj.sourceCampId
       : fallbackSourceCampId;
   return { animalId, sourceCampId, destCampId: obj.destCampId };
+}
+
+/**
+ * S8 / OS-2 — shape of a `mob_movement` observation's `details` JSON as the
+ * logger's `submitMobMove` queues it (`{ mobId, mobName, sourceCamp,
+ * destCamp, animalCount }` — note the mob vocabulary uses `sourceCamp` /
+ * `destCamp`, NOT the animal_movement `sourceCampId`/`destCampId`). Parsed at
+ * the route boundary so the camp change can be derived from the REPLAYED
+ * observation (the offline queue's sole carrier of the move) and applied via
+ * `performMobMove`.
+ */
+interface MobMovementDetails {
+  mobId: string;
+  destCampId: string;
+}
+
+/**
+ * S8 / OS-2 — derive the mob move from a `mob_movement` observation's
+ * `details` string. Mirrors `deriveAnimalMovement` (#100): returns the move
+ * when a usable `mobId` + `destCamp` are present, or `null` when the payload
+ * cannot express one (unparseable JSON, missing/blank fields). A `null` is
+ * NOT an error — the caller falls through to the bare `createObservation`
+ * path, preserving the behaviour of any non-logger writer that records a
+ * `mob_movement` without a destination. The logger + offline replay ALWAYS
+ * queue both fields, so the no-lost-move guarantee is unaffected.
+ */
+function deriveMobMovement(
+  details: string | null | undefined,
+): MobMovementDetails | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(details ?? "");
+  } catch {
+    return null;
+  }
+  const obj = (parsed ?? {}) as Record<string, unknown>;
+  if (typeof obj.mobId !== "string" || obj.mobId === "") {
+    return null;
+  }
+  if (typeof obj.destCamp !== "string" || obj.destCamp === "") {
+    return null;
+  }
+  return { mobId: obj.mobId, destCampId: obj.destCamp };
+}
+
+/**
+ * S8 / OS-2 — `performMobMove`'s same-camp guard throws a bare `Error`
+ * (`"Mob <name> is already in camp <campId>"`). On the REPLAY path that is
+ * not a failure: it means the move was already applied (the online PATCH ran
+ * first, or this is a #206 duplicate replay), so the route records the
+ * replayed row and returns 200. Message-match mirrors the established idiom
+ * in `lib/domain/rotation/execute-step.ts` (which maps the same throw to
+ * `MobAlreadyInCampError`).
+ */
+function isMobAlreadyInCamp(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("already in camp");
 }
 
 interface CreateObservationBody {
@@ -277,6 +334,20 @@ export const POST = tenantWrite<CreateObservationBody>({
         ? input.animal_id
         : null;
 
+    // S8 / OS-2 — a `mob_movement` write is now a sufficient carrier of the
+    // mob's camp change. The logger's `submitMobMove` queues the observation
+    // REGARDLESS of its online `PATCH /api/mobs/{id}` outcome (pre-S8 the
+    // PATCH was the ONLY camp writer and the observation was queued only
+    // after a successful PATCH — offline, the fetch threw and the move was
+    // silently dropped). When the replayed payload expresses a real move
+    // (usable `mobId` + `destCamp`), route it through `performMobMove` —
+    // the same op the PATCH route uses — then record the replayed row itself
+    // through the door's #206 `clientLocalId` upsert. Mirrors the #100
+    // `animal_movement` branch; every `mob_movement` without a usable move
+    // payload keeps the unchanged bare-`createObservation` path.
+    const mobMove =
+      input.type === "mob_movement" ? deriveMobMovement(input.details) : null;
+
     let result: Awaited<ReturnType<typeof createObservation>>;
     if (movement) {
       result = await performAnimalMove(ctx.prisma, {
@@ -300,6 +371,30 @@ export const POST = tenantWrite<CreateObservationBody>({
         notes: input.notes,
         loggedBy: input.loggedBy,
       });
+    } else if (mobMove) {
+      // S8 / OS-2 — apply the replayed move, then record the replayed row.
+      // `performMobMove` owns the mutation atomically (camp + member animals
+      // + its own source/dest audit pair, one `$transaction`); the replayed
+      // observation row is recorded separately through the door's
+      // `clientLocalId` upsert so a #206 duplicate replay collapses to one
+      // row. A same-camp throw means the move was ALREADY applied (the
+      // online PATCH won the race, or this is a duplicate replay) — on the
+      // replay path that is success, not failure: skip the move, keep the
+      // audit row. Every OTHER failure propagates to `mapApiDomainError`
+      // untouched: `MobNotFoundError` → 404 `{ error: "Mob not found" }`,
+      // `CrossSpeciesBlockedError` → 422 — both bounded client-side by the
+      // OBS-1 attempt budget, so a terminally-bad row dead-letters instead
+      // of looping.
+      try {
+        await performMobMove(ctx.prisma, {
+          mobId: mobMove.mobId,
+          toCampId: mobMove.destCampId,
+          loggedBy: input.loggedBy,
+        });
+      } catch (err) {
+        if (!isMobAlreadyInCamp(err)) throw err;
+      }
+      result = await createObservation(ctx.prisma, input);
     } else {
       result = await createObservation(ctx.prisma, input);
     }
