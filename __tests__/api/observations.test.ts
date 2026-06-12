@@ -306,6 +306,58 @@ describe('POST /api/observations', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
+  // S24 / obs-M2 — the `details` JSON string had NO length cap: a stale /
+  // malicious client could persist an arbitrarily large blob into the
+  // non-nullable `details` column (row growth, IndexedDB mirror bloat,
+  // RAG-chunk cost). The route boundary now rejects an over-length payload
+  // with a dedicated typed 400 BEFORE any JSON.parse / DB work.
+  it('returns a typed 400 (DETAILS_TOO_LONG) when details exceeds the cap', async () => {
+    const { OBSERVATION_DETAILS_MAX_LENGTH } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        details: 'x'.repeat(OBSERVATION_DETAILS_MAX_LENGTH + 1),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('DETAILS_TOO_LONG');
+    // Field-level info: the cap is forwarded so the client can surface it.
+    expect(data.details?.maxLength).toBe(OBSERVATION_DETAILS_MAX_LENGTH);
+    // The blob must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('accepts a details string exactly at the cap (inclusive bound)', async () => {
+    const { OBSERVATION_DETAILS_MAX_LENGTH } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        details: 'x'.repeat(OBSERVATION_DETAILS_MAX_LENGTH),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
   it('returns a typed 400 (NOTE_TOO_LONG) when notes exceeds the cap', async () => {
     const { POST } = await import('@/app/api/observations/route');
 

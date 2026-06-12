@@ -189,6 +189,22 @@ export class DetailsValidationError extends Error {
   }
 }
 
+/**
+ * S24 / obs-M2 — maximum length (chars) of the wire `details` JSON string.
+ *
+ * `details` is persisted into a NON-NULLABLE `String` column, mirrored into
+ * every client's IndexedDB, and chunked into the Einstein RAG index — yet it
+ * had NO length bound, so a stale / malicious client could persist an
+ * arbitrarily large blob. The largest legitimate producer (a full calving
+ * payload from `CalvingForm`) is well under 500 chars; 10 000 gives an
+ * order-of-magnitude headroom (and 5× the #492 `NOTE_MAX_LENGTH` free-text
+ * cap) while still bounding row growth. Enforced at the route boundary
+ * (`app/api/observations/route.ts`) BEFORE any JSON.parse / DB work, as a
+ * typed 400 `DETAILS_TOO_LONG` — a deterministic rejection the offline
+ * queue treats as terminal (no poison-row retry loop).
+ */
+export const OBSERVATION_DETAILS_MAX_LENGTH = 10_000;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Shared `details` coercion — the ONE canonical copy (ADR-0007 §Registry shape).
 // The three standalone validators each duplicated this verbatim; it is lifted

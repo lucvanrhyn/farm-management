@@ -12,12 +12,19 @@
  *   - POST 200 → `{ success: true, id: string }`
  *   - POST 422 → `{ error: "INVALID_TYPE" | "WRONG_SPECIES" | ... }`
  *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }`
- *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`
+ *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`,
+ *     or (S24/obs-M2) `DETAILS_TOO_LONG` when the `details` JSON string
+ *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`
  *   - POST 429 → `{ error: "Too many requests" }` (rate-limit, transport-only)
  */
 import { NextResponse } from "next/server";
 
-import { tenantRead, tenantWrite, RouteValidationError } from "@/lib/server/route";
+import {
+  tenantRead,
+  tenantWrite,
+  routeError,
+  RouteValidationError,
+} from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -27,6 +34,7 @@ import {
   OBSERVATIONS_MAX_LIMIT,
   type CreateObservationInput,
 } from "@/lib/domain/observations";
+import { OBSERVATION_DETAILS_MAX_LENGTH } from "@/lib/domain/observations/details-schemas";
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
 import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
 import { performMobMove } from "@/lib/domain/mobs/move-mob";
@@ -258,6 +266,29 @@ export const POST = tenantWrite<CreateObservationBody>({
     const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    // S24 / obs-M2 — bound the `details` JSON string at the wire boundary,
+    // BEFORE any JSON.parse (the movement/mob derivations below parse it) or
+    // DB work. `details` lands in a non-nullable column, is mirrored into
+    // every client's IndexedDB, and is chunked into the RAG index — an
+    // unbounded blob from a stale/malicious client is a storage + cost DoS.
+    // Typed 400 (shape-error family, like NOTE_TOO_LONG) with the cap
+    // forwarded as field-level info; deterministic, so the offline queue
+    // dead-letters the row instead of looping it.
+    if (
+      typeof body.details === "string" &&
+      body.details.length > OBSERVATION_DETAILS_MAX_LENGTH
+    ) {
+      return routeError(
+        "DETAILS_TOO_LONG",
+        `details exceeds the maximum length of ${OBSERVATION_DETAILS_MAX_LENGTH} characters.`,
+        400,
+        {
+          maxLength: OBSERVATION_DETAILS_MAX_LENGTH,
+          received: body.details.length,
+        },
+      );
     }
 
     // ADR-0007 (#513) — per-type `details` validation (reproductive state +
