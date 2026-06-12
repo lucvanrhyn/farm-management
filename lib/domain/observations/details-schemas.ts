@@ -205,6 +205,20 @@ export class DetailsValidationError extends Error {
  */
 export const OBSERVATION_DETAILS_MAX_LENGTH = 10_000;
 
+/**
+ * S24 / obs-M3 — how far into the FUTURE a client-supplied `created_at`
+ * may sit (ms). The offline-first contract keeps backdating unrestricted
+ * (a queued row replays its original timestamp days later), but there is
+ * no legitimate future observation: `created_at` becomes `observedAt`
+ * and — on the #538 death path — `deceasedAt`, both of which poison
+ * time-windowed reads (Einstein "last two weeks", camp last-inspection,
+ * SARS year-end counts) when they land in the future. 24 h tolerates a
+ * misconfigured device clock / timezone without admitting genuinely
+ * future rows. Enforced at the route boundary as a typed 400
+ * `TIMESTAMP_OUT_OF_RANGE` (deterministic → offline queue dead-letters).
+ */
+export const OBSERVATION_CREATED_AT_MAX_FUTURE_MS = 24 * 60 * 60 * 1000;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Shared `details` coercion — the ONE canonical copy (ADR-0007 §Registry shape).
 // The three standalone validators each duplicated this verbatim; it is lifted

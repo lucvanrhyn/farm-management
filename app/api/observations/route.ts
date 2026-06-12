@@ -14,7 +14,9 @@
  *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }`
  *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`,
  *     or (S24/obs-M2) `DETAILS_TOO_LONG` when the `details` JSON string
- *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`
+ *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`, or (S24/obs-M3)
+ *     `TIMESTAMP_OUT_OF_RANGE` when `created_at` is beyond the
+ *     `OBSERVATION_CREATED_AT_MAX_FUTURE_MS` clock-skew tolerance
  *   - POST 429 → `{ error: "Too many requests" }` (rate-limit, transport-only)
  */
 import { NextResponse } from "next/server";
@@ -34,7 +36,10 @@ import {
   OBSERVATIONS_MAX_LIMIT,
   type CreateObservationInput,
 } from "@/lib/domain/observations";
-import { OBSERVATION_DETAILS_MAX_LENGTH } from "@/lib/domain/observations/details-schemas";
+import {
+  OBSERVATION_CREATED_AT_MAX_FUTURE_MS,
+  OBSERVATION_DETAILS_MAX_LENGTH,
+} from "@/lib/domain/observations/details-schemas";
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
 import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
 import { performMobMove } from "@/lib/domain/mobs/move-mob";
@@ -211,6 +216,14 @@ const createObservationSchema = {
     if (body.notes != null && typeof body.notes !== "string") {
       errors.notes = "notes must be a string";
     }
+    // S24 / obs-M3 — `created_at` must be a STRING when present. A numeric
+    // epoch (or any other shape) previously sailed past this schema into the
+    // door's `new Date(input)` coercion, bypassing the string-based
+    // future-bound below. Same boundary discipline as #484 details / #492
+    // notes; `undefined` / `null` stay valid (server clock is used).
+    if (body.created_at != null && typeof body.created_at !== "string") {
+      errors.created_at = "created_at must be a string";
+    }
     if (Object.keys(errors).length > 0) {
       throw new RouteValidationError(
         Object.values(errors)[0] ?? "Invalid body",
@@ -289,6 +302,33 @@ export const POST = tenantWrite<CreateObservationBody>({
           received: body.details.length,
         },
       );
+    }
+
+    // S24 / obs-M3 — bound the client `created_at` against the FUTURE.
+    // Backdating stays unrestricted (offline-first: a queued row replays its
+    // original timestamp days later), but a far-future timestamp becomes a
+    // far-future `observedAt` — and, via the #538 death path, a far-future
+    // `deceasedAt` — poisoning every time-windowed read. An UNPARSEABLE
+    // string is deliberately left for the door's existing
+    // `InvalidTimestampError` (400 INVALID_TIMESTAMP) so that contract is
+    // owned in exactly one place; this branch only rejects the parseable-
+    // but-out-of-range case the door never checked.
+    if (typeof body.created_at === "string" && body.created_at !== "") {
+      const createdAtMs = new Date(body.created_at).getTime();
+      if (
+        Number.isFinite(createdAtMs) &&
+        createdAtMs > Date.now() + OBSERVATION_CREATED_AT_MAX_FUTURE_MS
+      ) {
+        return routeError(
+          "TIMESTAMP_OUT_OF_RANGE",
+          `created_at is further than ${OBSERVATION_CREATED_AT_MAX_FUTURE_MS / (60 * 60 * 1000)} hours in the future.`,
+          400,
+          {
+            field: "created_at",
+            maxFutureMs: OBSERVATION_CREATED_AT_MAX_FUTURE_MS,
+          },
+        );
+      }
     }
 
     // ADR-0007 (#513) — per-type `details` validation (reproductive state +

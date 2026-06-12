@@ -134,6 +134,91 @@ describe('POST /api/observations', () => {
     expect(res.status).toBe(400);
   });
 
+  // S24 / obs-M3 — `created_at` had NO upper bound: an offline client with a
+  // broken clock (or a malicious payload) could persist a far-future
+  // `observedAt` — and, via the #538 death path, a far-future `deceasedAt`.
+  // Backdating stays unrestricted (offline-first: a queued row replays its
+  // original timestamp days later); only the future direction is bounded, to
+  // a clock-skew tolerance.
+  it('returns a typed 400 (TIMESTAMP_OUT_OF_RANGE) when created_at is too far in the future', async () => {
+    const { OBSERVATION_CREATED_AT_MAX_FUTURE_MS } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const farFuture = new Date(
+      Date.now() + OBSERVATION_CREATED_AT_MAX_FUTURE_MS + 60 * 60 * 1000,
+    ).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: farFuture }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('TIMESTAMP_OUT_OF_RANGE');
+    expect(data.details?.field).toBe('created_at');
+    // The far-future row must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('accepts a created_at slightly in the future (clock-skew tolerance)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const nearFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: nearFuture }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a backdated created_at (offline replay is unrestricted)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: lastWeek }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  // S24 / obs-M3 — a NON-STRING created_at (e.g. a numeric epoch) previously
+  // sailed past the schema (only the door's `new Date(input)` saw it),
+  // bypassing any string-based bound. Reject the shape at the boundary like
+  // #484 details / #492 notes.
+  it.each([
+    ['a number', 4102444800000],
+    ['an object', { iso: '2026-01-01' }],
+    ['a boolean', true],
+  ])('returns a typed 400 when created_at is %s (not a string)', async (_label, badCreatedAt) => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: badCreatedAt }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('VALIDATION_FAILED');
+    expect(data.details?.fieldErrors?.created_at).toBeTruthy();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('returns 422 when observation type is not in the allowlist', async () => {
     // Wave C (#156): the type allowlist is enforced in the domain op as a
     // typed business-rule error (`INVALID_TYPE`, 422). Pre-Wave-C this
