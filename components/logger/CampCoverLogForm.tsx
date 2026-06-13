@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 
 interface Props {
@@ -93,9 +93,18 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
   // initializer exactly once per mount so double-tap collapses to one row.
   const [clientLocalId] = useState<string>(() => crypto.randomUUID());
 
+  // S6 / OS-3 (#482 WeighingForm pattern) — synchronous in-flight latch. The
+  // `submitting` STATE alone cannot win the same-tick race (state updates are
+  // batched), so a same-tick double-tap queued the reading twice locally. The
+  // mount-stable clientLocalId (#207) already collapses the duplicate at the
+  // server; this ref closes the residual local double-queue window.
+  const inFlightRef = useRef(false);
+
   async function submit() {
+    if (inFlightRef.current) return;
     if (!coverCategory) return;
 
+    inFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -105,6 +114,7 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
     } catch {
       setError("Failed to queue — try again");
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   }

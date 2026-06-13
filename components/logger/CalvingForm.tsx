@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { AnimalSex, EaseOfBirth } from "@/lib/types";
 import { getCachedFarmSettings } from "@/lib/offline-store";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
@@ -31,7 +31,10 @@ interface Props {
     photoBlob: Blob | null;
     calvingDifficulty: number;
     birthWeight: number | null;
-  }) => void;
+    // S6 / OS-3 — widened to accept a promise so the in-flight latch can hold
+    // until the parent's async queue write settles. The Logger page handler is
+    // an async function; the old `void` signature silently dropped its promise.
+  }) => void | Promise<void>;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -178,28 +181,52 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
   // bypass it.
   const canSubmit = calfAnimalId.trim().length > 0;
 
-  function submit() {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  // S6 / OS-3 (#482 WeighingForm pattern) — synchronous in-flight latch. This
+  // form had NO submit guard at all: a double-tap fired `onSubmit` twice and
+  // `submitCalvingObservation` mints a fresh clientLocalId per enqueue → two
+  // observation rows AND two queued calf creates. The ref is set synchronously
+  // BEFORE any await so the same-tick second tap is swallowed; `submitting`
+  // state covers the cross-render window; reset in `finally` so a legitimate
+  // later submit works after success OR failure.
+  const inFlightRef = useRef(false);
+
+  async function submit() {
+    if (inFlightRef.current) return;
     if (!canSubmit) return;
-    if (onSubmit) {
-      onSubmit({
-        animalId,
-        campId,
-        calfAnimalId: calfAnimalId.trim(),
-        calfName,
-        calfSex,
-        calfAlive,
-        easeOfBirth: ease,
-        fatherId: fatherId || null,
-        dateOfBirth,
-        breed: breed || "",
-        category: category || "Calf",
-        photoBlob,
-        calvingDifficulty: parseInt(calvingDifficulty, 10),
-        birthWeight: birthWeight ? parseFloat(birthWeight) : null,
-      });
-    } else {
-      alert(`Calving recorded for ${animalId} in camp ${campId}\nCalf ID: ${calfAnimalId}\nSex: ${calfSex}\nAlive: ${calfAlive ? "Yes" : "No"}\nEase: ${ease}`);
-      onClose();
+
+    inFlightRef.current = true;
+    setSubmitting(true);
+    setError("");
+    try {
+      if (onSubmit) {
+        await onSubmit({
+          animalId,
+          campId,
+          calfAnimalId: calfAnimalId.trim(),
+          calfName,
+          calfSex,
+          calfAlive,
+          easeOfBirth: ease,
+          fatherId: fatherId || null,
+          dateOfBirth,
+          breed: breed || "",
+          category: category || "Calf",
+          photoBlob,
+          calvingDifficulty: parseInt(calvingDifficulty, 10),
+          birthWeight: birthWeight ? parseFloat(birthWeight) : null,
+        });
+      } else {
+        alert(`Calving recorded for ${animalId} in camp ${campId}\nCalf ID: ${calfAnimalId}\nSex: ${calfSex}\nAlive: ${calfAlive ? "Yes" : "No"}\nEase: ${ease}`);
+        onClose();
+      }
+    } catch {
+      setError("Failed to queue — try again");
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -374,14 +401,18 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         {/* Photo */}
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
+        {error && (
+          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+        )}
+
         <StickySubmitBar>
           <button
             onClick={submit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || submitting}
             className="w-full font-bold py-4 rounded-2xl text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
           >
-            Record Birth
+            {submitting ? "Saving..." : "Record Birth"}
           </button>
         </StickySubmitBar>
       </div>

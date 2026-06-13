@@ -108,6 +108,11 @@ const RESERVED_TOP_LEVEL = new Set<string>([
   "login",
   "register",
   "verify-email",
+  // Password-reset surfaces (PRs #540/#542) — added to the reserved set when
+  // S10/sync-L2 made `lib/offline-store.ts` consume this predicate for
+  // tenant-DB resolution; they were latent gaps since the routes shipped.
+  "forgot-password",
+  "reset-password",
   "offline",
   "pricing",
   "subscribe",
