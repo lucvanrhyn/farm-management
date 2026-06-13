@@ -34,6 +34,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { evaluateAllAlerts, persistNotifications } from "@/lib/server/alerts";
 import { dispatchChannels } from "@/lib/server/alerts/dispatch";
 import { revalidateNotificationWrite } from "@/lib/server/revalidate";
+import { cleanupExpiredRateLimits } from "@/lib/rate-limit";
 import {
   serializeCandidates,
   deserializeCandidates,
@@ -139,4 +140,28 @@ export const evaluateTenantAlerts = inngest.createFunction(
   },
 );
 
-export const ALL_FUNCTIONS = [dailyAlertFanout, evaluateTenantAlerts];
+/**
+ * Daily janitor for the shared rate-limit table. The S28 limiter keeps one
+ * permanent META row per distinct key (IP / identifier); without pruning the
+ * table grows with the set of unique keys ever seen. Runs at 04:00 SAST (an
+ * hour before the alert fanout, to spread cron load) and deletes rows whose
+ * window closed > 24h ago — correctness-neutral (see cleanupExpiredRateLimits).
+ */
+export const dailyRateLimitCleanup = inngest.createFunction(
+  {
+    id: "daily-rate-limit-cleanup",
+    triggers: [{ cron: "TZ=Africa/Johannesburg 0 4 * * *" }],
+  },
+  async ({ step }) => {
+    const deleted = await step.run("prune-expired", () =>
+      cleanupExpiredRateLimits(),
+    );
+    return { deleted };
+  },
+);
+
+export const ALL_FUNCTIONS = [
+  dailyAlertFanout,
+  evaluateTenantAlerts,
+  dailyRateLimitCleanup,
+];

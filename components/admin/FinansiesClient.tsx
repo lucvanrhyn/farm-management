@@ -150,6 +150,7 @@ export default function FinansiesClient({
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}
         onChanged={refreshTransactions}
+        farmSlug={farmSlug}
       />
 
       {/* Category manager */}
