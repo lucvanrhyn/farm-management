@@ -3,6 +3,7 @@ import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmCreds, evictFarmCreds } from "@/lib/farm-creds-cache";
+import { verifyFreshFarmAccess } from "@/lib/fresh-farm-access";
 import { recordTiming, getTimingBag } from "@/lib/server/server-timing";
 import { recordFarmDbRegion } from "@/lib/server/region-timing";
 import { logger } from "@/lib/logger";
@@ -317,14 +318,28 @@ export async function getPrismaForSlugWithAuth(
     return { error: "Invalid farm slug", status: 400 };
   }
 
+  // Cheap first gate: a non-member per the JWT snapshot is rejected without a
+  // meta-db round-trip.
   const farms = session.user?.farms as SessionFarm[] | undefined;
   const farm = farms?.find((f) => f.slug === slug);
   if (!farm) return { error: "Forbidden", status: 403 };
 
+  // H3 / auth-M2 / auth-M3 — the JWT membership snapshot is up to 8h stale
+  // (session.maxAge in auth-options.ts). Re-verify against meta-db behind the
+  // 60s `verifyFreshFarmAccess` cache so a removed member is denied (H3) and a
+  // demoted admin sees their FRESH role (auth-M3) rather than the stale ADMIN.
+  // Fail-closed: `verifyFreshFarmAccess` returns null on a meta-db error too,
+  // which we treat as Forbidden — granting on error would be catastrophic.
+  const userId = session.user?.id;
+  const fresh = userId ? await verifyFreshFarmAccess(userId, slug) : null;
+  if (!fresh) return { error: "Forbidden", status: 403 };
+
   const prisma = await getPrismaForFarm(slug);
   if (!prisma) return { error: "Farm not found", status: 404 };
 
-  return { prisma, slug, role: farm.role };
+  // Use the FRESH role (not the stale JWT role) so every downstream
+  // `ctx.role !== "ADMIN"` check reflects the current grant.
+  return { prisma, slug, role: fresh.role };
 }
 
 // Test-only hook. Never call from app code.

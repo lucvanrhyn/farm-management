@@ -55,6 +55,22 @@ vi.mock('@/lib/auth-options', () => ({
   authOptions: {},
 }));
 
+// H3/auth-M3: the fast path in getFarmContext re-verifies membership at the
+// chokepoint. Case (1) below drives the real fast path, so default-allow the
+// fresh re-check (echo the requested slug as an ADMIN member). The legacy
+// fallback cases (2)/(3)/(5) go through the mocked getPrismaForSlugWithAuth and
+// never reach this helper.
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: vi.fn(async (_userId: string, slug: string) => ({
+    slug,
+    displayName: '',
+    role: 'ADMIN',
+    logoUrl: null,
+    tier: 'advanced',
+    subscriptionStatus: 'active',
+  })),
+}));
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 // Wave 1 W1b: HMAC payload is `v2\n<email>\n<slug>\n<sub>\n<role>`.
 function sign(email: string, slug: string, sub: string, role: string): string {

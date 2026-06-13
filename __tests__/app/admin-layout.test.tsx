@@ -21,10 +21,14 @@ const getFarmCredsMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
 const requireSessionMock = vi.fn();
 const getUserRoleForFarmMock = vi.fn();
+const verifyFreshFarmAccessMock = vi.fn();
 
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 vi.mock('next/headers', () => ({ headers: headersMock }));
 vi.mock('@/lib/meta-db', () => ({ getFarmCreds: getFarmCredsMock }));
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: verifyFreshFarmAccessMock,
+}));
 
 vi.mock('@/lib/farm-prisma', () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 // #544: layout migrated from getSession() bare-/login redirect to the
@@ -97,9 +101,18 @@ describe('AdminLayout — onboarding gate (I7)', () => {
     vi.clearAllMocks();
     vi.resetModules();
     // Default: valid ADMIN session (requireSession resolves with the session)
-    requireSessionMock.mockResolvedValue({ user: { email: 'admin@farm.test', farms: [] } });
+    requireSessionMock.mockResolvedValue({ user: { id: 'admin-1', email: 'admin@farm.test', farms: [] } });
     getUserRoleForFarmMock.mockReturnValue('ADMIN');
     getFarmCredsMock.mockResolvedValue({ tier: 'advanced' });
+    // auth-M3: default-allow the fresh role re-check (still ADMIN in meta-db).
+    verifyFreshFarmAccessMock.mockResolvedValue({
+      slug: 'farm',
+      displayName: '',
+      role: 'ADMIN',
+      logoUrl: null,
+      tier: 'advanced',
+      subscriptionStatus: 'active',
+    });
     setHeader(null);
   });
 
@@ -195,5 +208,37 @@ describe('AdminLayout — onboarding gate (I7)', () => {
 
     const { redirected } = await runLayout('any-farm');
     expect(redirected).toBe('/any-farm/home');
+  });
+
+  it('auth-M3: redirects a demoted admin to /home even when the JWT still says ADMIN', async () => {
+    // The 8h JWT snapshot still carries ADMIN (getUserRoleForFarm passes), but
+    // the user was demoted in meta-db. The fresh re-check must catch it and
+    // bounce to /home rather than render the admin shell for up to 8h.
+    getUserRoleForFarmMock.mockReturnValue('ADMIN');
+    verifyFreshFarmAccessMock.mockResolvedValue({
+      slug: 'demoted-farm',
+      displayName: '',
+      role: 'LOGGER',
+      logoUrl: null,
+      tier: 'advanced',
+      subscriptionStatus: 'active',
+    });
+
+    const { redirected } = await runLayout('demoted-farm');
+    expect(verifyFreshFarmAccessMock).toHaveBeenCalledWith('admin-1', 'demoted-farm');
+    expect(redirected).toBe('/demoted-farm/home');
+  });
+
+  it('auth-M3 / H3: redirects to /home when the fresh re-check says membership was revoked (or meta-db errors → fail-closed)', async () => {
+    // `verifyFreshFarmAccess` returns null for BOTH a revoked membership and a
+    // meta-db error (it fails closed). Either way the admin shell must not
+    // render. The UX cost — a transient meta-db blip bounces a real admin to
+    // /home until refresh — is the deliberate, conservative tradeoff, matching
+    // the fail-closed posture of the admin-write chokepoint.
+    getUserRoleForFarmMock.mockReturnValue('ADMIN');
+    verifyFreshFarmAccessMock.mockResolvedValue(null);
+
+    const { redirected } = await runLayout('removed-farm');
+    expect(redirected).toBe('/removed-farm/home');
   });
 });

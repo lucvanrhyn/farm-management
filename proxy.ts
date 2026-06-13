@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
 
 import { requireFarmContext } from "@/lib/farm-context";
+// `lib/tier.ts` is a pure, dependency-free constants/type module (no Prisma /
+// auth-options) — safe to import into the Edge-compatible middleware runtime.
+import type { FarmTier } from "@/lib/tier";
 
 // Keep in sync with `lib/server/farm-context.ts`. We intentionally re-implement
 // the tiny HMAC helper here rather than importing, because proxy.ts runs on
@@ -126,12 +129,19 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/farms", req.url));
     }
 
-    // Gate Basic-tier farms that haven't completed payment.
-    // Only active when PayFast is configured (prevents lockouts in dev/staging).
+    // Gate self-serve PAID-tier farms whose subscription has lapsed.
+    //
+    // auth-M1 (fail-closed in prod) + pay-M2 (broaden beyond basic): the
+    // decision is delegated to the pure `shouldGateForBilling()` helper below
+    // so the full truth-table is unit-testable without the Edge runtime. The
+    // exact redirect target (`/subscribe?farm=<slug>`) is preserved.
     if (
-      process.env.PAYFAST_MERCHANT_ID &&
-      farm.tier === "basic" &&
-      farm.subscriptionStatus !== "active"
+      shouldGateForBilling({
+        tier: farm.tier,
+        subscriptionStatus: farm.subscriptionStatus,
+        payfastConfigured: Boolean(process.env.PAYFAST_MERCHANT_ID),
+        isProduction: process.env.NODE_ENV === "production",
+      })
     ) {
       return NextResponse.redirect(
         new URL(`/subscribe?farm=${farmSlug}`, req.url),
@@ -255,6 +265,67 @@ const SHEEP_LEAK_PATHS = new Set([
 
 export function isSheepLeakPath(pathname: string): boolean {
   return SHEEP_LEAK_PATHS.has(pathname);
+}
+
+/**
+ * Self-serve PAID tiers subject to the lapsed-subscription gate.
+ *
+ * Kept in sync with `lib/tier.ts` (`FarmTier = 'basic' | 'advanced' |
+ * 'consulting'`). Consulting is deliberately EXCLUDED: it is bespoke /
+ * manually provisioned and budget-exempt (see `BUDGET_EXEMPT_TIERS` in
+ * `lib/tier.ts`), so it must never be redirected to the self-serve
+ * `/subscribe` flow even when `subscriptionStatus !== "active"`.
+ */
+const GATED_PAID_TIERS: ReadonlySet<FarmTier> = new Set<FarmTier>([
+  "basic",
+  "advanced",
+]);
+
+/**
+ * Decide whether a tenant request must be redirected to `/subscribe` because
+ * the farm's paid subscription has lapsed.
+ *
+ * Two stress-test findings shape this truth-table:
+ *
+ *   auth-M1 (fail-closed billing in production) — the original gate only fired
+ *   when `PAYFAST_MERCHANT_ID` was present. With the env var UNSET in prod the
+ *   gate silently disappeared and ALL Basic billing enforcement turned off
+ *   (fail-OPEN). The unconfigured-PayFast bypass is a dev/staging convenience
+ *   ONLY; in production the gate enforces regardless of the env var.
+ *
+ *   pay-M2 (broaden beyond basic) — the gate only fired for `tier === "basic"`,
+ *   so a lapsed Advanced subscription kept full access. It now fires for every
+ *   self-serve paid tier (`GATED_PAID_TIERS`). Consulting stays exempt.
+ *
+ * Pure + exported so the disposition matrix is unit-testable without booting
+ * the Edge runtime (mirrors `isProtectedPath` / `isSheepLeakPath`).
+ *
+ * @param tier                 The farm's tier (from the JWT `token.farms` snapshot).
+ * @param subscriptionStatus   The farm's subscription status (JWT snapshot).
+ * @param payfastConfigured    Whether `PAYFAST_MERCHANT_ID` is set.
+ * @param isProduction         Whether `NODE_ENV === "production"`.
+ */
+export function shouldGateForBilling(params: {
+  tier: string;
+  subscriptionStatus: string;
+  payfastConfigured: boolean;
+  isProduction: boolean;
+}): boolean {
+  const { tier, subscriptionStatus, payfastConfigured, isProduction } = params;
+
+  // Only self-serve paid tiers are ever gated. Consulting / unknown tiers pass.
+  if (!GATED_PAID_TIERS.has(tier as FarmTier)) return false;
+
+  // Active subscriptions are never gated.
+  if (subscriptionStatus === "active") return false;
+
+  // The farm is a gated paid tier with a lapsed subscription. Whether we
+  // actually enforce depends on environment + PayFast configuration:
+  //   - Production            → always enforce (fail-closed; auth-M1).
+  //   - Non-prod + configured → enforce (operator opted in via the env var).
+  //   - Non-prod + unconfigured → skip (dev/staging convenience).
+  if (isProduction) return true;
+  return payfastConfigured;
 }
 
 export function isProtectedPath(pathname: string): boolean {

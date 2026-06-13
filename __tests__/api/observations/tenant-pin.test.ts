@@ -83,6 +83,21 @@ vi.mock('@/lib/farm-prisma', () => ({
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
 }));
 
+// H3/auth-M3: getFarmContext re-verifies membership at the chokepoint. These
+// tenant-pin tests assert the tenant resolves from the SIGNED slug, so
+// default-allow the fresh re-check by echoing the requested slug as an ADMIN
+// member (membership is current; the focus here is which slug is pinned).
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: vi.fn(async (_userId: string, slug: string) => ({
+    slug,
+    displayName: '',
+    role: 'ADMIN',
+    logoUrl: null,
+    tier: 'advanced',
+    subscriptionStatus: 'active',
+  })),
+}));
+
 // revalidatePath/Tag throw outside a request scope in Next 16.
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
