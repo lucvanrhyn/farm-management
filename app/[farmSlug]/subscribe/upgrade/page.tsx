@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/auth';
 import { computeFarmLsu } from '@/lib/pricing/farm-lsu';
 import { quoteTier } from '@/lib/pricing/calculator';
-import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
+import { assertPayfastConfig, buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getAppBaseUrl } from '@/lib/server/app-url';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +62,8 @@ export default async function SubscribeUpgradePage({
     cancelUrl: `${appUrl}/${farmSlug}/subscribe/upgrade/cancel`,
     notifyUrl: `${appUrl}/api/webhooks/payfast`,
   });
+  // S32a (H5/PF-02): refuse to build an unsalted form in production.
+  assertPayfastConfig();
   pfParams.signature = generateSignature(pfParams, process.env.PAYFAST_PASSPHRASE);
 
   const sandboxMode = process.env.PAYFAST_SANDBOX === 'true';

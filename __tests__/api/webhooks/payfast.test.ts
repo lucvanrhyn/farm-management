@@ -130,6 +130,11 @@ vi.mock("@/lib/payfast", () => ({
   isValidPayFastIP: mocks.isValidPayFastIP,
   validateITN: mocks.validateITN,
   generateSignature: mocks.generateSignature,
+  // S32a: the route now calls assertPayfastConfig() at the top. Stub it as a
+  // no-op here so these idempotency tests are unaffected (the prod-passphrase
+  // contract is covered in lib/__tests__/payfast.test.ts and the S32a
+  // webhook tests in app/api/webhooks/payfast/__tests__/hardening.test.ts).
+  assertPayfastConfig: vi.fn(() => {}),
 }));
 
 vi.mock("@/lib/meta-db", () => ({
@@ -163,7 +168,10 @@ function buildBody(overrides: Record<string, string> = {}): string {
     custom_str1: "basson",
     custom_str2: "basic",
     custom_str3: "monthly",
-    amount_gross: "240.00",
+    // S33b: amount must match the expected tier price now that the route
+    // validates it. basic/monthly @ 100 LSU (computeFarmLsu mock) →
+    // quoteTier('basic',100).monthlyZar = round(round(1800+0.75*100)*1.2/12) = 188.
+    amount_gross: "188.00",
     token: "current-token",
     timestamp: "2026-05-03T10:00:00Z",
     signature: "match",

@@ -551,7 +551,15 @@ export interface FarmBilling {
 }
 
 export interface SubscriptionFields {
-  payfastToken?: string;
+  /**
+   * PayFast subscription token.
+   *   • `string`    → set the token.
+   *   • `null`      → explicitly CLEAR the token (emits `payfast_token = NULL`).
+   *                   Used on terminal FAILED/CANCELLED so a leaked/rotated
+   *                   token can't later replay (S34 / pay-L1).
+   *   • `undefined` → leave the column untouched.
+   */
+  payfastToken?: string | null;
   startedAt?: string;
   billingDate?: string;
   tier?: 'basic' | 'advanced';
@@ -623,7 +631,9 @@ export async function updateFarmSubscription(
   const sets: string[] = ['subscription_status = ?'];
   const args: (string | number | null)[] = [status];
 
-  const push = (col: string, val: string | number | undefined) => {
+  // `undefined` = leave the column untouched. `null` = explicitly set NULL
+  // (the S34 token-clear affordance). Any other value is bound as-is.
+  const push = (col: string, val: string | number | null | undefined) => {
     if (val === undefined) return;
     sets.push(`${col} = ?`);
     args.push(val);

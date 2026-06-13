@@ -113,6 +113,7 @@ vi.mock('@/lib/pricing/calculator', () => ({
   }),
 }));
 vi.mock('@/lib/payfast', () => ({
+  assertPayfastConfig: vi.fn(),
   buildSubscriptionParams: vi.fn().mockReturnValue({}),
   generateSignature: vi.fn().mockReturnValue('sig'),
   PAYFAST_URL: 'https://sandbox.payfast.co.za/eng/process',
