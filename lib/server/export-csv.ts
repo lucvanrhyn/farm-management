@@ -415,9 +415,18 @@ export function feedOnOfferToCSV(rows: FeedOnOfferRow[]): string {
 // ── SARS / IT3 Farming Tax Export ───────────────────────────────────────────
 
 /**
- * Two-section CSV mirroring the PDF layout: farm header, income schedule,
- * expense schedule, summary block, inventory block. Single flat file — the
- * downstream consumer (farmer's accountant) can slice sections in Excel.
+ * Flat CSV mirroring the PDF layout (`buildIt3Pdf`): farm header, income
+ * schedule, expense schedule, summary block, foreign block (SARS 0192/0193),
+ * stock-movement block (First Schedule para 5(1)) and inventory block. Single
+ * flat file — the downstream consumer (farmer's accountant) can slice sections
+ * in Excel.
+ *
+ * Both this CSV and the PDF read from the SAME stored payload, so they MUST
+ * reconcile to the same figures. The stock-movement delta is part of
+ * `netFarmingIncome` (`net = totalIncome − totalExpenses + stockMovement.delta`,
+ * sars-it3.ts ~450-452); the foreign block is a parallel SARS reporting line
+ * (EXCLUDED from net). Omitting either — as the pre-it3-M1 CSV did — left the
+ * CSV unable to reconcile to its own reported net and disagreeing with the PDF.
  */
 export function it3SnapshotToCSV(payload: It3SnapshotPayload): string {
   const lines: string[] = [];
@@ -452,6 +461,58 @@ export function it3SnapshotToCSV(payload: It3SnapshotPayload): string {
   lines.push(row("summary", "total_expenses_zar", payload.schedules.totalExpenses.toFixed(2)));
   lines.push(row("summary", "net_farming_income_zar", payload.schedules.netFarmingIncome.toFixed(2)));
   lines.push(row("summary", "transactions_included", payload.schedules.transactionCount));
+
+  // ── Foreign farming income (SARS source code 0192/0193) ──────────────────
+  // Parallel reporting line for foreign-derived transactions — EXCLUDED from
+  // the domestic net above. Mirrors the PDF's FOREIGN FARMING INCOME block.
+  // Only emitted when foreign-flagged transactions exist (legacy/no-foreign
+  // payloads carry null and omit the block, matching the PDF).
+  const foreign = payload.schedules.foreignFarmingIncome ?? null;
+  if (foreign) {
+    lines.push("");
+    lines.push(row("foreign", "activity_code", foreign.activityCode));
+    for (const r of foreign.income) {
+      lines.push(
+        row("foreign", "income", r.line, r.sourceCategories.join("; "), r.amount.toFixed(2), r.count),
+      );
+    }
+    for (const r of foreign.expense) {
+      lines.push(
+        row("foreign", "expense", r.line, r.sourceCategories.join("; "), r.amount.toFixed(2), r.count),
+      );
+    }
+    lines.push(row("foreign", "total_income_zar", foreign.totalIncome.toFixed(2)));
+    lines.push(row("foreign", "total_expenses_zar", foreign.totalExpenses.toFixed(2)));
+    lines.push(row("foreign", "net_foreign_income_zar", foreign.net.toFixed(2)));
+  }
+
+  // ── Stock at standard values (First Schedule para 5(1)) ──────────────────
+  // Opening + closing stock lines and the movement delta that rolls into
+  // netFarmingIncome. Mirrors the PDF's OPENING/CLOSING STOCK + STOCK MOVEMENT
+  // RECONCILIATION blocks. Legacy payloads (no stockMovement) omit the block.
+  const sm = payload.stockMovement;
+  if (sm) {
+    lines.push("");
+    lines.push(
+      row("stock_movement", "phase", "as_of_date", "species", "age_category", "count", "standard_value_zar", "effective_value_zar", "subtotal_zar"),
+    );
+    for (const l of sm.opening.lines) {
+      lines.push(
+        row("stock_movement", "opening", sm.opening.asOfDate, l.species, l.ageCategory, l.count, l.standardValueZar.toFixed(2), l.effectiveValueZar.toFixed(2), l.subtotalZar.toFixed(2)),
+      );
+    }
+    for (const l of sm.closing.lines) {
+      lines.push(
+        row("stock_movement", "closing", sm.closing.asOfDate, l.species, l.ageCategory, l.count, l.standardValueZar.toFixed(2), l.effectiveValueZar.toFixed(2), l.subtotalZar.toFixed(2)),
+      );
+    }
+    lines.push(row("stock_movement", "opening_stock_zar", sm.opening.totalZar.toFixed(2)));
+    lines.push(row("stock_movement", "closing_stock_zar", sm.closing.totalZar.toFixed(2)));
+    lines.push(row("stock_movement", "stock_movement_zar", sm.deltaZar.toFixed(2)));
+    if (sm.unmapped.length > 0) {
+      lines.push(row("stock_movement", "uncategorised_animals", sm.unmapped.length));
+    }
+  }
 
   lines.push("");
   lines.push(row("inventory", "category", "head_count"));
