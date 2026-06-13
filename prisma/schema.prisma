@@ -211,9 +211,17 @@ model FarmSettings {
   //   { assistantName: string (default "Einstein"),
   //     responseLanguage: "en"|"af"|"auto",
   //     methodology: { tier, speciesMix, breedingCalendar?, rotationPolicy?, lsuThresholds?, farmerNotes? },
-  //     ragConfig: { enabled, budgetCapZarPerMonth (default 100), monthSpentZar, currentMonthKey },
+  //     ragConfig: { enabled, budgetCapZarPerMonth (default 100) },
   //     learnedPreferences?: { swipeHistory } }
+  // EIN-1 (slice S23): the volatile monthly spend counter moved OUT of the
+  // ragConfig JSON into the dedicated columns below so the budget writers can
+  // use single-statement atomic SQL (`SET col = col + ?`) instead of a
+  // lost-update-prone read-modify-write of the whole blob. Only the cap +
+  // kill-switch remain in the JSON; the spend + its month key are columns.
   aiSettings              String?
+  // EIN-1 atomic budget counter (lib/einstein/budget.ts).
+  aiBudgetMonthSpentZar   Float    @default(0) // running ZAR spend in the current window
+  aiBudgetMonthKey        String? // "YYYY-MM" of the window the counter belongs to
 }
 
 model NvdRecord {
