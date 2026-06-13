@@ -172,3 +172,41 @@ describe("/[slug]/map empty state (#288)", () => {
     expect(screen.queryByTestId("map-empty-state")).toBeNull();
   });
 });
+
+describe("CampsEmptyState CTA href is route-correct per species (sp-M2)", () => {
+  // The /map overlay passes the live FarmMode (cattle | sheep | game). Before
+  // sp-M2 the CTA built `/${slug}/${species}/camps`, which 404s for cattle
+  // (real route is /admin/camps) and game (no camps route at all). The button
+  // must point at a camps surface that actually exists for every species.
+  async function renderEmptyStateLink(speciesLabel: string) {
+    const mod = await import("@/components/camps/CampsEmptyState");
+    const CampsEmptyState = mod.default;
+    render(
+      <CampsEmptyState
+        farmSlug="trio-b"
+        speciesLabel={speciesLabel}
+        variant="overlay"
+      />,
+    );
+    return screen.getByRole("link");
+  }
+
+  it("sheep → its own namespace camps page", async () => {
+    const link = await renderEmptyStateLink("sheep");
+    expect(link.getAttribute("href")).toBe("/trio-b/sheep/camps");
+  });
+
+  it("cattle → cross-species admin camps home, not a dead /cattle/camps", async () => {
+    const link = await renderEmptyStateLink("cattle");
+    const href = link.getAttribute("href");
+    expect(href).toBe("/trio-b/admin/camps");
+    expect(href).not.toMatch(/\/cattle\/camps$/);
+  });
+
+  it("game → cross-species admin camps home, not a non-existent /game/camps", async () => {
+    const link = await renderEmptyStateLink("game");
+    const href = link.getAttribute("href");
+    expect(href).toBe("/trio-b/admin/camps");
+    expect(href).not.toMatch(/\/game\/camps$/);
+  });
+});

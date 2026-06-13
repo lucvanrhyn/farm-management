@@ -43,6 +43,7 @@ export const POST = publicHandler({
     const ipRl = await checkRateLimit(`resend-verify-ip:${ip}`, 5, 60 * 60 * 1000);
     if (!ipRl.allowed) {
       return NextResponse.json(
+        // audit-allow-error-envelope: public resend-verification per-IP 429, deliberately-bare auth wire-shape (S26-excluded); anti-enum {ok:true} model untouched; conversion is its own Wave F sign-off.
         { error: 'Too many requests. Try again later.' },
         { status: 429 },
       );
@@ -53,6 +54,7 @@ export const POST = publicHandler({
       body = (await request.json()) as { email?: string };
     } catch {
       return NextResponse.json(
+        // audit-allow-error-envelope: public resend-verification malformed-body 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
         { error: 'Request body must be valid JSON' },
         { status: 400 },
       );
@@ -62,6 +64,7 @@ export const POST = publicHandler({
       typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
+        // audit-allow-error-envelope: public resend-verification email-format 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
         { error: 'A valid email address is required' },
         { status: 400 },
       );
@@ -110,6 +113,7 @@ export const POST = publicHandler({
         stack: err instanceof Error ? err.stack : '',
       });
       return NextResponse.json(
+        // audit-allow-error-envelope: resend-verification 500 intentionally generic — real error logged server-side (line 108), never revealed to caller (info-leak control); must stay bare.
         { error: 'Something went wrong. Please try again.' },
         { status: 500 },
       );

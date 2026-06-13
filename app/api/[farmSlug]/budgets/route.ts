@@ -31,9 +31,11 @@ export const dynamic = "force-dynamic";
  */
 async function denyIfNotFreshAdmin(ctx: FarmContext): Promise<NextResponse | null> {
   if (ctx.role !== "ADMIN") {
+    // audit-allow-error-envelope: budgets non-admin 403 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); 401 canonical, 403/400/404 stay bare.
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
+    // audit-allow-error-envelope: budgets stale-admin 403 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); 401 canonical, 403/400/404 stay bare.
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   return null;
@@ -84,6 +86,7 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     if (denied) return denied;
 
     if (!body || typeof body !== "object") {
+      // audit-allow-error-envelope: budgets POST malformed-body 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
@@ -97,19 +100,24 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     };
 
     if (typeof year !== "number" || !Number.isInteger(year) || year < 2000 || year > 2100) {
+      // audit-allow-error-envelope: budgets POST year-validation 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "year must be an integer 2000-2100" }, { status: 400 });
     }
     if (typeof month !== "number" || !Number.isInteger(month) || month < 1 || month > 12) {
+      // audit-allow-error-envelope: budgets POST month-validation 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "month must be an integer 1-12" }, { status: 400 });
     }
     if (typeof categoryName !== "string" || categoryName.trim() === "") {
+      // audit-allow-error-envelope: budgets POST categoryName-required 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "categoryName required" }, { status: 400 });
     }
     if (type !== "income" && type !== "expense") {
+      // audit-allow-error-envelope: budgets POST type-enum 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "type must be 'income' or 'expense'" }, { status: 400 });
     }
     const amt = typeof amount === "number" ? amount : Number.parseFloat(String(amount));
     if (!Number.isFinite(amt) || amt < 0) {
+      // audit-allow-error-envelope: budgets POST amount-validation 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "amount must be a non-negative number" }, { status: 400 });
     }
     const notesStr = typeof notes === "string" && notes.trim() !== "" ? notes.trim() : null;
@@ -150,10 +158,12 @@ export const PATCH = tenantWriteSlug<unknown, { farmSlug: string }>({
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {
+      // audit-allow-error-envelope: budgets PATCH missing-id 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
 
     if (!body || typeof body !== "object") {
+      // audit-allow-error-envelope: budgets PATCH malformed-body 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
@@ -163,6 +173,7 @@ export const PATCH = tenantWriteSlug<unknown, { farmSlug: string }>({
     if (amount !== undefined) {
       const amt = typeof amount === "number" ? amount : Number.parseFloat(String(amount));
       if (!Number.isFinite(amt) || amt < 0) {
+        // audit-allow-error-envelope: budgets PATCH amount-validation 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
         return NextResponse.json({ error: "amount must be non-negative" }, { status: 400 });
       }
       data.amount = amt;
@@ -172,6 +183,7 @@ export const PATCH = tenantWriteSlug<unknown, { farmSlug: string }>({
     }
 
     if (Object.keys(data).length === 0) {
+      // audit-allow-error-envelope: budgets PATCH no-fields 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "nothing to update" }, { status: 400 });
     }
 
@@ -179,6 +191,7 @@ export const PATCH = tenantWriteSlug<unknown, { farmSlug: string }>({
       const record = await ctx.prisma.budget.update({ where: { id }, data });
       return NextResponse.json(record);
     } catch {
+      // audit-allow-error-envelope: budgets PATCH not-found 404 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); 404s stay bare.
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
   },
@@ -193,11 +206,13 @@ export const DELETE = tenantWriteSlug<unknown, { farmSlug: string }>({
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {
+      // audit-allow-error-envelope: budgets DELETE missing-id 400 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); validation 400s stay bare.
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
 
     const existing = await ctx.prisma.budget.findUnique({ where: { id } });
     if (!existing) {
+      // audit-allow-error-envelope: budgets DELETE not-found 404 — deliberate hybrid wire-shape per ADR-0001/Wave G5 (header lines 9-17); 404s stay bare.
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
@@ -205,6 +220,7 @@ export const DELETE = tenantWriteSlug<unknown, { farmSlug: string }>({
       await ctx.prisma.budget.delete({ where: { id } });
     } catch (err) {
       logger.error("[budgets DELETE] DB error", err);
+      // audit-allow-error-envelope: budgets DELETE 500 intentionally generic — real DB error logged server-side (line 207), never returned (info-leak control); deliberate hybrid per ADR-0001/Wave G5.
       return NextResponse.json({ error: "Failed to delete budget record" }, { status: 500 });
     }
 

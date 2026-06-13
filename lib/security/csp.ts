@@ -125,16 +125,23 @@ export const CSP_SOURCES = {
  * nonces or hashes. Requires auditing every inline-emission point — do
  * NOT bundle into the header-key flip.
  */
-export function buildCsp(): string {
-  const directives: Record<string, string[]> = {
+/**
+ * Build the CSP directive table. `opts.dropScriptUnsafeEval` removes
+ * `'unsafe-eval'` from script-src — used by the Phase-0 Report-Only candidate
+ * (ADR-0008) to soak a stricter policy without touching the enforced one.
+ */
+function cspDirectives(
+  opts: { dropScriptUnsafeEval?: boolean } = {},
+): Record<string, string[]> {
+  // Next.js bootstrap + hydration require these until we move to nonces
+  // (ADR-0008). `'unsafe-eval'` is the first token the migration drops; the
+  // Report-Only candidate omits it to gather violation telemetry first.
+  const scriptSrc = ["'self'", "'unsafe-inline'"];
+  if (!opts.dropScriptUnsafeEval) scriptSrc.push("'unsafe-eval'");
+
+  return {
     "default-src": ["'self'"],
-    "script-src": [
-      "'self'",
-      // See note above — Next.js bootstrap + hydration require these
-      // until we move to nonces.
-      "'unsafe-inline'",
-      "'unsafe-eval'",
-    ],
+    "script-src": scriptSrc,
     "style-src": [
       "'self'",
       "'unsafe-inline'",
@@ -172,10 +179,32 @@ export function buildCsp(): string {
     "report-uri": [CSP_REPORT_URI],
     "report-to": [CSP_REPORT_GROUP],
   };
+}
 
+function serializeCsp(directives: Record<string, string[]>): string {
   return Object.entries(directives)
     .map(([key, values]) => (values.length ? `${key} ${values.join(" ")}` : key))
     .join("; ");
+}
+
+/** The ENFORCED policy emitted as `Content-Security-Policy`. */
+export function buildCsp(): string {
+  return serializeCsp(cspDirectives());
+}
+
+/**
+ * Phase 0 of the CSP nonce-migration wave (ADR-0008): a STRICTER candidate
+ * policy — script-src without `'unsafe-eval'` — emitted as a parallel
+ * `Content-Security-Policy-Report-Only` header. Report-Only blocks NOTHING in
+ * the browser, so it carries zero white-screen / lockout risk, yet every
+ * violation is POSTed to the existing `/api/csp-report` sink — giving real
+ * runtime telemetry on whether `'unsafe-eval'` is actually load-bearing
+ * (mapbox-gl, the Serwist SW, the React hydration shim) BEFORE any
+ * enforce-mode change. It NEVER replaces the enforced policy until a clean
+ * soak + real-browser pass across the auth surface (see ADR-0008 soak gate).
+ */
+export function buildCspCandidate(): string {
+  return serializeCsp(cspDirectives({ dropScriptUnsafeEval: true }));
 }
 
 /**
@@ -204,6 +233,17 @@ export function buildSecurityHeaders(): Array<{ key: string; value: string }> {
     // after a clean 2-week soak. The `unsafe-inline` / `unsafe-eval`
     // refactor (nonces / hashes) is a separately-tracked future wave.
     { key: "Content-Security-Policy", value: buildCsp() },
+    // Phase 0 of the CSP nonce-migration wave (ADR-0008). A parallel, STRICTER
+    // Report-Only candidate (script-src minus 'unsafe-eval') soaks violation
+    // telemetry via /api/csp-report WITHOUT blocking anything — the enforced
+    // policy above is unchanged. Promote to enforce only after a clean soak +
+    // real-browser pass across the auth surface (ADR-0008 soak gate). The
+    // /api/health auto-rollback smoke is blind to CSP white-screens, so a
+    // Report-Only soak is the safe way to gather the data.
+    {
+      key: "Content-Security-Policy-Report-Only",
+      value: buildCspCandidate(),
+    },
     // Reporting API v1 — names the `csp-endpoint` group referenced by the
     // `report-to csp-endpoint` directive in the CSP. Structured-fields
     // dictionary syntax (RFC 8941). See top-of-file rationale.

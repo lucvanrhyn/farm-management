@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
   const farmSlug = searchParams.get('farm');
 
   if (!farmSlug) {
+    // audit-allow-error-envelope: subscription-status 400 left bare pending billing-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: 'Missing farm param' }, { status: 400 });
   }
 
   // Verify the user has access to this farm
   const hasFarm = session.user.farms.some((f) => f.slug === farmSlug);
   if (!hasFarm) {
+    // audit-allow-error-envelope: subscription-status 403 left bare pending billing-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

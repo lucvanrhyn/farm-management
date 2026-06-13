@@ -28,6 +28,7 @@ export const POST = publicHandler({
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
     const rl = await checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
+      // audit-allow-error-envelope: public register 429 rate-limit, human-facing copy on a deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'Too many registration attempts. Please try again later.' }, { status: 429 });
     }
 
@@ -35,6 +36,7 @@ export const POST = publicHandler({
     try {
       body = await request.json();
     } catch {
+      // audit-allow-error-envelope: public register malformed-body 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
@@ -42,25 +44,30 @@ export const POST = publicHandler({
 
     // Validation
     if (!name || !email || !username || !password || !farmName) {
+      // audit-allow-error-envelope: public register required-fields 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      // audit-allow-error-envelope: public register email-format 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
 
     if (password.length < 8) {
+      // audit-allow-error-envelope: public register password-policy 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
     if (username.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(username)) {
       return NextResponse.json(
+        // audit-allow-error-envelope: public register username-policy 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
         { error: 'Username must be 3+ characters (letters, numbers, hyphens, underscores)' },
         { status: 400 },
       );
     }
 
     if (farmName.length < 2) {
+      // audit-allow-error-envelope: public register farm-name 400, deliberately-bare auth wire-shape (S26-excluded); conversion is its own Wave F sign-off.
       return NextResponse.json({ error: 'Farm name must be at least 2 characters' }, { status: 400 });
     }
 
@@ -111,6 +118,7 @@ export const POST = publicHandler({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       logger.error('[register] Provisioning error', { message });
+      // audit-allow-error-envelope: provisioning-failure 500 intentionally generic — real error logged server-side (line 113), never returned to unauthenticated callers (info-leak control); must stay bare.
       return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });
     }
   },

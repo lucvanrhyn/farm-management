@@ -18,10 +18,12 @@ export const POST = publicHandler({
     try {
       body = await req.json();
     } catch {
+      // audit-allow-error-envelope: telemetry vitals malformed-JSON 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid json" }, { status: 400 });
     }
 
     if (!body || typeof body !== "object") {
+      // audit-allow-error-envelope: telemetry vitals non-object-body 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid body" }, { status: 400 });
     }
 
@@ -36,15 +38,19 @@ export const POST = publicHandler({
     } = body as Record<string, unknown>;
 
     if (typeof id !== "string" || id.length === 0 || id.length > 128) {
+      // audit-allow-error-envelope: telemetry vitals invalid-id 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid id" }, { status: 400 });
     }
     if (typeof name !== "string" || !METRIC_NAMES.has(name)) {
+      // audit-allow-error-envelope: telemetry vitals invalid-name 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid name" }, { status: 400 });
     }
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_VALUE) {
+      // audit-allow-error-envelope: telemetry vitals invalid-value 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid value" }, { status: 400 });
     }
     if (typeof rating !== "string" || !RATINGS.has(rating)) {
+      // audit-allow-error-envelope: telemetry vitals invalid-rating 400 — fire-and-forget beacon, response body unread by client; deliberately bare (S26-excluded).
       return NextResponse.json({ error: "invalid rating" }, { status: 400 });
     }
 

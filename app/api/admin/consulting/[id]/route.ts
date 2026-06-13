@@ -30,6 +30,7 @@ export async function PATCH(
 
   const isAdmin = await isPlatformAdmin(email);
   if (!isAdmin) {
+    // audit-allow-error-envelope: admin-consulting non-admin 403 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -37,6 +38,7 @@ export async function PATCH(
   try {
     body = await req.json();
   } catch {
+    // audit-allow-error-envelope: admin-consulting malformed-body 400 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -50,6 +52,7 @@ export async function PATCH(
     !VALID_LEAD_STATUSES.includes(nextStatus as ConsultingLead["status"])
   ) {
     return NextResponse.json(
+      // audit-allow-error-envelope: admin-consulting invalid-status 400 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
       { error: "Invalid status" },
       { status: 400 },
     );
@@ -62,10 +65,12 @@ export async function PATCH(
 
   if (!result.ok) {
     if (result.error === "not found") {
+      // audit-allow-error-envelope: admin-consulting not-found 404 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     if (result.error === "invalid transition") {
       return NextResponse.json(
+        // audit-allow-error-envelope: admin-consulting invalid-transition 400 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
         { error: "Invalid transition" },
         { status: 400 },
       );
