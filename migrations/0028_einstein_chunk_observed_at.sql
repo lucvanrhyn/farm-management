@@ -1,0 +1,51 @@
+-- 0028_einstein_chunk_observed_at.sql
+--
+-- #516 (Einstein retrieval hardening — semantic event-axis fork). Adds the
+-- EVENT-axis date column to EinsteinChunk so the semantic/vector retriever can
+-- window a date-range query on when an event actually happened rather than on
+-- `sourceUpdatedAt` (the record-mutation axis that drives stale detection).
+--
+-- ROOT CAUSE: lib/einstein/retriever.ts semantic() filtered the date window on
+-- `sourceUpdatedAt`. For an observation logged retroactively (observedAt in the
+-- window, row edited later), or any entity whose mutation date diverges from
+-- its event date, a "last two weeks" question matched the wrong rows. The
+-- structured path already used the correct per-entity event axes
+-- (observation.observedAt / task.dueDate / notification.createdAt); the
+-- semantic path lagged. The chunker now resolves the same event axis into
+-- EinsteinChunk.observedAt (lib/einstein/chunker.ts resolveEventDate), the
+-- ingestion writer persists it (lib/server/inngest/einstein.ts), and the
+-- retriever windows on COALESCE(observedAt, sourceUpdatedAt).
+--
+-- ZERO-REGRESSION TRANSITION (no backfill): the column is NULLABLE with no
+-- default. Existing chunks keep observedAt = NULL, and the retriever's
+-- COALESCE(observedAt, sourceUpdatedAt) falls those rows back to the exact
+-- pre-column behaviour. New and re-embedded chunks populate observedAt going
+-- forward, so the event axis fills in naturally as data changes — no expensive
+-- full re-embed, no chunkerVersion bump, no UPDATE pass. Entities with no
+-- natural event axis (camp/animal/task_template/it3_snapshot) stay NULL by
+-- design and COALESCE to sourceUpdatedAt. See
+-- docs/adr/0009-einstein-observedat-event-axis.md.
+--
+-- Discipline notes (mirror 0014 / 0027):
+--   * Additive only — one ALTER TABLE ADD COLUMN on EinsteinChunk. No
+--     DROP/RENAME, no backfill UPDATE, no _migrations touch → within promote
+--     scope (runs on promote across every tenant clone).
+--   * NULLABLE (no default) — matches the Prisma `observedAt DateTime?`
+--     declaration so checkPrismaColumnParity (#137) holds. SQLite/libSQL
+--     accepts a bare ADD COLUMN for a nullable column with no default.
+--   * EinsteinChunk is operator-provisioned (F32_BLOB / libsql_vector_idx that
+--     Prisma can't emit; EXCLUDE_TABLES in scripts/gen-farm-schema.ts), so this
+--     column does NOT flow through lib/farm-schema.ts — exactly like the
+--     chunkerVersion/contentHash columns added by 0014 and the budget columns
+--     pattern. Column ALTERs on EinsteinChunk DO flow through the numbered
+--     migration pipeline (precedent: 0014 lines 32-34).
+--   * Idempotency is the migrator's per-tenant `_migrations` bookkeeping
+--     (lib/migrator.ts): each file runs exactly once per tenant DB inside an
+--     atomic batch. SQLite/libSQL has no ADD COLUMN IF NOT EXISTS; re-running is
+--     prevented by the bookkeeping row, not a per-statement guard.
+--   * verifyMigrationApplied (#141) parses the ALTER and probes
+--     pragma_table_info("EinsteinChunk") for "observedAt"; on a silent libSQL
+--     miss the bookkeeping row is rolled back so the file re-runs next batch.
+--   * Identifier quoting per feedback-quote-sql-keywords-in-migrations.md.
+
+ALTER TABLE "EinsteinChunk" ADD COLUMN "observedAt" DATETIME;

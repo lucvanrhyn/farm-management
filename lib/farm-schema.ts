@@ -1032,4 +1032,5 @@ export const BASELINE_MIGRATION_NAMES: readonly string[] = [
   '0025_backfill_empty_camp_color.sql',
   '0026_observation_notes.sql',
   '0027_einstein_budget_atomic_counter.sql',
+  '0028_einstein_chunk_observed_at.sql',
 ];

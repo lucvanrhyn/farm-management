@@ -937,6 +937,7 @@ model EinsteinChunk {
   tokensUsed      Int
   modelId         String // "text-embedding-3-small"
   sourceUpdatedAt DateTime // source row's updatedAt/editedAt at embed time — drives stale detection
+  observedAt      DateTime? // EVENT-axis date (#516): observation.observedAt / task.dueDate / notification.createdAt. NULL for entities with no event axis (camp/animal/task_template/it3_snapshot) — the semantic retriever COALESCEs NULL back to sourceUpdatedAt. Distinct from sourceUpdatedAt (mutation axis). Migration 0028.
   chunkerVersion  String   @default("0") // bumped when chunker text rendering changes
   contentHash     String   @default("") // sha256(chunk.text) — detects hash-function or rendering changes
   createdAt       DateTime @default(now())

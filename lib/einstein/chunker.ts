@@ -51,7 +51,23 @@ export interface RenderedChunk {
   langTag: "en" | "af";
   text: string;
   sourceUpdatedAt: Date;
+  /**
+   * The EVENT-axis date (#516) — distinct from sourceUpdatedAt (the record-
+   * mutation axis). Used by the semantic retriever's date window so a query
+   * resolves the events that actually fall inside the range, not the rows that
+   * were last edited inside it. observation→observedAt, task→dueDate,
+   * notification→createdAt; null for entities with no natural event axis
+   * (camp, animal, task_template, it3_snapshot), where the retriever COALESCEs
+   * back to sourceUpdatedAt (pre-column behaviour preserved).
+   */
+  observedAt: Date | null;
 }
+
+/**
+ * What the per-type renderers produce — everything except the event axis,
+ * which toEmbeddingText resolves once per entity and attaches uniformly.
+ */
+type RenderedChunkBody = Omit<RenderedChunk, "observedAt">;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -111,6 +127,39 @@ function resolveSourceDate(row: unknown): Date {
   return new Date(0);
 }
 
+/** Coerce a Date | parseable-string value to a Date, or null. */
+function toDateOrNull(v: unknown): Date | null {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v === "string" && v.length > 0) {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+/**
+ * Resolve the EVENT-axis date (#516) for a chunk — the date the thing the
+ * chunk describes actually happened, as opposed to resolveSourceDate's
+ * record-mutation axis. Mirrors the structured retriever's per-entity event
+ * axes (lib/einstein/retriever.ts):
+ *   observation → observedAt, task → dueDate, notification → createdAt.
+ * Entities with no natural event axis (camp, animal, task_template,
+ * it3_snapshot) return null; the retriever COALESCEs null back to
+ * sourceUpdatedAt so their date-window behaviour is unchanged.
+ */
+function resolveEventDate(entityType: EntityType, row: unknown): Date | null {
+  switch (entityType) {
+    case "observation":
+      return toDateOrNull(get(row, "observedAt"));
+    case "task":
+      return toDateOrNull(get(row, "dueDate"));
+    case "notification":
+      return toDateOrNull(get(row, "createdAt"));
+    default:
+      return null;
+  }
+}
+
 /** Best-effort JSON.parse; returns {} on failure or when input is already an object. */
 function parseJsonObject(v: unknown): Record<string, unknown> {
   if (v && typeof v === "object") return v as Record<string, unknown>;
@@ -136,7 +185,7 @@ function renderObservation(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const type = str(get(row, "type"));
   const observedAt = formatDate(get(row, "observedAt"));
   const campId = str(get(row, "campId"));
@@ -186,7 +235,7 @@ function renderCamp(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const campName = str(get(row, "campName"));
   const sizeHectares = get(row, "sizeHectares");
   const veldType = get(row, "veldType");
@@ -225,7 +274,7 @@ function renderAnimal(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const name = str(get(row, "name")) || str(get(row, "animalId"));
   const registrationNumber = get(row, "registrationNumber");
   const species = str(get(row, "species"));
@@ -272,7 +321,7 @@ function renderTask(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const taskType = str(get(row, "taskType")) || "generic";
   const title = str(get(row, "title"));
   const dueDate = formatDate(get(row, "dueDate"));
@@ -313,7 +362,7 @@ function renderTaskTemplate(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const name = str(get(row, "name"));
   const nameAf = get(row, "name_af");
   const taskType = str(get(row, "taskType"));
@@ -333,7 +382,7 @@ function renderTaskTemplate(
   let enText = `task_template — '${name}'${enDescriptor}`;
   if (present(description)) enText += `: ${description}`;
 
-  const chunks: RenderedChunk[] = [
+  const chunks: RenderedChunkBody[] = [
     {
       entityType: "task_template",
       entityId,
@@ -369,7 +418,7 @@ function renderNotification(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const type = str(get(row, "type"));
   const createdAt = formatDate(get(row, "createdAt"));
   const message = str(get(row, "message"));
@@ -400,7 +449,7 @@ function renderIt3Snapshot(
   entityId: string,
   row: unknown,
   sourceUpdatedAt: Date,
-): RenderedChunk[] {
+): RenderedChunkBody[] {
   const taxYear = get(row, "taxYear");
   const periodStart = str(get(row, "periodStart"));
   const periodEnd = str(get(row, "periodEnd"));
@@ -446,27 +495,35 @@ function renderIt3Snapshot(
 export function toEmbeddingText(input: ChunkInput): RenderedChunk[] {
   const { entityType, entityId, row } = input;
   const sourceUpdatedAt = resolveSourceDate(row);
+  const observedAt = resolveEventDate(entityType, row);
 
-  switch (entityType) {
-    case "observation":
-      return renderObservation(entityId, row, sourceUpdatedAt);
-    case "camp":
-      return renderCamp(entityId, row, sourceUpdatedAt);
-    case "animal":
-      return renderAnimal(entityId, row, sourceUpdatedAt);
-    case "task":
-      return renderTask(entityId, row, sourceUpdatedAt);
-    case "task_template":
-      return renderTaskTemplate(entityId, row, sourceUpdatedAt);
-    case "notification":
-      return renderNotification(entityId, row, sourceUpdatedAt);
-    case "it3_snapshot":
-      return renderIt3Snapshot(entityId, row, sourceUpdatedAt);
-    default: {
-      const _exhaustive: never = entityType;
-      throw new Error(`Unknown entity type: ${_exhaustive}`);
+  const rendered: RenderedChunkBody[] = (() => {
+    switch (entityType) {
+      case "observation":
+        return renderObservation(entityId, row, sourceUpdatedAt);
+      case "camp":
+        return renderCamp(entityId, row, sourceUpdatedAt);
+      case "animal":
+        return renderAnimal(entityId, row, sourceUpdatedAt);
+      case "task":
+        return renderTask(entityId, row, sourceUpdatedAt);
+      case "task_template":
+        return renderTaskTemplate(entityId, row, sourceUpdatedAt);
+      case "notification":
+        return renderNotification(entityId, row, sourceUpdatedAt);
+      case "it3_snapshot":
+        return renderIt3Snapshot(entityId, row, sourceUpdatedAt);
+      default: {
+        const _exhaustive: never = entityType;
+        throw new Error(`Unknown entity type: ${_exhaustive}`);
+      }
     }
-  }
+  })();
+
+  // The per-type renderers build sourceUpdatedAt into each chunk; the event
+  // axis is uniform across an entity's chunks (e.g. both langTags of a task
+  // template), so attach it here rather than threading it through all seven.
+  return rendered.map((chunk) => ({ ...chunk, observedAt }));
 }
 
 /**
