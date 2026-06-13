@@ -139,7 +139,7 @@ describe("DELETE /api/task-templates/[id]", () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: "tmpl-1" }) });
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.code).toBe("MISSING_ADMIN_SESSION");
+    expect(body.error).toBe("MISSING_ADMIN_SESSION");
   });
 
   it("returns 403 with FORBIDDEN for non-admin", async () => {
@@ -149,7 +149,7 @@ describe("DELETE /api/task-templates/[id]", () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: "tmpl-1" }) });
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.code).toBe("FORBIDDEN");
+    expect(body.error).toBe("FORBIDDEN");
   });
 
   it("returns 404 with TEMPLATE_NOT_FOUND when template doesn't exist", async () => {
@@ -159,7 +159,7 @@ describe("DELETE /api/task-templates/[id]", () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: "missing" }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.code).toBe("TEMPLATE_NOT_FOUND");
+    expect(body.error).toBe("TEMPLATE_NOT_FOUND");
   });
 });
 
@@ -225,7 +225,7 @@ describe("PATCH /api/task-templates/[id]", () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: "tmpl-1" }) });
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("INVALID_FIELD");
+    expect(body.error).toBe("INVALID_FIELD");
   });
 
   it("returns 401 MISSING_ADMIN_SESSION when unauthed", async () => {
@@ -239,7 +239,7 @@ describe("PATCH /api/task-templates/[id]", () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: "tmpl-1" }) });
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.code).toBe("MISSING_ADMIN_SESSION");
+    expect(body.error).toBe("MISSING_ADMIN_SESSION");
   });
 
   it("returns 404 TEMPLATE_NOT_FOUND when template doesn't exist", async () => {
@@ -253,7 +253,7 @@ describe("PATCH /api/task-templates/[id]", () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: "missing" }) });
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.code).toBe("TEMPLATE_NOT_FOUND");
+    expect(body.error).toBe("TEMPLATE_NOT_FOUND");
   });
 });
 
@@ -303,7 +303,7 @@ describe("PUT /api/farm-settings/tasks", () => {
     const res = await PUT(req);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("INVALID_FIELD");
+    expect(body.error).toBe("INVALID_FIELD");
   });
 
   it("returns 403 FORBIDDEN for non-admin", async () => {
@@ -321,6 +321,6 @@ describe("PUT /api/farm-settings/tasks", () => {
     const res = await PUT(req);
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.code).toBe("FORBIDDEN");
+    expect(body.error).toBe("FORBIDDEN");
   });
 });

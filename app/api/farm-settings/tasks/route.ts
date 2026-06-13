@@ -29,14 +29,12 @@ import {
   type FarmTaskSettings,
 } from "@/lib/farm-settings/defaults";
 import { revalidateSettingsWrite } from "@/lib/server/revalidate";
+import { routeError } from "@/lib/server/route/envelope";
 
 export async function GET(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_ADMIN_SESSION", "Unauthorized", 401);
   }
   const { prisma } = ctx;
 
@@ -47,35 +45,23 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_ADMIN_SESSION", "Unauthorized", 401);
   }
   const { prisma, role, slug, session } = ctx;
 
   if (role !== "ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body", code: "INVALID_JSON" },
-      { status: 400 },
-    );
+    return routeError("INVALID_JSON", "Invalid JSON body", 400);
   }
 
   const { defaultReminderOffset, autoObservation, horizonDays } = body;
@@ -86,24 +72,19 @@ export async function PUT(req: NextRequest) {
     defaultReminderOffset < 0 ||
     defaultReminderOffset > 10080
   ) {
-    return NextResponse.json(
-      { error: "defaultReminderOffset must be a number between 0 and 10080", code: "INVALID_FIELD" },
-      { status: 400 },
+    return routeError(
+      "INVALID_FIELD",
+      "defaultReminderOffset must be a number between 0 and 10080",
+      400,
     );
   }
 
   if (typeof autoObservation !== "boolean") {
-    return NextResponse.json(
-      { error: "autoObservation must be a boolean", code: "INVALID_FIELD" },
-      { status: 400 },
-    );
+    return routeError("INVALID_FIELD", "autoObservation must be a boolean", 400);
   }
 
   if (horizonDays !== 30 && horizonDays !== 60 && horizonDays !== 90) {
-    return NextResponse.json(
-      { error: "horizonDays must be 30, 60, or 90", code: "INVALID_FIELD" },
-      { status: 400 },
-    );
+    return routeError("INVALID_FIELD", "horizonDays must be 30, 60, or 90", 400);
   }
 
   const next: FarmTaskSettings = {

@@ -103,6 +103,10 @@ describe("isTenantNavigationRequest", () => {
     expect(isTenantNavigationRequest("/login")).toBe(false);
     expect(isTenantNavigationRequest("/register")).toBe(false);
     expect(isTenantNavigationRequest("/verify-email")).toBe(false);
+    // Password-reset surfaces (PRs #540/#542) — latent reserved-list gap
+    // closed when S10/sync-L2 made offline-store consume this predicate.
+    expect(isTenantNavigationRequest("/forgot-password")).toBe(false);
+    expect(isTenantNavigationRequest("/reset-password")).toBe(false);
   });
 
   it("returns false for /offline (Serwist fallback must stay cached)", () => {

@@ -57,7 +57,23 @@ vi.mock("@/lib/domain/observations/create-observation", () => ({
 }));
 
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
+import { AnimalNotFoundError } from "@/lib/domain/observations/errors";
 import type { PrismaClient } from "@prisma/client";
+
+/**
+ * S5 / OBS-2 — Prisma P2025 ("record to update not found") built the way the
+ * op detects it: by `.name` + `.code`, NOT `instanceof`, so the test carries
+ * no runtime `@prisma/client` exception dependency (the same lightweight
+ * convention as `lib/server/api-errors.ts` / `lib/server/alerts/dedup.ts`).
+ */
+function makeP2025(): Error {
+  const err = new Error(
+    "An operation failed because it depends on one or more records that were required but not found. Record to update not found.",
+  );
+  err.name = "PrismaClientKnownRequestError";
+  (err as Error & { code?: string }).code = "P2025";
+  return err;
+}
 
 const baseArgs = (
   overrides: Partial<{
@@ -175,5 +191,44 @@ describe("performAnimalMove (#100)", () => {
     await performAnimalMove(prismaMock as unknown as PrismaClient, args);
     const [, obsInput] = createObservationMock.mock.calls[0];
     expect(obsInput.notes).toBe("moved off the mountain camp");
+  });
+
+  // ── S5 / OBS-2 — missing animal is a TYPED domain error, not a raw P2025 ──
+
+  it("re-throws Prisma P2025 from the currentCamp update as the typed AnimalNotFoundError (OBS-2)", async () => {
+    // A movement replayed for an animal that genuinely does not exist
+    // (deleted server-side). The bare `tx.animal.update` raises P2025, which
+    // previously ESCAPED the op raw and was collapsed by `mapApiDomainError`'s
+    // #483 Prisma sanitizer into an opaque 500 → the offline queue classified
+    // it transient and looped. The op now translates it into the SAME typed
+    // error the door itself throws for the identical condition
+    // (`AnimalNotFoundError`, code ANIMAL_NOT_FOUND) → terminal 404. Mirrors
+    // the death sibling byte-identically (#543's shared-concern follow-up).
+    animalUpdateMock.mockRejectedValue(makeP2025());
+
+    const err = await performAnimalMove(
+      prismaMock as unknown as PrismaClient,
+      baseArgs(),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AnimalNotFoundError);
+    expect(err).toMatchObject({ code: "ANIMAL_NOT_FOUND", animalId: "BB-C014" });
+
+    // The door was never reached — the throw aborts the transaction before
+    // the observation write (no orphan movement row on a missing animal).
+    expect(createObservationMock).not.toHaveBeenCalled();
+  });
+
+  it("propagates a NON-P2025 update failure unchanged (no over-broad catch)", async () => {
+    // Only the record-not-found code is translated; an unrelated Prisma
+    // failure (e.g. a connection drop) must keep its identity so the #483
+    // sanitizer + server log see the real cause and the client retries.
+    const otherErr = new Error("connection reset");
+    otherErr.name = "PrismaClientKnownRequestError";
+    (otherErr as Error & { code?: string }).code = "P1001";
+    animalUpdateMock.mockRejectedValue(otherErr);
+
+    await expect(
+      performAnimalMove(prismaMock as unknown as PrismaClient, baseArgs()),
+    ).rejects.toBe(otherErr);
   });
 });

@@ -38,8 +38,10 @@ import {
 } from "../details-schemas";
 
 describe("DETAILS_SCHEMAS registry — shape", () => {
-  it("registers exactly the nine first-adopter typed observations", () => {
-    // ADR-0007 scope decision: the set already validated today, nothing more.
+  it("registers exactly the ten typed observations (nine first-adopters + scrotal_circumference, obs-M1)", () => {
+    // ADR-0007 scope decision: the set already validated today — extended by
+    // S24 / obs-M1 with `scrotal_circumference`, the ReproductionForm sub-flow
+    // that fed breeding scoring with NO server-side gate.
     expect(Object.keys(DETAILS_SCHEMAS).sort()).toEqual(
       [
         "body_condition_score",
@@ -49,6 +51,7 @@ describe("DETAILS_SCHEMAS registry — shape", () => {
         "heat_detection",
         "insemination",
         "pregnancy_scan",
+        "scrotal_circumference",
         "temperament_score",
         "weighing",
       ].sort(),
@@ -157,6 +160,26 @@ describe("validateObservationDetails — door-facing unified entry", () => {
         { speciesMax: 1500 },
       ),
     ).toThrow(DeathMultiCauseError);
+  });
+
+  it("dispatches scrotal_circumference through the repro family (S24 / obs-M1)", () => {
+    // A measurement outside the UI's 20..50 cm bounds (or missing/NaN) must
+    // be rejected at the door — pre-obs-M1 this type passed through entirely
+    // unvalidated and fed garbage into breeding scoring (`trait-profile.ts`).
+    expect(() =>
+      validateObservationDetails(
+        "scrotal_circumference",
+        JSON.stringify({ measurement_cm: "5" }),
+        { speciesMax: 1500 },
+      ),
+    ).toThrow(ReproFieldRequiredError);
+    expect(() =>
+      validateObservationDetails(
+        "scrotal_circumference",
+        JSON.stringify({ measurement_cm: "36.5", logged_by: "u@x.co.za" }),
+        { speciesMax: 1500 },
+      ),
+    ).not.toThrow();
   });
 
   it("re-throws ReproMultiStateError for a multi-state repro payload", () => {

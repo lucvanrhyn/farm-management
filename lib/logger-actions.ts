@@ -23,21 +23,45 @@ export interface MobMoveResult {
 }
 
 /**
- * Executes a mob move: PATCHes the API then queues a mob_movement observation.
- * Offline-safe — the observation is queued via IndexedDB and synced later.
+ * Executes a mob move.
+ *
+ * S8 / OS-2 — the queued `mob_movement` observation is the SOLE durable
+ * carrier of the camp change: it is queued REGARDLESS of the PATCH outcome,
+ * and the `POST /api/observations` route's `mob_movement` branch applies the
+ * move server-side on replay (via `performMobMove`, mirroring the #100
+ * `animal_movement` contract). Pre-S8 the observation was queued ONLY after a
+ * successful `PATCH /api/mobs/{id}` — offline the fetch threw and NOTHING was
+ * queued, so the move was silently dropped.
+ *
+ * The PATCH stays as the online fast path (instant camp change, no drain
+ * wait). When both apply, the replayed observation hits `performMobMove`'s
+ * same-camp guard and degrades to a plain audit row — idempotent. A
+ * terminally-invalid move (e.g. cross-species) re-rejects on replay with a
+ * typed 422 and dead-letters with feedback; the server enforces the block
+ * either way.
+ *
+ * Result contract: `success: true` means "applied or queued for replay" (the
+ * offline-first meaning every other logger submit uses). Only a failed
+ * ENQUEUE — the move has no carrier at all — reports `success: false`.
  */
 export async function submitMobMove(
   data: MobMoveData,
   ctx: MobMoveContext,
 ): Promise<MobMoveResult> {
+  // Online fast path. A throw (offline/network) or a non-ok status is NOT
+  // fatal — the queued observation below is the durable carrier and the
+  // observations route applies the move on replay.
   try {
-    const res = await fetch(`/api/mobs/${data.mobId}`, {
+    await fetch(`/api/mobs/${data.mobId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ currentCamp: data.toCampId }),
     });
-    if (!res.ok) return { success: false };
+  } catch {
+    // Offline — deliberately ignored; the queue carries the move (OS-2).
+  }
 
+  try {
     await queueObservation({
       type: "mob_movement",
       camp_id: data.fromCampId,
@@ -52,13 +76,15 @@ export async function submitMobMove(
       synced_at: null,
       sync_status: "pending",
     });
-
-    ctx.refreshPendingCount();
-    if (ctx.isOnline) ctx.syncNow();
-    return { success: true };
   } catch {
+    // The enqueue itself failed (IDB unavailable) — the move has NO carrier,
+    // which is the one genuinely-failed outcome the caller must surface.
     return { success: false };
   }
+
+  ctx.refreshPendingCount();
+  if (ctx.isOnline) ctx.syncNow();
+  return { success: true };
 }
 
 export interface CalvingData {

@@ -155,8 +155,10 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
+    // ADR-0001 canonical envelope: `error` is the SCREAMING_SNAKE code,
+    // `message` is the human sentence.
     expect(body.error).toBeDefined();
-    expect(body.code).toBeDefined();
+    expect(body.message).toBeDefined();
   });
 
   it("returns 400 when level is not a valid value", async () => {
@@ -173,7 +175,7 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("invalid_level");
+    expect(body.error).toBe("INVALID_LEVEL");
   });
 
   it("returns 400 when message is missing", async () => {
@@ -189,7 +191,7 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("invalid_message");
+    expect(body.error).toBe("INVALID_MESSAGE");
   });
 
   it("returns 400 when message is empty string", async () => {
@@ -206,7 +208,7 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("invalid_message");
+    expect(body.error).toBe("INVALID_MESSAGE");
   });
 
   it("returns 400 when body is not valid JSON", async () => {
@@ -223,7 +225,7 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("invalid_json");
+    expect(body.error).toBe("INVALID_JSON");
   });
 
   it("returns 400 when ts is missing", async () => {
@@ -239,6 +241,6 @@ describe("POST /api/telemetry/client-errors", () => {
     const res = await POST(req, CTX);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("invalid_ts");
+    expect(body.error).toBe("INVALID_TS");
   });
 });

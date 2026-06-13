@@ -27,12 +27,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   try {
     await stat(TEMPLATE_PATH);
   } catch {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Template asset not generated. Run `pnpm tsx scripts/create-template.ts`.",
-      }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
+    return routeError(
+      "TEMPLATE_NOT_FOUND",
+      "Template asset not generated. Run `pnpm tsx scripts/create-template.ts`.",
+      404,
     );
   }
 

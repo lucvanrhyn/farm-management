@@ -20,7 +20,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantReadSlug, adminWriteSlug } from "@/lib/server/route";
+import { routeError, tenantReadSlug, adminWriteSlug } from "@/lib/server/route";
 import {
   issueNvd,
   listNvds,
@@ -135,9 +135,10 @@ export const POST = adminWriteSlug<IssueBody, { farmSlug: string }>({
       10 * 60 * 1000,
     );
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many NVD requests. Please wait." },
-        { status: 429 },
+      return routeError(
+        "RATE_LIMITED",
+        "Too many NVD requests. Please wait.",
+        429,
       );
     }
 

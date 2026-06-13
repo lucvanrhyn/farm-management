@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { routeError } from "@/lib/server/route";
 
 export async function GET() {
-  return NextResponse.json({ error: "Not implemented" }, { status: 501 });
+  return routeError("NOT_IMPLEMENTED", "Not implemented", 501);
 }
 
 export async function POST() {
-  return NextResponse.json({ error: "Not implemented" }, { status: 501 });
+  return routeError("NOT_IMPLEMENTED", "Not implemented", 501);
 }

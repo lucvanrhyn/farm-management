@@ -11,7 +11,7 @@ function getFarmSlugFromRequest(req: NextRequest): string | null {
 export async function GET(req: NextRequest) {
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
-    return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
+    return routeError("INVALID_BODY", "farmSlug query param required");
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
-    return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
+    return routeError("INVALID_BODY", "farmSlug query param required");
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest) {
   const { prisma, role, session } = ctx;
 
   if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   // Defence-in-depth: re-verify against meta-db (fresh role) to close the
@@ -68,14 +68,14 @@ export async function PATCH(req: NextRequest) {
   // See lib/auth.ts::verifyFreshAdminRole for the full rationale.
   const freshOk = await verifyFreshAdminRole(session.user.id, farmSlug);
   if (!freshOk) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return routeError("INVALID_BODY", "Invalid JSON body");
   }
 
   // Validate required numeric fields are positive numbers when present
@@ -93,10 +93,7 @@ export async function PATCH(req: NextRequest) {
     if (field in body) {
       const val = body[field];
       if (typeof val !== "number" || isNaN(val) || val <= 0) {
-        return NextResponse.json(
-          { error: `${field} must be a positive number` },
-          { status: 400 }
-        );
+        return routeError("VALIDATION_FAILED", `${field} must be a positive number`);
       }
     }
   }
@@ -104,9 +101,9 @@ export async function PATCH(req: NextRequest) {
   if ("rotationSeasonMode" in body) {
     const mode = body.rotationSeasonMode;
     if (mode !== "auto" && mode !== "growing" && mode !== "dormant") {
-      return NextResponse.json(
-        { error: "rotationSeasonMode must be one of: auto, growing, dormant" },
-        { status: 400 }
+      return routeError(
+        "VALIDATION_FAILED",
+        "rotationSeasonMode must be one of: auto, growing, dormant",
       );
     }
   }
@@ -114,9 +111,9 @@ export async function PATCH(req: NextRequest) {
   if ("dormantSeasonMultiplier" in body) {
     const m = body.dormantSeasonMultiplier;
     if (typeof m !== "number" || !isFinite(m) || m < 1) {
-      return NextResponse.json(
-        { error: "dormantSeasonMultiplier must be a finite number ≥ 1" },
-        { status: 400 }
+      return routeError(
+        "VALIDATION_FAILED",
+        "dormantSeasonMultiplier must be a finite number ≥ 1",
       );
     }
   }
@@ -126,10 +123,7 @@ export async function PATCH(req: NextRequest) {
     if (field in body && body[field] !== null) {
       const val = body[field];
       if (typeof val !== "number" || isNaN(val)) {
-        return NextResponse.json(
-          { error: `${field} must be a number or null` },
-          { status: 400 }
-        );
+        return routeError("VALIDATION_FAILED", `${field} must be a number or null`);
       }
     }
   }
@@ -247,7 +241,7 @@ export async function PATCH(req: NextRequest) {
   const BIOMES = new Set(['highveld', 'bushveld', 'lowveld', 'karoo', 'mixedveld']);
   if ('biomeType' in body) {
     if (body.biomeType != null && !BIOMES.has(body.biomeType as string)) {
-      return NextResponse.json({ error: 'invalid biomeType' }, { status: 400 });
+      return routeError("VALIDATION_FAILED", "invalid biomeType");
     }
     updateData.biomeType = (body.biomeType as string | null) ?? null;
   }
@@ -286,9 +280,9 @@ export async function PATCH(req: NextRequest) {
       // Reject anything that contains characters outside the AIA charset
       // (alpha-numeric only, no punctuation/diacritics).
       if (!/^[A-Z0-9]{1,3}$/.test(normalised)) {
-        return NextResponse.json(
-          { error: "aiaIdentificationMark must be 1-3 alphanumeric characters" },
-          { status: 400 }
+        return routeError(
+          "VALIDATION_FAILED",
+          "aiaIdentificationMark must be 1-3 alphanumeric characters",
         );
       }
       updateData.aiaIdentificationMark = normalised;

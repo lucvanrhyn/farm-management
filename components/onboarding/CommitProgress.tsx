@@ -105,8 +105,18 @@ export function CommitProgress({
       if (!response.ok) {
         let errorText = "Import failed";
         try {
-          const body = (await response.json()) as { error?: string };
-          if (typeof body.error === "string") errorText = body.error;
+          // ADR-0001 envelope: `error` is a machine code, `message` is the
+          // human one-liner. Prefer the message; legacy bare-{error:
+          // "sentence"} responses still display via the error field.
+          const body = (await response.json()) as {
+            error?: string;
+            message?: string;
+          };
+          if (typeof body.message === "string" && body.message.length > 0) {
+            errorText = body.message;
+          } else if (typeof body.error === "string") {
+            errorText = body.error;
+          }
         } catch {
           /* fall back to the generic message */
         }

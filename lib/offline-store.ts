@@ -1,5 +1,6 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Camp, Animal, AnimalStatus, GrazingQuality, WaterStatus, FenceStatus } from './types';
+import { isTenantNavigationRequest } from './sw/tenant-nav';
 
 const DB_VERSION = 6;
 
@@ -50,16 +51,32 @@ export function getFarmEpoch(): number {
 }
 
 function getDBName(): string {
+  // S10 / sync-L2 — the URL `[farmSlug]` is the single tenant source of truth
+  // (#393), so when the active page IS a tenant page its slug WINS. The old
+  // order (module global → sessionStorage → URL) let two stale memos outrank
+  // the live URL: the global is set by the PREVIOUS farm's OfflineProvider
+  // and survives a client-side farm switch until the next provider effect
+  // runs, and sessionStorage survives a hard reload in a tab that last
+  // visited a different farm — either way a queue write fired in that window
+  // bound to the WRONG tenant's IndexedDB. `isTenantNavigationRequest` is the
+  // canonical reserved-route-aware predicate (lib/sw/tenant-nav.ts), so
+  // non-tenant surfaces (/farms, /login, …) never fabricate a tenant DB name
+  // from their path — they fall through to the memos below.
+  if (typeof window !== 'undefined' && isTenantNavigationRequest(window.location.pathname)) {
+    const seg = window.location.pathname.split('/')[1];
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('activeFarmSlug', seg);
+    return `farmtrack-${seg}`;
+  }
+  // Non-tenant surface or non-DOM environment: the provider-set memo.
   if (_activeFarmSlug) {
     if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('activeFarmSlug', _activeFarmSlug);
     return `farmtrack-${_activeFarmSlug}`;
   }
+  // Restore after a hard reload on a NON-tenant surface before
+  // OfflineProvider has mounted (tenant URLs are handled above).
   if (typeof window !== 'undefined') {
-    // Restore after a hard reload before OfflineProvider has mounted
     const stored = sessionStorage.getItem('activeFarmSlug');
     if (stored) return `farmtrack-${stored}`;
-    const seg = window.location.pathname.split('/')[1];
-    if (seg) return `farmtrack-${seg}`;
   }
   throw new Error('No active farm slug — call setActiveFarmSlug() before using offline-store');
 }
@@ -829,7 +846,24 @@ export async function discardFailedObservation(localId: number): Promise<void> {
     obs &&
     isTerminalFailure(withDefaultedFailureMeta(obs as PendingObservation))
   ) {
-    await db.delete('pending_observations', localId);
+    // S10 / sync-L1 — cascade the discard to the row's queued photos. The
+    // photo rows are keyed by `observation_local_id`; once the parent row is
+    // gone they are unreachable garbage (no UI lists them, no sweep collects
+    // them) and their Blobs leak in IndexedDB forever. Deleted in EVERY
+    // sync_status — even a `synced` photo row only existed to serve its
+    // parent's replay. One readwrite transaction across both stores so the
+    // discard is atomic: the observation and its photos go together or not
+    // at all (no half-discard on a mid-flight tab close).
+    const tx = db.transaction(['pending_observations', 'pending_photos'], 'readwrite');
+    const photoKeys = await tx
+      .objectStore('pending_photos')
+      .index('by_observation')
+      .getAllKeys(localId);
+    await Promise.all([
+      tx.objectStore('pending_observations').delete(localId),
+      ...photoKeys.map((key) => tx.objectStore('pending_photos').delete(key)),
+      tx.done,
+    ]);
   }
 }
 

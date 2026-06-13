@@ -9,15 +9,16 @@
  *   - 200 rows shape unchanged.
  *   - 401 envelope migrates from `{ error: "Unauthorized" }` to the
  *     adapter's canonical `{ error: "AUTH_REQUIRED", message: "..." }`.
- *   - 404 (farm-not-found) and 403 (basic tier) keep their bare-string
- *     `{ error: "<sentence>" }` envelopes — these are bespoke handler
- *     concerns, not adapter concerns. Existing clients
- *     (`components/admin/PerformanceSection.tsx`) may key on `body.error`
- *     as user-facing text, so the wire shape is preserved verbatim.
+ *   - S26 (ADR-0001 sweep) — 404 (farm-not-found) → NOT_FOUND and 403 (basic
+ *     tier) → FORBIDDEN converge on the canonical typed envelope
+ *     `{ error: CODE, message }` (statuses unchanged). The human sentence moves
+ *     to the `message` slot; clients that surfaced `body.error` as text now read
+ *     `body.message`.
  */
 import { NextResponse } from "next/server";
 
 import { tenantReadSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { getFarmCreds } from "@/lib/meta-db";
 import { listCampPerformance } from "@/lib/domain/performance";
 
@@ -30,13 +31,10 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     // and would lie about recently-upgraded farms until the user re-logs in.
     const creds = await getFarmCreds(params.farmSlug);
     if (!creds) {
-      return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+      return routeError("NOT_FOUND", "Farm not found", 404);
     }
     if (creds.tier === "basic") {
-      return NextResponse.json(
-        { error: "Advanced plan required" },
-        { status: 403 },
-      );
+      return routeError("FORBIDDEN", "Advanced plan required", 403);
     }
 
     const rows = await listCampPerformance(ctx.prisma);

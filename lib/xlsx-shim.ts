@@ -10,6 +10,10 @@
  *   - read first / named sheet → JSON or array-of-arrays
  *   - write a workbook from AOA or array-of-objects
  *   - configurable defval + raw=false (SheetJS semantics) for cell coercion
+ *   - CSV ingestion (S13 / OB-csv): readWorkbook sniffs the bytes — zip
+ *     container → xlsx path, text → an RFC-4180 CSV parse that loads into a
+ *     synthetic worksheet so every existing reader produces the identical
+ *     row model for both formats.
  *
  * It does NOT attempt to be a drop-in clone of SheetJS's `XLSX.utils.*` —
  * callsites have been migrated to the helpers below.
@@ -44,17 +48,60 @@ export type ColumnSpec = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Supported file types (S13 / OB-csv)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** File extensions the spreadsheet pipeline accepts, in display order. */
+export const SUPPORTED_SPREADSHEET_EXTENSIONS = [".xlsx", ".csv"] as const;
+
+/** `accept` attribute value for file inputs feeding `readWorkbook`. */
+export const SPREADSHEET_ACCEPT = SUPPORTED_SPREADSHEET_EXTENSIONS.join(",");
+
+/**
+ * MIME types accepted when a file name carries no recognizable extension.
+ * Windows commonly labels `.csv` files with the legacy Excel MIME type.
+ */
+const SUPPORTED_SPREADSHEET_MIME_TYPES: ReadonlySet<string> = new Set([
+  "text/csv",
+  "application/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+/**
+ * Boundary guard for upload surfaces: does this file LOOK like a supported
+ * spreadsheet? Extension wins; MIME type is the fallback for extension-less
+ * names. `readWorkbook` still sniffs the actual bytes, so a mislabeled file
+ * fails later with a specific parse error rather than crashing.
+ */
+export function isSupportedSpreadsheetFile(
+  fileName: string,
+  mimeType?: string,
+): boolean {
+  const name = fileName.toLowerCase();
+  if (SUPPORTED_SPREADSHEET_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return true;
+  }
+  return mimeType
+    ? SUPPORTED_SPREADSHEET_MIME_TYPES.has(mimeType.toLowerCase())
+    : false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Read
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Load a workbook from a Node Buffer or browser ArrayBuffer.
- * Throws when the bytes aren't a valid xlsx.
+ *
+ * Sniffs the leading bytes: a zip container is parsed as xlsx; anything
+ * else is decoded as text and parsed as delimited CSV (S13 / OB-csv), so
+ * both formats surface through the same `LoadedWorkbook` row model.
+ * Throws a branch-specific error for binary non-spreadsheet input.
  */
 export async function readWorkbook(
   data: ArrayBuffer | Buffer | Uint8Array,
 ): Promise<LoadedWorkbook> {
-  const wb = new ExcelJS.Workbook();
   // Normalize all inputs to a fresh Uint8Array. jszip (used internally by
   // ExcelJS) doesn't always accept Node's Buffer or sliced ArrayBuffers in
   // jsdom — but a plain Uint8Array view is always safe.
@@ -77,6 +124,12 @@ export async function readWorkbook(
   } else {
     throw new Error("readWorkbook: unsupported data type");
   }
+  if (!isZipContainer(bytes)) {
+    // Not a zip ⇒ cannot be xlsx. Parse as delimited text instead of letting
+    // jszip throw its opaque "end of central directory" error (OB-csv).
+    return csvToLoadedWorkbook(decodeSpreadsheetText(bytes));
+  }
+  const wb = new ExcelJS.Workbook();
   // ExcelJS's TypeScript types want a Node Buffer, but `load()` accepts any
   // ArrayBufferView at runtime (jszip handles the coercion). Cast through
   // `unknown` so the shim works in both Node and browser builds.
@@ -88,6 +141,190 @@ export async function readWorkbook(
     sheetNames.push(ws.name);
   });
   return Object.assign(wb, { sheetNames });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSV read path (S13 / OB-csv)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** xlsx files are zip containers — local-file-header magic "PK\x03\x04". */
+const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const;
+
+/**
+ * Candidate CSV delimiters in tie-break priority order. `;` covers ZA-locale
+ * exports (decimal comma ⇒ semicolon separator); `\t` covers Excel's
+ * "Unicode Text" output.
+ */
+const CSV_DELIMITERS = [",", ";", "\t"] as const;
+
+/** Worksheet name the CSV rows are loaded into (matches xlsx default). */
+const CSV_SHEET_NAME = "Sheet1";
+
+function isZipContainer(bytes: Uint8Array): boolean {
+  return ZIP_MAGIC.every((magicByte, i) => bytes[i] === magicByte);
+}
+
+/**
+ * BOM-aware text decode. Supports UTF-8 (with or without BOM) and UTF-16
+ * LE/BE with BOM — the encodings Excel and ZA bank/auction exports emit.
+ * Fatal decoding doubles as binary detection: invalid byte sequences mean
+ * "this is not a text file", and NUL characters catch BOM-less UTF-16 or
+ * binary formats whose bytes happen to be UTF-8-valid.
+ */
+function decodeSpreadsheetText(bytes: Uint8Array): string {
+  let encoding: string;
+  let body: Uint8Array;
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    encoding = "utf-8";
+    body = bytes.subarray(3);
+  } else if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    encoding = "utf-16le";
+    body = bytes.subarray(2);
+  } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    encoding = "utf-16be";
+    body = bytes.subarray(2);
+  } else {
+    encoding = "utf-8";
+    body = bytes;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder(encoding, { fatal: true }).decode(body);
+  } catch {
+    throw new Error(
+      "readWorkbook: file is not a valid .xlsx workbook or text-based .csv",
+    );
+  }
+  if (text.includes("\u0000")) {
+    throw new Error(
+      "readWorkbook: binary content is not a supported spreadsheet format",
+    );
+  }
+  return text;
+}
+
+/**
+ * Detect the delimiter by counting candidates outside quotes in the first
+ * logical record (header row). Ties and zero-hit files fall back to comma.
+ */
+function detectDelimiter(text: string): string {
+  const counts = new Map<string, number>(CSV_DELIMITERS.map((d) => [d, 0]));
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') i++;
+        else inQuotes = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === "\n" || ch === "\r") break;
+    const seen = counts.get(ch);
+    if (seen !== undefined) counts.set(ch, seen + 1);
+  }
+  let best: string = CSV_DELIMITERS[0];
+  let bestCount = 0;
+  for (const candidate of CSV_DELIMITERS) {
+    const count = counts.get(candidate) ?? 0;
+    if (count > bestCount) {
+      best = candidate;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * RFC-4180 state-machine parse: quoted fields, `""` escapes, embedded
+ * delimiters/newlines inside quotes, and LF / CRLF / bare-CR row breaks.
+ * Lenient like Excel for quotes appearing mid-field (treated literally)
+ * and for an unterminated trailing quote (field is flushed as-is).
+ */
+function parseDelimitedText(text: string, delimiter: string): string[][] {
+  const records: string[][] = [];
+  let fields: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  const endField = () => {
+    fields.push(field);
+    field = "";
+  };
+  const endRecord = () => {
+    endField();
+    records.push(fields);
+    fields = [];
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+    if (ch === '"' && field === "") {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === delimiter) {
+      endField();
+      continue;
+    }
+    if (ch === "\n") {
+      endRecord();
+      continue;
+    }
+    if (ch === "\r") {
+      if (text[i + 1] === "\n") i++;
+      endRecord();
+      continue;
+    }
+    field += ch;
+  }
+  // Flush the final record unless the text ended exactly at a record
+  // boundary (i.e. a trailing newline must not yield a phantom row).
+  if (field !== "" || fields.length > 0) endRecord();
+  return records;
+}
+
+/**
+ * Coerce a raw CSV field to match the cell types the xlsx path yields:
+ * empty → undefined (empty cell), canonical numeric literal → number,
+ * everything else stays a string. The `String(n) === field` round-trip
+ * keeps leading-zero identifiers ("007"), precision-losing long digit
+ * runs, and exponent notation as strings.
+ */
+function coerceCsvField(field: string): string | number | undefined {
+  if (field === "") return undefined;
+  const n = Number(field);
+  if (Number.isFinite(n) && String(n) === field) return n;
+  return field;
+}
+
+/** Load parsed CSV records into a single-sheet workbook. */
+function csvToLoadedWorkbook(text: string): LoadedWorkbook {
+  const delimiter = detectDelimiter(text);
+  const records = parseDelimitedText(text, delimiter);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(CSV_SHEET_NAME);
+  for (const record of records) {
+    ws.addRow(record.map(coerceCsvField));
+  }
+  return Object.assign(wb, { sheetNames: [CSV_SHEET_NAME] });
 }
 
 /**

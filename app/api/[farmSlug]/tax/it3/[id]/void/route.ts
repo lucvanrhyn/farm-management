@@ -12,14 +12,16 @@
  *     envelope (matches G5-G7 precedent). Empty body is naturally tolerated —
  *     the adapter parses an empty stream as `{}` and `body.reason` falls back
  *     to the default audit-trail string.
- *   - 403 (`Forbidden`), 404 (`IT3 snapshot not found`),
- *     409 (`Snapshot is already voided`) preserved verbatim as bare-string
- *     `{ error: "<sentence>" }` for the IT3 history-table toast.
+ *   - S26 (ADR-0001 sweep) — 403 → FORBIDDEN, 404 → NOT_FOUND, 409 →
+ *     SNAPSHOT_ALREADY_VOIDED converge on the canonical typed envelope
+ *     `{ error: CODE, message }` (statuses unchanged). The human sentence
+ *     moves to `message` for the IT3 history-table toast.
  *   - Default `"Voided by admin"` reason preserved verbatim (audit-trail string).
  */
 import { NextResponse } from "next/server";
 
 import { tenantWriteSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { voidIt3Snapshot } from "@/lib/server/sars-it3";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
@@ -34,11 +36,11 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string; id: string }>({
   revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, parsedBody, _req, { id }) => {
     if (ctx.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
     // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
     if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
 
     const record = await ctx.prisma.it3Snapshot.findUnique({
@@ -46,10 +48,10 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string; id: string }>({
       select: { id: true, voidedAt: true },
     });
     if (!record) {
-      return NextResponse.json({ error: "IT3 snapshot not found" }, { status: 404 });
+      return routeError("NOT_FOUND", "IT3 snapshot not found", 404);
     }
     if (record.voidedAt) {
-      return NextResponse.json({ error: "Snapshot is already voided" }, { status: 409 });
+      return routeError("SNAPSHOT_ALREADY_VOIDED", "Snapshot is already voided", 409);
     }
 
     // Adapter has already parsed JSON; an empty body resolves to `{}`. Verify

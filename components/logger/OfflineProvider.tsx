@@ -20,7 +20,12 @@ import {
   getCachedFarmSettingsForEpoch,
 } from '@/lib/offline-store';
 import { getCurrentSyncTruth } from '@/lib/sync/queue';
-import { refreshCachedData, syncAndRefresh, type SyncedItem } from '@/lib/sync-manager';
+import {
+  refreshCachedData,
+  syncAndRefresh,
+  prepareAutoDrain,
+  type SyncedItem,
+} from '@/lib/sync-manager';
 import { runDeadLetterCleanup } from '@/lib/offline-bcs-dead-letter-cleanup';
 import { Camp } from '@/lib/types';
 import { clientLogger } from '@/lib/client-logger';
@@ -51,6 +56,14 @@ const RECENT_ITEM_BUFFER_MAX = 12;
 // listener still always triggers a fresh sync on reconnect, so users coming
 // back from offline never serve stale data.
 const REFRESH_TTL_MS = 60_000;
+
+// S9 / sync-M1 (stress-test remediation 2026-06-01) — cadence of the
+// periodic auto-drain tick. 60s matches REFRESH_TTL_MS and is at least the
+// shortest backoff cooldown (RETRY_BACKOFF_BASE_MS = 30s), so a re-armed
+// transient failure is retried within roughly one tick of becoming
+// eligible. Each tick is cheap when the queue is empty: one IDB read via
+// `prepareAutoDrain`, no network.
+const AUTO_DRAIN_INTERVAL_MS = 60_000;
 
 interface SyncResult {
   synced: number;
@@ -385,6 +398,44 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+    };
+  }, [syncNow]);
+
+  // S9 / sync-M1 (stress-test remediation 2026-06-01) — automatic queue
+  // drain. Before this effect the queue drained only on the `online` event
+  // or a manual sync press: rows queued while the tab stayed online-but-idle
+  // (and transient failures re-armed by the S9 backoff pass in
+  // `prepareAutoDrain`) had no automatic path to the server. Every
+  // AUTO_DRAIN_INTERVAL_MS tick — and every return to a visible tab — runs
+  // the cooldown re-arm pass and triggers a normal `syncNow` cycle IFF it
+  // reports queued work. Hidden tabs and offline tabs are never drained.
+  // `syncNow`'s own `syncStatus === 'syncing'` latch dedupes overlap with
+  // the online-event / manual paths; the local `ticking` flag stops a slow
+  // tick from stacking on itself.
+  useEffect(() => {
+    let ticking = false;
+    const tick = async () => {
+      if (ticking || !navigator.onLine || document.hidden) return;
+      ticking = true;
+      try {
+        const { pendingCount: queued } = await prepareAutoDrain();
+        if (queued > 0) await syncNow();
+      } catch (err) {
+        clientLogger.error('auto-drain tick failed', { err });
+      } finally {
+        ticking = false;
+      }
+    };
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, AUTO_DRAIN_INTERVAL_MS);
+    const handleVisibility = () => {
+      if (!document.hidden) void tick();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [syncNow]);
 

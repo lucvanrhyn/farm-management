@@ -16,29 +16,21 @@ import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { SEED_TEMPLATES } from "@/lib/tasks/seed-templates";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
+import { routeError } from "@/lib/server/route/envelope";
 
 export async function POST(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_ADMIN_SESSION", "Unauthorized", 401);
   }
   const { prisma, role, slug, session } = ctx;
 
   if (role !== "ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   let installed = 0;

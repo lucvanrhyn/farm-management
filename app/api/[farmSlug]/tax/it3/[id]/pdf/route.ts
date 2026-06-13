@@ -13,12 +13,12 @@
  *   - 401 envelope migrates to the adapter's canonical `AUTH_REQUIRED` typed
  *     envelope. The legacy `new Response(JSON.stringify({error:"Unauthorized"}))`
  *     branch is gone — the adapter now centralises that path.
- *   - 404 emitted via `NextResponse.json` (legacy used `new Response(JSON.stringify(...))`);
- *     behaviour identical — both produce `{ error: "..." }` JSON with
- *     `Content-Type: application/json`.
+ *   - S26 (ADR-0001 sweep) — 404 converges on the canonical typed envelope
+ *     `{ error: "NOT_FOUND", message: "IT3 snapshot not found" }` via
+ *     `routeError` (status unchanged; `Content-Type: application/json`).
  */
 import { tenantReadSlug } from "@/lib/server/route";
-import { NextResponse } from "next/server";
+import { routeError } from "@/lib/server/route/envelope";
 
 import { buildIt3Pdf } from "@/lib/server/sars-it3-pdf";
 
@@ -28,7 +28,7 @@ export const GET = tenantReadSlug<{ farmSlug: string; id: string }>({
   handle: async (ctx, _req, { id }) => {
     const record = await ctx.prisma.it3Snapshot.findUnique({ where: { id } });
     if (!record) {
-      return NextResponse.json({ error: "IT3 snapshot not found" }, { status: 404 });
+      return routeError("NOT_FOUND", "IT3 snapshot not found", 404);
     }
 
     const pdf = buildIt3Pdf({

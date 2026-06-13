@@ -98,6 +98,36 @@ describe('classifySyncFailure — resolution matrix', () => {
     expect(result.action).toBe('mark-failed-terminal');
   });
 
+  // ── S5 / OBS-2 — typed 404 ANIMAL_NOT_FOUND → terminal ───────────────────
+
+  it('404 ANIMAL_NOT_FOUND → mark-failed-terminal (S5/OBS-2)', () => {
+    // A death/move (or any observation) replayed for an animal that genuinely
+    // no longer exists server-side. With S4's drain ordering (animals sync to
+    // completion BEFORE observations) a typed ANIMAL_NOT_FOUND can never be a
+    // not-yet-synced offline calf — it is deterministic and re-rejects
+    // identically forever, so the row must dead-letter, not loop.
+    const result = classifySyncFailure(404, { error: 'ANIMAL_NOT_FOUND' });
+    expect(result.action).toBe('mark-failed-terminal');
+  });
+
+  it('mark-failed-terminal for ANIMAL_NOT_FOUND carries a toast hint', () => {
+    const result = classifySyncFailure(404, { error: 'ANIMAL_NOT_FOUND' });
+    expect(result.toast).toBeDefined();
+    expect(result.toast?.kind).toBe('error');
+    expect(typeof result.toast?.message).toBe('string');
+    expect(result.toast?.message.length).toBeGreaterThan(0);
+  });
+
+  it('UNTYPED 404 (no recognised code) → retry-with-cooldown (deploy-order safety)', () => {
+    // A bare/legacy 404 (older server, "Not found"/"Mob not found" free-text,
+    // or a transient routing miss) must NOT insta-poison the row — it stays in
+    // the retry lane, bounded by the OBS-1 attempt budget. Only the typed
+    // ANIMAL_NOT_FOUND code is proof of a genuinely-missing animal.
+    expect(classifySyncFailure(404, { error: 'Not found' }).action).toBe('retry-with-cooldown');
+    expect(classifySyncFailure(404, null).action).toBe('retry-with-cooldown');
+    expect(classifySyncFailure(404, { error: 'Mob not found' }).action).toBe('retry-with-cooldown');
+  });
+
   // ── 5xx → retry-with-cooldown ────────────────────────────────────────────
 
   it('500 → retry-with-cooldown', () => {

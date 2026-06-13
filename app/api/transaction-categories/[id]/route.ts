@@ -11,10 +11,10 @@ export async function DELETE(
   const ctx = await getFarmContext(request);
   if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (role !== "ADMIN") return routeError("FORBIDDEN", "Forbidden");
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   const { id } = await params;
@@ -24,13 +24,13 @@ export async function DELETE(
   });
 
   if (!category) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return routeError("NOT_FOUND", "Not found", 404);
   }
 
   if (category.isDefault) {
-    return NextResponse.json(
-      { error: "Verstekategorieë kan nie geskrap word nie" },
-      { status: 400 }
+    return routeError(
+      "VALIDATION_FAILED",
+      "Verstekategorieë kan nie geskrap word nie",
     );
   }
 

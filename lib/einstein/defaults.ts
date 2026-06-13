@@ -38,6 +38,20 @@ export const RETRIEVAL_TOP_K = 16;
  */
 export const STRUCTURED_DETAIL_LIMIT = 25;
 
+/**
+ * Conversation-history caps for /api/einstein/ask (api-F1/EIN-2).
+ *
+ * Without these a client can ship an unbounded `history` array (multi-MB
+ * context → token-cost abuse). The route keeps the most recent
+ * MAX_HISTORY_TURNS turns and clamps each turn's content to
+ * MAX_HISTORY_TURN_CHARS, so total history context is bounded by
+ * MAX_HISTORY_TURNS × MAX_HISTORY_TURN_CHARS characters (~80k chars).
+ * Both are 1-line tunables (same pattern as RETRIEVAL_TOP_K above).
+ */
+export const MAX_HISTORY_TURNS = 20;
+/** Per-turn content clamp — mirrors the 4000-char cap on `question`. */
+export const MAX_HISTORY_TURN_CHARS = 4000;
+
 /** Claude Sonnet 4.6 — answer generation model. */
 export const ANTHROPIC_ANSWER_MODEL = 'claude-sonnet-4-6';
 
@@ -56,6 +70,18 @@ export const ANTHROPIC_PLANNER_MODEL = 'claude-haiku-4-5-20251001';
  */
 export const SONNET_INPUT_USD_PER_1M = 3.0;
 export const SONNET_OUTPUT_USD_PER_1M = 15.0;
+
+/**
+ * Prompt-cache rates for Sonnet 4.6 (api-F1/EIN-2 — real-usage cost
+ * reconciliation). The answer call marks its system blocks with
+ * `cache_control: {type: 'ephemeral'}` (5-minute TTL), so real usage splits
+ * input into three buckets billed at different rates:
+ *   uncached input            → SONNET_INPUT_USD_PER_1M  (1×)
+ *   cache WRITE (creation)    → 1.25× input  = $3.75/1M
+ *   cache READ                → 0.1×  input  = $0.30/1M
+ */
+export const SONNET_CACHE_WRITE_USD_PER_1M = 3.75;
+export const SONNET_CACHE_READ_USD_PER_1M = 0.3;
 
 /**
  * Haiku 4.5 pricing for the planner call (USD per 1M tokens):

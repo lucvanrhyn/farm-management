@@ -619,3 +619,147 @@ describe("sanityCheckMapping (B)", () => {
     expect(out.unmapped).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S16 (OB-002/M2) — import input caps. The route enforces these as typed
+// 400s; the lib enforces the same caps as defence-in-depth so no caller can
+// build an unbounded prompt.
+// ---------------------------------------------------------------------------
+
+describe("IMPORT_INPUT_CAPS (S16)", () => {
+  it("pins the cap contract and is frozen", async () => {
+    const { IMPORT_INPUT_CAPS } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    expect(IMPORT_INPUT_CAPS).toEqual({
+      maxColumns: 200,
+      maxSampleRows: 20,
+      maxCellChars: 512,
+      maxPayloadBytes: 256 * 1024,
+    });
+    expect(Object.isFrozen(IMPORT_INPUT_CAPS)).toBe(true);
+  });
+});
+
+describe("findImportInputCapViolation (S16)", () => {
+  it("returns null for a normal import payload", async () => {
+    const { findImportInputCapViolation } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    expect(
+      findImportInputCapViolation({
+        parsedColumns: bassonInput.parsedColumns,
+        sampleRows: bassonInput.sampleRows,
+        fullRowCount: bassonInput.fullRowCount,
+      })
+    ).toBeNull();
+  });
+
+  it("flags more than maxColumns columns", async () => {
+    const { findImportInputCapViolation, IMPORT_INPUT_CAPS } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: Array.from({ length: 201 }, (_, i) => `col${i}`),
+      sampleRows: [],
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxColumns");
+    expect(v?.limit).toBe(IMPORT_INPUT_CAPS.maxColumns);
+    expect(v?.actual).toBe(201);
+  });
+
+  it("flags an oversized column name", async () => {
+    const { findImportInputCapViolation } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: ["ok", "x".repeat(513)],
+      sampleRows: [],
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxCellChars");
+    expect(v?.field).toBe("parsedColumns[1]");
+  });
+
+  it("flags more than maxSampleRows rows", async () => {
+    const { findImportInputCapViolation } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: ["a"],
+      sampleRows: Array.from({ length: 21 }, () => ({ a: "x" })),
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxSampleRows");
+  });
+
+  it("flags an oversized sample-row key", async () => {
+    const { findImportInputCapViolation } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: ["a"],
+      sampleRows: [{ ["k".repeat(513)]: "x" }],
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxCellChars");
+    expect(v?.field).toBe("sampleRows[0]");
+  });
+
+  it("flags an oversized string cell value", async () => {
+    const { findImportInputCapViolation } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: ["a"],
+      sampleRows: [{ a: "x".repeat(513) }],
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxCellChars");
+    expect(v?.field).toBe("sampleRows[0]");
+  });
+
+  it("flags an oversized total payload even when per-field caps pass", async () => {
+    const { findImportInputCapViolation, IMPORT_INPUT_CAPS } = await import(
+      "@/lib/onboarding/adaptive-import"
+    );
+    const wideRow = Object.fromEntries(
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, "v".repeat(512)])
+    );
+    const v = findImportInputCapViolation({
+      parsedColumns: ["a"],
+      sampleRows: Array.from({ length: 20 }, () => ({ ...wideRow })),
+      fullRowCount: 1,
+    });
+    expect(v?.cap).toBe("maxPayloadBytes");
+    expect(v?.limit).toBe(IMPORT_INPUT_CAPS.maxPayloadBytes);
+    expect(v?.actual).toBeGreaterThan(IMPORT_INPUT_CAPS.maxPayloadBytes);
+    expect(v?.field).toBe("payload");
+  });
+});
+
+describe("proposeColumnMapping — cap enforcement (S16 defence-in-depth)", () => {
+  it("throws AdaptiveImportError for an oversized column name without calling the SDK", async () => {
+    await expect(
+      proposeColumnMapping({
+        ...bassonInput,
+        parsedColumns: [...bassonInput.parsedColumns, "x".repeat(513)],
+      })
+    ).rejects.toBeInstanceOf(AdaptiveImportError);
+    expect(chatCompletionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("throws AdaptiveImportError for an oversized payload without calling the SDK", async () => {
+    const wideRow = Object.fromEntries(
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, "v".repeat(512)])
+    );
+    await expect(
+      proposeColumnMapping({
+        ...bassonInput,
+        sampleRows: Array.from({ length: 20 }, () => ({ ...wideRow })),
+      })
+    ).rejects.toBeInstanceOf(AdaptiveImportError);
+    expect(chatCompletionsCreateMock).not.toHaveBeenCalled();
+  });
+});

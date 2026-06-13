@@ -15,6 +15,27 @@ import { buildNvdPdf } from "@/lib/server/nvd-pdf";
 import { getNvdByIdOrThrow } from "./get";
 
 import type { PrismaClient } from "@prisma/client";
+import type { NvdTransportDetails } from "@/lib/domain/nvd/snapshot";
+
+/**
+ * Parse the persisted `transportJson` snapshot column into the object shape
+ * `buildNvdPdf` expects. The column is nullable and stores a JSON string
+ * (written by `issueNvd`); it may be null (non-vehicular movement / legacy
+ * record) or — defensively — malformed. Any non-parseable / empty value
+ * degrades to `null` so the renderer falls back to its "not provided"
+ * placeholder rather than crashing the regulated PDF route.
+ */
+function parseTransport(
+  raw: string | null | undefined,
+): NvdTransportDetails | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as NvdTransportDetails;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface RenderedNvdPdf {
   /** Raw PDF bytes. `buildNvdPdf` returns the jsPDF `arraybuffer` output;
@@ -45,6 +66,11 @@ export async function renderNvdPdf(
     sellerSnapshot: record.sellerSnapshot,
     animalSnapshot: record.animalSnapshot,
     declarationsJson: record.declarationsJson,
+    // SARS-1: bind the captured transport snapshot into the renderer so the
+    // driver/vehicle block prints when it was recorded at issue time, instead
+    // of always falling through to "Transport details not provided."
+    // (Stock Theft Act §8 — vehicular-movement completeness.)
+    transport: parseTransport(record.transportJson),
     generatedBy: record.generatedBy,
     pdfHash: record.pdfHash,
   });

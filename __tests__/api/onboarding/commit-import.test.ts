@@ -15,6 +15,27 @@ import { NextRequest } from "next/server";
 const getServerSessionMock = vi.fn();
 const importJobCreateMock = vi.fn();
 const importJobFindUniqueMock = vi.fn();
+
+/**
+ * The `importJob.updateMany` arg the route sends (claim: re-claimable ->
+ * "running"; release: "running" -> "failed"). Typing the mock through the
+ * vi.fn generic — instead of annotating destructured tuples at the
+ * call-sites — keeps `mock.calls` correctly inferred by tsc (an untyped
+ * vi.fn() yields any[][] calls, which rejects inline tuple annotations
+ * with TS2769).
+ */
+interface ImportJobUpdateManyArg {
+  readonly where: {
+    readonly id: string;
+    readonly status?: string;
+    readonly OR?: ReadonlyArray<Record<string, unknown>>;
+  };
+  readonly data: { readonly status: string };
+}
+
+const importJobUpdateManyMock = vi.fn<
+  (arg: ImportJobUpdateManyArg) => Promise<{ count: number }>
+>();
 const getPrismaWithAuthMock = vi.fn();
 
 vi.mock("@/lib/server/farm-context", () => ({
@@ -74,7 +95,7 @@ const VALID_PROVENANCE = {
 
 const validBody = {
   rows: [
-    { earTag: "A001", sex: "Female" as const, birthDate: "2023-01-01" },
+    { earTag: "A001", sex: "Female" as const, dateOfBirth: "2023-01-01" },
     { earTag: "A002", sex: "Male" as const },
   ],
   defaultSpecies: "cattle",
@@ -92,11 +113,13 @@ function primeHappyMocks(opts: { role?: string } = {}) {
     user: { email: "luc@example.com", name: "Luc", farms: [] },
   });
   importJobCreateMock.mockResolvedValue({ id: "job-new-id" });
+  importJobUpdateManyMock.mockResolvedValue({ count: 1 });
   getPrismaWithAuthMock.mockResolvedValue({
     prisma: {
       importJob: {
         create: importJobCreateMock,
         findUnique: importJobFindUniqueMock,
+        updateMany: importJobUpdateManyMock,
       },
     },
     slug: "acme-cattle",
@@ -169,6 +192,7 @@ describe("POST /api/onboarding/commit-import", () => {
     getPrismaWithAuthMock.mockReset();
     importJobCreateMock.mockReset();
     importJobFindUniqueMock.mockReset();
+    importJobUpdateManyMock.mockReset();
     checkRateLimitMock.mockReset();
     commitImportMock.mockReset();
   });
@@ -351,7 +375,10 @@ describe("POST /api/onboarding/commit-import", () => {
     );
     expect(res.status).toBe(400);
     const err = await res.json();
-    expect(err.error).toMatch(/mappingJson/);
+    // Canonical typed envelope: `error` is the SCREAMING_SNAKE code; the
+    // human sentence (which names the offending field) is in `message`.
+    expect(err.error).toBe("VALIDATION_FAILED");
+    expect(err.message).toMatch(/mappingJson/);
     expect(importJobCreateMock).not.toHaveBeenCalled();
     expect(commitImportMock).not.toHaveBeenCalled();
   });
@@ -461,11 +488,18 @@ describe("POST /api/onboarding/commit-import", () => {
     expect(input.rows).toHaveLength(2);
   });
 
-  it("reuses a caller-supplied importJobId instead of creating one", async () => {
+  // -------------------------------------------------------------------------
+  // S14 (OB-004/M4) — the import-job claim is ATOMIC. Reuse must transition
+  // the job from a re-claimable state ("pending"/"failed"/legacy null) into
+  // "running" via a conditional updateMany; a job already "running" is in
+  // flight and a second commit must 409, never double-process.
+  // -------------------------------------------------------------------------
+
+  it("reuses a caller-supplied importJobId by atomically claiming it (failed -> running)", async () => {
     primeHappyMocks();
     importJobFindUniqueMock.mockResolvedValue({
       id: "existing-job-42",
-      status: "running",
+      status: "failed",
       farmId: "acme-cattle",
     });
     const { POST } = await import(
@@ -477,10 +511,57 @@ describe("POST /api/onboarding/commit-import", () => {
     await readStream(res);
 
     expect(importJobCreateMock).not.toHaveBeenCalled();
+    // The claim is a single conditional update gated on a re-claimable status.
+    const claimCall = importJobUpdateManyMock.mock.calls[0][0];
+    expect(claimCall.where.id).toBe("existing-job-42");
+    expect(JSON.stringify(claimCall.where)).toContain("status");
+    expect(claimCall.data).toEqual({ status: "running" });
     expect(commitImportMock).toHaveBeenCalledTimes(1);
     expect(commitImportMock.mock.calls[0][1].importJobId).toBe(
       "existing-job-42",
     );
+  });
+
+  it("returns 409 when the reused importJobId is already running (no double-processing)", async () => {
+    primeHappyMocks();
+    importJobFindUniqueMock.mockResolvedValue({
+      id: "in-flight-job",
+      status: "running",
+      farmId: "acme-cattle",
+    });
+    // The conditional claim matches zero rows for an in-flight job.
+    importJobUpdateManyMock.mockResolvedValue({ count: 0 });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "in-flight-job" }),
+    );
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("IMPORT_JOB_ALREADY_RUNNING");
+    expect(commitImportMock).not.toHaveBeenCalled();
+    expect(importJobCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when a concurrent commit wins the claim race after the status read", async () => {
+    primeHappyMocks();
+    // Status read says "failed" (claimable) — but by the time the conditional
+    // claim runs, a concurrent request has already flipped it to "running".
+    importJobFindUniqueMock.mockResolvedValue({
+      id: "raced-job",
+      status: "failed",
+      farmId: "acme-cattle",
+    });
+    importJobUpdateManyMock.mockResolvedValue({ count: 0 });
+    const { POST } = await import(
+      "@/app/api/onboarding/commit-import/route"
+    );
+    const res = await POST(
+      makeReq({ ...validBody, importJobId: "raced-job" }),
+    );
+    expect(res.status).toBe(409);
+    expect(commitImportMock).not.toHaveBeenCalled();
   });
 
   it("emits an error frame and closes the stream when commitImport throws", async () => {
@@ -513,6 +594,17 @@ describe("POST /api/onboarding/commit-import", () => {
     expect(errFrame.data).toEqual({ message: "Import failed" });
     // Generic message only — raw exception text must NOT leak to the client.
     expect(JSON.stringify(errFrame.data)).not.toContain("db offline");
+
+    // S14: the claim is released (running -> failed) so a retry can
+    // re-claim the job instead of 409ing forever against a dead run.
+    const release = importJobUpdateManyMock.mock.calls.find(
+      ([arg]) => arg.data.status === "failed",
+    );
+    expect(release).toBeDefined();
+    expect(release![0].where).toMatchObject({
+      id: "job-new-id",
+      status: "running",
+    });
   });
 
   // -------------------------------------------------------------------------

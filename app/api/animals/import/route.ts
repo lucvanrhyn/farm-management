@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
-import { adminWrite } from "@/lib/server/route";
+import { adminWrite, routeError } from "@/lib/server/route";
 import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { readWorkbook, readSheetAsObjects } from "@/lib/xlsx-shim";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { logger } from "@/lib/logger";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
 
@@ -70,12 +70,10 @@ export const POST = adminWrite({
     const userId = session.user?.email ?? "unknown";
     const rl = checkRateLimit(`import:${userId}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            "Too many import requests. Please wait before importing again.",
-        },
-        { status: 429 },
+      return routeError(
+        "RATE_LIMITED",
+        "Too many import requests. Please wait before importing again.",
+        429,
       );
     }
 
@@ -83,26 +81,24 @@ export const POST = adminWrite({
     const file = formData.get("file") as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return routeError("VALIDATION_FAILED", "No file provided", 400);
     }
 
     // Wave 1 W1d migrated from `xlsx@0.18.5` to ExcelJS via `lib/xlsx-shim`.
-    // The shim deliberately handles `.xlsx` only — it has no CSV parser and
-    // no BIFF8 (`.xls`) reader. Accepting those extensions and letting the
-    // shim throw unhandled produced a 500 with no useful message; per
-    // silent-failure-pattern.md we surface a typed-error 400 instead.
+    // This admin route's contract is `.xlsx`-only (the shim has no BIFF8
+    // `.xls` reader; CSV intake lives in the onboarding wizard — S13/OB-csv).
+    // Accepting other extensions and letting the shim throw unhandled
+    // produced a 500 with no useful message; per silent-failure-pattern.md
+    // we surface a typed-error 400 instead.
     const XLSX_MIME =
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     const isXlsxByExt = /\.xlsx$/i.test(file.name);
     const isXlsxByMime = file.type === XLSX_MIME;
     if (!isXlsxByExt && !isXlsxByMime) {
-      return NextResponse.json(
-        {
-          code: "FILE_TYPE_UNSUPPORTED",
-          error:
-            "Only .xlsx files are supported. CSV/XLS support was removed in the xlsx → ExcelJS migration. Please save your file as .xlsx and re-upload.",
-        },
-        { status: 400 },
+      return routeError(
+        "FILE_TYPE_UNSUPPORTED",
+        "Only .xlsx files are supported. CSV/XLS support was removed in the xlsx → ExcelJS migration. Please save your file as .xlsx and re-upload.",
+        400,
       );
     }
 
@@ -113,15 +109,15 @@ export const POST = adminWrite({
     } catch (err) {
       // ExcelJS / jszip throw "Can't find end of central directory" for
       // non-zip payloads (a renamed CSV, corrupt download, etc.). Translate
-      // to a typed 400 — never let it leak as a 500 with a stack trace.
-      return NextResponse.json(
-        {
-          code: "FILE_PARSE_FAILED",
-          error: `Could not read the .xlsx file — ${
-            err instanceof Error ? err.message : "invalid workbook"
-          }. Make sure the file is a real .xlsx workbook (not a renamed CSV).`,
-        },
-        { status: 400 },
+      // to a typed 400 — never let it leak as a 500 with a stack trace, and
+      // never forward the raw library message to the client (api-M1).
+      logger.error("[animals-import] workbook read failed", {
+        error: err instanceof Error ? err.message : err,
+      });
+      return routeError(
+        "FILE_PARSE_FAILED",
+        "Could not read the .xlsx file. Make sure the file is a real .xlsx workbook (not a renamed CSV).",
+        400,
       );
     }
 
@@ -205,19 +201,17 @@ export const POST = adminWrite({
     }) as Record<string, string>[];
 
     if (rows.length === 0) {
-      return NextResponse.json(
-        { error: "Animals sheet is empty" },
-        { status: 400 },
-      );
+      return routeError("VALIDATION_FAILED", "Animals sheet is empty", 400);
     }
 
     // Validate required columns.
     const headers = Object.keys(rows[0]);
     const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
     if (missing.length > 0) {
-      return NextResponse.json(
-        { error: `Missing required columns: ${missing.join(", ")}` },
-        { status: 400 },
+      return routeError(
+        "VALIDATION_FAILED",
+        `Missing required columns: ${missing.join(", ")}`,
+        400,
       );
     }
 
@@ -320,8 +314,19 @@ export const POST = adminWrite({
                     });
                     imported++;
                   } catch (err) {
+                    // S17 (OB-005/api-F2): the raw Prisma/driver message
+                    // carries internal schema text (table/column names,
+                    // invocation payload) and must never reach the SSE
+                    // client. Typed message out, full error to the server
+                    // log — same convention as mapApiDomainError's
+                    // DB_QUERY_FAILED sanitization (#483).
+                    logger.error("[animals-import] row upsert failed", {
+                      rowNum,
+                      animalId,
+                      error: err instanceof Error ? err.message : err,
+                    });
                     errors.push(
-                      `Row ${rowNum} (${animalId}): DB error — ${String(err)}`,
+                      `Row ${rowNum} (${animalId}): database error — the row could not be saved`,
                     );
                     skipped++;
                   }

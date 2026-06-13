@@ -89,6 +89,27 @@ export const AFRIKAANS_SHEEP_CATEGORY_MAP: Readonly<Record<string, string>> = Ob
 });
 
 /**
+ * Afrikaans status -> canonical `Animal.status` value.
+ * Mirrors the SYSTEM_PROMPT "Status" dictionary: Aktief/Lewendig -> Active,
+ * Verkoop -> Sold, Gevrek/Dood -> Deceased. English passthroughs included so
+ * callers can do a single case-insensitive lookup.
+ */
+export const AFRIKAANS_STATUS_MAP: Readonly<
+  Record<string, "Active" | "Sold" | "Deceased">
+> = Object.freeze({
+  aktief: "Active",
+  lewendig: "Active",
+  verkoop: "Sold",
+  gevrek: "Deceased",
+  dood: "Deceased",
+  // English passthroughs
+  active: "Active",
+  sold: "Sold",
+  deceased: "Deceased",
+  dead: "Deceased",
+});
+
+/**
  * Afrikaans sex -> canonical English.
  * `Manlik` = male, `Vroulik` = female.
  */

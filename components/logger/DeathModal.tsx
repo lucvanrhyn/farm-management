@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
 import ModalHeader from "@/components/ui/ModalHeader";
 
@@ -49,7 +49,10 @@ interface DeathModalProps {
   readonly isOpen: boolean;
   readonly animalId: string;
   readonly causes: string[];
-  readonly onSubmit: (data: DeathSubmitData) => void;
+  // S6 / OS-3 — widened to accept a promise so the in-flight latch can hold
+  // until the parent's async queue write settles. The Logger page handler is
+  // an async function; the old `void` signature silently dropped its promise.
+  readonly onSubmit: (data: DeathSubmitData) => void | Promise<void>;
   readonly onClose: () => void;
 }
 
@@ -75,17 +78,39 @@ export default function DeathModal({
   const [carcassDisposal, setCarcassDisposal] = useState<string>("");
   // Issue #492 — optional free-text note on the death event.
   const [notes, setNotes] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  // S6 / OS-3 (#482 WeighingForm pattern) — synchronous in-flight latch. This
+  // modal had NO submit guard at all: a double-tap fired `onSubmit` twice and
+  // each enqueue mints its own clientLocalId → two death observations. The ref
+  // is set synchronously BEFORE any await so the same-tick second tap is
+  // swallowed; `submitting` state covers the cross-render window; reset in
+  // `finally` so a legitimate later submit works after success OR failure.
+  const inFlightRef = useRef(false);
 
   if (!isOpen) return null;
 
-  const canSubmit = selectedCause !== null && carcassDisposal.length > 0;
+  const canSubmit = selectedCause !== null && carcassDisposal.length > 0 && !submitting;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     // UX-layer guard. The server-side `validateDeathObservation` is the
     // authoritative backstop (422 DEATH_MULTI_CAUSE / DEATH_DISPOSAL_REQUIRED)
     // — the disabled `canSubmit` button is a usability courtesy.
+    if (inFlightRef.current) return;
     if (!selectedCause || !carcassDisposal) return;
-    onSubmit({ cause: selectedCause, carcassDisposal, notes });
+
+    inFlightRef.current = true;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onSubmit({ cause: selectedCause, carcassDisposal, notes });
+    } catch {
+      setError("Failed to queue — try again");
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -207,6 +232,10 @@ export default function DeathModal({
           }}
         />
 
+        {error && (
+          <p className="text-sm text-center" style={{ color: "#C0574C" }}>{error}</p>
+        )}
+
         <StickySubmitBar className="-mx-6 px-6 mt-2">
           <button
             type="button"
@@ -220,7 +249,7 @@ export default function DeathModal({
               cursor: canSubmit ? "pointer" : "not-allowed",
             }}
           >
-            Record Death
+            {submitting ? "Saving..." : "Record Death"}
           </button>
           <button
             type="button"

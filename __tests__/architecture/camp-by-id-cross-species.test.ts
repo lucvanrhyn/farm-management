@@ -67,14 +67,23 @@ import { join } from "node:path";
 const REPO_ROOT = join(__dirname, "..", "..");
 
 /**
- * The three page surfaces issue #390 reclassifies. Path-scoped on purpose
- * — see file header. Adding a path here is a deliberate edit reviewers
- * can see, never an ambient capability.
+ * The three page surfaces issue #390 reclassifies, plus the two
+ * `/admin/camps` overview call-sites S25 (sp-M1) brought to the same
+ * canonical door (the listing page's camp list and CampsTable's
+ * rotation-metadata join). Path-scoped on purpose — see file header.
+ * Adding a path here is a deliberate edit reviewers can see, never an
+ * ambient capability.
+ *
+ * NOT audited (intentionally species-scoped): the per-species namespace
+ * camps pages, e.g. `app/[farmSlug]/sheep/camps/page.tsx` — locked by
+ * `__tests__/app/camps-empty-state.test.tsx`.
  */
 const AUDITED_PATHS: readonly string[] = [
   "app/[farmSlug]/dashboard/camp/[campId]/page.tsx",
   "app/[farmSlug]/admin/camps/[campId]/page.tsx",
   "app/[farmSlug]/logger/page.tsx",
+  "app/[farmSlug]/admin/camps/page.tsx",
+  "components/admin/CampsTable.tsx",
 ];
 
 /** Camp operations that filter rows — every read shape the door exposes. */

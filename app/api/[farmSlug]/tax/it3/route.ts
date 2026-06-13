@@ -12,16 +12,20 @@
  *     `{ error: "Unauthorized" }` is gone — every IT3 client tolerates either
  *     because adapters are now the source of truth (G3 precedent).
  *   - 400 INVALID_BODY on malformed JSON now flows through the adapter's typed
- *     envelope (matches G5-G7 precedent). All other handler-minted error
- *     bodies keep their bare-string `{ error: "<sentence>" }` shape so the
- *     IT3 UI form's `body.error` toast renders the human-readable message
- *     verbatim (rate-limit, tier-gate, taxYear range, issueIt3Snapshot throw).
- *   - 403 (Forbidden / tier-gate), 422 (issueIt3Snapshot throw),
- *     429 (rate-limit), 400 (taxYear range) preserved verbatim.
+ *     envelope (matches G5-G7 precedent).
+ *   - S26 (ADR-0001 error-envelope sweep) — all remaining handler-minted error
+ *     bodies converge on the canonical typed envelope
+ *     `{ error: CODE, message }`: 403 role/tier-gate → FORBIDDEN, 429
+ *     rate-limit → RATE_LIMITED, 400 taxYear range → VALIDATION_FAILED, 422
+ *     issueIt3Snapshot business throw → IT3_ISSUE_FAILED. The developer-authored
+ *     sentence moves to the `message` slot so the IT3 UI form's toast still
+ *     renders human-readable copy. HTTP statuses are unchanged.
  */
 import { NextResponse } from "next/server";
 
 import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
+import { mapApiDomainError } from "@/lib/server/api-errors";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -73,28 +77,30 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
   revalidate: (slug) => revalidateObservationWrite(slug, null),
   handle: async (ctx, parsedBody, _req, { farmSlug }) => {
     if (ctx.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
     // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
     if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
 
     // Tier gate: advanced+ only (Consulting also allowed — Phase L tier extension)
     const creds = await getFarmCreds(farmSlug);
     if (!creds || !isPaidTier(creds.tier)) {
-      return NextResponse.json(
-        { error: "SARS IT3 Tax Export requires an Advanced subscription." },
-        { status: 403 },
+      return routeError(
+        "FORBIDDEN",
+        "SARS IT3 Tax Export requires an Advanced subscription.",
+        403,
       );
     }
 
     // Rate limit: 5 IT3 issues per 10 minutes per farm (heavy aggregation)
     const rl = checkRateLimit(`it3-issue:${farmSlug}`, 5, 10 * 60 * 1000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many IT3 export requests. Please wait." },
-        { status: 429 },
+      return routeError(
+        "RATE_LIMITED",
+        "Too many IT3 export requests. Please wait.",
+        429,
       );
     }
 
@@ -112,9 +118,9 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
           ? parseInt(taxYearRaw, 10)
           : NaN;
     if (!Number.isFinite(taxYear) || taxYear < 2000 || taxYear > 2100) {
-      return NextResponse.json(
-        { error: "taxYear must be a number between 2000 and 2100" },
-        { status: 400 },
+      return routeError(
+        "VALIDATION_FAILED",
+        "taxYear must be a number between 2000 and 2100",
       );
     }
 
@@ -125,8 +131,24 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
       });
       return NextResponse.json(record, { status: 201 });
     } catch (err) {
+      // api-M1 (S27) — sanitize Prisma/DB throws via the canonical mapper
+      // (#483) BEFORE the message echo: this catch sits inside the
+      // `tenantWriteSlug` adapter, so the adapter's own sanitization never
+      // sees the throw. Prisma exception classes collapse to the opaque 500
+      // DB_QUERY_FAILED envelope (full error logged server-side by the
+      // mapper) instead of echoing raw table/column text into the IT3 toast.
+      const mapped = mapApiDomainError(err);
+      if (mapped) return mapped;
+      // S26 ADR-0001 — the deliberate business-rule throw from
+      // `issueIt3Snapshot` (duplicate active snapshot) converges on the
+      // canonical typed envelope: the SCREAMING_SNAKE `IT3_ISSUE_FAILED` code
+      // moves into `error`, and the developer-authored sentence (which IS the
+      // user-facing toast copy) moves into the human-readable `message` slot.
+      // Safe to surface verbatim here: Prisma/DB throws were already collapsed
+      // to the opaque DB_QUERY_FAILED envelope by `mapApiDomainError` above, so
+      // only this deliberate business message reaches the echo.
       const message = err instanceof Error ? err.message : "Failed to issue IT3 snapshot";
-      return NextResponse.json({ error: message }, { status: 422 });
+      return routeError("IT3_ISSUE_FAILED", message, 422);
     }
   },
 });

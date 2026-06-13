@@ -146,3 +146,130 @@ describe("xlsx-shim — round-trip", () => {
     await expect(readWorkbook(garbage.buffer)).rejects.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// CSV support — S13 / OB-csv.
+//
+// readWorkbook must branch on file content: zip bytes → xlsx path, text
+// bytes → CSV path producing the SAME row model the xlsx readers produce.
+// ---------------------------------------------------------------------------
+
+function csvBytes(text: string): Uint8Array {
+  return new TextEncoder().encode(text);
+}
+
+describe("xlsx-shim — csv parsing (OB-csv)", () => {
+  it("golden: a csv parses to the identical row model as the equivalent xlsx", async () => {
+    const aoa = [
+      ["Ear Tag", "Sex", "Weight", "Notes"],
+      ["A001", "Female", 420.5, "calm"],
+      ["A002", "Male", 350, undefined],
+    ];
+    const csvText =
+      "Ear Tag,Sex,Weight,Notes\nA001,Female,420.5,calm\nA002,Male,350,\n";
+
+    const xlsxWb = await readWorkbook(
+      await writeWorkbookToBuffer(buildWorkbookFromAOA(aoa, "Sheet1")),
+    );
+    const csvWb = await readWorkbook(csvBytes(csvText));
+
+    expect(csvWb.sheetNames).toEqual(xlsxWb.sheetNames);
+    expect(readFirstSheetAsArrays(csvWb)).toEqual(readFirstSheetAsArrays(xlsxWb));
+    expect(readFirstSheetAsObjects(csvWb, { defval: "", raw: false })).toEqual(
+      readFirstSheetAsObjects(xlsxWb, { defval: "", raw: false }),
+    );
+  });
+
+  it("parses quoted fields with embedded commas and escaped quotes", async () => {
+    const wb = await readWorkbook(
+      csvBytes('Name,Notes\n"Smith, John","He said ""howzit"""\n'),
+    );
+    const arrays = readFirstSheetAsArrays(wb);
+    expect(arrays[1]).toEqual(["Smith, John", 'He said "howzit"']);
+  });
+
+  it("preserves embedded newlines inside quoted fields", async () => {
+    const wb = await readWorkbook(
+      csvBytes('Name,Notes\nA001,"line one\nline two"\n'),
+    );
+    const arrays = readFirstSheetAsArrays(wb);
+    expect(arrays).toHaveLength(2);
+    expect(arrays[1]).toEqual(["A001", "line one\nline two"]);
+  });
+
+  it("strips a UTF-8 BOM so the first header is clean", async () => {
+    const wb = await readWorkbook(csvBytes("\uFEFFEar Tag,Sex\nA001,Female\n"));
+    const arrays = readFirstSheetAsArrays(wb);
+    expect(arrays[0]).toEqual(["Ear Tag", "Sex"]);
+  });
+
+  it("handles CRLF line endings", async () => {
+    const wb = await readWorkbook(csvBytes("a,b\r\nx,y\r\n"));
+    expect(readFirstSheetAsArrays(wb)).toEqual([
+      ["a", "b"],
+      ["x", "y"],
+    ]);
+  });
+
+  it("auto-detects semicolon-delimited csv (ZA locale exports)", async () => {
+    const wb = await readWorkbook(
+      csvBytes("Oorplaatjie;Geslag;Gewig\nA001;Vroulik;420,5\n"),
+    );
+    const arrays = readFirstSheetAsArrays(wb);
+    expect(arrays[0]).toEqual(["Oorplaatjie", "Geslag", "Gewig"]);
+    // Decimal-comma value must stay a single (string) cell, not split.
+    expect(arrays[1]).toEqual(["A001", "Vroulik", "420,5"]);
+  });
+
+  it("auto-detects tab-delimited text", async () => {
+    const wb = await readWorkbook(csvBytes("a\tb\n1\t2\n"));
+    expect(readFirstSheetAsArrays(wb)).toEqual([
+      ["a", "b"],
+      [1, 2],
+    ]);
+  });
+
+  it("coerces canonical numerics but keeps leading-zero identifiers as strings", async () => {
+    const wb = await readWorkbook(csvBytes("Tag,Count\n007,42\n"));
+    const arrays = readFirstSheetAsArrays(wb);
+    expect(arrays[1]).toEqual(["007", 42]);
+  });
+
+  it("does not add a phantom row for the trailing newline", async () => {
+    const wb = await readWorkbook(csvBytes("a\n1\n"));
+    expect(readFirstSheetAsArrays(wb)).toHaveLength(2);
+  });
+
+  it("skips fully-blank interior lines like the xlsx reader skips blank rows", async () => {
+    const wb = await readWorkbook(csvBytes("a,b\n\nx,y\n"));
+    expect(readFirstSheetAsArrays(wb)).toEqual([
+      ["a", "b"],
+      ["x", "y"],
+    ]);
+  });
+
+  it("decodes UTF-16LE csv when a BOM is present", async () => {
+    const body = Buffer.from("Tag,Sex\nA001,F\n", "utf16le");
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), body]);
+    const wb = await readWorkbook(new Uint8Array(bytes));
+    expect(readFirstSheetAsArrays(wb)).toEqual([
+      ["Tag", "Sex"],
+      ["A001", "F"],
+    ]);
+  });
+
+  it("rejects binary non-xlsx bytes with a specific message", async () => {
+    // PNG magic — invalid UTF-8 lead byte, not a zip container.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await expect(readWorkbook(png)).rejects.toThrow(
+      /not a valid \.xlsx workbook or text-based \.csv/,
+    );
+  });
+
+  it("rejects NUL-bearing pseudo-text (BOM-less UTF-16 / binary) with a specific message", async () => {
+    const bytes = new Uint8Array([0x61, 0x00, 0x62, 0x00, 0x63, 0x00]);
+    await expect(readWorkbook(bytes)).rejects.toThrow(
+      /binary content is not a supported spreadsheet format/,
+    );
+  });
+});

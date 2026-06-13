@@ -22,8 +22,14 @@ import {
   getFailedCoverReadings,
   getFailedObservations,
   markObservationSynced,
+  markObservationPending,
+  markAnimalCreatePending,
+  markCoverReadingPending,
+  isTerminalFailure,
   PendingObservation,
   PendingAnimalCreate,
+  type PendingQueueFailureMeta,
+  type QueueRowFailureInput,
 } from './offline-store';
 import { markSucceeded, markFailed, recordSyncAttempt } from './sync/queue';
 import { classifySyncFailure } from './sync/failure-classifier';
@@ -66,6 +72,15 @@ function mapPrismaAnimal(a: PrismaAnimal): Animal {
     category: a.category,
     current_camp: a.currentCamp,
     status: a.status,
+    // S7 / MS-1 — species must survive the seed. Logger consumers filter the
+    // cached herd with `(a.species ?? "cattle") === mode`; dropping the field
+    // here made every seeded row default to "cattle" and emptied the logger
+    // on sheep/game farms. The /api/animals seed fetch itself stays
+    // CROSS-species on purpose: `seedAnimals` orphan-sweeps rows missing from
+    // the payload and the `animals` store is not mode-partitioned, so a
+    // species-scoped seed would wipe the other species' herd from the device
+    // (the camps bug class from #437).
+    species: a.species,
     mother_id: a.motherId ?? undefined,
     father_id: a.fatherId ?? undefined,
     date_added: a.dateAdded,
@@ -232,6 +247,119 @@ function truncateError(body: string): string {
   return body.length > MAX_ERROR_BODY_CHARS ? body.slice(0, MAX_ERROR_BODY_CHARS) : body;
 }
 
+// ── S9 / sync-M2 — client-side drain throttle ────────────────────────────────
+//
+// `/api/observations` enforces a per-user server rate limit of 100
+// requests/minute (`checkRateLimit("observations:<userId>", 100, 60_000)` in
+// app/api/observations/route.ts). The drain loops used to POST queued rows
+// back-to-back, so a big reconnect drain tripped the server limiter and the
+// tail of the queue failed with 429s — burning OBS-1 retry budget on rows
+// that were perfectly healthy. Every server hit made by the drain
+// (observation/animal/cover POSTs, photo uploads, attachment PATCHes) now
+// acquires a slot from one shared sliding-window pacer whose budget sits
+// deliberately BELOW the server's, so a drain of any size stays under the
+// limit. Small drains (< the budget) are unaffected — the slot is free.
+export const SYNC_RATE_WINDOW_MS = 60_000;
+/** 20% headroom under the server's 100/min so user-driven foreground
+ *  requests issued during a drain don't push the combined total over. */
+export const SYNC_REQUESTS_PER_WINDOW = 80;
+/** Defensive re-check cadence for the (theoretical) case where the window
+ *  math reports no wait but the slot is still contended. */
+const SYNC_THROTTLE_RECHECK_MS = 50;
+
+let syncRequestStarts: readonly number[] = [];
+
+/**
+ * Pure sliding-window math, exported for unit tests: given the start times
+ * of recent drain requests, how long must the next request wait before it
+ * may start? Zero while the window has spare budget; otherwise exactly the
+ * time until the oldest in-window request ages out.
+ */
+export function computeSyncThrottleDelayMs(
+  recentStarts: readonly number[],
+  now: number,
+): number {
+  const inWindow = recentStarts.filter((t) => now - t < SYNC_RATE_WINDOW_MS);
+  if (inWindow.length < SYNC_REQUESTS_PER_WINDOW) return 0;
+  const oldest = Math.min(...inWindow);
+  return Math.max(0, oldest + SYNC_RATE_WINDOW_MS - now);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reserve one request slot, waiting for the sliding window to free when the
+ * client budget is exhausted. The observation and cover drains run
+ * concurrently (`Promise.all` in `syncAndRefresh`), so the shared
+ * module-level window is the property that keeps their COMBINED rate under
+ * the budget.
+ */
+async function acquireSyncSlot(): Promise<void> {
+  for (;;) {
+    const now = Date.now();
+    const inWindow = syncRequestStarts.filter((t) => now - t < SYNC_RATE_WINDOW_MS);
+    if (inWindow.length < SYNC_REQUESTS_PER_WINDOW) {
+      syncRequestStarts = [...inWindow, now];
+      return;
+    }
+    syncRequestStarts = inWindow;
+    const delay = computeSyncThrottleDelayMs(inWindow, now);
+    await sleep(delay > 0 ? delay : SYNC_THROTTLE_RECHECK_MS);
+  }
+}
+
+/** Test seam — module state would otherwise leak between cases in a file. */
+export function resetSyncThrottleForTests(): void {
+  syncRequestStarts = [];
+}
+
+// ── S9 / sync-M2 — transient-failure backoff clock ───────────────────────────
+//
+// `classifySyncFailure` has always CLASSIFIED transient failures as
+// `retry-with-cooldown`, but no cooldown was ever implemented — a failed row
+// sat in the #208 failed bucket until the user manually pressed "Retry all".
+// The clock below anchors each row's most recent drain failure in memory so
+// `prepareAutoDrain` can re-arm it only after its per-attempt exponential
+// cooldown elapses. In-memory is deliberate: the persisted row meta (#208)
+// carries `firstFailedAt` but not a last-failure timestamp, and widening the
+// IDB row shape is out of scope here. After a reload the clock is empty, so
+// a row falls back to its (older) `firstFailedAt` anchor and becomes
+// eligible at most one drain early — the OBS-1 attempts budget still bounds
+// total replays at MAX_SYNC_ATTEMPTS either way.
+type RearmableSyncKind = 'observation' | 'animal' | 'cover-reading';
+
+let transientFailureClock: ReadonlyMap<string, number> = new Map();
+
+function failureClockKey(kind: RearmableSyncKind, localId: number): string {
+  return `${kind}:${localId}`;
+}
+
+/**
+ * Single failure writer for the three re-armable kinds: stamps the backoff
+ * clock, then records the failure through the queue facade. Photo rows keep
+ * calling `markFailed` directly — they have no `markPhotoPending` re-arm
+ * path (they retry via their parent observation), so clocking them would be
+ * dead state.
+ */
+async function markRearmableRowFailed(
+  kind: RearmableSyncKind,
+  localId: number,
+  reason: string,
+  meta: QueueRowFailureInput,
+): Promise<void> {
+  const next = new Map(transientFailureClock);
+  next.set(failureClockKey(kind, localId), Date.now());
+  transientFailureClock = next;
+  await markFailed(kind, localId, reason, meta);
+}
+
+/** Test seam — the clock is module state shared across a test file. */
+export function resetRetryClockForTests(): void {
+  transientFailureClock = new Map();
+}
+
 /**
  * Issue #208 — upload result envelope. The legacy contract was "string or
  * null" which dropped the failure cause on the floor. Returning the
@@ -270,6 +398,7 @@ async function uploadObservation(obs: PendingObservation): Promise<UploadResult<
       // door sanitises (trim + cap) and writes it onto the `notes` column.
       notes: obs.notes ?? null,
     };
+    await acquireSyncSlot(); // S9 / sync-M2 — stay under the server 100/min limit
     const res = await fetch('/api/observations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -377,7 +506,7 @@ export async function syncPendingObservations(): Promise<{
         await clearPendingAnimalUpdate(obs.animal_id);
       }
     } else {
-      await markFailed('observation', obs.local_id!, 'upload_failed', {
+      await markRearmableRowFailed('observation', obs.local_id!, 'upload_failed', {
         statusCode: result.statusCode,
         error: result.error,
       });
@@ -395,6 +524,7 @@ async function uploadAnimalCreate(
     const settings = await getCachedFarmSettings();
     const breed = settings?.breed ?? 'Mixed';
 
+    await acquireSyncSlot(); // S9 / sync-M2 — stay under the server 100/min limit
     const res = await fetch('/api/animals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -459,7 +589,7 @@ export async function syncPendingAnimals(): Promise<{ synced: number; failed: nu
       await markSucceeded('animal', animal.local_id!);
       synced++;
     } else {
-      await markFailed('animal', animal.local_id!, 'upload_failed', {
+      await markRearmableRowFailed('animal', animal.local_id!, 'upload_failed', {
         statusCode: result.statusCode,
         error: result.error,
       });
@@ -493,6 +623,7 @@ async function syncPendingPhotos(
       if (!blobUrl) {
         const formData = new FormData();
         formData.append('file', photo.blob, `photo-${photo.local_id}.jpg`);
+        await acquireSyncSlot(); // S9 / sync-M2
         const uploadRes = await fetch('/api/photos/upload', { method: 'POST', body: formData });
         if (!uploadRes.ok) continue; // leave pending, retry next cycle
 
@@ -508,6 +639,7 @@ async function syncPendingPhotos(
       const serverId = localToServerId.get(photo.observation_local_id);
       if (!serverId) continue;
 
+      await acquireSyncSlot(); // S9 / sync-M2
       const patchRes = await fetch(`/api/observations/${serverId}/attachment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -545,6 +677,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
       // server_reading_id is already set — skip re-creating the reading row.
       let serverId = reading.server_reading_id;
       if (!serverId) {
+        await acquireSyncSlot(); // S9 / sync-M2
         const res = await fetch(
           `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover`,
           {
@@ -562,7 +695,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
         );
         if (!res.ok) {
           const text = await res.text().catch(() => '');
-          await markFailed(
+          await markRearmableRowFailed(
             'cover-reading',
             reading.local_id!,
             `post_failed_${res.status}`,
@@ -584,6 +717,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
       if (reading.photo_blob) {
         const formData = new FormData();
         formData.append('file', reading.photo_blob, `cover-${reading.local_id}.jpg`);
+        await acquireSyncSlot(); // S9 / sync-M2
         const uploadRes = await fetch('/api/photos/upload', { method: 'POST', body: formData });
         if (!uploadRes.ok) {
           // Photo upload failed — DO NOT mark the reading synced (that would
@@ -594,7 +728,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
             `[sync] cover photo upload failed (status ${uploadRes.status}) for reading ${reading.local_id}`,
           );
           const text = await uploadRes.text().catch(() => '');
-          await markFailed(
+          await markRearmableRowFailed(
             'cover-reading',
             reading.local_id!,
             `photo_upload_failed_${uploadRes.status}`,
@@ -607,6 +741,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
           continue;
         }
         const { url } = await uploadRes.json();
+        await acquireSyncSlot(); // S9 / sync-M2
         const patchRes = await fetch(
           `/api/${reading.farm_slug}/camps/${reading.camp_id}/cover/${serverId}/attachment`,
           {
@@ -618,7 +753,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
         if (!patchRes.ok) {
           // Leave as failed — reading row exists, next cycle retries photo only.
           const text = await patchRes.text().catch(() => '');
-          await markFailed(
+          await markRearmableRowFailed(
             'cover-reading',
             reading.local_id!,
             `photo_patch_failed_${patchRes.status}`,
@@ -636,7 +771,7 @@ export async function syncPendingCoverReadings(): Promise<{ synced: number; fail
       synced++;
     } catch (e) {
       console.error('[sync] cover reading failed:', e);
-      await markFailed('cover-reading', reading.local_id!, 'exception', {
+      await markRearmableRowFailed('cover-reading', reading.local_id!, 'exception', {
         statusCode: null,
         error: e instanceof Error ? e.message : String(e),
       });
@@ -774,6 +909,102 @@ export async function reconcileFailedRows(): Promise<{ reconciled: number }> {
   return { reconciled };
 }
 
+// ── S9 / sync-M1 + sync-M2 — backoff re-arm pass for the auto-drain ──────────
+
+/**
+ * Base cooldown before the FIRST automatic retry of a transiently-failed
+ * row. Doubles per recorded attempt (`computeRetryCooldownMs`), so within
+ * the OBS-1 budget of MAX_SYNC_ATTEMPTS=5 the schedule is
+ * 30s → 60s → 120s → 240s → dead-letter.
+ */
+export const RETRY_BACKOFF_BASE_MS = 30_000;
+/** Safety ceiling — unreachable within today's 5-attempt budget, but keeps
+ *  the math bounded if the budget is ever raised. */
+export const RETRY_BACKOFF_CAP_MS = 10 * 60_000;
+
+/**
+ * Pure exponential-backoff schedule, exported for unit tests. `attempts` is
+ * the row's persisted attempt count (#208 failure meta).
+ */
+export function computeRetryCooldownMs(attempts: number): number {
+  const doublings = Math.max(0, attempts - 1);
+  return Math.min(RETRY_BACKOFF_CAP_MS, RETRY_BACKOFF_BASE_MS * 2 ** doublings);
+}
+
+type RearmCandidate = Pick<
+  PendingQueueFailureMeta,
+  'attempts' | 'firstFailedAt' | 'lastStatusCode'
+> & { local_id?: number };
+
+async function rearmCooledRows(
+  kind: RearmableSyncKind,
+  rows: readonly RearmCandidate[],
+  flipToPending: (localId: number) => Promise<void>,
+  now: number,
+): Promise<number> {
+  let rearmed = 0;
+  for (const row of rows) {
+    if (row.local_id === undefined) continue;
+    // OBS-1 seam: terminal rows (terminal HTTP status OR attempts budget
+    // exhausted) are dead-letters — only the user's explicit Discard may
+    // touch them. The `markXPending` writers enforce the same gate, so this
+    // early skip is belt-and-braces plus an accurate `rearmed` count.
+    if (isTerminalFailure(row)) continue;
+    const anchor =
+      transientFailureClock.get(failureClockKey(kind, row.local_id)) ??
+      row.firstFailedAt ??
+      0;
+    if (now - anchor < computeRetryCooldownMs(row.attempts)) continue;
+    await flipToPending(row.local_id);
+    rearmed++;
+  }
+  return rearmed;
+}
+
+export interface AutoDrainPreparation {
+  /** Rows flipped failed → pending by the cooldown pass. */
+  rearmed: number;
+  /** Strict-pending rows (observation + animal + cover) AFTER the pass. */
+  pendingCount: number;
+}
+
+/**
+ * S9 — the automatic half of `retry-with-cooldown`. Re-arms every
+ * transiently-failed row whose exponential cooldown has elapsed, then
+ * reports how much queued work exists so the caller (OfflineProvider's
+ * periodic/visibility auto-drain tick) can decide whether running a full
+ * `syncAndRefresh` cycle is worth the network fan-out. Deliberately does
+ * NOT drain anything itself: the provider owns the sync cycle so UI state
+ * (syncStatus latch, toasts, camp reload) keeps a single code path.
+ *
+ * `now` is injectable for tests; production callers use the clock.
+ */
+export async function prepareAutoDrain(
+  now: number = Date.now(),
+): Promise<AutoDrainPreparation> {
+  const [failedObs, failedAnimals, failedCovers] = await Promise.all([
+    getFailedObservations(),
+    getFailedAnimals(),
+    getFailedCoverReadings(),
+  ]);
+
+  const rearmed =
+    (await rearmCooledRows('observation', failedObs, markObservationPending, now)) +
+    (await rearmCooledRows('animal', failedAnimals, markAnimalCreatePending, now)) +
+    (await rearmCooledRows('cover-reading', failedCovers, markCoverReadingPending, now));
+
+  const [pendingObs, pendingAnimals, pendingCovers] = await Promise.all([
+    getPendingObservations(),
+    getPendingAnimalCreates(),
+    getPendingCoverReadings(),
+  ]);
+
+  return {
+    rearmed,
+    pendingCount: pendingObs.length + pendingAnimals.length + pendingCovers.length,
+  };
+}
+
 export async function syncAndRefresh(
   options: SyncAndRefreshOptions = {},
 ): Promise<{ synced: number; failed: number; syncedItems: SyncedItem[] }> {
@@ -786,9 +1017,17 @@ export async function syncAndRefresh(
   const animalsBefore = await getPendingAnimalCreates();
   const coversBefore = await getPendingCoverReadings();
 
-  const [obsResult, animalsResult, coversResult] = await Promise.all([
+  // S4 / OS-1 — drain ORDER is load-bearing. Animal creates must complete
+  // before the first observation POST: an observation can reference an
+  // animal that is itself still queued (the offline-calf case), and the
+  // previous concurrent `Promise.all` let the observation race ahead, hit
+  // the server's 404 not-found path, classify terminal-by-status, and
+  // permanently dead-letter a row that would have succeeded moments later.
+  // Cover readings are camp-scoped (no animal dependency) so they may drain
+  // concurrently with observations.
+  const animalsResult = await syncPendingAnimals();
+  const [obsResult, coversResult] = await Promise.all([
     syncPendingObservations(),
-    syncPendingAnimals(),
     syncPendingCoverReadings(),
   ]);
   const photoResult = await syncPendingPhotos(obsResult.localToServerId);

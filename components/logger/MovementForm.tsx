@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useOffline } from "@/components/logger/OfflineProvider";
 import { PhotoCapture } from "@/components/logger/PhotoCapture";
 import StickySubmitBar from "@/components/logger/StickySubmitBar";
@@ -9,7 +9,10 @@ interface Props {
   animalId: string;
   sourceCampId: string;
   onClose: () => void;
-  onSubmit?: (data: { animalId: string; sourceCampId: string; destCampId: string; photoBlob: Blob | null }) => void;
+  // S6 / OS-3 — widened to accept a promise so the in-flight latch can hold
+  // until the parent's async queue write settles. The Logger page handler is
+  // an async function; the old `void` signature silently dropped its promise.
+  onSubmit?: (data: { animalId: string; sourceCampId: string; destCampId: string; photoBlob: Blob | null }) => void | Promise<void>;
 }
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -51,15 +54,37 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
   const { camps } = useOffline();
   const [destCampId, setDestCampId] = useState("");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const destinations = camps.filter((c) => c.camp_id !== sourceCampId);
 
-  function submit() {
+  // S6 / OS-3 (#482 WeighingForm pattern) — synchronous in-flight latch. This
+  // form had NO submit guard at all: a double-tap fired `onSubmit` twice and
+  // each enqueue mints its own clientLocalId → two server rows. The ref is set
+  // synchronously BEFORE any await so the same-tick second tap is swallowed;
+  // `submitting` state covers the cross-render window; reset in `finally` so a
+  // legitimate later submit works after success OR failure.
+  const inFlightRef = useRef(false);
+
+  async function submit() {
+    if (inFlightRef.current) return;
     if (!destCampId) return;
-    if (onSubmit) {
-      onSubmit({ animalId, sourceCampId, destCampId, photoBlob });
-    } else {
-      alert(`Animal ${animalId} moved from ${sourceCampId} to ${destCampId}`);
-      onClose();
+
+    inFlightRef.current = true;
+    setSubmitting(true);
+    setError("");
+    try {
+      if (onSubmit) {
+        await onSubmit({ animalId, sourceCampId, destCampId, photoBlob });
+      } else {
+        alert(`Animal ${animalId} moved from ${sourceCampId} to ${destCampId}`);
+        onClose();
+      }
+    } catch {
+      setError("Failed to queue — try again");
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -99,18 +124,22 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
           </div>
         </div>
 
+        {error && (
+          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+        )}
+
         <StickySubmitBar>
           <button
             onClick={submit}
-            disabled={!destCampId}
+            disabled={!destCampId || submitting}
             className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
             style={
-              !destCampId
+              !destCampId || submitting
                 ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
                 : { backgroundColor: '#B87333', color: '#F5F0E8' }
             }
           >
-            Confirm Move
+            {submitting ? "Saving..." : "Confirm Move"}
           </button>
         </StickySubmitBar>
       </div>

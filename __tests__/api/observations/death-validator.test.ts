@@ -56,7 +56,15 @@ const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaM
     // `tenantWrite` adapter maps it to the same 422 envelope, and neither
     // `observation.create` nor `observation.upsert` is reached.
     const prisma: Record<string, unknown> = {
-      camp: { findFirst: campFindFirst },
+      // S24 / obs-M4 — the route's animal↔camp species guard resolves the
+      // camp via `requireSpeciesScopedCamp`'s composite-unique
+      // `camp.findUnique` (step 1). A non-null cattle row matches the cattle
+      // animal above, so the guard passes and these death-envelope assertions
+      // exercise the validator (not the new guard).
+      camp: {
+        findFirst: campFindFirst,
+        findUnique: vi.fn().mockResolvedValue({ id: 'camp-row-1', species: 'cattle' }),
+      },
       animal: {
         findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }),
         update: vi.fn().mockResolvedValue({}),

@@ -12,6 +12,7 @@
 import { motion } from "framer-motion";
 import { CloudUpload, FileSpreadsheet, Sparkles } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
+import { SPREADSHEET_ACCEPT } from "@/lib/xlsx-shim";
 import { ONBOARDING_COLORS, SPRING_SOFT } from "./theme";
 
 type Props = {
@@ -23,7 +24,9 @@ type Props = {
 export function FileDropzone({
   onFile,
   isLoading = false,
-  accept = ".xlsx",
+  // Default tracks what readWorkbook actually parses (S13 / OB-csv) so
+  // accept-less consumers (e.g. the import re-upload step) stay honest.
+  accept = SPREADSHEET_ACCEPT,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -200,7 +203,7 @@ export function FileDropzone({
               <span aria-hidden="true">·</span>
               <span className="inline-flex items-center gap-1.5">
                 <FileSpreadsheet size={12} strokeWidth={1.8} />
-                .xlsx
+                {accept.split(",").join(" · ")}
               </span>
             </div>
           </>
