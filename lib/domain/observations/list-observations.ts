@@ -25,9 +25,18 @@ import { crossSpecies } from "@/lib/server/species-scoped-prisma";
  */
 export const OBSERVATIONS_DEFAULT_LIMIT = 50;
 export const OBSERVATIONS_MAX_LIMIT = 200;
+/**
+ * Hard cap on `skip` (api-L1). `clampOffset` already rejected NaN/negative, but
+ * — unlike `clampLimit` — left the offset unbounded, so a caller could force an
+ * arbitrarily deep `skip` (e.g. `?offset=99999999`), making libSQL scan-and-
+ * discard millions of rows. Capping mirrors `MAX_LIMIT`'s "no whole-table
+ * scan / exfil" rationale; 100k sits far beyond any real tenant's row count.
+ */
+export const OBSERVATIONS_MAX_OFFSET = 100_000;
 
 const DEFAULT_LIMIT = OBSERVATIONS_DEFAULT_LIMIT;
 const MAX_LIMIT = OBSERVATIONS_MAX_LIMIT;
+const MAX_OFFSET = OBSERVATIONS_MAX_OFFSET;
 
 export interface ListObservationsFilters {
   camp?: string | null;
@@ -56,7 +65,7 @@ function clampOffset(raw: number | null | undefined): number {
   if (raw === null || raw === undefined || Number.isNaN(raw) || raw < 0) {
     return 0;
   }
-  return raw;
+  return Math.min(raw, MAX_OFFSET);
 }
 
 export async function listObservations(

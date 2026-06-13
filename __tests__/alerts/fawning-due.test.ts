@@ -30,6 +30,9 @@ describe("FAWNING_DUE", () => {
     const out = await evaluate(prisma, makeSettings(), "tenant-a");
     expect(out).toHaveLength(1);
     expect(out[0].type).toBe("FAWNING_DUE");
+    // Deep-link must be farm-scoped at source so the context-less push SW and
+    // the email digest land on the right tenant (not a bare /admin/... 404).
+    expect(out[0].href).toBe("/tenant-a/admin/game/species/sp-1");
     expect(out[0].payload.gestationDays).toBe(GESTATION_TABLE.kudu.days);
     expect(out[0].payload.speciesName).toBe("Kudu");
     expect(out[0].collapseKey).toBe("sp-1");

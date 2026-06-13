@@ -130,7 +130,7 @@ export const dispatchTaskRemindersForTenant = inngest.createFunction(
       if (!prisma) {
         throw new Error(`No farm credentials for tenant "${slug}"`);
       }
-      return dispatchRemindersForTenant(prisma);
+      return dispatchRemindersForTenant(prisma, slug);
     });
   },
 );
@@ -300,6 +300,7 @@ export interface DispatchResult {
  */
 export async function dispatchRemindersForTenant(
   prisma: PrismaClient,
+  slug: string,
 ): Promise<DispatchResult> {
   const now = new Date();
 
@@ -354,7 +355,7 @@ export async function dispatchRemindersForTenant(
       type: "TASK_REMINDER",
       severity: task.priority === "high" ? "red" : "amber",
       message: `Reminder: ${task.title} · due ${dueLabel}`,
-      href: `/admin/tasks?taskId=${task.id}`,
+      href: `/${slug}/admin/tasks?taskId=${task.id}`,
       dedupKey: `TASK_REMINDER:${occ.id}`,
       collapseKey: `task-reminder:${occ.id}`,
       payload: JSON.stringify(payload),

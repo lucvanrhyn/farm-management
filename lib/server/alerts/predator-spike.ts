@@ -39,7 +39,7 @@ function stdDev(values: number[], mu: number): number {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   const todayIso = toIsoDate(new Date());
   const lookbackIso = toIsoDate(
@@ -111,7 +111,7 @@ export async function evaluate(
         lookbackDays: 7,
       },
       message: `${todayCount} predator losses today — ${SIGMA_MULTIPLIER}σ above 7-day baseline (μ=${mu.toFixed(1)})`,
-      href: `/admin/observations?type=predation_loss`,
+      href: `/${farmSlug}/admin/observations?type=predation_loss`,
       expiresAt: defaultExpiry(),
     },
   ];

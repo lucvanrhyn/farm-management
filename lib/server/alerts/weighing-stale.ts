@@ -24,7 +24,7 @@ interface WeighRow {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // cross-species by design: 90-day weighing alert applies to every species.
   // crossSpecies() forwards args verbatim — no species/status injection.
@@ -74,7 +74,7 @@ export async function evaluate(
         daysSince === null
           ? `${a.animalId} has no weighing on record`
           : `${a.animalId} not weighed in ${daysSince} days`,
-      href: `/admin/animals?focus=${encodeURIComponent(a.animalId)}`,
+      href: `/${farmSlug}/admin/animals?focus=${encodeURIComponent(a.animalId)}`,
       expiresAt,
     });
   }

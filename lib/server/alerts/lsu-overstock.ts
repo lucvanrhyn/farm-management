@@ -36,7 +36,7 @@ interface VeldRow {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // cross-species by design: LSU overstock uses merged LSU values across all
   // species (cattle + sheep + game) per the brief's mixed-species math.
@@ -109,7 +109,7 @@ export async function evaluate(
         sizeHectares: camp.sizeHectares,
       },
       message: `${camp.campName}: ${stocked.toFixed(1)} LSU stocked vs ${capacity.toFixed(1)} LSU capacity (>${Math.round((OVERSTOCK_MULTIPLIER - 1) * 100)}% over)`,
-      href: `/admin/camps/${camp.campId}`,
+      href: `/${farmSlug}/admin/camps/${camp.campId}`,
       expiresAt,
     });
   }

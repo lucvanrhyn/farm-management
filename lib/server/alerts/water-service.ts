@@ -20,7 +20,7 @@ interface WaterPointRow {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   let points: WaterPointRow[];
   try {
@@ -66,7 +66,7 @@ export async function evaluate(
         daysSince === null
           ? `Water point "${wp.name}" has no service on record`
           : `Water point "${wp.name}" last serviced ${daysSince} days ago`,
-      href: `/admin/game/infrastructure`,
+      href: `/${farmSlug}/admin/game/infrastructure`,
       expiresAt,
     });
   }
@@ -82,7 +82,7 @@ export async function evaluate(
       collapseKey: "tenant",
       payload: { waterPointId: wp.id, name: wp.name, status: wp.status },
       message: `Water point "${wp.name}" status: ${wp.status}`,
-      href: `/admin/game/infrastructure`,
+      href: `/${farmSlug}/admin/game/infrastructure`,
       expiresAt,
     });
   }

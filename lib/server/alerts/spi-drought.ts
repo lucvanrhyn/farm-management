@@ -14,7 +14,7 @@ import { logger } from "@/lib/logger";
 export async function evaluate(
   prisma: PrismaClient,
   settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   if (settings.latitude == null || settings.longitude == null) {
     return [];
@@ -46,7 +46,7 @@ export async function evaluate(
         collapseKey: null,
         payload: { spi3, severity: payload.spi3?.severity ?? "severe" },
         message: `Severe drought — SPI-3 = ${spi3.toFixed(2)}`,
-        href: `/tools/drought`,
+        href: `/${farmSlug}/tools/drought`,
         expiresAt,
       },
     ];
@@ -61,7 +61,7 @@ export async function evaluate(
         collapseKey: null,
         payload: { spi3, severity: payload.spi3?.severity ?? "moderate" },
         message: `Moderate drought — SPI-3 = ${spi3.toFixed(2)}`,
-        href: `/tools/drought`,
+        href: `/${farmSlug}/tools/drought`,
         expiresAt,
       },
     ];
