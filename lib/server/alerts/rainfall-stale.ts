@@ -11,7 +11,7 @@ import { defaultExpiry, diffDays, toIsoDate, toIsoWeek } from "./helpers";
 export async function evaluate(
   prisma: PrismaClient,
   settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   const latest = await prisma.rainfallRecord.findFirst({
     orderBy: { date: "desc" },
@@ -31,7 +31,7 @@ export async function evaluate(
         collapseKey: null,
         payload: { daysSince: null, thresholdDays: threshold },
         message: "No rainfall readings on record — start logging to track drought risk",
-        href: `/admin/settings/rainfall`,
+        href: `/${farmSlug}/admin/settings/rainfall`,
         expiresAt: defaultExpiry(now),
       },
     ];
@@ -51,7 +51,7 @@ export async function evaluate(
       collapseKey: null,
       payload: { daysSince, thresholdDays: threshold, lastDate: latest.date },
       message: `Rainfall not logged for ${daysSince} days (threshold ${threshold}d)`,
-      href: `/admin/settings/rainfall`,
+      href: `/${farmSlug}/admin/settings/rainfall`,
       expiresAt: defaultExpiry(now),
     },
   ];

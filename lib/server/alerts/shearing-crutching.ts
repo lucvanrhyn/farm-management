@@ -25,7 +25,7 @@ interface ObservationRow {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // SHEARING/CRUTCHING is sheep-only — route through the scoped() door so
   // species: "sheep" is injected structurally. The explicit status:
@@ -87,7 +87,7 @@ export async function evaluate(
           daysSinceShear === null
             ? `${ewe.animalId} has no shearing on record`
             : `${ewe.animalId} last shorn ${daysSinceShear} days ago`,
-        href: `/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
+        href: `/${farmSlug}/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
         expiresAt,
       });
     }
@@ -110,7 +110,7 @@ export async function evaluate(
             daysToLambing,
           },
           message: `${ewe.animalId} crutching due (${daysToLambing} day${daysToLambing === 1 ? "" : "s"} pre-lambing)`,
-          href: `/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
+          href: `/${farmSlug}/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
           expiresAt,
         });
       }

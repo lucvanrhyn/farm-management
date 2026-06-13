@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Bell, X, CheckCheck } from "lucide-react";
+import { scopeHref } from "@/lib/notifications/scope-href";
 
 interface NotificationItem {
   id: string;
@@ -179,7 +180,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                       style={{ background: n.isRead ? "rgba(210,180,140,0.2)" : colors.dot }}
                     />
                     <Link
-                      href={`/${farmSlug}${new URL(n.href, "http://x").pathname.replace(`/${farmSlug}`, "")}`}
+                      href={scopeHref(n.href, farmSlug)}
                       onClick={() => {
                         if (!n.isRead) void markRead(n.id);
                         setOpen(false);

@@ -269,7 +269,7 @@ describe("dispatchRemindersForTenant", () => {
       notification: { create: notifCreate },
     });
 
-    const result = await dispatchRemindersForTenant(prisma);
+    const result = await dispatchRemindersForTenant(prisma, "tenant-a");
 
     // findMany#1 → updateMany → findMany#2 → notifCreate (stamp before send).
     expect(callOrder[0]).toBe("findMany#1");
@@ -289,6 +289,8 @@ describe("dispatchRemindersForTenant", () => {
     expect(notif.dedupKey).toBe("TASK_REMINDER:occ-1");
     expect(notif.collapseKey).toBe("task-reminder:occ-1");
     expect(notif.message).toContain("Weigh weaners");
+    // Deep-link is farm-scoped at source (the push SW navigates verbatim).
+    expect(notif.href).toBe("/tenant-a/admin/tasks?taskId=task-1");
 
     expect(result).toEqual({ ready: 1, dispatched: 1, raceSkipped: 0 });
 
@@ -325,7 +327,7 @@ describe("dispatchRemindersForTenant", () => {
       notification: { create: notifCreate },
     });
 
-    const result = await dispatchRemindersForTenant(prisma);
+    const result = await dispatchRemindersForTenant(prisma, "tenant-a");
 
     expect(notifCreate).toHaveBeenCalledTimes(2);
     // high-priority task → severity "red"; normal → "amber".
@@ -346,7 +348,7 @@ describe("dispatchRemindersForTenant", () => {
       notification: { create: notifCreate },
     });
 
-    const result = await dispatchRemindersForTenant(prisma);
+    const result = await dispatchRemindersForTenant(prisma, "tenant-a");
 
     expect(occUpdateMany).not.toHaveBeenCalled();
     expect(notifCreate).not.toHaveBeenCalled();
@@ -372,7 +374,7 @@ describe("dispatchRemindersForTenant", () => {
       notification: { create: notifCreate },
     });
 
-    const result = await dispatchRemindersForTenant(prisma);
+    const result = await dispatchRemindersForTenant(prisma, "tenant-a");
 
     expect(notifCreate).toHaveBeenCalledTimes(1);
     expect(result.dispatched).toBe(0);
@@ -415,7 +417,7 @@ describe("dispatchRemindersForTenant", () => {
       },
     });
 
-    const result = await dispatchRemindersForTenant(prisma);
+    const result = await dispatchRemindersForTenant(prisma, "tenant-a");
 
     expect(result.ready).toBe(2);
     expect(result.dispatched).toBe(1);

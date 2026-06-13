@@ -46,7 +46,7 @@ function parsePregnant(details: string): boolean {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // LAMBING_DUE is sheep-only — route through the scoped() door so
   // species: "sheep" is injected structurally. The explicit status:
@@ -118,7 +118,7 @@ export async function evaluate(
         dueDate: due.toISOString(),
       },
       message: `${ewe.animalId} lambing due in ${daysToLambing} day${daysToLambing === 1 ? "" : "s"}`,
-      href: `/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
+      href: `/${farmSlug}/admin/animals?focus=${encodeURIComponent(ewe.animalId)}`,
       expiresAt,
     });
   }

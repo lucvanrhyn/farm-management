@@ -37,7 +37,7 @@ interface WeightRow {
 export async function evaluate(
   prisma: PrismaClient,
   settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   const speciesThresholds = parseSpeciesThresholds(settings.speciesAlertThresholds);
 
@@ -125,7 +125,7 @@ export async function evaluate(
         breakevenPerKg: Math.round(breakeven * 100) / 100,
       },
       message: `${a.animalId}: cost-of-gain R${cogPerKg.toFixed(2)}/kg > ${Math.round(BREAKEVEN_FRACTION * 100)}% of market (R${breakeven.toFixed(2)})`,
-      href: `/admin/animals?focus=${encodeURIComponent(a.animalId)}`,
+      href: `/${farmSlug}/admin/animals?focus=${encodeURIComponent(a.animalId)}`,
       expiresAt,
     });
   }

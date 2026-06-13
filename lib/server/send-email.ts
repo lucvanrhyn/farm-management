@@ -15,6 +15,7 @@ import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { NOTIFICATION_ERROR_CODES } from "@/lib/server/notifications/error-codes";
 import { getAppBaseUrl } from "@/lib/server/app-url";
+import { scopeHref } from "@/lib/notifications/scope-href";
 
 function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -118,9 +119,13 @@ const alertDigestRenderer: Renderer = (data) => {
       const items = g.items
         .map((item) => {
           const color = item.severity === "red" ? "#B91C1C" : "#B45309";
+          // `scopeHref` farm-scopes the deep-link idempotently: generators now
+          // emit a complete `/${farmSlug}/...` path, but a legacy bare href
+          // still inside its ≤24h TTL is self-healed here (and double-prefixing
+          // is impossible). Absolute URLs pass straight through.
           const href = item.href.startsWith("http")
             ? item.href
-            : `${baseUrl}/${farmSlug}${item.href.startsWith("/") ? "" : "/"}${item.href}`;
+            : `${baseUrl}${scopeHref(item.href, farmSlug)}`;
           return `<li style="margin:6px 0;">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px;"></span>
             <a href="${href}" style="color:#1A1510;text-decoration:none;">${escapeHtml(item.message)}</a>

@@ -31,7 +31,7 @@ function startOfDay(d: Date): Date {
 export async function evaluate(
   _prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   const now = new Date();
   const candidates: AlertCandidate[] = [];
@@ -50,7 +50,7 @@ export async function evaluate(
         collapseKey: null,
         payload: { deadline: toIsoDate(it3), leadDays: lead, type: "IT3" },
         message: `IT3 farming tax deadline in ${lead} day${lead === 1 ? "" : "s"} (${toIsoDate(it3)})`,
-        href: `/admin/tax/it3`,
+        href: `/${farmSlug}/admin/tax/it3`,
         expiresAt,
       });
     }
@@ -69,7 +69,7 @@ export async function evaluate(
         collapseKey: null,
         payload: { deadline: toIsoDate(vat), leadDays: lead, type: "VAT" },
         message: `VAT submission deadline in ${lead} day${lead === 1 ? "" : "s"} (${toIsoDate(vat)})`,
-        href: `/admin/tax/vat`,
+        href: `/${farmSlug}/admin/tax/vat`,
         expiresAt,
       });
     }

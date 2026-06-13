@@ -25,7 +25,7 @@ interface CoverRow {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // Cover-staleness is a farm-wide notification cron — every camp across
   // every species is in scope. crossSpecies() forwards args verbatim.
@@ -63,7 +63,7 @@ export async function evaluate(
           daysSince: null,
         },
         message: `${camp.campName}: no cover reading on record`,
-        href: `/admin/camps/${camp.campId}`,
+        href: `/${farmSlug}/admin/camps/${camp.campId}`,
         expiresAt,
       });
       continue;
@@ -86,7 +86,7 @@ export async function evaluate(
         daysSince,
       },
       message: `${camp.campName}: cover reading ${daysSince} days old (stale >21d)`,
-      href: `/admin/camps/${camp.campId}`,
+      href: `/${farmSlug}/admin/camps/${camp.campId}`,
       expiresAt,
     });
   }

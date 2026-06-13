@@ -54,7 +54,7 @@ function normaliseBreed(commonName: string): GestationBreed | null {
 export async function evaluate(
   prisma: PrismaClient,
   _settings: FarmSettings,
-  _farmSlug?: string,
+  farmSlug: string,
 ): Promise<AlertCandidate[]> {
   // GameSpecies table is present on Game-enabled tenants only — fall back to
   // [] gracefully if the model doesn't exist in the compiled client, though
@@ -114,7 +114,7 @@ export async function evaluate(
         predictedDate: predictedFawning.toISOString(),
       },
       message: `${label} fawning window opening in ${daysToFawning} day${daysToFawning === 1 ? "" : "s"}`,
-      href: `/admin/game/species/${sp.id}`,
+      href: `/${farmSlug}/admin/game/species/${sp.id}`,
       expiresAt,
     });
   }
