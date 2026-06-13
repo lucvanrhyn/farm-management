@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  assertPayfastConfig,
   generateSignature,
   isValidPayFastIP,
   validateITN,
@@ -88,6 +89,23 @@ function parseEventTime(raw: string | undefined): Date {
   return Number.isFinite(t) ? new Date(t) : new Date();
 }
 
+/** True only when PayFast supplied a real, parseable `timestamp`. When false,
+ * parseEventTime() has fabricated a "now" value that ranks as the newest event
+ * — which (pay-L1 / S34) would let a timestamp-less FAILED win the ordering
+ * check and clobber a real, newer COMPLETE. The handler uses this to refuse a
+ * timestamp-less terminal downgrade of an active subscription. */
+function hasParseableTimestamp(raw: string | undefined): boolean {
+  if (!raw) return false;
+  return Number.isFinite(Date.parse(raw));
+}
+
+const TERMINAL_STATUSES = new Set(['FAILED', 'CANCELLED']);
+
+/** S33b: allowed |received − expected| amount delta (whole ZAR). Absorbs the
+ * independent rounding of our quote vs. PayFast's amount; anything larger is
+ * treated as a price mismatch and blocks activation. */
+const AMOUNT_TOLERANCE_ZAR = 1;
+
 /** Status upgrade precedence. Higher number = higher priority.
  * Used to decide whether an incoming event can overwrite an existing row. */
 const STATUS_RANK: Record<string, number> = {
@@ -103,6 +121,13 @@ function isStatusUpgrade(incoming: string, existing: string): boolean {
 
 export const POST = publicHandler({
   handle: async (req: NextRequest): Promise<Response> => {
+  // 0. Config guard (S32a / H5 / PF-02). In production a missing
+  // PAYFAST_PASSPHRASE means signatures are unsalted MD5. Refuse to process —
+  // throwing here surfaces as a 500 (generic envelope to the caller, full
+  // error logged server-side) and crucially NEVER mutates subscription state.
+  // Sandbox/dev are exempt inside assertPayfastConfig.
+  assertPayfastConfig();
+
   // 1. Source IP allowlist.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
@@ -154,6 +179,7 @@ export const POST = publicHandler({
   const incomingToken = rawParams.token ?? '';
   const pfPaymentId = rawParams.pf_payment_id;
   const eventTime = parseEventTime(rawParams.timestamp);
+  const eventTimePresent = hasParseableTimestamp(rawParams.timestamp);
 
   if (!farmSlug) {
     logger.error('[payfast-itn] Missing custom_str1 (farmSlug)');
@@ -166,6 +192,19 @@ export const POST = publicHandler({
     // accept potentially-replayable events.
     logger.warn('[payfast-itn] Missing pf_payment_id', { farmSlug });
     return NextResponse.json({ error: 'Missing pf_payment_id' }, { status: 400 });
+  }
+
+  // 5b. Merchant verification (S32b / PF-03). Defence-in-depth: the ITN must
+  // be for OUR merchant account. Only enforced when PAYFAST_MERCHANT_ID is set
+  // (it is in production) so the sandbox, which may omit it, is unaffected.
+  const expectedMerchantId = process.env.PAYFAST_MERCHANT_ID;
+  if (expectedMerchantId && rawParams.merchant_id !== expectedMerchantId) {
+    logger.warn('[payfast-itn] merchant_id mismatch — rejecting', {
+      farmSlug,
+      pfPaymentId,
+      receivedMerchantId: rawParams.merchant_id,
+    });
+    return NextResponse.json({ error: 'Merchant mismatch' }, { status: 400 });
   }
 
   logger.info('[payfast-itn] Received', {
@@ -191,6 +230,25 @@ export const POST = publicHandler({
     // 200 OK with no body — same shape as success path so PayFast's retry
     // queue empties. The event was authentic (signature + ITN-validate
     // passed) but does not apply to the current subscription.
+    return new NextResponse(null, { status: 200 });
+  }
+
+  // 6b. Timestamp-less terminal downgrade guard (S34 / pay-L1).
+  // parseEventTime() fabricates a "now" value when `timestamp` is absent, which
+  // ranks as the newest event and so SLIPS PAST the ordering check below. A
+  // timestamp-less FAILED/CANCELLED could therefore clobber a real, newer
+  // COMPLETE and deactivate a live subscription. Refuse to downgrade an ACTIVE
+  // subscription on a terminal event that carries no usable timestamp; a real,
+  // timestamped cancellation is unaffected. 200 so PayFast stops retrying.
+  if (
+    !eventTimePresent &&
+    TERMINAL_STATUSES.has(paymentStatus ?? '') &&
+    subscription?.subscriptionStatus === 'active'
+  ) {
+    logger.warn(
+      '[payfast-itn] Refusing timestamp-less terminal event — would downgrade active subscription',
+      { farmSlug, pfPaymentId, paymentStatus },
+    );
     return new NextResponse(null, { status: 200 });
   }
 
@@ -320,16 +378,61 @@ export const POST = publicHandler({
         logger.error('[payfast-itn] Failed to compute farm LSU — lockedLsu will be null', err);
       }
 
-      const now = new Date();
+      // 8a. Amount validation (S33b / pay-M2). The received amount is otherwise
+      // trusted verbatim — a forged/incorrect amount would be persisted as the
+      // billing amount. Recompute the expected price for (tier, frequency,
+      // lockedLsu) and compare. We can only validate when we have a known tier,
+      // frequency, lockedLsu and a received amount; otherwise we cannot derive
+      // the expectation and fall through (logged) rather than block.
+      if (
+        billingAmountZar !== undefined &&
+        (tier === 'basic' || tier === 'advanced') &&
+        (frequency === 'monthly' || frequency === 'annual') &&
+        lockedLsu !== undefined
+      ) {
+        const { quoteTier } = await import('@/lib/pricing/calculator');
+        const quote = quoteTier(tier, lockedLsu);
+        const expectedZar = frequency === 'monthly' ? quote.monthlyZar : quote.annualZar;
+        // Tolerance of 1 rand absorbs rounding (the quote and the PayFast
+        // amount each round independently). Anything larger is suspicious.
+        if (Math.abs(billingAmountZar - expectedZar) > AMOUNT_TOLERANCE_ZAR) {
+          // HIGH-severity: do NOT activate off an unexpected amount. Return 200
+          // so PayFast stops retrying (the amount won't change on retry), but
+          // leave the ledger row with appliedAt = null and the subscription
+          // untouched. A human must reconcile the discrepancy.
+          logger.warn(
+            '[payfast-itn] HIGH: amount mismatch — received amount does not match tier price; NOT activating',
+            {
+              farmSlug,
+              pfPaymentId,
+              tier,
+              frequency,
+              lockedLsu,
+              receivedZar: billingAmountZar,
+              expectedZar,
+            },
+          );
+          return new NextResponse(null, { status: 200 });
+        }
+      }
+
+      // 8b. Idempotent, write-once billing-period anchors (S33a / M1).
+      // Anchor to the STABLE event time (not `new Date()`), and reuse an
+      // already-persisted startedAt when one exists so a retry / status-upgrade
+      // re-entry for the SAME pf_payment_id can never recompute or drift the
+      // billing period. The same pf_payment_id always yields the same
+      // startedAt / nextRenewalAt regardless of how many times PayFast retries.
+      const startedAtIso = subscription?.subscriptionStartedAt ?? eventTime.toISOString();
+      const anchor = new Date(startedAtIso);
 
       // Only compute nextRenewalAt when we know the billing period.
       let nextRenewalAt: string | undefined;
       if (frequency === 'monthly') {
-        const d = new Date(now);
+        const d = new Date(anchor);
         d.setMonth(d.getMonth() + 1);
         nextRenewalAt = d.toISOString();
       } else if (frequency === 'annual') {
-        const d = new Date(now);
+        const d = new Date(anchor);
         d.setFullYear(d.getFullYear() + 1);
         nextRenewalAt = d.toISOString();
       }
@@ -338,7 +441,7 @@ export const POST = publicHandler({
       // PayFast retries will re-enter the retry-after-failure branch above.
       await updateFarmSubscription(farmSlug, 'active', {
         payfastToken: incomingToken || undefined,
-        startedAt: now.toISOString(),
+        startedAt: startedAtIso,
         ...(tier === 'basic' || tier === 'advanced' ? { tier } : {}),
         ...(frequency === 'monthly' || frequency === 'annual'
           ? { billingFrequency: frequency }
@@ -351,7 +454,7 @@ export const POST = publicHandler({
       // Stamp appliedAt now that the mutation committed.
       await db.payfastEvent.update({
         where: { pfPaymentId },
-        data: { appliedAt: now },
+        data: { appliedAt: new Date() },
       });
 
       logger.info('[payfast-itn] Subscription activated', {
@@ -360,12 +463,17 @@ export const POST = publicHandler({
         frequency: frequency || 'unknown',
         billingAmountZar,
         lockedLsu,
+        startedAt: startedAtIso,
+        nextRenewalAt,
         payfastTokenMask: maskToken(incomingToken),
         isRetryAfterFailure,
         isStatusUpgradeCase,
       });
     } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
-      await updateFarmSubscription(farmSlug, 'inactive');
+      // S34 (pay-L1): clear the PayFast token on terminal failure so a
+      // leaked/rotated token can't later replay an old subscription. `null`
+      // emits `payfast_token = NULL` (the meta-db NULL affordance).
+      await updateFarmSubscription(farmSlug, 'inactive', { payfastToken: null });
 
       await db.payfastEvent.update({
         where: { pfPaymentId },

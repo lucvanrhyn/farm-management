@@ -31,6 +31,33 @@ const PAYFAST_VALID_IPS = [
 export type PayFastParams = Record<string, string>;
 
 /**
+ * S32a (H5/PF-02): assert PayFast is configured to ALWAYS salt signatures in
+ * production.
+ *
+ * `generateSignature` only appends the passphrase when one is provided, so an
+ * unset `PAYFAST_PASSPHRASE` silently degrades production to plain (unsalted)
+ * MD5 — a weaker signature whose security then rests entirely on the IP
+ * allowlist + server-to-server `validateITN`. This guard closes that gap by
+ * refusing to operate in production without a passphrase, so signing is always
+ * salted.
+ *
+ * Sandbox/dev are exempt: PayFast's sandbox merchant may legitimately have no
+ * passphrase, and local dev must not be blocked. We key off NODE_ENV rather
+ * than PAYFAST_SANDBOX so a misconfigured prod (SANDBOX flag forgotten) still
+ * fails loudly.
+ *
+ * Throws (loud config error) so the caller — the ITN webhook — refuses to
+ * process rather than activating a subscription off an unsalted signature.
+ */
+export function assertPayfastConfig(): void {
+  if (process.env.NODE_ENV === 'production' && !process.env.PAYFAST_PASSPHRASE) {
+    throw new Error(
+      'PAYFAST_PASSPHRASE must be set in production so ITN signatures are always salted',
+    );
+  }
+}
+
+/**
  * Generate an MD5 signature for PayFast params.
  * Params are sorted alphabetically, URL-encoded (PHP-style: spaces as +),
  * joined with &. Passphrase appended if provided.

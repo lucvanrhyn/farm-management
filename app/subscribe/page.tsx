@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
+import { assertPayfastConfig, buildSubscriptionParams, generateSignature, PAYFAST_URL } from '@/lib/payfast';
 import { getFarmSubscription } from '@/lib/meta-db';
 import { BASIC_DISPLAY_MONTHLY_ZAR } from '@/lib/pricing/compute-total-lsu';
 import { getAppBaseUrl } from '@/lib/server/app-url';
@@ -68,6 +68,9 @@ export default async function SubscribePage({
     notifyUrl: `${appUrl}/api/webhooks/payfast`,
   });
 
+  // S32a (H5/PF-02): in production a missing PAYFAST_PASSPHRASE would build an
+  // UNSALTED payment form. Refuse loudly rather than render a weak form.
+  assertPayfastConfig();
   const passphrase = process.env.PAYFAST_PASSPHRASE;
   pfParams.signature = generateSignature(pfParams, passphrase);
 

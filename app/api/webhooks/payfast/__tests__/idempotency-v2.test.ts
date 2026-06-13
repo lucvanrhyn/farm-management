@@ -160,6 +160,9 @@ vi.mock("@/lib/payfast", () => ({
   isValidPayFastIP: mocks.isValidPayFastIP,
   validateITN: mocks.validateITN,
   generateSignature: mocks.generateSignature,
+  // S32a: route now calls assertPayfastConfig() at the top — stub as no-op so
+  // these Issue #95 regression tests stay focused on the idempotency contract.
+  assertPayfastConfig: vi.fn(() => {}),
 }));
 
 vi.mock("@/lib/meta-db", () => ({
@@ -193,7 +196,8 @@ function buildBody(overrides: Record<string, string> = {}): string {
     custom_str1: "basson",
     custom_str2: "basic",
     custom_str3: "monthly",
-    amount_gross: "240.00",
+    // S33b: amount must match expected tier price (basic/monthly @ 100 LSU = 188).
+    amount_gross: "188.00",
     token: "current-token",
     timestamp: "2026-05-03T10:00:00Z",
     signature: "match",
