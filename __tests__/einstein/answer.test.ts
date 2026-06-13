@@ -380,6 +380,104 @@ describe('streamAnswer — error frames', () => {
   });
 });
 
+describe('streamAnswer — usage event (api-F1/EIN-2)', () => {
+  // The route needs REAL token usage to reconcile cost (the pre-stamped
+  // budget figure is a pessimistic estimate). The generator must surface a
+  // `usage` event built from the SDK's message_start (input + cache buckets)
+  // and message_delta (cumulative output) frames.
+  const tailJson =
+    '```json\n' +
+    JSON.stringify({ answer: 'ok', citations: [], confidence: 'low' }) +
+    '\n```';
+
+  function mkMessageStart(usage: Record<string, number>) {
+    return { type: 'message_start', message: { usage } };
+  }
+
+  it('yields one usage event from message_start + cumulative message_delta', async () => {
+    streamScript = [
+      mkMessageStart({
+        input_tokens: 1200,
+        output_tokens: 1,
+        cache_creation_input_tokens: 300,
+        cache_read_input_tokens: 4000,
+      }),
+      mkDelta(tailJson),
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn' },
+        usage: { output_tokens: 250 },
+      },
+    ];
+
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval([]),
+      }),
+    );
+
+    const usageEvents = events.filter((e) => e.type === 'usage');
+    const finals = events.filter((e) => e.type === 'final');
+    expect(usageEvents).toHaveLength(1);
+    expect(usageEvents[0].usage).toEqual({
+      inputTokens: 1200,
+      cacheCreationInputTokens: 300,
+      cacheReadInputTokens: 4000,
+      outputTokens: 250, // cumulative message_delta count wins over message_start
+    });
+    expect(finals).toHaveLength(1);
+    // usage must arrive before final so the route has it even if validation
+    // of the tail JSON subsequently fails.
+    expect(events.findIndex((e) => e.type === 'usage')).toBeLessThan(
+      events.findIndex((e) => e.type === 'final'),
+    );
+  });
+
+  it('emits usage even when the tail JSON is invalid (tokens were consumed)', async () => {
+    streamScript = [
+      mkMessageStart({ input_tokens: 800, output_tokens: 90 }),
+      mkDelta('no json at all here'),
+    ];
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval([]),
+      }),
+    );
+    const usageEvents = events.filter((e) => e.type === 'usage');
+    const errors = events.filter((e) => e.type === 'error');
+    expect(usageEvents).toHaveLength(1);
+    expect(usageEvents[0].usage).toEqual({
+      inputTokens: 800,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      outputTokens: 90,
+    });
+    expect((errors[0] as { code: string }).code).toBe(
+      'EINSTEIN_ANSWER_INVALID_JSON',
+    );
+  });
+
+  it('emits no usage event when the SDK reports none', async () => {
+    streamScript = [mkDelta(tailJson)];
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval([]),
+      }),
+    );
+    expect(events.filter((e) => e.type === 'usage')).toHaveLength(0);
+    expect(events.filter((e) => e.type === 'final')).toHaveLength(1);
+  });
+});
+
 describe('parseAnswerJson — pure helper', () => {
   it('parses a well-formed fenced JSON block', () => {
     const raw =

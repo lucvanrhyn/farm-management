@@ -32,8 +32,22 @@ export interface EinsteinAnswer {
   refusedReason?: EinsteinRefusalReason;
 }
 
+/**
+ * Real token consumption reported by the Anthropic stream (api-F1/EIN-2).
+ * Input splits into three billing buckets: uncached input, cache-creation
+ * (write, 1.25×) and cache-read (0.1×) — the system blocks above carry
+ * `cache_control`, so all three occur in practice.
+ */
+export interface AnswerUsage {
+  inputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  outputTokens: number;
+}
+
 export type AnswerStreamEvent =
   | { type: 'token'; text: string }
+  | { type: 'usage'; usage: AnswerUsage }
   | { type: 'final'; payload: EinsteinAnswer }
   | { type: 'error'; code: string; message: string };
 
@@ -230,6 +244,11 @@ export async function* streamAnswer(
   });
 
   let fullText = '';
+  let usage: AnswerUsage | null = null;
+  // message_delta reports the CUMULATIVE output count; tracked separately and
+  // merged after the loop (reassigning `usage` in terms of itself inside the
+  // async-generator loop trips tsc 5.9's circular-CFA fallback).
+  let cumulativeOutputTokens: number | null = null;
 
   try {
     const stream = client.messages.stream({
@@ -249,6 +268,30 @@ export async function* streamAnswer(
         const delta = event.delta.text;
         fullText += delta;
         yield { type: 'token', text: delta };
+      } else if (event.type === 'message_start') {
+        // api-F1/EIN-2 — capture real usage. The SDK's (0.30.x) Usage type
+        // predates the prompt-caching usage fields, but the wire payload
+        // carries them because the system blocks above opt into
+        // cache_control; read them through a structural cast (same idiom as
+        // the cache_control blocks).
+        const u = event.message.usage as {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number | null;
+          cache_read_input_tokens?: number | null;
+        };
+        usage = {
+          inputTokens: u.input_tokens ?? 0,
+          cacheCreationInputTokens: u.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: u.cache_read_input_tokens ?? 0,
+          outputTokens: u.output_tokens ?? 0,
+        };
+      } else if (event.type === 'message_delta') {
+        const cumulative = (event.usage as { output_tokens?: number } | undefined)
+          ?.output_tokens;
+        if (typeof cumulative === 'number') {
+          cumulativeOutputTokens = cumulative;
+        }
       }
     }
   } catch (err) {
@@ -258,6 +301,23 @@ export async function* streamAnswer(
       message: err instanceof Error ? err.message : 'Anthropic streaming call failed',
     };
     return;
+  }
+
+  // Surface real usage BEFORE tail-JSON parsing/citation validation: the
+  // tokens were consumed even when the answer is subsequently rejected, so
+  // the caller must be able to reconcile cost on those error paths too. The
+  // final cumulative message_delta output count supersedes message_start's
+  // initial figure.
+  if (usage) {
+    yield {
+      type: 'usage',
+      usage: {
+        inputTokens: usage.inputTokens,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens,
+        cacheReadInputTokens: usage.cacheReadInputTokens,
+        outputTokens: cumulativeOutputTokens ?? usage.outputTokens,
+      },
+    };
   }
 
   // Parse the tail JSON block.

@@ -68,6 +68,7 @@ vi.mock('@/lib/farm-prisma', () => ({
 // ── Einstein module mocks ─────────────────────────────────────────────────────
 const mockAssertWithinBudget = vi.fn();
 const mockStampCostBeforeSend = vi.fn();
+const mockReconcileCostAfterSend = vi.fn();
 const mockPlanQuery = vi.fn();
 const mockRetrieveSemantic = vi.fn();
 const mockRetrieveStructured = vi.fn();
@@ -91,6 +92,10 @@ vi.mock('@/lib/einstein/budget', async () => {
     stampCostBeforeSend: (...args: unknown[]) => {
       callOrder.push('stampCostBeforeSend');
       return mockStampCostBeforeSend(...args);
+    },
+    reconcileCostAfterSend: (...args: unknown[]) => {
+      callOrder.push('reconcileCostAfterSend');
+      return mockReconcileCostAfterSend(...args);
     },
     EinsteinBudgetError: actual.EinsteinBudgetError,
   };
@@ -147,6 +152,17 @@ vi.mock('@/lib/einstein/answer', async () => {
 // Import AFTER every vi.mock — so the handler picks up all doubles.
 const { POST } = await import('@/app/api/einstein/ask/route');
 const { EinsteinBudgetError } = await import('@/lib/einstein/budget');
+const {
+  MAX_HISTORY_TURNS,
+  MAX_HISTORY_TURN_CHARS,
+  ESTIMATED_INPUT_TOKENS,
+  ESTIMATED_OUTPUT_TOKENS,
+  SONNET_INPUT_USD_PER_1M,
+  SONNET_OUTPUT_USD_PER_1M,
+  SONNET_CACHE_WRITE_USD_PER_1M,
+  SONNET_CACHE_READ_USD_PER_1M,
+} = await import('@/lib/einstein/defaults');
+const { ZAR_PER_USD } = await import('@/lib/einstein/embeddings');
 
 // Wave H3 (#175) — POST is now wrapped in `publicHandler`, so its signature
 // is `(req, ctx)`. The adapter tolerates an empty params context (no dynamic
@@ -207,6 +223,7 @@ function resetAll() {
   mockGetPrismaForFarm.mockReset();
   mockAssertWithinBudget.mockReset();
   mockStampCostBeforeSend.mockReset();
+  mockReconcileCostAfterSend.mockReset();
   mockPlanQuery.mockReset();
   mockRetrieveSemantic.mockReset();
   mockRetrieveStructured.mockReset();
@@ -228,6 +245,7 @@ function happyPathDefaults() {
     remainingZar: 80,
   });
   mockStampCostBeforeSend.mockResolvedValue(undefined);
+  mockReconcileCostAfterSend.mockResolvedValue(undefined);
   mockPlanQuery.mockResolvedValue({
     rewrittenQuery: 'q',
     isStructuredQuery: false,
@@ -291,8 +309,21 @@ describe('POST /api/einstein/ask — auth + validation', () => {
 });
 
 describe('POST /api/einstein/ask — tier gate', () => {
-  it('returns 404 EINSTEIN_FARM_NOT_FOUND when meta DB has no creds', async () => {
-    mockGetServerSession.mockResolvedValue(validSession);
+  it('returns 404 EINSTEIN_FARM_NOT_FOUND when a MEMBER farm has no meta creds', async () => {
+    // ein-M1: the membership gate now runs first, so the 404 branch is only
+    // reachable by a member whose farm vanished from the meta DB (race guard).
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'farmer@example.com',
+        farms: [{ slug: 'ghost', role: 'farm_admin' }],
+      },
+    });
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      prisma: mockPrisma,
+      slug: 'ghost',
+      role: 'farm_admin',
+    });
     mockGetFarmCreds.mockResolvedValue(null);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'ghost' }),
@@ -303,8 +334,15 @@ describe('POST /api/einstein/ask — tier gate', () => {
     expect(json.code).toBe('EINSTEIN_FARM_NOT_FOUND');
   });
 
-  it('returns 403 EINSTEIN_TIER_LOCKED for basic tier', async () => {
+  it('returns 403 EINSTEIN_TIER_LOCKED for basic tier (member)', async () => {
     mockGetServerSession.mockResolvedValue(validSession);
+    // ein-M1: tier gate runs after the membership gate, so members must pass
+    // authz before the tier is ever consulted.
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      prisma: mockPrisma,
+      slug: 'delta-livestock',
+      role: 'farm_admin',
+    });
     mockGetFarmCreds.mockResolvedValue(basicCreds);
     const resp = await POST(
       createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
@@ -329,6 +367,58 @@ describe('POST /api/einstein/ask — tier gate', () => {
     expect(resp.status).toBe(403);
     const json = await resp.json();
     expect(json.code).toBe('EINSTEIN_FORBIDDEN');
+  });
+});
+
+describe('POST /api/einstein/ask — authz precedes existence/tier probing (ein-M1)', () => {
+  // Stress-test finding ein-M1: getFarmCreds (404) and isPaidTier (403) used to
+  // run BEFORE the membership gate, so any logged-in user could enumerate farm
+  // existence + tier for farms they cannot access by diffing the responses.
+  // The route must consult the membership gate FIRST and return ONE uniform
+  // response to non-members regardless of whether the farm exists or what
+  // tier it is on.
+  const nonMemberSession = {
+    user: {
+      id: 'user-2',
+      email: 'intruder@example.com',
+      farms: [{ slug: 'other-farm', role: 'farm_admin' }],
+    },
+  };
+
+  async function probeAsNonMember(
+    creds: unknown,
+  ): Promise<{ status: number; body: string }> {
+    resetAll();
+    mockGetServerSession.mockResolvedValue(nonMemberSession);
+    mockGetFarmCreds.mockResolvedValue(creds);
+    // farm-prisma's membership check runs before any meta-DB lookup, so a
+    // non-member gets the same Forbidden shape whether or not the farm exists.
+    mockGetPrismaForSlugWithAuth.mockResolvedValue({
+      error: 'Forbidden',
+      status: 403,
+    });
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'target-farm' }),
+      CTX,
+    );
+    return { status: resp.status, body: await resp.text() };
+  }
+
+  it('non-member gets a byte-identical response for missing vs basic vs advanced farms', async () => {
+    const missing = await probeAsNonMember(null);
+    const basic = await probeAsNonMember(basicCreds);
+    const advanced = await probeAsNonMember(advancedCreds);
+    expect(basic).toEqual(missing);
+    expect(advanced).toEqual(missing);
+    expect(missing.status).toBe(403);
+    expect((JSON.parse(missing.body) as { code: string }).code).toBe(
+      'EINSTEIN_FORBIDDEN',
+    );
+  });
+
+  it('never touches the meta DB for a non-member (no existence/tier probe)', async () => {
+    await probeAsNonMember(advancedCreds);
+    expect(mockGetFarmCreds).not.toHaveBeenCalled();
   });
 });
 
@@ -365,7 +455,7 @@ describe('POST /api/einstein/ask — budget branch', () => {
 describe('POST /api/einstein/ask — happy path (advanced)', () => {
   it('returns 200 + text/event-stream; stamps cost BEFORE stream; writes RagQueryLog', async () => {
     happyPathDefaults();
-    mockStreamAnswer.mockImplementation((params) => {
+    mockStreamAnswer.mockImplementation(() => {
       return buildStreamEvents([
         { type: 'token', text: 'Hello ' },
         { type: 'token', text: 'world' },
@@ -514,6 +604,203 @@ describe('POST /api/einstein/ask — consulting tier', () => {
     await readSSE(resp);
     // Route always runs the check; consulting handling lives inside budget.ts.
     expect(mockAssertWithinBudget).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/einstein/ask — history caps (api-F1/EIN-2)', () => {
+  // Stress-test finding api-F1: `history` had no array-length or per-turn cap
+  // (only `question` was capped), so a client could ship a multi-MB context
+  // straight into the Sonnet call. The route must bound history BEFORE the
+  // model call: keep the most recent MAX_HISTORY_TURNS turns, clamp each
+  // turn's content to MAX_HISTORY_TURN_CHARS.
+  function finalOnlyStream() {
+    mockStreamAnswer.mockImplementation(() =>
+      buildStreamEvents([
+        {
+          type: 'final',
+          payload: { answer: 'ok', citations: [], confidence: 'low' },
+        },
+      ]),
+    );
+  }
+
+  it('keeps only the most recent MAX_HISTORY_TURNS turns', async () => {
+    happyPathDefaults();
+    finalOnlyStream();
+    const oversizedTurnCount = MAX_HISTORY_TURNS + 30;
+    const history = Array.from({ length: oversizedTurnCount }, (_, i) => ({
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `turn-${i}`,
+    }));
+
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'delta-livestock', history }),
+      CTX,
+    );
+    await readSSE(resp);
+
+    const call = mockStreamAnswer.mock.calls[0][0] as {
+      history: Array<{ role: string; content: string }>;
+    };
+    expect(call.history).toHaveLength(MAX_HISTORY_TURNS);
+    // The TAIL of the submitted array survives (most recent turns).
+    expect(call.history[0].content).toBe(`turn-${oversizedTurnCount - MAX_HISTORY_TURNS}`);
+    expect(call.history[MAX_HISTORY_TURNS - 1].content).toBe(
+      `turn-${oversizedTurnCount - 1}`,
+    );
+  });
+
+  it('clamps an oversized turn to MAX_HISTORY_TURN_CHARS', async () => {
+    happyPathDefaults();
+    finalOnlyStream();
+    const resp = await POST(
+      createRequest({
+        question: 'q',
+        farmSlug: 'delta-livestock',
+        history: [
+          { role: 'user', content: 'x'.repeat(MAX_HISTORY_TURN_CHARS * 3) },
+          { role: 'assistant', content: 'short' },
+        ],
+      }),
+      CTX,
+    );
+    await readSSE(resp);
+
+    const call = mockStreamAnswer.mock.calls[0][0] as {
+      history: Array<{ role: string; content: string }>;
+    };
+    expect(call.history).toHaveLength(2);
+    expect(call.history[0].content).toHaveLength(MAX_HISTORY_TURN_CHARS);
+    // In-bound turns pass through untouched.
+    expect(call.history[1].content).toBe('short');
+  });
+});
+
+describe('POST /api/einstein/ask — real usage reconciliation (api-F1/EIN-2)', () => {
+  // Stress-test finding EIN-2: cost was stamped from the fixed ESTIMATED_*
+  // constants and never reconciled to the SDK's reported usage — the logged
+  // cost was fiction and the budget never reflected real consumption. The
+  // stream now surfaces a `usage` event; the route must (a) log REAL tokens +
+  // cost in RagQueryLog and (b) apply the reconciling delta to the budget.
+  const USAGE = {
+    inputTokens: 100_000,
+    cacheCreationInputTokens: 50_000,
+    cacheReadInputTokens: 200_000,
+    outputTokens: 10_000,
+  };
+
+  function expectedActualCostZar(): number {
+    const usd =
+      (USAGE.inputTokens / 1_000_000) * SONNET_INPUT_USD_PER_1M +
+      (USAGE.cacheCreationInputTokens / 1_000_000) * SONNET_CACHE_WRITE_USD_PER_1M +
+      (USAGE.cacheReadInputTokens / 1_000_000) * SONNET_CACHE_READ_USD_PER_1M +
+      (USAGE.outputTokens / 1_000_000) * SONNET_OUTPUT_USD_PER_1M;
+    return usd * ZAR_PER_USD;
+  }
+
+  it('logs real tokens/cost and applies the reconciling budget delta', async () => {
+    happyPathDefaults();
+    mockStreamAnswer.mockImplementation(() =>
+      buildStreamEvents([
+        { type: 'token', text: 'hi' },
+        { type: 'usage', usage: USAGE },
+        {
+          type: 'final',
+          payload: { answer: 'hi', citations: [], confidence: 'low' },
+        },
+      ]),
+    );
+
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
+    );
+    await readSSE(resp);
+
+    // RagQueryLog reflects REAL usage, not the estimate.
+    expect(mockRagQueryLogCreate).toHaveBeenCalledTimes(1);
+    const logArgs = mockRagQueryLogCreate.mock.calls[0][0] as {
+      data: {
+        inputTokens: number;
+        outputTokens: number;
+        cachedInputTokens: number;
+        costZar: number;
+      };
+    };
+    expect(logArgs.data.inputTokens).toBe(USAGE.inputTokens);
+    expect(logArgs.data.outputTokens).toBe(USAGE.outputTokens);
+    expect(logArgs.data.cachedInputTokens).toBe(
+      USAGE.cacheReadInputTokens + USAGE.cacheCreationInputTokens,
+    );
+    expect(logArgs.data.costZar).toBeCloseTo(expectedActualCostZar(), 8);
+
+    // Budget reconciled by (actual − pre-stamped estimate).
+    expect(mockReconcileCostAfterSend).toHaveBeenCalledTimes(1);
+    const [slug, delta] = mockReconcileCostAfterSend.mock.calls[0] as [
+      string,
+      number,
+    ];
+    expect(slug).toBe('delta-livestock');
+    const stampedEstimate = mockStampCostBeforeSend.mock.calls[0][1] as number;
+    expect(delta).toBeCloseTo(expectedActualCostZar() - stampedEstimate, 8);
+  });
+
+  it('falls back to the pessimistic estimate when the stream reports no usage', async () => {
+    // Conservative path: if the SDK never reported usage (e.g. the call died
+    // before message_start), the pre-stamped pessimistic estimate stands.
+    happyPathDefaults();
+    mockStreamAnswer.mockImplementation(() =>
+      buildStreamEvents([
+        {
+          type: 'final',
+          payload: { answer: 'ok', citations: [], confidence: 'low' },
+        },
+      ]),
+    );
+
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
+    );
+    await readSSE(resp);
+
+    const logArgs = mockRagQueryLogCreate.mock.calls[0][0] as {
+      data: { inputTokens: number; outputTokens: number; costZar: number };
+    };
+    expect(logArgs.data.inputTokens).toBe(ESTIMATED_INPUT_TOKENS);
+    expect(logArgs.data.outputTokens).toBe(ESTIMATED_OUTPUT_TOKENS);
+    expect(logArgs.data.costZar).toBeGreaterThan(0);
+    expect(mockReconcileCostAfterSend).not.toHaveBeenCalled();
+  });
+
+  it('still reconciles when the stream errors AFTER usage was reported', async () => {
+    // The tokens were consumed even though the answer was rejected — the
+    // budget must reflect real spend on fabrication/parse failures too.
+    happyPathDefaults();
+    mockStreamAnswer.mockImplementation(() =>
+      buildStreamEvents([
+        { type: 'token', text: 'narr' },
+        { type: 'usage', usage: USAGE },
+        {
+          type: 'error',
+          code: 'EINSTEIN_CITATION_FABRICATION',
+          message: 'fake id cited',
+        },
+      ]),
+    );
+
+    const resp = await POST(
+      createRequest({ question: 'q', farmSlug: 'delta-livestock' }),
+      CTX,
+    );
+    await readSSE(resp);
+
+    expect(mockReconcileCostAfterSend).toHaveBeenCalledTimes(1);
+    const logArgs = mockRagQueryLogCreate.mock.calls[0][0] as {
+      data: { errorCode: string | null; costZar: number };
+    };
+    expect(logArgs.data.errorCode).toBe('EINSTEIN_CITATION_FABRICATION');
+    expect(logArgs.data.costZar).toBeCloseTo(expectedActualCostZar(), 8);
   });
 });
 
