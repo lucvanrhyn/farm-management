@@ -9,8 +9,10 @@ export async function DELETE(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, slug, session } = ctx;
+  // audit-allow-error-envelope: admin-reset (destructive) non-admin 403 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
+    // audit-allow-error-envelope: admin-reset (destructive) stale-admin 403 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -19,6 +21,7 @@ export async function DELETE(req: NextRequest) {
   try { body = await req.json(); } catch { body = null; }
   if ((body as Record<string, unknown> | null)?.confirm !== "DELETE ALL") {
     return NextResponse.json(
+      // audit-allow-error-envelope: admin-reset confirmation-required 400 — the literal text IS the operator contract (instructs the required {confirm:'DELETE ALL'} body); must stay bare.
       { error: 'Send { "confirm": "DELETE ALL" } to confirm this destructive action' },
       { status: 400 },
     );

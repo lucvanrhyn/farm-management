@@ -136,6 +136,7 @@ export const POST = publicHandler({
 
   if (!isValidPayFastIP(ip)) {
     logger.warn('[payfast-itn] Rejected request from IP', { ip });
+    // audit-allow-error-envelope: payfast ITN webhook IP-allowlist 403 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -144,6 +145,7 @@ export const POST = publicHandler({
   try {
     body = await req.text();
   } catch {
+    // audit-allow-error-envelope: payfast ITN webhook body-read 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
@@ -151,6 +153,7 @@ export const POST = publicHandler({
   const { signature: receivedSignature, ...paramsWithoutSig } = rawParams;
 
   if (!receivedSignature) {
+    // audit-allow-error-envelope: payfast ITN webhook missing-signature 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
@@ -163,6 +166,7 @@ export const POST = publicHandler({
       expected: expectedSignature,
       got: receivedSignature,
     });
+    // audit-allow-error-envelope: payfast ITN webhook signature-mismatch 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -170,6 +174,7 @@ export const POST = publicHandler({
   const isValid = await validateITN(rawParams);
   if (!isValid) {
     logger.warn('[payfast-itn] PayFast ITN validation returned INVALID');
+    // audit-allow-error-envelope: payfast ITN server-validate reject 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'ITN validation failed' }, { status: 400 });
   }
 
@@ -183,6 +188,7 @@ export const POST = publicHandler({
 
   if (!farmSlug) {
     logger.error('[payfast-itn] Missing custom_str1 (farmSlug)');
+    // audit-allow-error-envelope: payfast ITN missing-farm-identifier 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Missing farm identifier' }, { status: 400 });
   }
 
@@ -191,6 +197,7 @@ export const POST = publicHandler({
     // would rather have PayFast surface the misconfiguration than silently
     // accept potentially-replayable events.
     logger.warn('[payfast-itn] Missing pf_payment_id', { farmSlug });
+    // audit-allow-error-envelope: payfast ITN missing-pf_payment_id 400 — machine-to-machine response shape, payment-surface contract; must stay bare (S26/Wave G).
     return NextResponse.json({ error: 'Missing pf_payment_id' }, { status: 400 });
   }
 

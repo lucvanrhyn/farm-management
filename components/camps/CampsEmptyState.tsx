@@ -17,6 +17,19 @@ import Link from "next/link";
  * Pattern mirrors `components/admin/breeding/NoPedigreeEmptyState.tsx`
  * (why/how explainer + a single primary CTA, palette-consistent).
  */
+
+// Per-species camps surface. NOT every species owns a `/[slug]/<species>/camps`
+// route: cattle and game manage camps on the cross-species admin camps home
+// (`/admin/camps`, ADR-0005); only sheep has its own namespace page (#229). The
+// empty-state CTA must resolve for whichever species is active — the /map
+// overlay passes the live FarmMode, which can be cattle | sheep | game — so the
+// href is derived from this map rather than assuming `/<species>/camps` exists.
+// Before sp-M2, the CTA was `/${slug}/${species}/camps`, a dead 404 link for
+// cattle and game on the map empty-state.
+const CAMPS_HREF_BY_SPECIES: Record<string, (slug: string) => string> = {
+  sheep: (slug) => `/${slug}/sheep/camps`,
+};
+
 export default function CampsEmptyState({
   farmSlug,
   speciesLabel,
@@ -28,7 +41,11 @@ export default function CampsEmptyState({
   variant?: "page" | "overlay";
 }) {
   const testId = variant === "overlay" ? "map-empty-state" : "camps-empty-state";
-  const addCampHref = `/${farmSlug}/${speciesLabel}/camps`;
+  // Fall back to the cross-species admin camps home for any species without a
+  // dedicated namespace page (cattle, game) so the CTA never 404s.
+  const addCampHref =
+    CAMPS_HREF_BY_SPECIES[speciesLabel]?.(farmSlug) ??
+    `/${farmSlug}/admin/camps`;
 
   const card = (
     <div

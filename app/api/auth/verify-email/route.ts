@@ -50,6 +50,7 @@ export const GET = publicHandler({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error('[verify-email]', { message, stack: err instanceof Error ? err.stack : '' });
+      // audit-allow-error-envelope: verify-email catch-all 500 intentionally generic — real error logged server-side (line 52), never returned (info-leak control); must stay bare.
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },

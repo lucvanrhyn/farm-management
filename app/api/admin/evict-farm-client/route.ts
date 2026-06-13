@@ -17,10 +17,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const slug = typeof body?.slug === "string" ? body.slug.trim() : "";
   if (!slug) {
+    // audit-allow-error-envelope: evict-farm-client missing-slug 400 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: "slug is required" }, { status: 400 });
   }
 
   if (getUserRoleForFarm(session, slug) !== "ADMIN") {
+    // audit-allow-error-envelope: evict-farm-client non-admin 403 left bare pending admin-surface envelope migration sign-off (file already routeErrors the 401); convert under Wave F/G.
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

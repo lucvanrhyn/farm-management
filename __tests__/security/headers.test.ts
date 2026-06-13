@@ -16,7 +16,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildCsp, buildSecurityHeaders } from "@/lib/security/csp";
+import {
+  buildCsp,
+  buildCspCandidate,
+  buildSecurityHeaders,
+} from "@/lib/security/csp";
 
 describe("buildSecurityHeaders", () => {
   const headers = buildSecurityHeaders();
@@ -48,24 +52,32 @@ describe("buildSecurityHeaders", () => {
     );
   });
 
-  it("enforces CSP after 2026-05-11 soak (flipped from Report-Only)", () => {
-    // Wave CSP-Enforce (2026-05-11): after a clean 2-week Report-Only soak
-    // (started 2026-04-27, no production-impacting violations) we flipped
-    // the header key to `Content-Security-Policy`. The unsafe-inline /
-    // unsafe-eval tokens stay — moving to nonces is a separate refactor.
+  it("keeps the ENFORCED CSP and adds the ADR-0008 Report-Only candidate", () => {
+    // Wave CSP-Enforce (2026-05-11) flipped the enforced header key to
+    // `Content-Security-Policy`. ADR-0008 Phase 0 then ADDS a parallel,
+    // stricter `Content-Security-Policy-Report-Only` candidate (script-src
+    // minus 'unsafe-eval') to soak telemetry without blocking anything — the
+    // enforced policy is unchanged and still present.
     expect(map.has("Content-Security-Policy")).toBe(true);
-    expect(map.has("Content-Security-Policy-Report-Only")).toBe(false);
+    expect(map.has("Content-Security-Policy-Report-Only")).toBe(true);
+    // The enforced policy keeps its current (weaker) tokens until the soak
+    // clears — the candidate is the only thing that drops 'unsafe-eval'.
+    expect(map.get("Content-Security-Policy")).toContain("'unsafe-eval'");
+    expect(map.get("Content-Security-Policy-Report-Only")).not.toContain(
+      "'unsafe-eval'",
+    );
   });
 
-  it("emits exactly the seven expected headers (no surprise additions)", () => {
-    // Wave 4 A8 (2026-05-02): added `Reporting-Endpoints` so the CSP
-    // report-only soak actually collects telemetry. Detailed contract
-    // for the new header lives in `csp-report.test.ts`. Wave CSP-Enforce
-    // (2026-05-11): `Content-Security-Policy-Report-Only` → `Content-Security-Policy`.
+  it("emits exactly the eight expected headers (no surprise additions)", () => {
+    // Wave 4 A8 (2026-05-02): added `Reporting-Endpoints`. Wave CSP-Enforce
+    // (2026-05-11): `Content-Security-Policy-Report-Only` → enforced. ADR-0008
+    // Phase 0: re-added `Content-Security-Policy-Report-Only` as the stricter
+    // candidate (alongside, not replacing, the enforced policy).
     const keys = headers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
         "Content-Security-Policy",
+        "Content-Security-Policy-Report-Only",
         "Permissions-Policy",
         "Referrer-Policy",
         "Reporting-Endpoints",
@@ -74,6 +86,35 @@ describe("buildSecurityHeaders", () => {
         "X-Frame-Options",
       ].sort(),
     );
+  });
+});
+
+describe("buildCspCandidate (ADR-0008 Phase-0 Report-Only candidate)", () => {
+  const enforced = buildCsp();
+  const candidate = buildCspCandidate();
+
+  function scriptSrc(csp: string): string[] {
+    const dir = csp
+      .split(";")
+      .map((d) => d.trim())
+      .find((d) => d.startsWith("script-src "));
+    return dir ? dir.split(/\s+/).slice(1) : [];
+  }
+
+  it("drops 'unsafe-eval' from script-src while the enforced policy keeps it", () => {
+    expect(scriptSrc(enforced)).toContain("'unsafe-eval'");
+    expect(scriptSrc(candidate)).not.toContain("'unsafe-eval'");
+  });
+
+  it("still allows 'unsafe-inline' in script-src (that token is dropped in a later phase)", () => {
+    expect(scriptSrc(candidate)).toContain("'unsafe-inline'");
+    expect(scriptSrc(candidate)).toContain("'self'");
+  });
+
+  it("otherwise matches the enforced policy (only script-src differs this phase)", () => {
+    // Cheap structural proof: the two policies are identical once the single
+    // dropped token is removed from the enforced one.
+    expect(candidate).toBe(enforced.replace(" 'unsafe-eval'", ""));
   });
 });
 
