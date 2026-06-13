@@ -204,6 +204,7 @@ export const POST = publicHandler({
       pfPaymentId,
       receivedMerchantId: rawParams.merchant_id,
     });
+    // audit-allow-error-envelope: payfast webhook is a payment route deliberately kept on bare-string wire-shapes (S26-excluded); the auth/payment envelope migration is its own sign-off (Wave G).
     return NextResponse.json({ error: 'Merchant mismatch' }, { status: 400 });
   }
 
