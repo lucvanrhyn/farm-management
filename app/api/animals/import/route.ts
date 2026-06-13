@@ -87,10 +87,11 @@ export const POST = adminWrite({
     }
 
     // Wave 1 W1d migrated from `xlsx@0.18.5` to ExcelJS via `lib/xlsx-shim`.
-    // The shim deliberately handles `.xlsx` only — it has no CSV parser and
-    // no BIFF8 (`.xls`) reader. Accepting those extensions and letting the
-    // shim throw unhandled produced a 500 with no useful message; per
-    // silent-failure-pattern.md we surface a typed-error 400 instead.
+    // This admin route's contract is `.xlsx`-only (the shim has no BIFF8
+    // `.xls` reader; CSV intake lives in the onboarding wizard — S13/OB-csv).
+    // Accepting other extensions and letting the shim throw unhandled
+    // produced a 500 with no useful message; per silent-failure-pattern.md
+    // we surface a typed-error 400 instead.
     const XLSX_MIME =
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     const isXlsxByExt = /\.xlsx$/i.test(file.name);
