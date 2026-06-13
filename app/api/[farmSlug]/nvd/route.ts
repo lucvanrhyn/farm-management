@@ -129,7 +129,7 @@ export const POST = adminWriteSlug<IssueBody, { farmSlug: string }>({
     // those). The 429 wire shape is preserved verbatim — `adminWriteSlug`
     // passes any non-2xx Response from `handle` through unchanged and
     // revalidate is skipped for non-2xx.
-    const rl = checkRateLimit(
+    const rl = await checkRateLimit(
       `nvd-issue:${params.farmSlug}`,
       10,
       10 * 60 * 1000,

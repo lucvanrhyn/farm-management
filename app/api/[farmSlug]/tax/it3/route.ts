@@ -95,7 +95,7 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     }
 
     // Rate limit: 5 IT3 issues per 10 minutes per farm (heavy aggregation)
-    const rl = checkRateLimit(`it3-issue:${farmSlug}`, 5, 10 * 60 * 1000);
+    const rl = await checkRateLimit(`it3-issue:${farmSlug}`, 5, 10 * 60 * 1000);
     if (!rl.allowed) {
       return routeError(
         "RATE_LIMITED",

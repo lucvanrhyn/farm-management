@@ -42,7 +42,7 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     const prisma = ctx.prisma;
 
     // Rate limit: 20 exports per 10 minutes per farm (PDF generation is CPU-intensive)
-    const rl = checkRateLimit(`export:${farmSlug}`, 20, 10 * 60 * 1000);
+    const rl = await checkRateLimit(`export:${farmSlug}`, 20, 10 * 60 * 1000);
     if (!rl.allowed) {
       return routeError("RATE_LIMITED", "Too many export requests. Please wait.", 429);
     }

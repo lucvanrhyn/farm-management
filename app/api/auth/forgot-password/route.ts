@@ -35,7 +35,7 @@ export const POST = publicHandler({
     // ── Per-IP rate limit (hard block) ─────────────────────────────────────
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-    const ipRl = checkRateLimit(`forgot-password-ip:${ip}`, 5, 60 * 60 * 1000);
+    const ipRl = await checkRateLimit(`forgot-password-ip:${ip}`, 5, 60 * 60 * 1000);
     if (!ipRl.allowed) {
       return routeError('RATE_LIMITED', 'Too many requests. Try again later.', 429);
     }
@@ -55,7 +55,7 @@ export const POST = publicHandler({
     }
 
     // ── Per-email rate limit (silent — anti-enumeration preserved) ──────────
-    const emailRl = checkRateLimit(
+    const emailRl = await checkRateLimit(
       `forgot-password-email:${email}`,
       3,
       60 * 60 * 1000,
