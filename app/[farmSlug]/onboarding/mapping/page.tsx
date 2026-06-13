@@ -42,7 +42,9 @@ const TARGET_FIELDS: TargetField[] = [
   { value: "species", label: "Species" },
   { value: "registrationNumber", label: "Registration Number" },
   { value: "deceasedAt", label: "Deceased Date" },
-  { value: "notes", label: "Notes" },
+  // S11 (H1/OB-001): "notes" removed — Animal has no notes column, so the
+  // option silently discarded the mapped column. Free-text pedigree columns
+  // map to sireNote/damNote; anything else should be explicitly ignored.
 ];
 
 const IGNORED_OPTION: TargetField = {

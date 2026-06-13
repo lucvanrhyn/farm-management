@@ -5,7 +5,7 @@
  * The calling HTTP route (B4b) wraps this with auth + SSE streaming.
  *
  * Pipeline:
- *  1. Validation   — de-dupe within batch, check earTag/birthDate/sex
+ *  1. Validation   — de-dupe within batch, check earTag/dateOfBirth/sex/status
  *  2. Pedigree     — topological sort so sires/dams are inserted first,
  *                    detect cycles, prune affected rows
  *  3. Inserting    — transactional prisma.animal.create per row; per-row
@@ -13,10 +13,12 @@
  *  4. Done         — update ImportJob with final counts
  *
  * Schema note: this repo's Animal model stores parent ear-tag strings in
- * `fatherId`/`motherId` (no FK). The public ImportRow API mirrors the task
- * spec (`earTag`, `sireEarTag`, `damEarTag`, ...) and we translate to schema
- * names at insert time. Pedigree resolution still runs a topological sort
- * so cycles are rejected and ordering is deterministic.
+ * `fatherId`/`motherId` (no FK). ImportRow speaks the SAME schema-name
+ * vocabulary the AI wizard emits as mapping targets (S11 / H1 / OB-001 —
+ * see `IMPORT_ROW_FIELDS` in client-types.ts): `motherId`/`fatherId` are
+ * ear-tag references resolved against this batch + existing animals.
+ * Pedigree resolution runs a topological sort so cycles are rejected and
+ * ordering is deterministic.
  *
  * ImportJob fields used: `rowsImported`, `rowsFailed`, `warnings`, `status`,
  * `completedAt`.
@@ -25,21 +27,36 @@
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { AFRIKAANS_STATUS_MAP } from "@/lib/onboarding/schema-dictionary";
+import { sanitizeCellString } from "@/lib/onboarding/sanitize-cells";
 
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
 
+/**
+ * One spreadsheet row in the canonical schema-name vocabulary.
+ *
+ * Field names MUST stay in lock-step with `IMPORT_ROW_FIELDS`
+ * (lib/onboarding/client-types.ts) — a compile-time assertion there fails the
+ * build on drift. Enum-ish fields (`sex`, `status`, `category`) are `string`
+ * on the wire and validated here, at the system boundary.
+ */
 export type ImportRow = {
-  earTag: string; // required, unique per animal within farm
-  sex?: "Male" | "Female";
-  birthDate?: Date | string; // ISO or Date
+  earTag: string; // required, unique per animal within farm (Animal.animalId)
+  registrationNumber?: string; // stud book number
   breed?: string;
-  campId?: string; // must reference existing camp.campId
-  sireEarTag?: string; // pedigree — may reference another row in THIS import
-  damEarTag?: string; // pedigree — may reference another row in THIS import
-  notes?: string;
+  sex?: string; // "Male" | "Female" — validated in validateRows
+  category?: string; // Cow/Bull/Heifer/... — free label, defaults "Unknown"
+  dateOfBirth?: Date | string; // ISO or Date
+  motherId?: string; // dam ear-tag ref — may reference another row in THIS import
+  fatherId?: string; // sire ear-tag ref — may reference another row in THIS import
+  currentCamp?: string; // camp reference (campId slug or raw camp name)
+  status?: string; // Active | Sold | Deceased (Afrikaans normalized server-side)
   species?: string; // per-row override of defaultSpecies; validated against ALLOWED_SPECIES
+  deceasedAt?: Date | string; // ISO or Date — only meaningful with status Deceased
+  sireNote?: string; // free-text fallback when the sire isn't in this file
+  damNote?: string; // free-text fallback when the dam isn't in this file
 };
 
 export type CommitImportInput = {
@@ -87,6 +104,19 @@ const TRANSACTION_TIMEOUT_MS = 60_000;
  */
 const ALLOWED_SPECIES = new Set(["cattle", "sheep", "goats", "game"]);
 
+/**
+ * Hard bound on the camp-resolution lookup (S12). Real farms hold tens of
+ * camps; this exists purely so the `findMany` is provably bounded
+ * (audit-findmany-no-take) even on a pathological tenant.
+ */
+const CAMP_LOOKUP_LIMIT = 1_000;
+
+/**
+ * Sentinel `Animal.currentCamp` value for rows that reference no camp.
+ * Pre-dates S12; intentionally NOT materialized as a Camp row.
+ */
+const UNASSIGNED_CAMP = "unassigned";
+
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
@@ -95,18 +125,26 @@ type ValidatedRow = {
   /** Index in the original input.rows array (1-based for reporting). */
   originalIndex: number;
   earTag: string;
-  sex?: "Male" | "Female";
-  birthDateIso?: string;
+  registrationNumber?: string;
   breed?: string;
-  campId?: string;
-  sireEarTag?: string;
-  damEarTag?: string;
-  notes?: string;
+  sex?: "Male" | "Female";
+  category?: string;
+  dateOfBirthIso?: string;
+  /** Dam ear-tag reference (in-batch or existing animal). */
+  motherId?: string;
+  /** Sire ear-tag reference (in-batch or existing animal). */
+  fatherId?: string;
+  currentCamp?: string;
+  /** Canonical "Active" | "Sold" | "Deceased". */
+  status?: string;
   /** Resolved per-row species (row.species if valid, else undefined — caller applies defaultSpecies at insert). */
   species?: string;
+  deceasedAtIso?: string;
+  sireNote?: string;
+  damNote?: string;
 };
 
-function parseBirthDate(value: Date | string): string | null {
+function parseDateOnly(value: Date | string): string | null {
   if (value instanceof Date) {
     return isNaN(value.getTime()) ? null : value.toISOString().split("T")[0];
   }
@@ -116,6 +154,116 @@ function parseBirthDate(value: Date | string): string | null {
   const parsed = Date.parse(trimmed);
   if (isNaN(parsed)) return null;
   return new Date(parsed).toISOString().split("T")[0];
+}
+
+/**
+ * Trim an optional string field; empty/whitespace-only collapses to undefined.
+ * Rows arrive from a JSON HTTP boundary, so a field typed `string` may carry
+ * any JSON value at runtime — non-strings collapse to undefined instead of
+ * throwing mid-validation.
+ */
+function trimmedOrUndefined(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return value.trim() || undefined;
+}
+
+/**
+ * Trim + formula-injection-neutralize a persisted free-text field
+ * (S15 / M3). The client sanitizes parsed files, but a direct API POST
+ * bypasses the client — the server boundary must do it itself. Sanitize
+ * AFTER trim so a leading-space payload (" =1+1") is still caught, and
+ * idempotently (a client-prefixed "'=x" is never double-prefixed).
+ */
+function sanitizedOrUndefined(value: string | undefined): string | undefined {
+  const trimmed = trimmedOrUndefined(value);
+  return trimmed === undefined ? undefined : sanitizeCellString(trimmed);
+}
+
+/**
+ * Validate a single row. Returns the validated shape, or a per-row error.
+ * `seenEarTags` is mutated by the caller AFTER a row is accepted.
+ */
+function validateRow(
+  row: ImportRow,
+  rowNum: number,
+  seenEarTags: ReadonlySet<string>,
+): { ok: ValidatedRow } | { err: CommitImportError } {
+  const rawEarTag =
+    typeof row.earTag === "string" ? sanitizeCellString(row.earTag.trim()) : "";
+
+  if (!rawEarTag) {
+    return { err: { row: rowNum, reason: "missing earTag" } };
+  }
+  if (seenEarTags.has(rawEarTag)) {
+    return {
+      err: { row: rowNum, earTag: rawEarTag, reason: "duplicate earTag within import" },
+    };
+  }
+  if (row.sex !== undefined && row.sex !== "Male" && row.sex !== "Female") {
+    return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid sex" } };
+  }
+  if (
+    row.species !== undefined &&
+    row.species !== null &&
+    row.species !== "" &&
+    !ALLOWED_SPECIES.has(row.species)
+  ) {
+    return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid species" } };
+  }
+
+  let dateOfBirthIso: string | undefined;
+  if (row.dateOfBirth !== undefined && row.dateOfBirth !== null && row.dateOfBirth !== "") {
+    const parsed = parseDateOnly(row.dateOfBirth);
+    if (parsed === null) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid dateOfBirth" } };
+    }
+    dateOfBirthIso = parsed;
+  }
+
+  let deceasedAtIso: string | undefined;
+  if (row.deceasedAt !== undefined && row.deceasedAt !== null && row.deceasedAt !== "") {
+    const parsed = parseDateOnly(row.deceasedAt);
+    if (parsed === null) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid deceasedAt" } };
+    }
+    deceasedAtIso = parsed;
+  }
+
+  let status: string | undefined;
+  const rawStatus = trimmedOrUndefined(row.status);
+  if (rawStatus !== undefined) {
+    const normalized = AFRIKAANS_STATUS_MAP[rawStatus.toLowerCase()];
+    if (normalized === undefined) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid status" } };
+    }
+    status = normalized;
+  }
+
+  const resolvedSpecies =
+    row.species && ALLOWED_SPECIES.has(row.species) ? row.species : undefined;
+
+  return {
+    ok: {
+      originalIndex: rowNum,
+      earTag: rawEarTag,
+      // Free-text fields are sanitized at this boundary (S15 / M3);
+      // sex/status are closed enums (invalid payloads already rejected
+      // above) and dates are re-emitted as ISO strings.
+      registrationNumber: sanitizedOrUndefined(row.registrationNumber),
+      breed: sanitizedOrUndefined(row.breed),
+      sex: row.sex,
+      category: sanitizedOrUndefined(row.category),
+      dateOfBirthIso,
+      motherId: sanitizedOrUndefined(row.motherId),
+      fatherId: sanitizedOrUndefined(row.fatherId),
+      currentCamp: sanitizedOrUndefined(row.currentCamp),
+      status,
+      species: resolvedSpecies,
+      deceasedAtIso,
+      sireNote: sanitizedOrUndefined(row.sireNote),
+      damNote: sanitizedOrUndefined(row.damNote),
+    },
+  };
 }
 
 /**
@@ -131,58 +279,12 @@ function validateRows(
   const seenEarTags = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 1;
-    const rawEarTag = typeof row.earTag === "string" ? row.earTag.trim() : "";
-
-    if (!rawEarTag) {
-      errors.push({ row: rowNum, reason: "missing earTag" });
-    } else if (seenEarTags.has(rawEarTag)) {
-      errors.push({
-        row: rowNum,
-        earTag: rawEarTag,
-        reason: "duplicate earTag within import",
-      });
-    } else if (row.sex !== undefined && row.sex !== "Male" && row.sex !== "Female") {
-      errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid sex" });
-    } else if (
-      row.species !== undefined &&
-      row.species !== null &&
-      row.species !== "" &&
-      !ALLOWED_SPECIES.has(row.species)
-    ) {
-      errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid species" });
+    const result = validateRow(rows[i], i + 1, seenEarTags);
+    if ("err" in result) {
+      errors.push(result.err);
     } else {
-      let birthDateIso: string | undefined;
-      if (row.birthDate !== undefined && row.birthDate !== null && row.birthDate !== "") {
-        const parsed = parseBirthDate(row.birthDate);
-        if (parsed === null) {
-          errors.push({ row: rowNum, earTag: rawEarTag, reason: "invalid birthDate" });
-          // Emit progress before continuing
-          if ((i + 1) % VALIDATE_PROGRESS_INTERVAL === 0) {
-            onProgress?.({ phase: "validating", processed: i + 1, total: rows.length });
-          }
-          continue;
-        }
-        birthDateIso = parsed;
-      }
-
-      const resolvedSpecies =
-        row.species && ALLOWED_SPECIES.has(row.species) ? row.species : undefined;
-
-      seenEarTags.add(rawEarTag);
-      kept.push({
-        originalIndex: rowNum,
-        earTag: rawEarTag,
-        sex: row.sex,
-        birthDateIso,
-        breed: row.breed,
-        campId: row.campId,
-        sireEarTag: row.sireEarTag?.trim() || undefined,
-        damEarTag: row.damEarTag?.trim() || undefined,
-        notes: row.notes,
-        species: resolvedSpecies,
-      });
+      seenEarTags.add(result.ok.earTag);
+      kept.push(result.ok);
     }
 
     if ((i + 1) % VALIDATE_PROGRESS_INTERVAL === 0) {
@@ -204,9 +306,9 @@ function validateRows(
  * parent. Cycles cause every row in the cycle to be dropped with
  * "pedigree cycle".
  *
- * Rows with a sire/dam that references an ear tag not in this batch are
- * unaffected by ordering — they rely on existing DB state, which the insert
- * phase validates.
+ * Rows with a `fatherId`/`motherId` that references an ear tag not in this
+ * batch are unaffected by ordering — they rely on existing DB state, which
+ * the insert phase validates.
  */
 function topologicallyOrder(
   rows: ValidatedRow[],
@@ -222,15 +324,15 @@ function topologicallyOrder(
 
   for (const row of rows) {
     const parents = new Set<string>();
-    if (row.sireEarTag && byEarTag.has(row.sireEarTag)) parents.add(row.sireEarTag);
-    if (row.damEarTag && byEarTag.has(row.damEarTag)) parents.add(row.damEarTag);
+    if (row.fatherId && byEarTag.has(row.fatherId)) parents.add(row.fatherId);
+    if (row.motherId && byEarTag.has(row.motherId)) parents.add(row.motherId);
 
     // Self-reference is a trivial cycle.
     if (parents.has(row.earTag)) {
       // handled below in cycle detection; for now include it
     }
     inBatchParents.set(row.earTag, parents);
-    if (parents.size > 0 || row.sireEarTag || row.damEarTag) {
+    if (parents.size > 0 || row.fatherId || row.motherId) {
       rowsNeedingPedigree.push(row);
     }
   }
@@ -303,6 +405,179 @@ function topologicallyOrder(
   return { ordered, errors };
 }
 
+/**
+ * Detect a unique-constraint violation across the shapes we see in practice:
+ * Prisma's typed P2002 and the raw libSQL/SQLite "UNIQUE constraint failed"
+ * driver message.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  ) {
+    return true;
+  }
+  return err instanceof Error && /unique constraint/i.test(err.message);
+}
+
+/**
+ * Map a per-row insert failure to a TYPED, user-safe reason
+ * (S17 / OB-005 / api-F2). These reasons stream to the SSE client and
+ * persist into `ImportJob.warnings`, so the raw Prisma/driver message —
+ * which carries internal schema text (table/column names, invocation
+ * payload) — must never be forwarded. Same convention as
+ * `mapApiDomainError`'s DB_QUERY_FAILED sanitization (#483): typed message
+ * to the caller, full error to the server log.
+ *
+ * Two branches, each with its own code path:
+ *  - unique violation → the actionable duplicate message (expected user
+ *    error: the animal is already registered; no server log needed);
+ *  - anything else    → opaque generic reason + full server-side log.
+ */
+function insertFailureReason(err: unknown, earTag: string): string {
+  if (isUniqueViolation(err)) {
+    return "earTag already exists";
+  }
+  logger.error("commitImport: row insert failed", {
+    earTag,
+    error: err instanceof Error ? err.message : err,
+  });
+  return "database error — row not inserted";
+}
+
+/** Camp reference -> campId slug, per the wizard contract (lowercase, dashes for spaces). */
+function slugifyCampRef(ref: string): string {
+  return ref.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+/** Composite key for a camp reference: camps are unique per (species, campId). */
+function campKey(species: string, ref: string): string {
+  return `${species} ${ref}`;
+}
+
+/**
+ * Phase 2.5 (S12 / H2 / OB-006) — resolve every referenced camp BEFORE the
+ * insert phase. Previously `currentCamp` was written with no existence
+ * check and no camp was ever created, so imported animals pointed at camps
+ * that did not exist.
+ *
+ * - Existing camps are matched per species by campId (exact or slugified
+ *   reference) or by display name (trimmed, case-insensitive) and reused.
+ * - Unknown references become species-scoped placeholder camps (composite
+ *   (species, campId) key — ADR-0005 / #28 Phase A); the farmer draws the
+ *   boundary post-import.
+ * - A unique-constraint race on placeholder creation means a concurrent
+ *   import won — treat the camp as existing.
+ * - Any other creation failure drops ONLY the affected rows with a typed
+ *   per-row reason (never the raw driver text), so one bad camp cannot
+ *   re-introduce the dangling-reference bug for its rows.
+ *
+ * Returns a NEW row array (rows are never mutated) with `currentCamp`
+ * rewritten to the resolved campId.
+ */
+async function resolveReferencedCamps(
+  prisma: PrismaClient,
+  rows: ValidatedRow[],
+  defaultSpecies: string,
+): Promise<{ resolvedRows: ValidatedRow[]; errors: CommitImportError[] }> {
+  const needed = new Map<string, { species: string; ref: string }>();
+  for (const row of rows) {
+    if (!row.currentCamp) continue;
+    const species = row.species ?? defaultSpecies;
+    needed.set(campKey(species, row.currentCamp), {
+      species,
+      ref: row.currentCamp,
+    });
+  }
+  if (needed.size === 0) {
+    return { resolvedRows: rows, errors: [] };
+  }
+
+  const speciesList = Array.from(
+    new Set(Array.from(needed.values(), (n) => n.species)),
+  );
+  // cross-species by design: one query resolves every species bucket in the
+  // batch; per-species matching happens below against the composite key.
+  const existingCamps = await crossSpecies(
+    prisma,
+    "species-registry-internal",
+  ).camp.findMany({
+    where: { species: { in: speciesList } },
+    select: { campId: true, campName: true, species: true },
+    take: CAMP_LOOKUP_LIMIT,
+  });
+
+  // species -> normalized lookup token -> campId
+  const lookupBySpecies = new Map<string, Map<string, string>>();
+  for (const camp of existingCamps) {
+    const lookup =
+      lookupBySpecies.get(camp.species) ?? new Map<string, string>();
+    lookup.set(camp.campId.toLowerCase(), camp.campId);
+    lookup.set(camp.campName.trim().toLowerCase(), camp.campId);
+    lookupBySpecies.set(camp.species, lookup);
+  }
+
+  const resolvedByKey = new Map<string, string>();
+  const failedKeys = new Set<string>();
+  for (const [key, { species, ref }] of needed) {
+    const lookup = lookupBySpecies.get(species);
+    const matched =
+      lookup?.get(ref.trim().toLowerCase()) ?? lookup?.get(slugifyCampRef(ref));
+    if (matched !== undefined) {
+      resolvedByKey.set(key, matched);
+      continue;
+    }
+
+    const slug = slugifyCampRef(ref);
+    try {
+      // Placeholder camp: no boundary/size yet — the farmer completes it
+      // post-import. `create` carries the species explicitly (the facade
+      // deliberately does not wrap creates — see species-scoped-prisma.ts).
+      await prisma.camp.create({
+        data: { campId: slug, campName: ref.trim(), species },
+      });
+      resolvedByKey.set(key, slug);
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        // Concurrent import created it between lookup and create.
+        resolvedByKey.set(key, slug);
+      } else {
+        logger.error("commitImport: failed to create placeholder camp", {
+          campId: slug,
+          species,
+          error: err instanceof Error ? err.message : err,
+        });
+        failedKeys.add(key);
+      }
+    }
+  }
+
+  const resolvedRows: ValidatedRow[] = [];
+  const errors: CommitImportError[] = [];
+  for (const row of rows) {
+    if (!row.currentCamp) {
+      resolvedRows.push(row);
+      continue;
+    }
+    const key = campKey(row.species ?? defaultSpecies, row.currentCamp);
+    const campId = resolvedByKey.get(key);
+    if (campId === undefined) {
+      errors.push({
+        row: row.originalIndex,
+        earTag: row.earTag,
+        reason: "camp could not be created",
+      });
+      continue;
+    }
+    resolvedRows.push(
+      campId === row.currentCamp ? row : { ...row, currentCamp: campId },
+    );
+  }
+  return { resolvedRows, errors };
+}
+
 // -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
@@ -338,8 +613,20 @@ export async function commitImport(
   // ---------------------------------------------------------------------------
   // Phase 2 — pedigree topo sort
   // ---------------------------------------------------------------------------
-  const { ordered, errors: pedigreeErrors } = topologicallyOrder(validated, onProgress);
+  const { ordered: orderedRaw, errors: pedigreeErrors } = topologicallyOrder(
+    validated,
+    onProgress,
+  );
   errors.push(...pedigreeErrors);
+
+  // ---------------------------------------------------------------------------
+  // Phase 2.5 — camp resolution (S12 / H2 / OB-006): reuse existing camps,
+  // create species-scoped placeholders for the rest, rewrite currentCamp to
+  // the resolved campId so the insert below never dangles.
+  // ---------------------------------------------------------------------------
+  const { resolvedRows: ordered, errors: campErrors } =
+    await resolveReferencedCamps(prisma, orderedRaw, defaultSpecies);
+  errors.push(...campErrors);
 
   // ---------------------------------------------------------------------------
   // Phase 3 — transactional insert
@@ -347,8 +634,8 @@ export async function commitImport(
   // Resolve existing ear tags to animalId (the ID stored in fatherId/motherId).
   const parentTags = new Set<string>();
   for (const row of ordered) {
-    if (row.sireEarTag) parentTags.add(row.sireEarTag);
-    if (row.damEarTag) parentTags.add(row.damEarTag);
+    if (row.fatherId) parentTags.add(row.fatherId);
+    if (row.motherId) parentTags.add(row.motherId);
   }
 
   let existingByTag = new Map<string, string>();
@@ -375,50 +662,51 @@ export async function commitImport(
       for (let i = 0; i < ordered.length; i++) {
         const row = ordered[i];
 
-        const fatherId =
-          row.sireEarTag && resolvedByTag.has(row.sireEarTag)
-            ? resolvedByTag.get(row.sireEarTag)!
-            : row.sireEarTag
-              ? null
-              : null;
-        const motherId =
-          row.damEarTag && resolvedByTag.has(row.damEarTag)
-            ? resolvedByTag.get(row.damEarTag)!
-            : row.damEarTag
-              ? null
-              : null;
+        const resolvedSire =
+          row.fatherId && resolvedByTag.has(row.fatherId)
+            ? resolvedByTag.get(row.fatherId)!
+            : null;
+        const resolvedDam =
+          row.motherId && resolvedByTag.has(row.motherId)
+            ? resolvedByTag.get(row.motherId)!
+            : null;
 
         try {
           await tx.animal.create({
             data: {
               animalId: row.earTag,
               sex: row.sex ?? "Unknown",
-              dateOfBirth: row.birthDateIso ?? null,
+              dateOfBirth: row.dateOfBirthIso ?? null,
               breed: row.breed ?? "Mixed",
-              category: "Unknown",
-              currentCamp: row.campId ?? "unassigned",
-              status: "Active",
-              motherId,
-              fatherId,
+              category: row.category ?? "Unknown",
+              currentCamp: row.currentCamp ?? UNASSIGNED_CAMP,
+              status: row.status ?? "Active",
+              registrationNumber: row.registrationNumber ?? null,
+              deceasedAt: row.deceasedAtIso ?? null,
+              motherId: resolvedDam,
+              fatherId: resolvedSire,
               dateAdded: todayIso,
               species: row.species ?? defaultSpecies,
               importJobId,
-              sireNote: row.sireEarTag && !resolvedByTag.has(row.sireEarTag)
-                ? `Unresolved sire: ${row.sireEarTag}`
-                : null,
-              damNote: row.damEarTag && !resolvedByTag.has(row.damEarTag)
-                ? `Unresolved dam: ${row.damEarTag}`
-                : null,
+              // Unresolved-ref note wins; otherwise pass through any
+              // wizard-provided free-text note for the same slot.
+              sireNote: row.fatherId && !resolvedByTag.has(row.fatherId)
+                ? `Unresolved sire: ${row.fatherId}`
+                : row.sireNote ?? null,
+              damNote: row.motherId && !resolvedByTag.has(row.motherId)
+                ? `Unresolved dam: ${row.motherId}`
+                : row.damNote ?? null,
             },
           });
           inserted += 1;
           resolvedByTag.set(row.earTag, row.earTag);
         } catch (err) {
-          const reason = err instanceof Error ? err.message : "unknown insert error";
+          // S17 (OB-005/api-F2): never forward the raw driver/Prisma
+          // message — typed reason out, full error to the server log.
           errors.push({
             row: row.originalIndex,
             earTag: row.earTag,
-            reason,
+            reason: insertFailureReason(err, row.earTag),
           });
         }
 

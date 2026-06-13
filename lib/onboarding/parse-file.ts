@@ -13,6 +13,7 @@ import {
   readFirstSheetAsArrays,
   readFirstSheetAsObjects,
 } from "@/lib/xlsx-shim";
+import { sanitizeRow } from "@/lib/onboarding/sanitize-cells";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_COLUMNS = 200;
@@ -90,23 +91,13 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   };
 }
 
-export function sanitizeCell(v: unknown): unknown {
-  return typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
-}
-
 /**
- * Defuse formula-injection payloads in every cell of a row. Exported so the
- * full-file re-parse path on the import step can apply the same sanitization
- * that parseSpreadsheet applies to the 20-row preview — otherwise rows 21+
- * would slip formulae through.
+ * Formula-injection sanitizers now live in `sanitize-cells.ts` (S15 / M3)
+ * so the server commit path can apply them without importing this parser
+ * (and its ExcelJS dependency). Re-exported here for existing client
+ * callers — `parseSpreadsheet` above and `read-all-rows.ts`.
  */
-export function sanitizeRow(
-  row: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(row)) out[k] = sanitizeCell(v);
-  return out;
-}
+export { sanitizeCell, sanitizeRow } from "@/lib/onboarding/sanitize-cells";
 
 /**
  * Compute a lowercase hex SHA-256 digest of the file contents.

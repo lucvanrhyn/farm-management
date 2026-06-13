@@ -4,6 +4,7 @@ import { revalidateAnimalWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { readWorkbook, readSheetAsObjects } from "@/lib/xlsx-shim";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { logger } from "@/lib/logger";
 
 const REQUIRED_COLUMNS = ["animal_id", "sex", "category", "current_camp"];
 
@@ -321,8 +322,19 @@ export const POST = adminWrite({
                     });
                     imported++;
                   } catch (err) {
+                    // S17 (OB-005/api-F2): the raw Prisma/driver message
+                    // carries internal schema text (table/column names,
+                    // invocation payload) and must never reach the SSE
+                    // client. Typed message out, full error to the server
+                    // log — same convention as mapApiDomainError's
+                    // DB_QUERY_FAILED sanitization (#483).
+                    logger.error("[animals-import] row upsert failed", {
+                      rowNum,
+                      animalId,
+                      error: err instanceof Error ? err.message : err,
+                    });
                     errors.push(
-                      `Row ${rowNum} (${animalId}): DB error — ${String(err)}`,
+                      `Row ${rowNum} (${animalId}): database error — the row could not be saved`,
                     );
                     skipped++;
                   }
