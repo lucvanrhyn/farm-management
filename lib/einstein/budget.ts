@@ -12,15 +12,22 @@
  *   advanced     → budgeted ZAR 100/mo default, enforced here
  *   consulting   → budget-exempt (isBudgetExempt → true)
  *
- * Storage: aiSettings JSON blob on FarmSettings (per Wave 1 schema):
- *   {
- *     ragConfig: {
- *       enabled: boolean,
- *       budgetCapZarPerMonth: number,
- *       monthSpentZar: number,
- *       currentMonthKey: string  // "YYYY-MM"
- *     }
- *   }
+ * Storage (EIN-1 / slice S23 — atomic counter):
+ *   The CAP + kill-switch stay in the `aiSettings` JSON blob's `ragConfig`
+ *   (rarely written, edited only from the admin form):
+ *     { ragConfig: { enabled, budgetCapZarPerMonth } }
+ *   The VOLATILE spend counter moved to dedicated columns so the three writers
+ *   can use single-statement atomic SQL instead of a lost-update-prone
+ *   read-modify-write of the whole blob:
+ *     FarmSettings.aiBudgetMonthSpentZar  REAL  (running ZAR spend this window)
+ *     FarmSettings.aiBudgetMonthKey       TEXT  ("YYYY-MM" the counter belongs to)
+ *
+ *   Why columns: two concurrent Einstein queries each used to read spent=50 and
+ *   each write 50+cost → one increment was LOST → budget undercounted → AI
+ *   overspend. You cannot atomically increment a number buried in a JSON string
+ *   column, so the counter is now a first-class REAL column updated with
+ *   `SET col = col + ?` in one statement. The DB serializes the statement;
+ *   concurrent increments compose instead of clobbering.
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -50,24 +57,6 @@ export class EinsteinBudgetError extends Error {
   }
 }
 
-// ── Shape of the ragConfig blob ───────────────────────────────────────────────
-
-export interface RagConfig {
-  enabled: boolean;
-  budgetCapZarPerMonth: number;
-  monthSpentZar: number;
-  currentMonthKey: string;
-}
-
-function defaultRagConfig(): RagConfig {
-  return {
-    enabled: true,
-    budgetCapZarPerMonth: DEFAULT_BUDGET_CAP_ZAR,
-    monthSpentZar: 0,
-    currentMonthKey: currentMonthKey(new Date()),
-  };
-}
-
 export function currentMonthKey(d: Date): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -79,33 +68,54 @@ export function firstOfNextMonthIso(d: Date): string {
   return next.toISOString();
 }
 
-// ── Internal: read/write aiSettings ──────────────────────────────────────────
+// ── Internal: read the budget cap (still JSON) + volatile counter (columns) ────
 
-interface AiSettingsBlob {
-  assistantName?: string;
-  responseLanguage?: string;
-  methodology?: unknown;
-  ragConfig?: RagConfig;
-  learnedPreferences?: unknown;
+/**
+ * Shape of the FarmSettings row fields the budget module reads. The volatile
+ * spend counter lives in dedicated columns (EIN-1); only the cap + kill-switch
+ * remain in the `aiSettings` JSON blob.
+ */
+interface BudgetRow {
+  aiSettings: string | null;
+  aiBudgetMonthSpentZar: number | null;
+  aiBudgetMonthKey: string | null;
 }
 
-async function readAiSettings(prisma: PrismaClient): Promise<AiSettingsBlob> {
-  // FarmSettings is a singleton per tenant DB — same pattern as every other
-  // Phase J/K generator (findFirst, null-safe default).
-  const row = await prisma.farmSettings.findFirst({});
+/** Cap is the only budget value still parsed from the aiSettings JSON blob. */
+function readBudgetCap(aiSettings: string | null): number {
+  if (!aiSettings) return DEFAULT_BUDGET_CAP_ZAR;
+  try {
+    const parsed = JSON.parse(aiSettings) as {
+      ragConfig?: { budgetCapZarPerMonth?: unknown };
+    };
+    const cap = parsed?.ragConfig?.budgetCapZarPerMonth;
+    if (typeof cap === 'number' && Number.isFinite(cap) && cap > 0) return cap;
+    return DEFAULT_BUDGET_CAP_ZAR;
+  } catch {
+    return DEFAULT_BUDGET_CAP_ZAR;
+  }
+}
+
+/**
+ * FarmSettings is a singleton per tenant DB — same pattern as every other
+ * Phase J/K reader (findFirst, null-safe). Throws SETTINGS_MISSING when no row
+ * exists so callers surface a typed error instead of silently defaulting.
+ */
+async function readBudgetRow(prisma: PrismaClient): Promise<BudgetRow> {
+  const row = await prisma.farmSettings.findFirst({
+    select: {
+      aiSettings: true,
+      aiBudgetMonthSpentZar: true,
+      aiBudgetMonthKey: true,
+    },
+  });
   if (!row) {
     throw new EinsteinBudgetError(
       'EINSTEIN_BUDGET_SETTINGS_MISSING',
       'FarmSettings row not found for tenant',
     );
   }
-  const raw = row.aiSettings as string | null | undefined;
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as AiSettingsBlob;
-  } catch {
-    return {};
-  }
+  return row as BudgetRow;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -114,7 +124,7 @@ async function readAiSettings(prisma: PrismaClient): Promise<AiSettingsBlob> {
  * Check if the given farm has budget remaining for a query.
  *
  * Consulting tier short-circuits to `remainingZar: Infinity`.
- * Advanced tier rolls the monthly counter if the persisted currentMonthKey
+ * Advanced tier rolls the monthly counter if the persisted aiBudgetMonthKey
  * doesn't match "today's" key (cron should handle this too — see
  * resetMonthlyBudget — but clients may race the cron so we also roll here).
  *
@@ -146,15 +156,16 @@ export async function assertWithinBudget(
     );
   }
 
-  const settings = await readAiSettings(prisma);
-  const rag = settings.ragConfig ?? defaultRagConfig();
+  const row = await readBudgetRow(prisma);
+  const cap = readBudgetCap(row.aiSettings);
 
-  // Monthly rollover — if the stamped currentMonthKey is stale, treat this
-  // request as being in a fresh month with 0 spent.
+  // Monthly rollover — if the stamped month key is stale, treat this request
+  // as being in a fresh month with 0 spent. (Note: this is a read-time TOCTOU
+  // window vs the atomic stamp, but the stamp itself self-heals the rollover.)
   const now = new Date();
   const thisMonth = currentMonthKey(now);
-  const effectiveSpent = rag.currentMonthKey === thisMonth ? rag.monthSpentZar : 0;
-  const cap = rag.budgetCapZarPerMonth ?? DEFAULT_BUDGET_CAP_ZAR;
+  const effectiveSpent =
+    row.aiBudgetMonthKey === thisMonth ? row.aiBudgetMonthSpentZar ?? 0 : 0;
   const remainingZar = Math.max(0, cap - effectiveSpent);
 
   if (remainingZar <= 0) {
@@ -169,13 +180,29 @@ export async function assertWithinBudget(
 }
 
 /**
+ * Guard: every atomic write targets the FarmSettings singleton. If 0 rows are
+ * affected the tenant has no settings row — surface a typed error rather than
+ * silently no-op'ing a debit.
+ */
+function assertRowsAffected(affected: number): void {
+  if (affected < 1) {
+    throw new EinsteinBudgetError(
+      'EINSTEIN_BUDGET_SETTINGS_MISSING',
+      'FarmSettings row not found for tenant',
+    );
+  }
+}
+
+/**
  * MARK-BEFORE-SEND: Stamp the estimated ZAR cost onto the counter BEFORE the
- * Anthropic call. After the call completes we can patch with the actual cost
- * (delta = actual - estimated) via a separate adjustment, but that's the
- * caller's responsibility. This function is strictly the pessimistic pre-debit.
+ * Anthropic call. After the call completes we patch with the actual cost via
+ * reconcileCostAfterSend. This function is strictly the pessimistic pre-debit.
  *
- * Idempotent on monthly rollover: if currentMonthKey is stale the counter
- * resets to `estimatedCostZar` (not added on top of last month).
+ * ATOMIC (EIN-1): a single UPDATE statement handles month-rollover AND the
+ * increment together. If the stored month key matches this month the counter
+ * is incremented (`col + ?`); otherwise it RESETS to `estimatedCostZar` (the
+ * stale prior month is discarded — correct rollover). Because the increment is
+ * one statement, concurrent stamps compose instead of clobbering each other.
  */
 export async function stampCostBeforeSend(
   farmSlug: string,
@@ -206,27 +233,18 @@ export async function stampCostBeforeSend(
     );
   }
 
-  const settings = await readAiSettings(prisma);
-  const rag = settings.ragConfig ?? defaultRagConfig();
-  const now = new Date();
-  const thisMonth = currentMonthKey(now);
-  const rolledOver = rag.currentMonthKey !== thisMonth;
-
-  const next: RagConfig = {
-    enabled: rag.enabled ?? true,
-    budgetCapZarPerMonth: rag.budgetCapZarPerMonth ?? DEFAULT_BUDGET_CAP_ZAR,
-    monthSpentZar: (rolledOver ? 0 : rag.monthSpentZar) + estimatedCostZar,
-    currentMonthKey: thisMonth,
-  };
-  const nextBlob: AiSettingsBlob = { ...settings, ragConfig: next };
-
-  // Atomic write of the whole aiSettings blob. We deliberately avoid
-  // json_set() here — the column is a plain String, not SQLite JSON1
-  // functions. Rewriting the whole blob is O(few-KB) and avoids edge cases
-  // where the blob was null or malformed.
-  await prisma.farmSettings.updateMany({
-    data: { aiSettings: JSON.stringify(nextBlob) },
-  });
+  const thisMonth = currentMonthKey(new Date());
+  const affected = await prisma.$executeRawUnsafe(
+    `UPDATE "FarmSettings"
+     SET "aiBudgetMonthSpentZar" = CASE WHEN "aiBudgetMonthKey" = ? THEN "aiBudgetMonthSpentZar" + ? ELSE ? END,
+         "aiBudgetMonthKey" = ?
+     WHERE "id" = 'singleton'`,
+    thisMonth,
+    estimatedCostZar,
+    estimatedCostZar,
+    thisMonth,
+  );
+  assertRowsAffected(affected);
 }
 
 /**
@@ -236,9 +254,9 @@ export async function stampCostBeforeSend(
  * real consumption instead of the pessimistic guess. A negative delta credits
  * back the over-stamp; the counter clamps at 0.
  *
- * Storage is the same read-modify-write blob as stampCostBeforeSend —
- * making the counter atomic under concurrency is EIN-1 (slice S23, schema
- * change behind the gate), deliberately out of scope here.
+ * ATOMIC (EIN-1): same single-statement shape as stampCostBeforeSend, wrapped
+ * in MAX(0, …) so a credit can never drive the counter negative. After a
+ * rollover the reset value is `deltaZar`; a negative delta there clamps to 0.
  */
 export async function reconcileCostAfterSend(
   farmSlug: string,
@@ -269,32 +287,24 @@ export async function reconcileCostAfterSend(
     );
   }
 
-  const settings = await readAiSettings(prisma);
-  const rag = settings.ragConfig ?? defaultRagConfig();
-  const now = new Date();
-  const thisMonth = currentMonthKey(now);
-  const rolledOver = rag.currentMonthKey !== thisMonth;
-
-  const next: RagConfig = {
-    enabled: rag.enabled ?? true,
-    budgetCapZarPerMonth: rag.budgetCapZarPerMonth ?? DEFAULT_BUDGET_CAP_ZAR,
-    // Clamp at 0: a credit larger than the stamped spend (e.g. after a
-    // mid-flight monthly rollover) must never drive the counter negative.
-    monthSpentZar: Math.max(0, (rolledOver ? 0 : rag.monthSpentZar) + deltaZar),
-    currentMonthKey: thisMonth,
-  };
-  const nextBlob: AiSettingsBlob = { ...settings, ragConfig: next };
-
-  await prisma.farmSettings.updateMany({
-    data: { aiSettings: JSON.stringify(nextBlob) },
-  });
+  const thisMonth = currentMonthKey(new Date());
+  const affected = await prisma.$executeRawUnsafe(
+    `UPDATE "FarmSettings"
+     SET "aiBudgetMonthSpentZar" = MAX(0, CASE WHEN "aiBudgetMonthKey" = ? THEN "aiBudgetMonthSpentZar" + ? ELSE ? END),
+         "aiBudgetMonthKey" = ?
+     WHERE "id" = 'singleton'`,
+    thisMonth,
+    deltaZar,
+    deltaZar,
+    thisMonth,
+  );
+  assertRowsAffected(affected);
 }
 
 /**
  * Inngest cron target: reset the monthly counter for a given tenant on the
  * first of each month. 2C's cron iterates all farms and calls this.
- * Idempotent — if called mid-month with matching currentMonthKey it's a no-op
- * (still writes the same blob back; harmless).
+ * Idempotent — re-running mid-month just re-zeroes (harmless).
  */
 export async function resetMonthlyBudget(farmSlug: string): Promise<void> {
   const prisma = await getPrismaForFarm(farmSlug);
@@ -304,15 +314,12 @@ export async function resetMonthlyBudget(farmSlug: string): Promise<void> {
       `Tenant DB for ${farmSlug} not reachable`,
     );
   }
-  const settings = await readAiSettings(prisma);
-  const rag = settings.ragConfig ?? defaultRagConfig();
-  const next: RagConfig = {
-    ...rag,
-    monthSpentZar: 0,
-    currentMonthKey: currentMonthKey(new Date()),
-  };
-  const nextBlob: AiSettingsBlob = { ...settings, ragConfig: next };
-  await prisma.farmSettings.updateMany({
-    data: { aiSettings: JSON.stringify(nextBlob) },
-  });
+  const affected = await prisma.$executeRawUnsafe(
+    `UPDATE "FarmSettings"
+     SET "aiBudgetMonthSpentZar" = 0,
+         "aiBudgetMonthKey" = ?
+     WHERE "id" = 'singleton'`,
+    currentMonthKey(new Date()),
+  );
+  assertRowsAffected(affected);
 }
