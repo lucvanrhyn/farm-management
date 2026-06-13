@@ -14,14 +14,16 @@ import { describe, it, expect } from "vitest";
 import {
   dailyAlertFanout,
   evaluateTenantAlerts,
+  dailyRateLimitCleanup,
   ALL_FUNCTIONS,
 } from "@/lib/server/inngest/functions";
 
 describe("inngest functions contract", () => {
-  it("exposes both functions in ALL_FUNCTIONS", () => {
-    expect(ALL_FUNCTIONS).toHaveLength(2);
+  it("exposes all functions in ALL_FUNCTIONS", () => {
+    expect(ALL_FUNCTIONS).toHaveLength(3);
     expect(ALL_FUNCTIONS).toContain(dailyAlertFanout);
     expect(ALL_FUNCTIONS).toContain(evaluateTenantAlerts);
+    expect(ALL_FUNCTIONS).toContain(dailyRateLimitCleanup);
   });
 
   it("pins the cron function id to 'daily-alert-fanout'", () => {
@@ -35,6 +37,17 @@ describe("inngest functions contract", () => {
     const id =
       typeof f.id === "function" ? f.id() : f.id ?? f.opts?.id ?? f.name ?? "";
     expect(id).toContain("daily-alert-fanout");
+  });
+
+  it("pins the rate-limit janitor function id to 'daily-rate-limit-cleanup'", () => {
+    const f = dailyRateLimitCleanup as unknown as {
+      id?: string | (() => string);
+      opts?: { id?: string };
+      name?: string;
+    };
+    const id =
+      typeof f.id === "function" ? f.id() : f.id ?? f.opts?.id ?? f.name ?? "";
+    expect(id).toContain("daily-rate-limit-cleanup");
   });
 
   it("pins the event-driven function id to 'evaluate-tenant-alerts'", () => {

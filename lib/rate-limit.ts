@@ -84,3 +84,38 @@ export async function checkRateLimit(
     return { allowed: true, retryAfterMs: 0 };
   }
 }
+
+/**
+ * Prune rate-limit rows whose fixed window closed more than `olderThanMs` ago.
+ *
+ * Each distinct key (IP / identifier) leaves a permanent row: the window resets
+ * in place on the next hit but the row never departs, so the table grows with
+ * the set of unique keys ever seen. A closed-window row carries no live state —
+ * a later request for the same key simply re-inserts a fresh count=1 row — so
+ * deleting it is correctness-neutral. The default TTL (24h) sits comfortably
+ * beyond the longest window any caller uses (1h, the register limiter), so we
+ * never delete a row that could still be enforcing a cap.
+ *
+ * Invoked by the `daily-rate-limit-cleanup` Inngest cron. FAIL SOFT: a META-DB
+ * blip must not break the scheduled job — we log and return 0, mirroring
+ * checkRateLimit's fail-open stance. Returns the number of rows deleted.
+ */
+export async function cleanupExpiredRateLimits(
+  olderThanMs: number = 24 * 60 * 60 * 1000,
+): Promise<number> {
+  const cutoff = Date.now() - olderThanMs;
+
+  try {
+    const client = getMetaClient();
+    const result = await client.execute({
+      sql: `DELETE FROM "RateLimit" WHERE "windowStartMs" < ?`,
+      args: [cutoff],
+    });
+    return result.rowsAffected ?? 0;
+  } catch (err) {
+    logger.warn('[rate-limit] cleanup skipped — META DB unavailable', {
+      error: err,
+    });
+    return 0;
+  }
+}
