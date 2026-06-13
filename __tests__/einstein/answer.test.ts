@@ -385,9 +385,20 @@ describe('streamAnswer — usage event (api-F1/EIN-2)', () => {
   // budget figure is a pessimistic estimate). The generator must surface a
   // `usage` event built from the SDK's message_start (input + cache buckets)
   // and message_delta (cumulative output) frames.
+  // A grounded happy-path answer: a non-empty factual answer must cite ≥1
+  // entityId present in the retrieval set (S20 / ein-M3 grounding contract,
+  // merged in from the D-answer lane). The usage-event tests below pair this
+  // with mkRetrieval(['e1']) so the `final` event is reached; an ungrounded
+  // fixture would short-circuit to EINSTEIN_ANSWER_UNGROUNDED before final.
   const tailJson =
     '```json\n' +
-    JSON.stringify({ answer: 'ok', citations: [], confidence: 'low' }) +
+    JSON.stringify({
+      answer: 'ok',
+      citations: [
+        { entityType: 'observation', entityId: 'e1', quote: 'ok', relevance: 'direct' },
+      ],
+      confidence: 'low',
+    }) +
     '\n```';
 
   function mkMessageStart(usage: Record<string, number>) {
@@ -415,7 +426,7 @@ describe('streamAnswer — usage event (api-F1/EIN-2)', () => {
         question: 'q',
         assistantName: 'Einstein',
         methodology: null,
-        retrieval: mkRetrieval([]),
+        retrieval: mkRetrieval(['e1']),
       }),
     );
 
@@ -470,7 +481,7 @@ describe('streamAnswer — usage event (api-F1/EIN-2)', () => {
         question: 'q',
         assistantName: 'Einstein',
         methodology: null,
-        retrieval: mkRetrieval([]),
+        retrieval: mkRetrieval(['e1']),
       }),
     );
     expect(events.filter((e) => e.type === 'usage')).toHaveLength(0);
