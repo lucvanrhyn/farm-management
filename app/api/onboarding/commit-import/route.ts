@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     return routeError("VALIDATION_FAILED", parsed.error, 400);
   }
 
-  const rl = checkRateLimit(
+  const rl = await checkRateLimit(
     `commit-import:${slug}`,
     MAX_COMMITS_PER_DAY,
     RATE_LIMIT_WINDOW_MS,

@@ -68,7 +68,7 @@ export const POST = adminWrite({
     // Rate limit: 5 imports per hour per user — each import parses XLSX and
     // bulk-upserts rows.
     const userId = session.user?.email ?? "unknown";
-    const rl = checkRateLimit(`import:${userId}`, 5, 60 * 60 * 1000);
+    const rl = await checkRateLimit(`import:${userId}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
       return routeError(
         "RATE_LIMITED",
