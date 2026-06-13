@@ -26,7 +26,7 @@ export const POST = publicHandler({
   handle: async (request: NextRequest) => {
     // Rate limit by IP — 5 registrations per hour per IP (each registration provisions a Turso DB)
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-    const rl = checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
+    const rl = await checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many registration attempts. Please try again later.' }, { status: 429 });
     }

@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const rl = checkRateLimit(
+  const rl = await checkRateLimit(
     `map-columns:${slug}`,
     MAX_CALLS_PER_DAY,
     RATE_LIMIT_WINDOW_MS

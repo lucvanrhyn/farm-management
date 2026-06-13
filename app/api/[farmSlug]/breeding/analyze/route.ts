@@ -44,7 +44,7 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
       return NextResponse.json({ error: "Breeding AI requires an Advanced plan" }, { status: 403 });
     }
 
-    const { allowed, retryAfterMs } = checkRateLimit(`breeding:${farmSlug}`, 5, 60_000);
+    const { allowed, retryAfterMs } = await checkRateLimit(`breeding:${farmSlug}`, 5, 60_000);
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait before trying again." },
