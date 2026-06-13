@@ -51,8 +51,31 @@ export const GPT_4O_MINI_RATES = Object.freeze({
  */
 export const ZAR_PER_USD = 18.5;
 
-const MAX_SAMPLE_ROWS = 20;
 const MAX_OUTPUT_TOKENS = 4096;
+
+/**
+ * S16 (OB-002/M2) — input caps for the AI map-columns pipeline.
+ *
+ * Every user-supplied dimension of the prompt is bounded so a hostile (or
+ * accidental) oversized upload cannot run up unbounded LLM cost. The route
+ * enforces these as typed 400s at the HTTP boundary; `validateInput` enforces
+ * the same caps here as defence-in-depth for any other caller.
+ *
+ *   maxColumns       — header count (matches the long-standing route cap).
+ *   maxSampleRows    — sample rows forwarded to the model.
+ *   maxCellChars     — any single string: column name, row key, or cell value.
+ *   maxPayloadBytes  — total serialized user payload. 256 KiB ≈ 64K tokens,
+ *                      half of gpt-4o-mini's 128K context, bounding worst-case
+ *                      input spend to ~$0.01/call while leaving generous room
+ *                      for any legitimate spreadsheet (typical imports are
+ *                      well under 50 KB).
+ */
+export const IMPORT_INPUT_CAPS = Object.freeze({
+  maxColumns: 200,
+  maxSampleRows: 20,
+  maxCellChars: 512,
+  maxPayloadBytes: 256 * 1024,
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -149,6 +172,109 @@ function getOpenAIClient(): OpenAI {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+
+/** The user-supplied subset of {@link ProposeMappingInput} the caps govern. */
+export type MapColumnsUserInput = Pick<
+  ProposeMappingInput,
+  "parsedColumns" | "sampleRows" | "fullRowCount"
+>;
+
+/** Which cap was exceeded, by how much, and where (S16 / OB-002). */
+export type ImportInputCapViolation = {
+  cap: keyof typeof IMPORT_INPUT_CAPS;
+  limit: number;
+  actual: number;
+  /** Locator only (e.g. `parsedColumns[3]`) — never echoes payload content. */
+  field: string;
+  message: string;
+};
+
+const PAYLOAD_BYTE_ENCODER = new TextEncoder();
+
+/**
+ * Return the first input-cap violation in a map-columns payload, or null if
+ * every cap passes. Pure and side-effect free; checks cheap per-field caps
+ * before the total-payload backstop (which also bounds non-string values
+ * such as nested objects that the per-field checks do not inspect).
+ */
+export function findImportInputCapViolation(
+  input: MapColumnsUserInput
+): ImportInputCapViolation | null {
+  const { maxColumns, maxSampleRows, maxCellChars, maxPayloadBytes } =
+    IMPORT_INPUT_CAPS;
+
+  if (input.parsedColumns.length > maxColumns) {
+    return {
+      cap: "maxColumns",
+      limit: maxColumns,
+      actual: input.parsedColumns.length,
+      field: "parsedColumns",
+      message: `parsedColumns must contain at most ${maxColumns} entries.`,
+    };
+  }
+  for (let i = 0; i < input.parsedColumns.length; i++) {
+    const col = input.parsedColumns[i];
+    if (typeof col === "string" && col.length > maxCellChars) {
+      return {
+        cap: "maxCellChars",
+        limit: maxCellChars,
+        actual: col.length,
+        field: `parsedColumns[${i}]`,
+        message: `parsedColumns entries must be ${maxCellChars} characters or fewer.`,
+      };
+    }
+  }
+  if (input.sampleRows.length > maxSampleRows) {
+    return {
+      cap: "maxSampleRows",
+      limit: maxSampleRows,
+      actual: input.sampleRows.length,
+      field: "sampleRows",
+      message: `sampleRows must contain at most ${maxSampleRows} rows.`,
+    };
+  }
+  for (let i = 0; i < input.sampleRows.length; i++) {
+    for (const [key, value] of Object.entries(input.sampleRows[i])) {
+      if (key.length > maxCellChars) {
+        return {
+          cap: "maxCellChars",
+          limit: maxCellChars,
+          actual: key.length,
+          field: `sampleRows[${i}]`,
+          message: `sampleRows keys must be ${maxCellChars} characters or fewer.`,
+        };
+      }
+      if (typeof value === "string" && value.length > maxCellChars) {
+        return {
+          cap: "maxCellChars",
+          limit: maxCellChars,
+          actual: value.length,
+          field: `sampleRows[${i}]`,
+          message: `sampleRows string values must be ${maxCellChars} characters or fewer.`,
+        };
+      }
+    }
+  }
+
+  const payloadBytes = PAYLOAD_BYTE_ENCODER.encode(
+    JSON.stringify({
+      parsedColumns: input.parsedColumns,
+      sampleRows: input.sampleRows,
+      fullRowCount: input.fullRowCount,
+    })
+  ).length;
+  if (payloadBytes > maxPayloadBytes) {
+    return {
+      cap: "maxPayloadBytes",
+      limit: maxPayloadBytes,
+      actual: payloadBytes,
+      field: "payload",
+      message: `Import payload exceeds the maximum of ${maxPayloadBytes} bytes.`,
+    };
+  }
+
+  return null;
+}
 
 export function buildUserPrompt(input: ProposeMappingInput): string {
   const { parsedColumns, sampleRows, existingCamps, fullRowCount } = input;
@@ -630,11 +756,6 @@ function validateInput(input: ProposeMappingInput): void {
   if (!Array.isArray(input.sampleRows)) {
     throw new AdaptiveImportError("sampleRows must be an array.");
   }
-  if (input.sampleRows.length > MAX_SAMPLE_ROWS) {
-    throw new AdaptiveImportError(
-      `sampleRows must contain at most ${MAX_SAMPLE_ROWS} rows.`
-    );
-  }
   if (!Array.isArray(input.existingCamps)) {
     throw new AdaptiveImportError("existingCamps must be an array.");
   }
@@ -646,5 +767,16 @@ function validateInput(input: ProposeMappingInput): void {
     throw new AdaptiveImportError(
       "fullRowCount must be a non-negative number."
     );
+  }
+  // S16 (OB-002/M2) defence-in-depth: the route rejects cap violations with a
+  // typed 400 before calling in here; enforcing the same caps again means no
+  // other caller can ever build an unbounded prompt.
+  const violation = findImportInputCapViolation({
+    parsedColumns: input.parsedColumns,
+    sampleRows: input.sampleRows,
+    fullRowCount: input.fullRowCount,
+  });
+  if (violation) {
+    throw new AdaptiveImportError(`Input caps exceeded: ${violation.message}`);
   }
 }

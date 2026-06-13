@@ -4,6 +4,7 @@ import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   proposeColumnMapping,
+  findImportInputCapViolation,
   AdaptiveImportError,
   type ProposeMappingInput,
 } from "@/lib/onboarding/adaptive-import";
@@ -24,6 +25,9 @@ import { routeError } from "@/lib/server/route";
  *   - farm scoped by active_farm_slug cookie, ADMIN role required (403 otherwise)
  *   - 3 calls / farm / day rate limit (429)
  *   - request body shape guard (400 on malformed JSON or missing fields)
+ *   - S16 (OB-002/M2) input caps — column count/length, row count, cell/key
+ *     length, total payload bytes (IMPORT_INPUT_CAPS) — typed 400 BEFORE the
+ *     rate limit is charged, so abusive payloads can't reach the LLM call
  *   - existing camps loaded from Prisma so Claude can fuzzy-match
  *   - upstream (Anthropic) failures surface as 502 with a safe message;
  *     unexpected errors surface as 500 with a generic message — never leak
@@ -64,6 +68,19 @@ export async function POST(req: NextRequest) {
   const parsed = parseBody(raw);
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  // S16 (OB-002/M2): size caps run after the shape guard but BEFORE the rate
+  // limit so an oversized payload neither charges the daily budget nor
+  // reaches the LLM call. Typed envelope per ADR-0001.
+  const capViolation = findImportInputCapViolation(parsed);
+  if (capViolation) {
+    return routeError("VALIDATION_FAILED", capViolation.message, 400, {
+      cap: capViolation.cap,
+      limit: capViolation.limit,
+      actual: capViolation.actual,
+      field: capViolation.field,
+    });
   }
 
   const rl = checkRateLimit(
@@ -131,12 +148,10 @@ function parseBody(
       fullRowCount: number;
     }
   | { error: string } {
-  if (
-    !Array.isArray(raw.parsedColumns) ||
-    raw.parsedColumns.length === 0 ||
-    raw.parsedColumns.length > 200
-  ) {
-    return { error: "parsedColumns must contain between 1 and 200 strings." };
+  // Shape guard only — size caps (count/length/bytes) are enforced by
+  // findImportInputCapViolation in the POST handler (S16 / OB-002).
+  if (!Array.isArray(raw.parsedColumns) || raw.parsedColumns.length === 0) {
+    return { error: "parsedColumns must be a non-empty array." };
   }
   if (!raw.parsedColumns.every((c) => typeof c === "string")) {
     return { error: "parsedColumns must contain only strings." };
@@ -144,24 +159,12 @@ function parseBody(
   if (!Array.isArray(raw.sampleRows)) {
     return { error: "sampleRows must be an array." };
   }
-  if (raw.sampleRows.length > 20) {
-    return { error: "sampleRows must contain at most 20 rows." };
-  }
   if (
     !raw.sampleRows.every(
       (r) => typeof r === "object" && r !== null && !Array.isArray(r)
     )
   ) {
     return { error: "sampleRows entries must be objects." };
-  }
-  for (const row of raw.sampleRows as Array<Record<string, unknown>>) {
-    for (const v of Object.values(row)) {
-      if (typeof v === "string" && v.length > 512) {
-        return {
-          error: "sampleRows string values must be 512 chars or fewer.",
-        };
-      }
-    }
   }
   if (
     typeof raw.fullRowCount !== "number" ||
