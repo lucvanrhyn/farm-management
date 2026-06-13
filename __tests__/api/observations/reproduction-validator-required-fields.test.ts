@@ -39,7 +39,15 @@ const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaM
     const observationCreate = vi.fn();
     const observationUpsert = vi.fn();
     const prisma = {
-      camp: { findFirst: campFindFirst },
+      // S24 / obs-M4 — the route's animal↔camp species guard resolves the
+      // camp via `requireSpeciesScopedCamp`'s composite-unique
+      // `camp.findUnique` (step 1). A non-null cattle row matches the cattle
+      // animal above, so the guard passes and these required-field assertions
+      // exercise the validator (not the new guard).
+      camp: {
+        findFirst: campFindFirst,
+        findUnique: vi.fn().mockResolvedValue({ id: 'camp-row-1', species: 'cattle' }),
+      },
       animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
       observation: { create: observationCreate, upsert: observationUpsert },
     };

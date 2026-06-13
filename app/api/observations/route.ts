@@ -11,7 +11,9 @@
  *   - GET  200 → `Observation[]` (raw Prisma rows)
  *   - POST 200 → `{ success: true, id: string }`
  *   - POST 422 → `{ error: "INVALID_TYPE" | "WRONG_SPECIES" | ... }`
- *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }`
+ *     (`WRONG_SPECIES` fires from the S24/obs-M4 animal↔camp guard below —
+ *     advertised since Wave C but only wired in S24)
+ *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }` or `{ error: "ANIMAL_NOT_FOUND" }`
  *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`,
  *     or (S24/obs-M2) `DETAILS_TOO_LONG` when the `details` JSON string
  *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`, or (S24/obs-M3)
@@ -44,6 +46,13 @@ import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
 import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
 import { performMobMove } from "@/lib/domain/mobs/move-mob";
 import { parseLimit } from "@/lib/domain/shared/limit";
+import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
+import { SpeciesScopedCampError } from "@/lib/domain/animals/errors";
+import {
+  AnimalNotFoundError,
+  CampNotFoundError,
+} from "@/lib/domain/observations/errors";
+import type { SpeciesId } from "@/lib/species/types";
 
 /**
  * Issue #100 — shape of an `animal_movement` observation's `details` JSON,
@@ -418,6 +427,61 @@ export const POST = tenantWrite<CreateObservationBody>({
     // payload keeps the unchanged bare-`createObservation` path.
     const mobMove =
       input.type === "mob_movement" ? deriveMobMovement(input.details) : null;
+
+    // S24 / obs-M4 — animal↔camp species validation. The route has advertised
+    // `422 WRONG_SPECIES` since Wave C, but nothing on the observation path
+    // ever performed the check (`requireSpeciesScopedCamp` guarded the mob ops
+    // #97 and the animal PATCH #98 only), so a cattle observation could be
+    // logged against a sheep camp — and an `animal_movement` could advance
+    // `currentCamp` INTO a wrong-species camp — with zero resistance.
+    //
+    // The guarded camp is the one the write RELATES the animal to: the
+    // movement DESTINATION (the `currentCamp` mutation target) for
+    // `animal_movement`, the wire `camp_id` otherwise. The movement SOURCE is
+    // deliberately unguarded — blocking a move OUT of a legacy wrong-species
+    // camp would trap the animal there. Outcomes:
+    //   - composite (species, campId) hit            → proceed
+    //   - camp exists under another species          → `SpeciesScopedCampError`
+    //     (422 `WRONG_SPECIES`, the same wire the #98 animal PATCH emits)
+    //   - campId unknown under ANY species           → `CampNotFoundError`
+    //     (the route's established 404 `CAMP_NOT_FOUND`, not a new 422)
+    //   - animal tag resolves to no row              → `AnimalNotFoundError`
+    //     (the S5/OBS-2 typed terminal 404, thrown before any camp work)
+    //   - legacy animal with species=null            → guard skipped,
+    //     mirroring the #98 PATCH lenience (TODO(#28) tighten post-backfill)
+    // All three throws are deterministic 4xx the offline queue dead-letters
+    // (`classifySyncFailure`), so a terminally cross-species row cannot loop.
+    // The mob path needs no arm here: `performMobMove` already hard-blocks
+    // via `CrossSpeciesBlockedError` (422).
+    const guardAnimalTag =
+      movement?.animalId ??
+      deathAnimalId ??
+      (typeof input.animal_id === "string" && input.animal_id !== ""
+        ? input.animal_id
+        : null);
+    if (guardAnimalTag) {
+      const guardAnimal = await ctx.prisma.animal.findUnique({
+        where: { animalId: guardAnimalTag },
+        select: { species: true },
+      });
+      if (!guardAnimal) {
+        throw new AnimalNotFoundError(guardAnimalTag);
+      }
+      if (guardAnimal.species) {
+        const guardCampId = movement ? movement.destCampId : input.camp_id;
+        const campResult = await requireSpeciesScopedCamp(ctx.prisma, {
+          species: guardAnimal.species as SpeciesId,
+          farmSlug: ctx.slug,
+          campId: guardCampId,
+        });
+        if (!campResult.ok) {
+          if (campResult.reason === "NOT_FOUND") {
+            throw new CampNotFoundError(guardCampId);
+          }
+          throw new SpeciesScopedCampError(campResult.reason);
+        }
+      }
+    }
 
     let result: Awaited<ReturnType<typeof createObservation>>;
     if (movement) {

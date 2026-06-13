@@ -9,6 +9,12 @@ const mockFindMany = vi.fn().mockResolvedValue([]);
 // Phase A of #28: observations route now uses findFirst (campId is no longer
 // globally unique under the composite UNIQUE on species+campId).
 const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: 'A' });
+// S24 / obs-M4 — the route's animal↔camp species guard resolves the camp via
+// `requireSpeciesScopedCamp`'s composite-unique `camp.findUnique` (step 1).
+// A non-null row means "camp exists for the animal's species" → guard passes.
+const mockCampFindUnique = vi
+  .fn()
+  .mockResolvedValue({ id: 'camp-row-1', species: 'cattle' });
 // Phase I.3 — observations POST now looks up Animal.species at write time
 // to keep the denormalised column fresh.
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
@@ -20,6 +26,7 @@ const mockPrisma = {
   },
   camp: {
     findFirst: mockCampFindFirst,
+    findUnique: mockCampFindUnique,
   },
   animal: {
     findUnique: mockAnimalFindUnique,

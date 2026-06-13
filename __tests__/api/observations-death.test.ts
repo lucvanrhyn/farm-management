@@ -33,13 +33,17 @@ import { NextRequest } from 'next/server';
 const mockObsCreate = vi.fn().mockResolvedValue({ id: 'obs-id' });
 const mockObsUpsert = vi.fn().mockResolvedValue({ id: 'obs-id' });
 const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: 'camp-source', species: 'cattle' });
+// S24 / obs-M4 — the route's animal↔camp species guard resolves the camp via
+// `requireSpeciesScopedCamp`'s composite-unique `camp.findUnique`; a non-null
+// row means the camp exists for the animal's species (guard passes).
+const mockCampFindUnique = vi.fn().mockResolvedValue({ id: 'camp-row-1', species: 'cattle' });
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
 const mockAnimalUpdate = vi.fn().mockResolvedValue({});
 
 const mockPrisma: Record<string, unknown> = {
   $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockPrisma)),
   observation: { create: mockObsCreate, upsert: mockObsUpsert, findMany: vi.fn().mockResolvedValue([]) },
-  camp: { findFirst: mockCampFindFirst },
+  camp: { findFirst: mockCampFindFirst, findUnique: mockCampFindUnique },
   animal: { findUnique: mockAnimalFindUnique, update: mockAnimalUpdate },
   farmSettings: { findFirst: vi.fn().mockResolvedValue(null) },
 };
