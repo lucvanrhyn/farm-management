@@ -46,6 +46,21 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { createObservation } from "@/lib/domain/observations/create-observation";
+import { AnimalNotFoundError } from "@/lib/domain/observations/errors";
+
+/**
+ * S5 / OBS-2 — lightweight Prisma P2025 ("record to update not found")
+ * detection by `.name` + `.code`, never `instanceof`, matching the convention
+ * in `lib/server/api-errors.ts` / `lib/server/alerts/dedup.ts` so this module
+ * takes no runtime dependency on `@prisma/client` exception classes.
+ */
+function isPrismaRecordNotFound(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.name === "PrismaClientKnownRequestError" &&
+    (err as Error & { code?: unknown }).code === "P2025"
+  );
+}
 
 export interface PerformAnimalDeathArgs {
   /** The animal TAG (the `animalId` column), as carried by the observation. */
@@ -112,10 +127,28 @@ export async function performAnimalDeath(
     // Caller owns the mutation — keyed on the TAG column (animalId), matching
     // the door's animal lookup. Mirrors `performAnimalMove`'s currentCamp
     // write, with two fields (the terminal status + its anchor date).
-    await tx.animal.update({
-      where: { animalId },
-      data: { status: "Deceased", deceasedAt },
-    });
+    //
+    // S5 / OBS-2 — a missing animal surfaces here as Prisma P2025 because the
+    // bare update runs BEFORE the door's own animal lookup. Pre-S5 the raw
+    // P2025 escaped this op and `mapApiDomainError`'s #483 sanitizer collapsed
+    // it to an opaque 500 → the offline queue classified the row transient and
+    // looped it. Translate it into the SAME typed error the door throws for
+    // the identical FK miss (`AnimalNotFoundError`, code ANIMAL_NOT_FOUND) so
+    // the wire is a deterministic 404 the sync client dead-letters. Only P2025
+    // is translated — any other failure keeps its identity for the sanitizer +
+    // server log. Mirrors `performAnimalMove` byte-identically (the #543
+    // shared-concern follow-up).
+    try {
+      await tx.animal.update({
+        where: { animalId },
+        data: { status: "Deceased", deceasedAt },
+      });
+    } catch (err) {
+      if (isPrismaRecordNotFound(err)) {
+        throw new AnimalNotFoundError(animalId);
+      }
+      throw err;
+    }
 
     // The door stays pure — it receives the tx client so the observation
     // create is atomic with the status update above. The door runs its own

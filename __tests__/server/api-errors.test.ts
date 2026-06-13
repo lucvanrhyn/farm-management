@@ -23,6 +23,8 @@ import { describe, it, expect } from "vitest";
 import { CrossSpeciesBlockedError } from "@/lib/species/errors";
 import { MobNotFoundError } from "@/lib/domain/mobs/move-mob";
 import { CampConditionFieldRequiredError } from "@/lib/domain/observations/create-observation";
+import { AnimalNotFoundError as ObservationAnimalNotFoundError } from "@/lib/domain/observations/errors";
+import { AnimalNotFoundError as AnimalsDomainNotFoundError } from "@/lib/domain/animals/errors";
 import { mapApiDomainError } from "@/lib/server/api-errors";
 
 async function readBody(res: Response): Promise<unknown> {
@@ -46,6 +48,32 @@ describe("mapApiDomainError", () => {
 
   it("returns null for a generic Error so the caller can rethrow", () => {
     expect(mapApiDomainError(new Error("boom"))).toBeNull();
+  });
+
+  // ── S5 / OBS-2 — observations-domain AnimalNotFoundError → typed 404 ──────
+
+  it("maps the observations-domain AnimalNotFoundError → 404 { error: 'ANIMAL_NOT_FOUND' } (S5/OBS-2)", async () => {
+    // Thrown by the observation door's species-stamping waterfall AND (post-S5)
+    // by performAnimalDeath/performAnimalMove when the tag-keyed update hits
+    // P2025. The offline replay made missing-animal a REACHABLE wire case
+    // (animal deleted server-side while a death/move sat in the queue), so it
+    // needs a typed terminal 404 the sync classifier can dead-letter — not the
+    // pre-S5 unmapped fall-through to an opaque 500 the queue retried forever.
+    const res = mapApiDomainError(new ObservationAnimalNotFoundError("BB-C014"));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(404);
+    expect(await readBody(res!)).toEqual({ error: "ANIMAL_NOT_FOUND" });
+  });
+
+  it("keeps the animals-domain AnimalNotFoundError on the legacy 404 { error: 'Not found' } wire (no contract drift)", async () => {
+    // The animals CRUD `[id]` routes pin their PRE-extraction free-text body
+    // byte-identical (Wave 309b). The S5 typed code applies ONLY to the
+    // observations-domain class — the two same-named classes stay on their
+    // separate wire contracts.
+    const res = mapApiDomainError(new AnimalsDomainNotFoundError("BB-C014"));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(404);
+    expect(await readBody(res!)).toEqual({ error: "Not found" });
   });
 
   it("returns null for a non-Error throwable (string, null, undefined, plain object)", () => {

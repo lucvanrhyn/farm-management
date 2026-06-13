@@ -9,6 +9,12 @@ const mockFindMany = vi.fn().mockResolvedValue([]);
 // Phase A of #28: observations route now uses findFirst (campId is no longer
 // globally unique under the composite UNIQUE on species+campId).
 const mockCampFindFirst = vi.fn().mockResolvedValue({ campId: 'A' });
+// S24 / obs-M4 — the route's animal↔camp species guard resolves the camp via
+// `requireSpeciesScopedCamp`'s composite-unique `camp.findUnique` (step 1).
+// A non-null row means "camp exists for the animal's species" → guard passes.
+const mockCampFindUnique = vi
+  .fn()
+  .mockResolvedValue({ id: 'camp-row-1', species: 'cattle' });
 // Phase I.3 — observations POST now looks up Animal.species at write time
 // to keep the denormalised column fresh.
 const mockAnimalFindUnique = vi.fn().mockResolvedValue({ species: 'cattle' });
@@ -20,6 +26,7 @@ const mockPrisma = {
   },
   camp: {
     findFirst: mockCampFindFirst,
+    findUnique: mockCampFindUnique,
   },
   animal: {
     findUnique: mockAnimalFindUnique,
@@ -132,6 +139,91 @@ describe('POST /api/observations', () => {
 
     const res = await POST(req, { params: Promise.resolve({}) });
     expect(res.status).toBe(400);
+  });
+
+  // S24 / obs-M3 — `created_at` had NO upper bound: an offline client with a
+  // broken clock (or a malicious payload) could persist a far-future
+  // `observedAt` — and, via the #538 death path, a far-future `deceasedAt`.
+  // Backdating stays unrestricted (offline-first: a queued row replays its
+  // original timestamp days later); only the future direction is bounded, to
+  // a clock-skew tolerance.
+  it('returns a typed 400 (TIMESTAMP_OUT_OF_RANGE) when created_at is too far in the future', async () => {
+    const { OBSERVATION_CREATED_AT_MAX_FUTURE_MS } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const farFuture = new Date(
+      Date.now() + OBSERVATION_CREATED_AT_MAX_FUTURE_MS + 60 * 60 * 1000,
+    ).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: farFuture }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('TIMESTAMP_OUT_OF_RANGE');
+    expect(data.details?.field).toBe('created_at');
+    // The far-future row must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('accepts a created_at slightly in the future (clock-skew tolerance)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const nearFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: nearFuture }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a backdated created_at (offline replay is unrestricted)', async () => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: lastWeek }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  // S24 / obs-M3 — a NON-STRING created_at (e.g. a numeric epoch) previously
+  // sailed past the schema (only the door's `new Date(input)` saw it),
+  // bypassing any string-based bound. Reject the shape at the boundary like
+  // #484 details / #492 notes.
+  it.each([
+    ['a number', 4102444800000],
+    ['an object', { iso: '2026-01-01' }],
+    ['a boolean', true],
+  ])('returns a typed 400 when created_at is %s (not a string)', async (_label, badCreatedAt) => {
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'camp_check', camp_id: 'A', created_at: badCreatedAt }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('VALIDATION_FAILED');
+    expect(data.details?.fieldErrors?.created_at).toBeTruthy();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('returns 422 when observation type is not in the allowlist', async () => {
@@ -304,6 +396,58 @@ describe('POST /api/observations', () => {
     expect(data.details?.fieldErrors?.notes).toBeTruthy();
     // The bad value must NEVER have reached Prisma.
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  // S24 / obs-M2 — the `details` JSON string had NO length cap: a stale /
+  // malicious client could persist an arbitrarily large blob into the
+  // non-nullable `details` column (row growth, IndexedDB mirror bloat,
+  // RAG-chunk cost). The route boundary now rejects an over-length payload
+  // with a dedicated typed 400 BEFORE any JSON.parse / DB work.
+  it('returns a typed 400 (DETAILS_TOO_LONG) when details exceeds the cap', async () => {
+    const { OBSERVATION_DETAILS_MAX_LENGTH } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        details: 'x'.repeat(OBSERVATION_DETAILS_MAX_LENGTH + 1),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('DETAILS_TOO_LONG');
+    // Field-level info: the cap is forwarded so the client can surface it.
+    expect(data.details?.maxLength).toBe(OBSERVATION_DETAILS_MAX_LENGTH);
+    // The blob must NEVER have reached Prisma.
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('accepts a details string exactly at the cap (inclusive bound)', async () => {
+    const { OBSERVATION_DETAILS_MAX_LENGTH } = await import(
+      '@/lib/domain/observations/details-schemas'
+    );
+    const { POST } = await import('@/app/api/observations/route');
+
+    const req = new NextRequest('http://localhost/api/observations', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'camp_check',
+        camp_id: 'A',
+        details: 'x'.repeat(OBSERVATION_DETAILS_MAX_LENGTH),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledOnce();
   });
 
   it('returns a typed 400 (NOTE_TOO_LONG) when notes exceeds the cap', async () => {

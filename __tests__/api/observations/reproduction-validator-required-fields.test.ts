@@ -39,7 +39,15 @@ const { campFindFirstMock, observationCreateMock, observationUpsertMock, prismaM
     const observationCreate = vi.fn();
     const observationUpsert = vi.fn();
     const prisma = {
-      camp: { findFirst: campFindFirst },
+      // S24 / obs-M4 — the route's animal↔camp species guard resolves the
+      // camp via `requireSpeciesScopedCamp`'s composite-unique
+      // `camp.findUnique` (step 1). A non-null cattle row matches the cattle
+      // animal above, so the guard passes and these required-field assertions
+      // exercise the validator (not the new guard).
+      camp: {
+        findFirst: campFindFirst,
+        findUnique: vi.fn().mockResolvedValue({ id: 'camp-row-1', species: 'cattle' }),
+      },
       animal: { findUnique: vi.fn().mockResolvedValue({ species: 'cattle' }) },
       observation: { create: observationCreate, upsert: observationUpsert },
     };
@@ -191,6 +199,65 @@ describe('validateReproductiveState — calving requires calf identity (#285)', 
     expect(() => validateReproductiveState('calving', null)).toThrow(
       ReproFieldRequiredError,
     );
+  });
+});
+
+// ── scrotal_circumference (S24 / obs-M1) ───────────────────────────────────
+describe('validateReproductiveState — scrotal_circumference requires measurement_cm (obs-M1)', () => {
+  it('passes for a valid in-range measurement (number or numeric string)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: '36' }),
+    ).not.toThrow();
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 36.5 }),
+    ).not.toThrow();
+    // Inclusive bounds — the exact UI input limits (min=20, max=50).
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 20 }),
+    ).not.toThrow();
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 50 }),
+    ).not.toThrow();
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is missing', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', {}),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is out of range (mirrors UI 20..50 cm)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: '19.9' }),
+    ).toThrow(ReproFieldRequiredError);
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 50.1 }),
+    ).toThrow(ReproFieldRequiredError);
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: -36 }),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when measurement_cm is non-numeric (NaN would poison breeding scoring)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', { measurement_cm: 'big' }),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('throws ReproFieldRequiredError when details is null (offline stale client)', () => {
+    expect(() =>
+      validateReproductiveState('scrotal_circumference', null),
+    ).toThrow(ReproFieldRequiredError);
+  });
+
+  it('error carries the canonical 422 wire code', () => {
+    try {
+      validateReproductiveState('scrotal_circumference', {});
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ReproFieldRequiredError);
+      expect((err as ReproFieldRequiredError).code).toBe('REPRO_FIELD_REQUIRED');
+    }
   });
 });
 

@@ -9,6 +9,7 @@ import {
   WrongSpeciesError,
 } from "@/lib/domain/mobs/errors";
 import {
+  AnimalNotFoundError as ObservationAnimalNotFoundError,
   CampNotFoundError,
   DuplicateObservationError,
   InvalidTimestampError,
@@ -172,6 +173,19 @@ export function mapApiDomainError(err: unknown): NextResponse | null {
     return NextResponse.json({ error: err.code }, { status: 404 });
   }
   if (err instanceof CampNotFoundError) {
+    return NextResponse.json({ error: err.code }, { status: 404 });
+  }
+  // S5 / OBS-2 — the observation-write path's missing-animal error. Thrown by
+  // the door's species-stamping waterfall (ADR-0006 FK miss) AND by
+  // `performAnimalDeath`/`performAnimalMove` when their tag-keyed
+  // `tx.animal.update` hits Prisma P2025. The offline replay made
+  // missing-animal a REACHABLE wire case (an animal deleted server-side while
+  // a death/move sat in the queue), so it gets a typed terminal 404 the sync
+  // classifier (`classifySyncFailure`) dead-letters — instead of the pre-S5
+  // unmapped fall-through to an opaque 500 the queue retried forever. Distinct
+  // from the animals-domain `AnimalNotFoundError` arm below, which pins the
+  // legacy `{ error: "Not found" }` free-text for the animals `[id]` routes.
+  if (err instanceof ObservationAnimalNotFoundError) {
     return NextResponse.json({ error: err.code }, { status: 404 });
   }
   // Wave 309a (ADR-0001 Wave B, #309) — camps domain delete guard.

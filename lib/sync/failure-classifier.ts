@@ -10,6 +10,8 @@
  *   - HTTP 422 DUPLICATE_OBSERVATION (no existingId) → mark-failed-terminal
  *   - HTTP 422 INVALID_TYPE                        → mark-failed-terminal
  *   - HTTP 422 (any other code)                    → mark-failed-terminal
+ *   - HTTP 404 ANIMAL_NOT_FOUND                    → mark-failed-terminal (S5/OBS-2)
+ *   - HTTP 404 (untyped/any other body)            → retry-with-cooldown
  *   - HTTP 5xx                                     → retry-with-cooldown
  *   - null status (fetch threw)                    → retry-with-cooldown
  *
@@ -60,6 +62,13 @@ interface ParsedBody {
 
 const DUPLICATE_OBSERVATION = 'DUPLICATE_OBSERVATION';
 const INVALID_TYPE = 'INVALID_TYPE';
+/**
+ * S5 / OBS-2 — the typed 404 emitted by `POST /api/observations` when the
+ * target animal genuinely does not exist server-side (door FK miss or a
+ * death/move whose tag-keyed update hit Prisma P2025). Deterministic: the
+ * identical payload re-rejects identically forever, so the row is terminal.
+ */
+const ANIMAL_NOT_FOUND = 'ANIMAL_NOT_FOUND';
 
 // ── Implementation ────────────────────────────────────────────────────────────
 
@@ -133,6 +142,26 @@ export function classifySyncFailure(
         message: 'Observation rejected by server — remove from queue to continue',
       },
     };
+  }
+
+  // S5 / OBS-2 — typed 404: the server PROVED the target animal no longer
+  // exists (post-S4 the drain syncs pending animals to completion before any
+  // observation, so this can never be a not-yet-synced offline calf). The row
+  // dead-letters instead of looping. ONLY the typed code is terminal: an
+  // untyped/legacy 404 ("Not found", "Mob not found", older servers, routing
+  // misses) falls through to the retry arm below, bounded by the OBS-1
+  // attempt budget — deploy-order safety for mixed client/server versions.
+  if (httpStatus === 404) {
+    const body = parsedBody as ParsedBody | null;
+    if (body?.error === ANIMAL_NOT_FOUND) {
+      return {
+        action: 'mark-failed-terminal',
+        toast: {
+          kind: 'error',
+          message: 'Animal no longer exists on the server — remove from queue to continue',
+        },
+      };
+    }
   }
 
   // Any other non-success status → retry (4xx that aren't 422, unexpected codes).

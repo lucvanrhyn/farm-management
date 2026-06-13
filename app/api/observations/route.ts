@@ -11,13 +11,24 @@
  *   - GET  200 → `Observation[]` (raw Prisma rows)
  *   - POST 200 → `{ success: true, id: string }`
  *   - POST 422 → `{ error: "INVALID_TYPE" | "WRONG_SPECIES" | ... }`
- *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }`
- *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`
+ *     (`WRONG_SPECIES` fires from the S24/obs-M4 animal↔camp guard below —
+ *     advertised since Wave C but only wired in S24)
+ *   - POST 404 → `{ error: "CAMP_NOT_FOUND" }` or `{ error: "ANIMAL_NOT_FOUND" }`
+ *   - POST 400 → `{ error: "INVALID_TIMESTAMP" }` or `VALIDATION_FAILED`,
+ *     or (S24/obs-M2) `DETAILS_TOO_LONG` when the `details` JSON string
+ *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`, or (S24/obs-M3)
+ *     `TIMESTAMP_OUT_OF_RANGE` when `created_at` is beyond the
+ *     `OBSERVATION_CREATED_AT_MAX_FUTURE_MS` clock-skew tolerance
  *   - POST 429 → `{ error: "Too many requests" }` (rate-limit, transport-only)
  */
 import { NextResponse } from "next/server";
 
-import { tenantRead, tenantWrite, RouteValidationError } from "@/lib/server/route";
+import {
+  tenantRead,
+  tenantWrite,
+  routeError,
+  RouteValidationError,
+} from "@/lib/server/route";
 import { revalidateObservationWrite } from "@/lib/server/revalidate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -27,9 +38,21 @@ import {
   OBSERVATIONS_MAX_LIMIT,
   type CreateObservationInput,
 } from "@/lib/domain/observations";
+import {
+  OBSERVATION_CREATED_AT_MAX_FUTURE_MS,
+  OBSERVATION_DETAILS_MAX_LENGTH,
+} from "@/lib/domain/observations/details-schemas";
 import { performAnimalMove } from "@/lib/domain/animals/perform-animal-move";
 import { performAnimalDeath } from "@/lib/domain/animals/perform-animal-death";
+import { performMobMove } from "@/lib/domain/mobs/move-mob";
 import { parseLimit } from "@/lib/domain/shared/limit";
+import { requireSpeciesScopedCamp } from "@/lib/server/species/require-species-scoped-camp";
+import { SpeciesScopedCampError } from "@/lib/domain/animals/errors";
+import {
+  AnimalNotFoundError,
+  CampNotFoundError,
+} from "@/lib/domain/observations/errors";
+import type { SpeciesId } from "@/lib/species/types";
 
 /**
  * Issue #100 — shape of an `animal_movement` observation's `details` JSON,
@@ -96,6 +119,62 @@ function deriveAnimalMovement(
   return { animalId, sourceCampId, destCampId: obj.destCampId };
 }
 
+/**
+ * S8 / OS-2 — shape of a `mob_movement` observation's `details` JSON as the
+ * logger's `submitMobMove` queues it (`{ mobId, mobName, sourceCamp,
+ * destCamp, animalCount }` — note the mob vocabulary uses `sourceCamp` /
+ * `destCamp`, NOT the animal_movement `sourceCampId`/`destCampId`). Parsed at
+ * the route boundary so the camp change can be derived from the REPLAYED
+ * observation (the offline queue's sole carrier of the move) and applied via
+ * `performMobMove`.
+ */
+interface MobMovementDetails {
+  mobId: string;
+  destCampId: string;
+}
+
+/**
+ * S8 / OS-2 — derive the mob move from a `mob_movement` observation's
+ * `details` string. Mirrors `deriveAnimalMovement` (#100): returns the move
+ * when a usable `mobId` + `destCamp` are present, or `null` when the payload
+ * cannot express one (unparseable JSON, missing/blank fields). A `null` is
+ * NOT an error — the caller falls through to the bare `createObservation`
+ * path, preserving the behaviour of any non-logger writer that records a
+ * `mob_movement` without a destination. The logger + offline replay ALWAYS
+ * queue both fields, so the no-lost-move guarantee is unaffected.
+ */
+function deriveMobMovement(
+  details: string | null | undefined,
+): MobMovementDetails | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(details ?? "");
+  } catch {
+    return null;
+  }
+  const obj = (parsed ?? {}) as Record<string, unknown>;
+  if (typeof obj.mobId !== "string" || obj.mobId === "") {
+    return null;
+  }
+  if (typeof obj.destCamp !== "string" || obj.destCamp === "") {
+    return null;
+  }
+  return { mobId: obj.mobId, destCampId: obj.destCamp };
+}
+
+/**
+ * S8 / OS-2 — `performMobMove`'s same-camp guard throws a bare `Error`
+ * (`"Mob <name> is already in camp <campId>"`). On the REPLAY path that is
+ * not a failure: it means the move was already applied (the online PATCH ran
+ * first, or this is a #206 duplicate replay), so the route records the
+ * replayed row and returns 200. Message-match mirrors the established idiom
+ * in `lib/domain/rotation/execute-step.ts` (which maps the same throw to
+ * `MobAlreadyInCampError`).
+ */
+function isMobAlreadyInCamp(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("already in camp");
+}
+
 interface CreateObservationBody {
   type: string;
   camp_id: string;
@@ -145,6 +224,14 @@ const createObservationSchema = {
     // — this boundary only shape-checks the type.
     if (body.notes != null && typeof body.notes !== "string") {
       errors.notes = "notes must be a string";
+    }
+    // S24 / obs-M3 — `created_at` must be a STRING when present. A numeric
+    // epoch (or any other shape) previously sailed past this schema into the
+    // door's `new Date(input)` coercion, bypassing the string-based
+    // future-bound below. Same boundary discipline as #484 details / #492
+    // notes; `undefined` / `null` stay valid (server clock is used).
+    if (body.created_at != null && typeof body.created_at !== "string") {
+      errors.created_at = "created_at must be a string";
     }
     if (Object.keys(errors).length > 0) {
       throw new RouteValidationError(
@@ -201,6 +288,56 @@ export const POST = tenantWrite<CreateObservationBody>({
     const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    // S24 / obs-M2 — bound the `details` JSON string at the wire boundary,
+    // BEFORE any JSON.parse (the movement/mob derivations below parse it) or
+    // DB work. `details` lands in a non-nullable column, is mirrored into
+    // every client's IndexedDB, and is chunked into the RAG index — an
+    // unbounded blob from a stale/malicious client is a storage + cost DoS.
+    // Typed 400 (shape-error family, like NOTE_TOO_LONG) with the cap
+    // forwarded as field-level info; deterministic, so the offline queue
+    // dead-letters the row instead of looping it.
+    if (
+      typeof body.details === "string" &&
+      body.details.length > OBSERVATION_DETAILS_MAX_LENGTH
+    ) {
+      return routeError(
+        "DETAILS_TOO_LONG",
+        `details exceeds the maximum length of ${OBSERVATION_DETAILS_MAX_LENGTH} characters.`,
+        400,
+        {
+          maxLength: OBSERVATION_DETAILS_MAX_LENGTH,
+          received: body.details.length,
+        },
+      );
+    }
+
+    // S24 / obs-M3 — bound the client `created_at` against the FUTURE.
+    // Backdating stays unrestricted (offline-first: a queued row replays its
+    // original timestamp days later), but a far-future timestamp becomes a
+    // far-future `observedAt` — and, via the #538 death path, a far-future
+    // `deceasedAt` — poisoning every time-windowed read. An UNPARSEABLE
+    // string is deliberately left for the door's existing
+    // `InvalidTimestampError` (400 INVALID_TIMESTAMP) so that contract is
+    // owned in exactly one place; this branch only rejects the parseable-
+    // but-out-of-range case the door never checked.
+    if (typeof body.created_at === "string" && body.created_at !== "") {
+      const createdAtMs = new Date(body.created_at).getTime();
+      if (
+        Number.isFinite(createdAtMs) &&
+        createdAtMs > Date.now() + OBSERVATION_CREATED_AT_MAX_FUTURE_MS
+      ) {
+        return routeError(
+          "TIMESTAMP_OUT_OF_RANGE",
+          `created_at is further than ${OBSERVATION_CREATED_AT_MAX_FUTURE_MS / (60 * 60 * 1000)} hours in the future.`,
+          400,
+          {
+            field: "created_at",
+            maxFutureMs: OBSERVATION_CREATED_AT_MAX_FUTURE_MS,
+          },
+        );
+      }
     }
 
     // ADR-0007 (#513) — per-type `details` validation (reproductive state +
@@ -277,6 +414,75 @@ export const POST = tenantWrite<CreateObservationBody>({
         ? input.animal_id
         : null;
 
+    // S8 / OS-2 — a `mob_movement` write is now a sufficient carrier of the
+    // mob's camp change. The logger's `submitMobMove` queues the observation
+    // REGARDLESS of its online `PATCH /api/mobs/{id}` outcome (pre-S8 the
+    // PATCH was the ONLY camp writer and the observation was queued only
+    // after a successful PATCH — offline, the fetch threw and the move was
+    // silently dropped). When the replayed payload expresses a real move
+    // (usable `mobId` + `destCamp`), route it through `performMobMove` —
+    // the same op the PATCH route uses — then record the replayed row itself
+    // through the door's #206 `clientLocalId` upsert. Mirrors the #100
+    // `animal_movement` branch; every `mob_movement` without a usable move
+    // payload keeps the unchanged bare-`createObservation` path.
+    const mobMove =
+      input.type === "mob_movement" ? deriveMobMovement(input.details) : null;
+
+    // S24 / obs-M4 — animal↔camp species validation. The route has advertised
+    // `422 WRONG_SPECIES` since Wave C, but nothing on the observation path
+    // ever performed the check (`requireSpeciesScopedCamp` guarded the mob ops
+    // #97 and the animal PATCH #98 only), so a cattle observation could be
+    // logged against a sheep camp — and an `animal_movement` could advance
+    // `currentCamp` INTO a wrong-species camp — with zero resistance.
+    //
+    // The guarded camp is the one the write RELATES the animal to: the
+    // movement DESTINATION (the `currentCamp` mutation target) for
+    // `animal_movement`, the wire `camp_id` otherwise. The movement SOURCE is
+    // deliberately unguarded — blocking a move OUT of a legacy wrong-species
+    // camp would trap the animal there. Outcomes:
+    //   - composite (species, campId) hit            → proceed
+    //   - camp exists under another species          → `SpeciesScopedCampError`
+    //     (422 `WRONG_SPECIES`, the same wire the #98 animal PATCH emits)
+    //   - campId unknown under ANY species           → `CampNotFoundError`
+    //     (the route's established 404 `CAMP_NOT_FOUND`, not a new 422)
+    //   - animal tag resolves to no row              → `AnimalNotFoundError`
+    //     (the S5/OBS-2 typed terminal 404, thrown before any camp work)
+    //   - legacy animal with species=null            → guard skipped,
+    //     mirroring the #98 PATCH lenience (TODO(#28) tighten post-backfill)
+    // All three throws are deterministic 4xx the offline queue dead-letters
+    // (`classifySyncFailure`), so a terminally cross-species row cannot loop.
+    // The mob path needs no arm here: `performMobMove` already hard-blocks
+    // via `CrossSpeciesBlockedError` (422).
+    const guardAnimalTag =
+      movement?.animalId ??
+      deathAnimalId ??
+      (typeof input.animal_id === "string" && input.animal_id !== ""
+        ? input.animal_id
+        : null);
+    if (guardAnimalTag) {
+      const guardAnimal = await ctx.prisma.animal.findUnique({
+        where: { animalId: guardAnimalTag },
+        select: { species: true },
+      });
+      if (!guardAnimal) {
+        throw new AnimalNotFoundError(guardAnimalTag);
+      }
+      if (guardAnimal.species) {
+        const guardCampId = movement ? movement.destCampId : input.camp_id;
+        const campResult = await requireSpeciesScopedCamp(ctx.prisma, {
+          species: guardAnimal.species as SpeciesId,
+          farmSlug: ctx.slug,
+          campId: guardCampId,
+        });
+        if (!campResult.ok) {
+          if (campResult.reason === "NOT_FOUND") {
+            throw new CampNotFoundError(guardCampId);
+          }
+          throw new SpeciesScopedCampError(campResult.reason);
+        }
+      }
+    }
+
     let result: Awaited<ReturnType<typeof createObservation>>;
     if (movement) {
       result = await performAnimalMove(ctx.prisma, {
@@ -300,6 +506,30 @@ export const POST = tenantWrite<CreateObservationBody>({
         notes: input.notes,
         loggedBy: input.loggedBy,
       });
+    } else if (mobMove) {
+      // S8 / OS-2 — apply the replayed move, then record the replayed row.
+      // `performMobMove` owns the mutation atomically (camp + member animals
+      // + its own source/dest audit pair, one `$transaction`); the replayed
+      // observation row is recorded separately through the door's
+      // `clientLocalId` upsert so a #206 duplicate replay collapses to one
+      // row. A same-camp throw means the move was ALREADY applied (the
+      // online PATCH won the race, or this is a duplicate replay) — on the
+      // replay path that is success, not failure: skip the move, keep the
+      // audit row. Every OTHER failure propagates to `mapApiDomainError`
+      // untouched: `MobNotFoundError` → 404 `{ error: "Mob not found" }`,
+      // `CrossSpeciesBlockedError` → 422 — both bounded client-side by the
+      // OBS-1 attempt budget, so a terminally-bad row dead-letters instead
+      // of looping.
+      try {
+        await performMobMove(ctx.prisma, {
+          mobId: mobMove.mobId,
+          toCampId: mobMove.destCampId,
+          loggedBy: input.loggedBy,
+        });
+      } catch (err) {
+        if (!isMobAlreadyInCamp(err)) throw err;
+      }
+      result = await createObservation(ctx.prisma, input);
     } else {
       result = await createObservation(ctx.prisma, input);
     }
