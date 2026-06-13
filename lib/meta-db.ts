@@ -277,6 +277,35 @@ export async function getUserByEmail(email: string): Promise<MetaUser | null> {
   };
 }
 
+/**
+ * Resolve a user by username (registration collision check — issue H7).
+ *
+ * Mirrors `getUserByEmail`. Used by the register route to pre-check username
+ * uniqueness BEFORE provisioning, so a colliding username returns a clean 409
+ * instead of slipping past `createUser` (which now throws on the
+ * `users_username_unique` constraint) and orphaning a half-built tenant.
+ *
+ * Unlike email, a taken username is safe to surface (usernames are not secret),
+ * so this is NOT part of the email anti-enumeration contract.
+ */
+export async function getUserByUsername(username: string): Promise<MetaUser | null> {
+  const client = getMetaClient();
+  const result = await client.execute({
+    sql: `SELECT id, email, username, password_hash, name
+          FROM users WHERE username = ? LIMIT 1`,
+    args: [username],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    id: row.id as string,
+    email: (row.email as string) || null,
+    username: row.username as string,
+    passwordHash: row.password_hash as string,
+    name: row.name as string | null,
+  };
+}
+
 export async function getFarmBySlug(slug: string): Promise<{ id: string; slug: string } | null> {
   const client = getMetaClient();
   const result = await client.execute({
@@ -310,8 +339,14 @@ export async function createUser(
   // No email → auto-verified. preVerified=true for admin-provisioned users.
   // Self-service registrations (email present, preVerified=false) require email confirmation.
   const emailVerified = !email || preVerified ? 1 : 0;
+  // Plain INSERT (NOT `OR IGNORE`): a duplicate id / email / username must
+  // raise a UNIQUE-constraint error so the caller aborts and compensates
+  // (issue H7). `OR IGNORE` silently no-op'd on a username collision, leaving
+  // provisioning to link a farm to a user row that was never inserted — an
+  // orphaned tenant the registrant could never log into, with no throw to
+  // trigger cleanup.
   await client.execute({
-    sql: `INSERT OR IGNORE INTO users (id, email, username, password_hash, name, email_verified, created_at)
+    sql: `INSERT INTO users (id, email, username, password_hash, name, email_verified, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)`,
     args: [id, email, username, passwordHash, name, emailVerified, new Date().toISOString()],
   });
@@ -342,6 +377,39 @@ export async function createFarmUser(
   await client.execute({
     sql: `INSERT INTO farm_users (user_id, farm_id, role) VALUES (?, ?, ?)`,
     args: [userId, farmId, role],
+  });
+}
+
+// ── Compensating deletes (provisioning rollback — issue H6 / OB-007) ─────────
+//
+// Self-service provisioning is not transactional: the Turso tenant DB and the
+// three meta rows (user, farm, farm_users mapping) are written in separate
+// awaits. When a later step fails, `provisionFarm` rolls back by best-effort
+// deleting in reverse creation order. These helpers mirror `deleteBranchClone`'s
+// idempotent style — a DELETE of a non-existent row is a no-op, never a throw —
+// so the rollback never compounds the original failure.
+
+export async function deleteFarmUser(userId: string, farmId: string): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `DELETE FROM farm_users WHERE user_id = ? AND farm_id = ?`,
+    args: [userId, farmId],
+  });
+}
+
+export async function deleteFarm(farmId: string): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `DELETE FROM farms WHERE id = ?`,
+    args: [farmId],
+  });
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const client = getMetaClient();
+  await client.execute({
+    sql: `DELETE FROM users WHERE id = ?`,
+    args: [userId],
   });
 }
 
