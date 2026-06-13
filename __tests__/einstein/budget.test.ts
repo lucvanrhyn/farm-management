@@ -7,11 +7,18 @@
  *   - consulting tier → skips check, returns Infinity
  *   - advanced tier at cap → throws EINSTEIN_BUDGET_EXHAUSTED
  *   - advanced tier below cap → returns remaining ZAR
- *   - monthly rollover — stale currentMonthKey resets the counter
- *   - stampCostBeforeSend fires UPDATE before caller proceeds (ordering captured
- *     via a call-order array mock)
+ *   - monthly rollover — stale aiBudgetMonthKey resets the counter
+ *   - stampCostBeforeSend fires the atomic UPDATE before caller proceeds
  *   - stampCostBeforeSend short-circuits for consulting
- *   - resetMonthlyBudget writes zeroes and the current month key
+ *   - resetMonthlyBudget zeroes the counter + writes the current month key
+ *
+ * EIN-1 (slice S23): the volatile spend counter moved out of the aiSettings
+ * JSON blob into dedicated columns (FarmSettings.aiBudgetMonthSpentZar +
+ * aiBudgetMonthKey) so the three writers can use single-statement atomic SQL
+ * (`UPDATE … SET col = col + ?`) instead of a lost-update-prone
+ * read-modify-write of the whole JSON blob. The fake Prisma below models
+ * `$executeRawUnsafe` as an atomic, serialized increment so the concurrency
+ * test genuinely exercises the no-lost-update guarantee.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -45,41 +52,106 @@ const {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeFakePrisma(
-  aiSettings: Record<string, unknown> | null,
-  sideEffects: { updateManyCalls?: unknown[] } = {},
-) {
-  const farmSettingsFindFirst = vi.fn().mockResolvedValue(
-    aiSettings === null
-      ? { aiSettings: null }
-      : { aiSettings: JSON.stringify(aiSettings) },
-  );
-  const farmSettingsUpdateMany = vi.fn().mockImplementation((args: unknown) => {
-    if (sideEffects.updateManyCalls) sideEffects.updateManyCalls.push(args);
-    return Promise.resolve({ count: 1 });
-  });
-  return {
-    farmSettings: {
-      findFirst: farmSettingsFindFirst,
-      updateMany: farmSettingsUpdateMany,
-    },
+/**
+ * Stateful in-memory FarmSettings singleton.
+ *
+ * `$executeRawUnsafe` interprets the three atomic statements the budget module
+ * emits and applies them to `row` ATOMICALLY: it captures the pre-state, awaits
+ * a microtask (to interleave with other concurrent calls), then commits the new
+ * value derived from the value it read at call-entry serialized through a tiny
+ * lock. This faithfully models a single-statement SQL UPDATE — concurrent calls
+ * cannot lose each other's increments. (A read-modify-write fake — read then
+ * write in separate awaits without the lock — WOULD lose updates; that is the
+ * exact bug EIN-1 fixes, so the lock is what makes this test honest.)
+ */
+function makeAtomicPrisma(initial: {
+  aiBudgetMonthSpentZar?: number;
+  aiBudgetMonthKey?: string | null;
+  aiSettings?: Record<string, unknown> | null;
+}) {
+  const row = {
+    id: 'singleton',
+    aiBudgetMonthSpentZar: initial.aiBudgetMonthSpentZar ?? 0,
+    aiBudgetMonthKey: initial.aiBudgetMonthKey ?? null,
+    aiSettings:
+      initial.aiSettings === undefined || initial.aiSettings === null
+        ? null
+        : JSON.stringify(initial.aiSettings),
   };
-}
 
-function mkRagConfig(overrides: Record<string, unknown> = {}) {
-  return {
-    enabled: true,
-    budgetCapZarPerMonth: 100,
-    monthSpentZar: 0,
-    currentMonthKey: currentMonthKey(new Date()),
-    ...overrides,
+  // Serializes the apply step so an UPDATE behaves as a single atomic statement.
+  let lock: Promise<void> = Promise.resolve();
+  const executeCalls: Array<{ sql: string; args: unknown[] }> = [];
+
+  function applyAtomic(sql: string, args: unknown[]): Promise<number> {
+    const run = lock.then(async () => {
+      // Yield once so concurrent callers interleave at the await boundary —
+      // this is where a non-atomic read-modify-write fake would lose updates.
+      await Promise.resolve();
+      const norm = sql.replace(/\s+/g, ' ').trim();
+
+      if (norm.startsWith('UPDATE "FarmSettings"') && norm.includes('CASE WHEN')) {
+        // stamp / reconcile: params are [monthKey, delta, resetValue, monthKey]
+        const [monthKey, delta, resetValue, newKey] = args as [
+          string,
+          number,
+          number,
+          string,
+        ];
+        const base =
+          row.aiBudgetMonthKey === monthKey
+            ? row.aiBudgetMonthSpentZar + delta
+            : resetValue;
+        const clamped = norm.includes('MAX(0,') ? Math.max(0, base) : base;
+        row.aiBudgetMonthSpentZar = clamped;
+        row.aiBudgetMonthKey = newKey;
+        return 1;
+      }
+
+      if (norm.includes('"aiBudgetMonthSpentZar" = 0')) {
+        // resetMonthlyBudget: params are [monthKey]
+        const [monthKey] = args as [string];
+        row.aiBudgetMonthSpentZar = 0;
+        row.aiBudgetMonthKey = monthKey;
+        return 1;
+      }
+
+      throw new Error(`unexpected SQL in fake: ${norm}`);
+    });
+    lock = run.then(() => undefined).catch(() => undefined);
+    return run;
+  }
+
+  const client = {
+    row, // exposed for assertions
+    executeCalls,
+    farmSettings: {
+      findFirst: vi.fn().mockImplementation(() => Promise.resolve({ ...row })),
+    },
+    $executeRawUnsafe: vi.fn().mockImplementation((sql: string, ...args: unknown[]) => {
+      executeCalls.push({ sql, args });
+      return applyAtomic(sql, args);
+    }),
   };
+  return client;
 }
 
 beforeEach(() => {
   getFarmCredsMock.mockReset();
   getPrismaForFarmMock.mockReset();
 });
+
+function advancedCreds() {
+  getFarmCredsMock.mockResolvedValue({
+    tursoUrl: 'x',
+    tursoAuthToken: 'y',
+    tier: 'advanced',
+  });
+}
+
+function ragWithCap(cap = 100): Record<string, unknown> {
+  return { ragConfig: { enabled: true, budgetCapZarPerMonth: cap } };
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -96,14 +168,12 @@ describe('assertWithinBudget', () => {
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
   });
 
-  it('advanced tier below cap returns remaining ZAR', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
-    });
-    const fake = makeFakePrisma({
-      ragConfig: mkRagConfig({ monthSpentZar: 40 }),
+  it('advanced tier below cap returns remaining ZAR (spent read from column)', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 40,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+      aiSettings: ragWithCap(100),
     });
     getPrismaForFarmMock.mockResolvedValue(fake);
     const result = await assertWithinBudget('delta-livestock');
@@ -112,13 +182,11 @@ describe('assertWithinBudget', () => {
   });
 
   it('advanced tier at cap throws EINSTEIN_BUDGET_EXHAUSTED', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
-    });
-    const fake = makeFakePrisma({
-      ragConfig: mkRagConfig({ monthSpentZar: 100 }),
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 100,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+      aiSettings: ragWithCap(100),
     });
     getPrismaForFarmMock.mockResolvedValue(fake);
     try {
@@ -136,13 +204,11 @@ describe('assertWithinBudget', () => {
   });
 
   it('advanced tier over cap throws EINSTEIN_BUDGET_EXHAUSTED', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
-    });
-    const fake = makeFakePrisma({
-      ragConfig: mkRagConfig({ monthSpentZar: 150 }),
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 150,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+      aiSettings: ragWithCap(100),
     });
     getPrismaForFarmMock.mockResolvedValue(fake);
     await expect(assertWithinBudget('delta-livestock')).rejects.toBeInstanceOf(
@@ -150,17 +216,12 @@ describe('assertWithinBudget', () => {
     );
   });
 
-  it('stale currentMonthKey rolls over — advanced tier treated as 0 spent', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
-    });
-    const fake = makeFakePrisma({
-      ragConfig: mkRagConfig({
-        monthSpentZar: 500,
-        currentMonthKey: '1999-01', // stale
-      }),
+  it('stale aiBudgetMonthKey rolls over — advanced tier treated as 0 spent', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 500,
+      aiBudgetMonthKey: '1999-01', // stale
+      aiSettings: ragWithCap(100),
     });
     getPrismaForFarmMock.mockResolvedValue(fake);
     const result = await assertWithinBudget('delta-livestock');
@@ -168,13 +229,13 @@ describe('assertWithinBudget', () => {
     expect(result.remainingZar).toBe(100);
   });
 
-  it('missing ragConfig blob defaults to full budget', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
+  it('missing ragConfig blob defaults cap to DEFAULT_BUDGET_CAP_ZAR (100)', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 0,
+      aiBudgetMonthKey: null,
+      aiSettings: null, // no aiSettings → cap defaults
     });
-    const fake = makeFakePrisma({}); // no ragConfig present
     getPrismaForFarmMock.mockResolvedValue(fake);
     const result = await assertWithinBudget('delta-livestock');
     expect(result.remainingZar).toBe(100);
@@ -184,9 +245,27 @@ describe('assertWithinBudget', () => {
     getFarmCredsMock.mockResolvedValue(null);
     await expect(assertWithinBudget('no-such')).rejects.toBeInstanceOf(EinsteinBudgetError);
   });
+
+  it('FarmSettings row missing throws SETTINGS_MISSING', async () => {
+    advancedCreds();
+    const fake = {
+      farmSettings: { findFirst: vi.fn().mockResolvedValue(null) },
+      $executeRawUnsafe: vi.fn(),
+    };
+    getPrismaForFarmMock.mockResolvedValue(fake);
+    try {
+      await assertWithinBudget('delta-livestock');
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(EinsteinBudgetError);
+      expect((err as InstanceType<typeof EinsteinBudgetError>).code).toBe(
+        'EINSTEIN_BUDGET_SETTINGS_MISSING',
+      );
+    }
+  });
 });
 
-describe('stampCostBeforeSend — mark-before-send ordering', () => {
+describe('stampCostBeforeSend — atomic mark-before-send', () => {
   it('consulting tier returns without writing', async () => {
     getFarmCredsMock.mockResolvedValue({
       tursoUrl: 'x',
@@ -197,137 +276,129 @@ describe('stampCostBeforeSend — mark-before-send ordering', () => {
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
   });
 
-  it('advanced tier writes updated monthSpentZar BEFORE caller proceeds', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
+  it('advanced tier increments the counter column atomically', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 10,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
     });
-    const updateManyCalls: unknown[] = [];
-    const callOrder: string[] = [];
+    getPrismaForFarmMock.mockResolvedValue(fake);
 
-    const prismaObj = {
-      farmSettings: {
-        findFirst: vi.fn().mockImplementation(() => {
-          callOrder.push('findFirst');
-          return Promise.resolve({
-            aiSettings: JSON.stringify({ ragConfig: mkRagConfig({ monthSpentZar: 10 }) }),
-          });
-        }),
-        updateMany: vi.fn().mockImplementation((args: unknown) => {
-          callOrder.push('updateMany');
-          updateManyCalls.push(args);
-          return Promise.resolve({ count: 1 });
-        }),
-      },
-    };
-    getPrismaForFarmMock.mockResolvedValue(prismaObj);
-
-    // Simulate caller pattern: stamp, then fake-Anthropic call.
-    const anthropicCalls: string[] = [];
     await stampCostBeforeSend('delta-livestock', 3);
-    anthropicCalls.push('anthropic-api');
 
-    // Assert stamp ran BEFORE caller would invoke Anthropic.
-    expect(callOrder).toEqual(['findFirst', 'updateMany']);
-    // The stamped call precedes the anthropic simulated call by program order:
-    expect(anthropicCalls.length).toBe(1);
-    expect(updateManyCalls).toHaveLength(1);
+    expect(fake.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(13, 5);
+    expect(fake.row.aiBudgetMonthKey).toBe(currentMonthKey(new Date()));
+  });
 
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as { ragConfig: { monthSpentZar: number } };
-    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(13, 5);
+  it('LOST-UPDATE PROOF: N concurrent stamps sum exactly (no lost updates)', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 0,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+    });
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    // Fire 10 concurrent stamps of 5 each. With a read-modify-write writer
+    // these would interleave and lose increments (final < 50). The atomic
+    // single-statement UPDATE the fake models guarantees the full sum.
+    const N = 10;
+    const COST = 5;
+    await Promise.all(
+      Array.from({ length: N }, () => stampCostBeforeSend('delta-livestock', COST)),
+    );
+
+    expect(fake.$executeRawUnsafe).toHaveBeenCalledTimes(N);
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(N * COST, 5);
   });
 
   it('rejects negative estimatedCostZar', async () => {
     await expect(stampCostBeforeSend('x', -1)).rejects.toBeInstanceOf(EinsteinBudgetError);
   });
 
-  it('resets counter on monthly rollover (stale key → new month key stamped)', async () => {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
+  it('resets counter on monthly rollover (stale key → new cost only)', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 99,
+      aiBudgetMonthKey: '1999-01', // stale
     });
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      { ragConfig: mkRagConfig({ monthSpentZar: 99, currentMonthKey: '1999-01' }) },
-      { updateManyCalls },
-    );
     getPrismaForFarmMock.mockResolvedValue(fake);
 
     await stampCostBeforeSend('delta-livestock', 5);
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number; currentMonthKey: string };
-    };
+
     // Stale 99 ZAR discarded; new spend starts at 5.
-    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(5, 5);
-    expect(parsed.ragConfig.currentMonthKey).toBe(currentMonthKey(new Date()));
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(5, 5);
+    expect(fake.row.aiBudgetMonthKey).toBe(currentMonthKey(new Date()));
+  });
+
+  it('FarmSettings row missing throws SETTINGS_MISSING (no rows updated)', async () => {
+    advancedCreds();
+    const fake = {
+      farmSettings: { findFirst: vi.fn() },
+      $executeRawUnsafe: vi.fn().mockResolvedValue(0), // 0 rows affected
+    };
+    getPrismaForFarmMock.mockResolvedValue(fake);
+    try {
+      await stampCostBeforeSend('delta-livestock', 5);
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(EinsteinBudgetError);
+      expect((err as InstanceType<typeof EinsteinBudgetError>).code).toBe(
+        'EINSTEIN_BUDGET_SETTINGS_MISSING',
+      );
+    }
   });
 });
 
 describe('reconcileCostAfterSend — post-send reconciliation (api-F1/EIN-2)', () => {
-  // After the Anthropic call the route knows REAL cost; the counter must be
-  // adjusted by delta = actual − pre-stamped estimate so the monthly budget
-  // reflects real consumption (negative delta credits back the over-stamp).
-  function advancedCreds() {
-    getFarmCredsMock.mockResolvedValue({
-      tursoUrl: 'x',
-      tursoAuthToken: 'y',
-      tier: 'advanced',
-    });
-  }
-
   it('applies a positive delta on top of the stamped spend', async () => {
     advancedCreds();
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      { ragConfig: mkRagConfig({ monthSpentZar: 13 }) },
-      { updateManyCalls },
-    );
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 13,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+    });
     getPrismaForFarmMock.mockResolvedValue(fake);
 
     await reconcileCostAfterSend('delta-livestock', 2);
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number };
-    };
-    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(15, 5);
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(15, 5);
   });
 
   it('credits back a negative delta (actual cost below the pessimistic stamp)', async () => {
     advancedCreds();
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      { ragConfig: mkRagConfig({ monthSpentZar: 13 }) },
-      { updateManyCalls },
-    );
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 13,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+    });
     getPrismaForFarmMock.mockResolvedValue(fake);
 
     await reconcileCostAfterSend('delta-livestock', -2.5);
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number };
-    };
-    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(10.5, 5);
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(10.5, 5);
   });
 
   it('clamps the counter at zero on an over-credit', async () => {
     advancedCreds();
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      { ragConfig: mkRagConfig({ monthSpentZar: 1 }) },
-      { updateManyCalls },
-    );
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 1,
+      aiBudgetMonthKey: currentMonthKey(new Date()),
+    });
     getPrismaForFarmMock.mockResolvedValue(fake);
 
     await reconcileCostAfterSend('delta-livestock', -5);
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number };
-    };
-    expect(parsed.ragConfig.monthSpentZar).toBe(0);
+    expect(fake.row.aiBudgetMonthSpentZar).toBe(0);
+  });
+
+  it('clamps to zero when a negative delta lands after a monthly rollover', async () => {
+    advancedCreds();
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 50,
+      aiBudgetMonthKey: '1999-01', // stale → resets to deltaZar, then MAX(0,·)
+    });
+    getPrismaForFarmMock.mockResolvedValue(fake);
+
+    await reconcileCostAfterSend('delta-livestock', -3);
+    // After rollover the reset value is the (negative) delta; MAX(0, -3) = 0.
+    expect(fake.row.aiBudgetMonthSpentZar).toBe(0);
+    expect(fake.row.aiBudgetMonthKey).toBe(currentMonthKey(new Date()));
   });
 
   it('consulting tier returns without writing (budget-exempt)', async () => {
@@ -352,44 +423,29 @@ describe('reconcileCostAfterSend — post-send reconciliation (api-F1/EIN-2)', (
     }
   });
 
-  it('rolls over a stale month key — delta applies to a fresh counter', async () => {
+  it('rolls over a stale month key — positive delta applies to a fresh counter', async () => {
     advancedCreds();
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      {
-        ragConfig: mkRagConfig({
-          monthSpentZar: 99,
-          currentMonthKey: '1999-01', // stale
-        }),
-      },
-      { updateManyCalls },
-    );
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 99,
+      aiBudgetMonthKey: '1999-01', // stale
+    });
     getPrismaForFarmMock.mockResolvedValue(fake);
 
     await reconcileCostAfterSend('delta-livestock', 4);
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number; currentMonthKey: string };
-    };
-    expect(parsed.ragConfig.monthSpentZar).toBeCloseTo(4, 5);
-    expect(parsed.ragConfig.currentMonthKey).toBe(currentMonthKey(new Date()));
+    expect(fake.row.aiBudgetMonthSpentZar).toBeCloseTo(4, 5);
+    expect(fake.row.aiBudgetMonthKey).toBe(currentMonthKey(new Date()));
   });
 });
 
 describe('resetMonthlyBudget', () => {
-  it('writes a fresh ragConfig with 0 spent + current month key', async () => {
-    const updateManyCalls: unknown[] = [];
-    const fake = makeFakePrisma(
-      { ragConfig: mkRagConfig({ monthSpentZar: 88 }) },
-      { updateManyCalls },
-    );
+  it('zeroes the counter column + writes the current month key', async () => {
+    const fake = makeAtomicPrisma({
+      aiBudgetMonthSpentZar: 88,
+      aiBudgetMonthKey: '1999-01',
+    });
     getPrismaForFarmMock.mockResolvedValue(fake);
     await resetMonthlyBudget('delta-livestock');
-    const stamped = updateManyCalls[0] as { data: { aiSettings: string } };
-    const parsed = JSON.parse(stamped.data.aiSettings) as {
-      ragConfig: { monthSpentZar: number; currentMonthKey: string };
-    };
-    expect(parsed.ragConfig.monthSpentZar).toBe(0);
-    expect(parsed.ragConfig.currentMonthKey).toBe(currentMonthKey(new Date()));
+    expect(fake.row.aiBudgetMonthSpentZar).toBe(0);
+    expect(fake.row.aiBudgetMonthKey).toBe(currentMonthKey(new Date()));
   });
 });

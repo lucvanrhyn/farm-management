@@ -286,7 +286,7 @@ export const POST = tenantWrite<CreateObservationBody>({
     // Rate limit: 100 observations per minute per user. Transport-only —
     // offline sync can burst, but cap runaway clients.
     const userId = ctx.session.user?.email ?? "unknown";
-    const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
+    const rl = await checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
     if (!rl.allowed) {
       return routeError("RATE_LIMITED", "Too many requests", 429);
     }

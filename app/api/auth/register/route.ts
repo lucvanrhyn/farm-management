@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
-import { getUserByEmail } from '../../../../lib/meta-db';
+import { getUserByEmail, getUserByUsername } from '../../../../lib/meta-db';
 import { provisionFarm } from '../../../../lib/provisioning';
 import { checkRateLimit } from '../../../../lib/rate-limit';
 import { logger } from '../../../../lib/logger';
@@ -26,7 +26,7 @@ export const POST = publicHandler({
   handle: async (request: NextRequest) => {
     // Rate limit by IP — 5 registrations per hour per IP (each registration provisions a Turso DB)
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-    const rl = checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
+    const rl = await checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many registration attempts. Please try again later.' }, { status: 429 });
     }
@@ -62,6 +62,19 @@ export const POST = publicHandler({
 
     if (farmName.length < 2) {
       return NextResponse.json({ error: 'Farm name must be at least 2 characters' }, { status: 400 });
+    }
+
+    // Username uniqueness (H7). Checked BEFORE the email anti-enumeration block
+    // and before provisioning. Unlike email, a username is NOT secret — usernames
+    // are user-chosen public handles, so revealing "already taken" is standard,
+    // acceptable UX and does NOT need the email branch's timing-match. A clean
+    // 409 here also closes the orphan class: previously a colliding username
+    // slipped through to `createUser`'s `INSERT OR IGNORE`, which silently
+    // no-op'd and let provisioning link a farm to a never-inserted user.
+    const usernameTaken = await getUserByUsername(username);
+    if (usernameTaken) {
+      // audit-allow-error-envelope: register is an auth route deliberately kept on bare-string wire-shapes (S26-excluded); the auth/payment envelope migration is its own sign-off (Wave F/G).
+      return NextResponse.json({ error: 'Username is already taken' }, { status: 409 });
     }
 
     // Anti-enumeration: new vs existing emails must produce byte-identical

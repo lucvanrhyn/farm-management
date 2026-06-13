@@ -221,11 +221,15 @@ export const PUT = tenantWriteSlug<unknown, { farmSlug: string }>({
       }
       if ("budgetCapZarPerMonth" in validation.value) {
         const existingRag: Partial<RagConfig> = existing.ragConfig ?? {};
+        // EIN-1 (slice S23): the volatile spend counter lives in the
+        // FarmSettings.aiBudgetMonthSpentZar / aiBudgetMonthKey columns now —
+        // only the cap + kill-switch belong in the JSON ragConfig. We carry the
+        // existing `enabled` forward but no longer write the deprecated
+        // monthSpentZar / currentMonthKey keys (mergeAiSettings shallow-merges,
+        // so any legacy keys already in the blob are left untouched).
         patch.ragConfig = {
           enabled: existingRag.enabled ?? true,
           budgetCapZarPerMonth: validation.value.budgetCapZarPerMonth!,
-          monthSpentZar: existingRag.monthSpentZar ?? 0,
-          currentMonthKey: existingRag.currentMonthKey ?? "",
         };
       }
 

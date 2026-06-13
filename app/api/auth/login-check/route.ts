@@ -64,7 +64,7 @@ export const POST = publicHandler({
 
     // Rate limit: 10 attempts per minute per identifier (same window/key as
     // authorize() so brute-force protection is unaffected by the new route).
-    const rl = checkRateLimit(`login:${identifier}`, 10, 60_000);
+    const rl = await checkRateLimit(`login:${identifier}`, 10, 60_000);
     if (!rl.allowed) {
       return payload({ ok: false, reason: AUTH_ERROR_CODES.RATE_LIMITED });
     }

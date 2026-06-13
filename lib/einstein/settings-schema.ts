@@ -42,12 +42,22 @@ export interface FarmMethodology {
   readonly farmerNotes?: string;
 }
 
-/** RAG budget + kill-switch config (also managed by lib/einstein/budget.ts). */
+/**
+ * RAG budget cap + kill-switch config (also managed by lib/einstein/budget.ts).
+ *
+ * EIN-1 (slice S23): the volatile spend counter moved to dedicated FarmSettings
+ * columns (aiBudgetMonthSpentZar / aiBudgetMonthKey) so it can be incremented
+ * atomically. The `monthSpentZar` / `currentMonthKey` keys are kept here only as
+ * OPTIONAL legacy fields — pre-migration tenants still physically carry them in
+ * the JSON blob — but they are no longer authoritative and nothing writes them.
+ */
 export interface RagConfig {
   readonly enabled: boolean;
   readonly budgetCapZarPerMonth: number;
-  readonly monthSpentZar: number;
-  readonly currentMonthKey: string;
+  /** @deprecated EIN-1 — read from FarmSettings.aiBudgetMonthSpentZar instead. */
+  readonly monthSpentZar?: number;
+  /** @deprecated EIN-1 — read from FarmSettings.aiBudgetMonthKey instead. */
+  readonly currentMonthKey?: string;
 }
 
 /** Full aiSettings blob. Every field optional — blob may be missing. */

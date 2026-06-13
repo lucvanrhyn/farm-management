@@ -148,7 +148,9 @@ CREATE TABLE "FarmSettings" (
     "speciesAlertThresholds" TEXT,
     "taskSettings" TEXT,
     "mapSettings" TEXT,
-    "aiSettings" TEXT
+    "aiSettings" TEXT,
+    "aiBudgetMonthSpentZar" REAL NOT NULL DEFAULT 0,
+    "aiBudgetMonthKey" TEXT
 );
 
 -- CreateTable
@@ -1029,4 +1031,5 @@ export const BASELINE_MIGRATION_NAMES: readonly string[] = [
   '0024_backfill_observation_species_stragglers.sql',
   '0025_backfill_empty_camp_color.sql',
   '0026_observation_notes.sql',
+  '0027_einstein_budget_atomic_counter.sql',
 ];

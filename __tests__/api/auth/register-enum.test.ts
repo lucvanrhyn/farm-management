@@ -3,14 +3,17 @@ import type { NextRequest } from 'next/server';
 
 // ─── Mock deps before importing the route ───────────────────────────────────
 const getUserByEmailMock = vi.fn();
+const getUserByUsernameMock = vi.fn();
 const provisionFarmMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 
 vi.mock('@/lib/meta-db', () => ({
   getUserByEmail: (...args: unknown[]) => getUserByEmailMock(...args),
+  getUserByUsername: (...args: unknown[]) => getUserByUsernameMock(...args),
 }));
 vi.mock('../../../../lib/meta-db', () => ({
   getUserByEmail: (...args: unknown[]) => getUserByEmailMock(...args),
+  getUserByUsername: (...args: unknown[]) => getUserByUsernameMock(...args),
 }));
 vi.mock('@/lib/provisioning', () => ({
   provisionFarm: (...args: unknown[]) => provisionFarmMock(...args),
@@ -60,6 +63,9 @@ const VALID_BODY = {
 describe('POST /api/auth/register — anti-enumeration', () => {
   beforeEach(() => {
     getUserByEmailMock.mockReset();
+    // Username is checked BEFORE email; default to "no collision" so the
+    // email-anti-enumeration assertions exercise the existing-email branch.
+    getUserByUsernameMock.mockReset().mockResolvedValue(null);
     provisionFarmMock.mockReset();
     checkRateLimitMock.mockReset().mockReturnValue({ allowed: true });
   });
@@ -127,5 +133,55 @@ describe('POST /api/auth/register — anti-enumeration', () => {
   it('still returns 400 on invalid email', async () => {
     const res = await POST(buildRequest({ ...VALID_BODY, email: 'not-an-email' }), CTX);
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/auth/register — username collision (H7)', () => {
+  beforeEach(() => {
+    getUserByEmailMock.mockReset().mockResolvedValue(null);
+    getUserByUsernameMock.mockReset().mockResolvedValue(null);
+    provisionFarmMock.mockReset();
+    checkRateLimitMock.mockReset().mockReturnValue({ allowed: true });
+  });
+
+  it('returns 409 for a taken username and does NOT provision', async () => {
+    getUserByUsernameMock.mockResolvedValueOnce({
+      id: 'user-existing',
+      email: 'someone-else@example.com',
+      username: VALID_BODY.username,
+      passwordHash: '$2a$12$existinghash',
+    });
+
+    const res = await POST(buildRequest(VALID_BODY), CTX);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(typeof body.error).toBe('string');
+    // No farm/DB is provisioned for a colliding username — this is the H7 fix:
+    // the orphan happened precisely because provisioning ran past the collision.
+    expect(provisionFarmMock).not.toHaveBeenCalled();
+  });
+
+  it('checks username BEFORE email — a colliding username never reaches the email branch', async () => {
+    getUserByUsernameMock.mockResolvedValueOnce({
+      id: 'u',
+      email: 'x@example.com',
+      username: VALID_BODY.username,
+      passwordHash: '$2a$12$h',
+    });
+
+    const res = await POST(buildRequest(VALID_BODY), CTX);
+    expect(res.status).toBe(409);
+    // Username collision short-circuits before the email lookup.
+    expect(getUserByEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('proceeds to provision when both username and email are free', async () => {
+    getUserByUsernameMock.mockResolvedValueOnce(null);
+    getUserByEmailMock.mockResolvedValueOnce(null);
+    provisionFarmMock.mockResolvedValueOnce({ slug: 's', userId: 'u' });
+
+    const res = await POST(buildRequest(VALID_BODY), CTX);
+    expect(res.status).toBe(200);
+    expect(provisionFarmMock).toHaveBeenCalledTimes(1);
   });
 });
