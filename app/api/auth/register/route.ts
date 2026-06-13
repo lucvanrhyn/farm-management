@@ -73,6 +73,7 @@ export const POST = publicHandler({
     // no-op'd and let provisioning link a farm to a never-inserted user.
     const usernameTaken = await getUserByUsername(username);
     if (usernameTaken) {
+      // audit-allow-error-envelope: register is an auth route deliberately kept on bare-string wire-shapes (S26-excluded); the auth/payment envelope migration is its own sign-off (Wave F/G).
       return NextResponse.json({ error: 'Username is already taken' }, { status: 409 });
     }
 
