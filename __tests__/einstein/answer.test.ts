@@ -9,9 +9,11 @@
  *     (NOT throw — the generator gracefully emits an error frame).
  *   - Lazy client: importing the module doesn't construct Anthropic at load-time.
  *   - Citation fabrication: if the model cites an entityId not present in the
- *     retrieval set, yields `{type:'error', code:'EINSTEIN_CITATION_FABRICATION'}`.
- *   - Refusal path: refusedReason='NO_GROUNDED_EVIDENCE' short-circuits citation
- *     fabrication checks and the final frame carries the refusal.
+ *     retrieval set, yields `{type:'error', code:'EINSTEIN_CITATION_FABRICATION'}`
+ *     — REGARDLESS of refusedReason (S20 / ein-M3).
+ *   - Grounding contract (S20 / ein-M3): a non-empty factual answer with zero
+ *     citations yields `{type:'error', code:'EINSTEIN_ANSWER_UNGROUNDED'}`.
+ *     Refusals (refusedReason set) are exempt — a refusal is not free-generation.
  *   - Invalid tail JSON → yields `{type:'error', code:'EINSTEIN_ANSWER_INVALID_JSON'}`.
  *   - SDK throw → `{type:'error', code:'EINSTEIN_ANSWER_API_ERROR'}`.
  *   - parseAnswerJson pure helper: valid JSON → EinsteinAnswer; invalid → throws.
@@ -151,7 +153,12 @@ describe('streamAnswer — happy path', () => {
     streamScript = [
       mkDelta(
         '```json\n' +
-          JSON.stringify({ answer: 'ok', citations: [], confidence: 'low' }) +
+          JSON.stringify({
+            answer: 'ok',
+            citations: [],
+            confidence: 'low',
+            refusedReason: 'NO_GROUNDED_EVIDENCE',
+          }) +
           '\n```',
       ),
     ];
@@ -168,12 +175,21 @@ describe('streamAnswer — happy path', () => {
       }),
     );
     const call = streamMock.mock.calls[0][0] as {
-      messages: Array<{ role: string; content: string }>;
+      messages: Array<{
+        role: string;
+        content: string | Array<{ type: string; text: string }>;
+      }>;
     };
     expect(call.messages).toHaveLength(3);
     expect(call.messages[0]).toEqual({ role: 'user', content: 'prev q' });
     expect(call.messages[1]).toEqual({ role: 'assistant', content: 'prev a' });
-    expect(call.messages[2]).toEqual({ role: 'user', content: 'follow up' });
+    // Final turn: [retrieval data block, question] — the question is the
+    // trailing text block (S19 moved retrieval into the user turn).
+    const lastTurn = call.messages[2];
+    expect(lastTurn.role).toBe('user');
+    const blocks = lastTurn.content as Array<{ type: string; text: string }>;
+    expect(Array.isArray(blocks)).toBe(true);
+    expect(blocks[blocks.length - 1].text).toBe('follow up');
   });
 });
 
@@ -242,7 +258,7 @@ describe('streamAnswer — error frames', () => {
     expect(finals).toHaveLength(0);
   });
 
-  it('refusal bypasses citation fabrication check — final frame emitted with refusedReason', async () => {
+  it('refusal with zero citations passes the grounding gate — final frame carries refusedReason', async () => {
     const tailJson = JSON.stringify({
       answer: 'I cannot answer — no grounded evidence.',
       citations: [],
@@ -265,6 +281,86 @@ describe('streamAnswer — error frames', () => {
     expect(finals).toHaveLength(1);
     const payload = (finals[0] as { payload: { refusedReason?: string } }).payload;
     expect(payload.refusedReason).toBe('NO_GROUNDED_EVIDENCE');
+  });
+
+  it('S20: fabricated citation is rejected even when refusedReason is set', async () => {
+    const tailJson = JSON.stringify({
+      answer: 'Partially refusing, but here is obs-fake anyway.',
+      citations: [
+        {
+          entityType: 'observation',
+          entityId: 'obs-fake-never-retrieved',
+          quote: 'x',
+          relevance: 'direct',
+        },
+      ],
+      confidence: 'low',
+      refusedReason: 'NO_GROUNDED_EVIDENCE',
+    });
+    streamScript = [mkDelta('```json\n' + tailJson + '\n```')];
+
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval(['obs-real-1']),
+      }),
+    );
+    const err = events.find((e) => e.type === 'error') as
+      | { code: string }
+      | undefined;
+    const finals = events.filter((e) => e.type === 'final');
+    expect(err?.code).toBe('EINSTEIN_CITATION_FABRICATION');
+    expect(finals).toHaveLength(0);
+  });
+
+  it('S20: non-empty factual answer with zero citations is rejected as ungrounded', async () => {
+    const tailJson = JSON.stringify({
+      answer: 'Your cows are definitely all healthy, trust me.',
+      citations: [],
+      confidence: 'high',
+    });
+    streamScript = [mkDelta('```json\n' + tailJson + '\n```')];
+
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval(['obs-real-1', 'obs-real-2']),
+      }),
+    );
+    const err = events.find((e) => e.type === 'error') as
+      | { code: string }
+      | undefined;
+    const finals = events.filter((e) => e.type === 'final');
+    expect(err?.code).toBe('EINSTEIN_ANSWER_UNGROUNDED');
+    expect(finals).toHaveLength(0);
+  });
+
+  it('S20: free-generation over an empty retrieval set is rejected as ungrounded', async () => {
+    const tailJson = JSON.stringify({
+      answer: 'Generally, mastitis is treated with antibiotics.',
+      citations: [],
+      confidence: 'medium',
+    });
+    streamScript = [mkDelta('```json\n' + tailJson + '\n```')];
+
+    const events = await collectEvents(
+      streamAnswer({
+        question: 'q',
+        assistantName: 'Einstein',
+        methodology: null,
+        retrieval: mkRetrieval([]),
+      }),
+    );
+    const err = events.find((e) => e.type === 'error') as
+      | { code: string }
+      | undefined;
+    const finals = events.filter((e) => e.type === 'final');
+    expect(err?.code).toBe('EINSTEIN_ANSWER_UNGROUNDED');
+    expect(finals).toHaveLength(0);
   });
 
   it('invalid tail JSON yields EINSTEIN_ANSWER_INVALID_JSON', async () => {
