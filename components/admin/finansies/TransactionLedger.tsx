@@ -34,6 +34,8 @@ interface Props {
   incomeCategories: Category[];
   expenseCategories: Category[];
   onChanged: () => void;
+  /** Active farm slug; animal links are tenant-scoped (`/${slug}/admin/animals/…`). */
+  farmSlug?: string;
 }
 
 export default function TransactionLedger({
@@ -41,6 +43,7 @@ export default function TransactionLedger({
   incomeCategories,
   expenseCategories,
   onChanged,
+  farmSlug,
 }: Props) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -208,7 +211,11 @@ export default function TransactionLedger({
                   <td className="px-4 py-3">
                     {tx.animalId && (
                       <Link
-                        href={`/admin/animals/${tx.animalId}`}
+                        href={
+                          farmSlug
+                            ? `/${farmSlug}/admin/animals/${tx.animalId}`
+                            : `/admin/animals/${tx.animalId}`
+                        }
                         className="font-mono text-xs hover:underline"
                         style={{ color: "#8B6914" }}
                       >
