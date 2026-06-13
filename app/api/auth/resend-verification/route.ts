@@ -40,7 +40,7 @@ export const POST = publicHandler({
   handle: async (request: NextRequest) => {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-    const ipRl = checkRateLimit(`resend-verify-ip:${ip}`, 5, 60 * 60 * 1000);
+    const ipRl = await checkRateLimit(`resend-verify-ip:${ip}`, 5, 60 * 60 * 1000);
     if (!ipRl.allowed) {
       return NextResponse.json(
         { error: 'Too many requests. Try again later.' },
@@ -69,7 +69,7 @@ export const POST = publicHandler({
 
     // Per-email limit — applied BEFORE the lookup so an attacker can't use
     // response timing to learn whether the email exists.
-    const emailRl = checkRateLimit(
+    const emailRl = await checkRateLimit(
       `resend-verify-email:${email}`,
       1,
       5 * 60 * 1000,

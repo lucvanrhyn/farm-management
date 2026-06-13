@@ -35,7 +35,7 @@ export const authOptions: NextAuthOptions = {
 
         // Rate limit: 10 attempts per minute per identifier to slow brute-force.
         // Throw so the UI can tell the user to wait instead of blaming their password.
-        const rl = checkRateLimit(`login:${credentials.identifier}`, 10, 60_000);
+        const rl = await checkRateLimit(`login:${credentials.identifier}`, 10, 60_000);
         if (!rl.allowed) {
           throw new Error(AUTH_ERROR_CODES.RATE_LIMITED);
         }

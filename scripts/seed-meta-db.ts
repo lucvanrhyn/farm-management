@@ -134,6 +134,12 @@ async function createTables() {
       role     TEXT NOT NULL,
       PRIMARY KEY (user_id, farm_id)
     );
+
+    CREATE TABLE IF NOT EXISTS "RateLimit" (
+      "key"           TEXT PRIMARY KEY,
+      "windowStartMs" INTEGER NOT NULL,
+      "count"         INTEGER NOT NULL
+    );
   `);
   console.log('Tables created (or already exist).');
 }
