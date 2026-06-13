@@ -1,15 +1,12 @@
 import { getLatestCampConditions } from "@/lib/server/camp-status";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { Camp } from "@/lib/types";
 import CampsTableClient, { type CampRow } from "./CampsTableClient";
 
 export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; farmSlug: string }) {
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
-
-  const mode = await getFarmMode(farmSlug);
 
   const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
     getLatestCampConditions(prisma),
@@ -24,7 +21,12 @@ export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; f
     }) as unknown as Promise<
       Array<{ currentCamp: string | null; _count: { _all: number } }>
     >,
-    scoped(prisma, mode).camp.findMany({
+    // Rotation metadata is joined onto the camps this table was handed,
+    // keyed by campId. Camps are cross-species infrastructure (ADR-0005),
+    // so the join must see every camp's row — `scoped(prisma, mode)` here
+    // silently dropped veldType/rest-day overrides for any camp whose
+    // species tag differed from the active FarmMode cookie (S25/sp-M1).
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({
       select: {
         campId: true,
         veldType: true,

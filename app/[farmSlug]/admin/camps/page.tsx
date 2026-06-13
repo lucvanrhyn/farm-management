@@ -9,8 +9,7 @@ import RotationSection from "@/components/admin/rotation/RotationSection";
 import CampsTabBar from "@/components/admin/CampsTabBar";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getFarmMode } from "@/lib/server/get-farm-mode";
-import { scoped } from "@/lib/server/species-scoped-prisma";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { Camp } from "@/lib/types";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
@@ -54,8 +53,6 @@ export default async function AdminCampsPage({
     );
   }
 
-  const mode = await getFarmMode(farmSlug);
-
   const creds = await getFarmCreds(farmSlug);
   const tier = creds?.tier ?? "basic";
   const isBasic = tier === "basic";
@@ -66,8 +63,15 @@ export default async function AdminCampsPage({
   const needsVeldSummary = !gatedFeature && activeTab === "veld";
   const needsFeedOnOffer = !gatedFeature && activeTab === "feed-on-offer";
 
+  // Camps are cross-species infrastructure — a physical camp grazes
+  // whatever species is on it, regardless of the active FarmMode. The
+  // admin camps overview must list every camp on the farm (ADR-0005;
+  // same reclassification PR #373/#364 made on the map pages and #390
+  // made on the camp-by-id surfaces — S25/sp-M1 closes the last
+  // divergent `scoped()` outlier on this surface). The per-species
+  // namespace pages (e.g. /sheep/camps) stay intentionally scoped.
   const [prismaCampsRaw, veldSummary, feedOnOfferPayload] = await Promise.all([
-    scoped(prisma, mode).camp.findMany({ orderBy: { campName: "asc" } }),
+    crossSpecies(prisma, "farm-wide-audit").camp.findMany({ orderBy: { campName: "asc" } }),
     needsVeldSummary ? getVeldSummary(prisma) : Promise.resolve(null),
     needsFeedOnOffer ? getFarmFeedOnOfferPayload(prisma) : Promise.resolve(null),
   ]);
