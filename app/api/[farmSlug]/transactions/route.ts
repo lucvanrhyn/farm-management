@@ -91,10 +91,10 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     // meta-db to close the stale-ADMIN window introduced when Phase H
     // dropped the jwt-callback meta-db refresh.
     if (ctx.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
     if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("FORBIDDEN", "Forbidden", 403);
     }
 
     const {
@@ -132,16 +132,18 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     };
 
     if (!type || !category || amount == null || !date) {
-      return NextResponse.json(
-        { error: "type, category, amount, date required" },
-        { status: 400 },
+      return routeError(
+        "VALIDATION_FAILED",
+        "type, category, amount, date required",
+        400,
       );
     }
 
     if (saleType != null && saleType !== "auction" && saleType !== "private") {
-      return NextResponse.json(
-        { error: "saleType must be 'auction' or 'private'" },
-        { status: 400 },
+      return routeError(
+        "VALIDATION_FAILED",
+        "saleType must be 'auction' or 'private'",
+        400,
       );
     }
 

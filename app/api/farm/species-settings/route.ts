@@ -12,7 +12,7 @@ function getFarmSlugFromRequest(req: NextRequest): string | null {
 export async function GET(req: NextRequest) {
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
-    return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
+    return routeError("INVALID_BODY", "farmSlug query param required");
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const farmSlug = getFarmSlugFromRequest(req);
   if (!farmSlug) {
-    return NextResponse.json({ error: "farmSlug query param required" }, { status: 400 });
+    return routeError("INVALID_BODY", "farmSlug query param required");
   }
 
   const ctx = await getFarmContextForSlug(farmSlug, req);
@@ -42,25 +42,25 @@ export async function PATCH(req: NextRequest) {
   const { prisma, role, session } = ctx;
 
   if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, farmSlug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return routeError("INVALID_BODY", "Invalid JSON body");
   }
 
   if (typeof body.species !== "string" || !body.species.trim()) {
-    return NextResponse.json({ error: "species must be a non-empty string" }, { status: 400 });
+    return routeError("VALIDATION_FAILED", "species must be a non-empty string");
   }
   if (typeof body.enabled !== "boolean") {
-    return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
+    return routeError("VALIDATION_FAILED", "enabled must be a boolean");
   }
 
   const { species, enabled } = body as { species: string; enabled: boolean };

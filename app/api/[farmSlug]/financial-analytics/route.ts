@@ -9,15 +9,16 @@
  *     to extract; many other consumers reference it).
  *   - 401 envelope migrates from `{ error: "Unauthorized" }` to the
  *     adapter's canonical `{ error: "AUTH_REQUIRED", message: "..." }`.
- *   - 404 (farm-not-found), 403 (basic tier), 400 (invalid-date) keep
- *     their bare-string `{ error: "<sentence>" }` envelopes — these are
- *     bespoke handler concerns. Existing clients
- *     (`components/admin/FinancialAnalyticsPanel.tsx` etc.) may key on
- *     `body.error` as user-facing text.
+ *   - S26 (ADR-0001 sweep) — 404 (farm-not-found) → NOT_FOUND, 403 (basic
+ *     tier) → FORBIDDEN, 400 (invalid-date) → VALIDATION_FAILED converge on the
+ *     canonical typed envelope `{ error: CODE, message }` (statuses unchanged).
+ *     The human sentence moves to the `message` slot; clients that surfaced
+ *     `body.error` as text now read `body.message`.
  */
 import { NextResponse } from "next/server";
 
 import { tenantReadSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getFinancialAnalytics } from "@/lib/server/financial-analytics";
 
@@ -30,13 +31,10 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     // recently-upgraded farms until the user re-logs in.
     const creds = await getFarmCreds(params.farmSlug);
     if (!creds) {
-      return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+      return routeError("NOT_FOUND", "Farm not found", 404);
     }
     if (creds.tier === "basic") {
-      return NextResponse.json(
-        { error: "Advanced plan required" },
-        { status: 403 },
-      );
+      return routeError("FORBIDDEN", "Advanced plan required", 403);
     }
 
     const { searchParams } = new URL(req.url);
@@ -47,10 +45,7 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     const from = fromParam ? new Date(fromParam) : new Date(0); // epoch = all-time
 
     if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      return NextResponse.json(
-        { error: "Invalid date params" },
-        { status: 400 },
-      );
+      return routeError("VALIDATION_FAILED", "Invalid date params");
     }
 
     const result = await getFinancialAnalytics(ctx.prisma, from, to);

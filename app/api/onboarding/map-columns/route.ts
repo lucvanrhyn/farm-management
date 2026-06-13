@@ -48,26 +48,23 @@ export async function POST(req: NextRequest) {
   if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, slug, role, session } = ctx;
   if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
 
   let raw: MapColumnsBody;
   try {
     raw = (await req.json()) as MapColumnsBody;
   } catch {
-    return NextResponse.json(
-      { error: "Request body must be valid JSON." },
-      { status: 400 }
-    );
+    return routeError("INVALID_BODY", "Request body must be valid JSON.", 400);
   }
 
   const parsed = parseBody(raw);
   if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return routeError("VALIDATION_FAILED", parsed.error, 400);
   }
 
   // S16 (OB-002/M2): size caps run after the shape guard but BEFORE the rate
@@ -89,13 +86,11 @@ export async function POST(req: NextRequest) {
     RATE_LIMIT_WINDOW_MS
   );
   if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        error:
-          "Daily AI import limit reached. Try again tomorrow or contact support.",
-        retryAfterMs: rl.retryAfterMs,
-      },
-      { status: 429 }
+    return routeError(
+      "RATE_LIMITED",
+      "Daily AI import limit reached. Try again tomorrow or contact support.",
+      429,
+      { retryAfterMs: rl.retryAfterMs },
     );
   }
 
@@ -126,16 +121,14 @@ export async function POST(req: NextRequest) {
     if (err instanceof AdaptiveImportError) {
       // Upstream / parse failure — safe to surface a pointer, but not details.
       logger.error('[map-columns] AdaptiveImportError', { message: err.message });
-      return NextResponse.json(
-        { error: "AI import service is currently unavailable." },
-        { status: 502 }
+      return routeError(
+        "AI_IMPORT_UNAVAILABLE",
+        "AI import service is currently unavailable.",
+        502,
       );
     }
     logger.error('[map-columns] unexpected error', err);
-    return NextResponse.json(
-      { error: "Internal server error." },
-      { status: 500 }
-    );
+    return routeError("INTERNAL_ERROR", "Internal server error.", 500);
   }
 }
 

@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTaskWrite } from "@/lib/server/revalidate";
+import { routeError } from "@/lib/server/route/envelope";
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
 
@@ -28,37 +29,25 @@ export async function DELETE(
 ) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_ADMIN_SESSION", "Unauthorized", 401);
   }
   const { prisma, role, slug: tenantSlug, session } = ctx;
 
   const { id } = await params;
 
   if (role !== "ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, tenantSlug))) {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   const existing = await prisma.taskTemplate.findFirst({
     where: { id, tenantSlug },
   });
   if (!existing) {
-    return NextResponse.json(
-      { error: "Template not found", code: "TEMPLATE_NOT_FOUND" },
-      { status: 404 },
-    );
+    return routeError("TEMPLATE_NOT_FOUND", "Template not found", 404);
   }
 
   await prisma.taskTemplate.delete({ where: { id } });
@@ -90,47 +79,32 @@ export async function PATCH(
 ) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_ADMIN_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_ADMIN_SESSION", "Unauthorized", 401);
   }
   const { prisma, role, slug: tenantSlug, session } = ctx;
 
   const { id } = await params;
 
   if (role !== "ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, tenantSlug))) {
-    return NextResponse.json(
-      { error: "Forbidden", code: "FORBIDDEN" },
-      { status: 403 },
-    );
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   const existing = await prisma.taskTemplate.findFirst({
     where: { id, tenantSlug },
   });
   if (!existing) {
-    return NextResponse.json(
-      { error: "Template not found", code: "TEMPLATE_NOT_FOUND" },
-      { status: 404 },
-    );
+    return routeError("TEMPLATE_NOT_FOUND", "Template not found", 404);
   }
 
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body", code: "INVALID_JSON" },
-      { status: 400 },
-    );
+    return routeError("INVALID_JSON", "Invalid JSON body", 400);
   }
 
   // Build a whitelist of permitted fields. Unknown keys are silently dropped.
@@ -143,25 +117,20 @@ export async function PATCH(
       // Nullables: name/taskType/priorityDefault are required in schema —
       // reject null for those. Others may be cleared.
       if (field === "name" || field === "taskType") {
-        return NextResponse.json(
-          { error: `${field} cannot be null`, code: "INVALID_FIELD" },
-          { status: 400 },
-        );
+        return routeError("INVALID_FIELD", `${field} cannot be null`, 400);
       }
       update[field] = null;
     } else if (typeof value === "string") {
       if (field === "priorityDefault" && !VALID_PRIORITIES.has(value)) {
-        return NextResponse.json(
-          { error: "priorityDefault must be low|medium|high", code: "INVALID_FIELD" },
-          { status: 400 },
+        return routeError(
+          "INVALID_FIELD",
+          "priorityDefault must be low|medium|high",
+          400,
         );
       }
       update[field] = value.trim();
     } else {
-      return NextResponse.json(
-        { error: `${field} must be a string or null`, code: "INVALID_FIELD" },
-        { status: 400 },
-      );
+      return routeError("INVALID_FIELD", `${field} must be a string or null`, 400);
     }
   }
 
@@ -172,19 +141,17 @@ export async function PATCH(
     } else if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
       update.reminderOffset = Math.round(v);
     } else {
-      return NextResponse.json(
-        { error: "reminderOffset must be a non-negative number or null", code: "INVALID_FIELD" },
-        { status: 400 },
+      return routeError(
+        "INVALID_FIELD",
+        "reminderOffset must be a non-negative number or null",
+        400,
       );
     }
   }
 
   if ("isPublic" in body) {
     if (typeof body.isPublic !== "boolean") {
-      return NextResponse.json(
-        { error: "isPublic must be a boolean", code: "INVALID_FIELD" },
-        { status: 400 },
-      );
+      return routeError("INVALID_FIELD", "isPublic must be a boolean", 400);
     }
     update.isPublic = body.isPublic;
   }

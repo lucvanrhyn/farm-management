@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -88,26 +88,23 @@ export async function POST(req: NextRequest) {
   if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, slug, role, session } = ctx;
   if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
 
   let raw: RawBody;
   try {
     raw = (await req.json()) as RawBody;
   } catch {
-    return NextResponse.json(
-      { error: "Request body must be valid JSON." },
-      { status: 400 },
-    );
+    return routeError("INVALID_BODY", "Request body must be valid JSON.", 400);
   }
 
   const parsed = parseBody(raw);
   if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return routeError("VALIDATION_FAILED", parsed.error, 400);
   }
 
   const rl = checkRateLimit(
@@ -116,18 +113,14 @@ export async function POST(req: NextRequest) {
     RATE_LIMIT_WINDOW_MS,
   );
   if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        error: "Daily import limit reached. Try again tomorrow or contact support.",
-        retryAfterMs: rl.retryAfterMs,
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
-        },
-      },
+    const res = routeError(
+      "RATE_LIMITED",
+      "Daily import limit reached. Try again tomorrow or contact support.",
+      429,
+      { retryAfterMs: rl.retryAfterMs },
     );
+    res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
+    return res;
   }
 
   // Resolve or create an ImportJob. commitImport updates this row at the end
@@ -144,18 +137,16 @@ export async function POST(req: NextRequest) {
       select: { id: true, status: true, farmId: true },
     });
     if (!existing) {
-      return NextResponse.json(
-        { error: "ImportJob not found" },
-        { status: 404 },
-      );
+      return routeError("IMPORT_JOB_NOT_FOUND", "ImportJob not found", 404);
     }
     if (existing.farmId !== slug) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return routeError("CROSS_TENANT_FORBIDDEN", "Forbidden", 403);
     }
     if (existing.status === "complete") {
-      return NextResponse.json(
-        { error: "ImportJob already complete" },
-        { status: 409 },
+      return routeError(
+        "IMPORT_JOB_ALREADY_COMPLETE",
+        "ImportJob already complete",
+        409,
       );
     }
     // S14 (OB-004/M4): ATOMIC claim. The pre-S14 code reused any

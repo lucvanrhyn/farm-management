@@ -64,7 +64,7 @@ export async function GET() {
         message: e?.message,
         code: e?.code,
       });
-      return NextResponse.json({ error: "Failed to load farm data" }, { status: 500 });
+      return routeError("DB_QUERY_FAILED", "Failed to load farm data");
     }
   });
 }

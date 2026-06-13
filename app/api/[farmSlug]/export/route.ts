@@ -9,9 +9,12 @@
 // Wire-shape preservation (hybrid per ADR-0001 / Wave G7 spec):
 //   - 401 envelope migrates to the adapter's canonical
 //     `{ error: "AUTH_REQUIRED", message: "Unauthorized" }` (NextResponse.json).
-//   - All other branches keep their bare-string `{ error }` JSON envelope on
-//     a raw `Response` (legacy wire-shape; tier gate, rate limit, invalid
-//     type, ExportRequestError, generic 500).
+//   - S26 (ADR-0001 sweep) — all error branches converge on the canonical
+//     typed envelope `{ error: CODE, message }` via `routeError`: 429 rate
+//     limit → RATE_LIMITED, 400 invalid type → VALIDATION_FAILED, 403 tier gate
+//     → FORBIDDEN, ExportRequestError → EXPORT_REQUEST_INVALID, generic 500 →
+//     EXPORT_FAILED. Statuses unchanged. The export cards only act on `res.ok`,
+//     so moving the sentence to `message` is wire-safe.
 //   - 2xx success returns a raw `Response` with the binary body and
 //     `Content-Type` / `Content-Disposition` headers — the adapter passes
 //     this through unchanged (see lib/server/route/tenant-read-slug.ts:18-22).
@@ -41,13 +44,13 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     // Rate limit: 20 exports per 10 minutes per farm (PDF generation is CPU-intensive)
     const rl = checkRateLimit(`export:${farmSlug}`, 20, 10 * 60 * 1000);
     if (!rl.allowed) {
-      return new Response(JSON.stringify({ error: "Too many export requests. Please wait." }), { status: 429 });
+      return routeError("RATE_LIMITED", "Too many export requests. Please wait.", 429);
     }
 
     const url = new URL(req.url);
     const typeParam = url.searchParams.get("type") ?? "animals";
     if (!isExportType(typeParam)) {
-      return new Response(JSON.stringify({ error: "Invalid export type" }), { status: 400 });
+      return routeError("VALIDATION_FAILED", "Invalid export type");
     }
     const type: ExportType = typeParam;
 
@@ -55,7 +58,11 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     if (ADVANCED_ONLY_EXPORTS.has(type)) {
       const creds = await getFarmCreds(farmSlug);
       if (!creds || !isPaidTier(creds.tier)) {
-        return new Response(JSON.stringify({ error: "This export requires an Advanced subscription." }), { status: 403 });
+        return routeError(
+          "FORBIDDEN",
+          "This export requires an Advanced subscription.",
+          403,
+        );
       }
     }
 
@@ -87,7 +94,12 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
         return routeError("EXPORT_REQUEST_INVALID", err.message, err.status);
       }
       logger.error('[export] Error generating export', err);
-      return new Response(JSON.stringify({ error: "Export failed" }), { status: 500 });
+      // S26 ADR-0001 — the generic export failure converges on the canonical
+      // typed envelope. The `error` field carries the SCREAMING_SNAKE code
+      // `EXPORT_FAILED`; the static "Export failed" sentence (no raw error text
+      // — `err` is logged server-side, never echoed) moves to the `message`
+      // slot. 500 is EXPORT_FAILED's inferred status (no DEFAULT_STATUS entry).
+      return routeError("EXPORT_FAILED", "Export failed", 500);
     }
   },
 });

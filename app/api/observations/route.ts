@@ -19,7 +19,8 @@
  *     exceeds `OBSERVATION_DETAILS_MAX_LENGTH`, or (S24/obs-M3)
  *     `TIMESTAMP_OUT_OF_RANGE` when `created_at` is beyond the
  *     `OBSERVATION_CREATED_AT_MAX_FUTURE_MS` clock-skew tolerance
- *   - POST 429 → `{ error: "Too many requests" }` (rate-limit, transport-only)
+ *   - POST 429 → `{ error: "RATE_LIMITED", message: "Too many requests" }`
+ *     (rate-limit, transport-only)
  */
 import { NextResponse } from "next/server";
 
@@ -287,7 +288,7 @@ export const POST = tenantWrite<CreateObservationBody>({
     const userId = ctx.session.user?.email ?? "unknown";
     const rl = checkRateLimit(`observations:${userId}`, 100, 60 * 1000);
     if (!rl.allowed) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+      return routeError("RATE_LIMITED", "Too many requests", 429);
     }
 
     // S24 / obs-M2 — bound the `details` JSON string at the wire boundary,

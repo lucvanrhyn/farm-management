@@ -16,7 +16,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
+import { routeError, tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateAlertWrite } from "@/lib/server/revalidate";
 import { logger } from "@/lib/logger";
@@ -32,10 +32,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  */
 async function denyIfNotFreshAdmin(ctx: FarmContext): Promise<NextResponse | null> {
   if (ctx.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
   if (!(await verifyFreshAdminRole(ctx.session.user.id, ctx.slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden", 403);
   }
   return null;
 }
@@ -94,17 +94,15 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     };
 
     if (typeof date !== "string" || !DATE_RE.test(date)) {
-      return NextResponse.json(
-        { error: "date required (YYYY-MM-DD)" },
-        { status: 400 },
-      );
+      return routeError("VALIDATION_FAILED", "date required (YYYY-MM-DD)", 400);
     }
 
     const mm = parseFloat(rainfallMm as string);
     if (isNaN(mm) || mm < 0) {
-      return NextResponse.json(
-        { error: "rainfallMm must be a non-negative number" },
-        { status: 400 },
+      return routeError(
+        "VALIDATION_FAILED",
+        "rainfallMm must be a non-negative number",
+        400,
       );
     }
 
@@ -131,7 +129,7 @@ export const DELETE = tenantWriteSlug<unknown, { farmSlug: string }>({
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "id required" }, { status: 400 });
+      return routeError("VALIDATION_FAILED", "id required", 400);
     }
 
     try {
@@ -143,14 +141,11 @@ export const DELETE = tenantWriteSlug<unknown, { farmSlug: string }>({
       // is a connection / permission / constraint problem worth surfacing.
       const code = (err as { code?: string })?.code;
       if (code === "P2025") {
-        return NextResponse.json({ error: "Record not found" }, { status: 404 });
+        return routeError("NOT_FOUND", "Record not found", 404);
       }
       const message = err instanceof Error ? err.message : String(err);
       logger.error("[rainfall DELETE]", { message, stack: err instanceof Error ? err.stack : "" });
-      return NextResponse.json(
-        { error: "Could not delete rainfall record" },
-        { status: 500 },
-      );
+      return routeError("DB_QUERY_FAILED", "Could not delete rainfall record");
     }
 
     return NextResponse.json({ ok: true });

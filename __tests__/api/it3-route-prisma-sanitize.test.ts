@@ -15,8 +15,9 @@
  *     the full error is logged server-side by the mapper.
  *   - The deliberate business-rule throw from `issueIt3Snapshot` (duplicate
  *     active snapshot — its developer-authored message IS the user-facing
- *     toast copy) keeps the verbatim 422 `{ error: "<sentence>" }` shape,
- *     byte-identical to the Wave G8 wire contract.
+ *     toast copy) routes through the canonical typed envelope (S26 ADR-0001
+ *     sweep): 422 `{ error: "IT3_ISSUE_FAILED", message: "<sentence>" }`. The
+ *     sentence moves from `error` into the human-readable `message` slot.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -117,12 +118,18 @@ describe("POST /api/[farmSlug]/tax/it3 — Prisma/DB error sanitization (api-M1)
     }
   });
 
-  it("keeps the deliberate duplicate-snapshot business error verbatim on the 422 arm", async () => {
+  it("routes the deliberate duplicate-snapshot business error to the typed IT3_ISSUE_FAILED envelope on the 422 arm", async () => {
     const sentence =
       "An active IT3 snapshot already exists for tax year 2026. Void it before re-issuing.";
     issueIt3SnapshotMock.mockRejectedValue(new Error(sentence));
     const resp = await POST(postReq({ taxYear: 2026 }), CTX);
     expect(resp.status).toBe(422);
-    expect(await resp.json()).toEqual({ error: sentence });
+    // S26 (ADR-0001 sweep) — the SCREAMING_SNAKE code moves to `error`; the
+    // developer-authored sentence (still the user-facing toast copy) moves to
+    // the canonical `message` slot.
+    expect(await resp.json()).toEqual({
+      error: "IT3_ISSUE_FAILED",
+      message: sentence,
+    });
   });
 });

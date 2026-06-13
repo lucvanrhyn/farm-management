@@ -14,14 +14,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFarmContext } from "@/lib/server/farm-context";
+import { routeError } from "@/lib/server/route/envelope";
 
 export async function GET(req: NextRequest) {
   const ctx = await getFarmContext(req);
   if (!ctx) {
-    return NextResponse.json(
-      { error: "Unauthorized", code: "MISSING_SESSION" },
-      { status: 401 },
-    );
+    return routeError("MISSING_SESSION", "Unauthorized", 401);
   }
   const { prisma } = ctx;
 

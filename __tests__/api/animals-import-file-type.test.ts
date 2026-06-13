@@ -89,9 +89,11 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("FILE_TYPE_UNSUPPORTED");
-    expect(body.error).toMatch(/\.xlsx/i);
-    expect(body.error).toMatch(/csv|xls/i);
+    // Canonical typed envelope (ADR-0001): `error` is the SCREAMING_SNAKE
+    // code; the human sentence lives in `message`.
+    expect(body.error).toBe("FILE_TYPE_UNSUPPORTED");
+    expect(body.message).toMatch(/\.xlsx/i);
+    expect(body.message).toMatch(/csv|xls/i);
   });
 
   it("rejects a legacy .xls (BIFF8) upload with 400 + FILE_TYPE_UNSUPPORTED code", async () => {
@@ -104,7 +106,7 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("FILE_TYPE_UNSUPPORTED");
+    expect(body.error).toBe("FILE_TYPE_UNSUPPORTED");
   });
 
   it("does not blow up when someone uploads renamed binary garbage with .xlsx extension — the shim throws and the route surfaces 400", async () => {
@@ -131,6 +133,6 @@ describe("POST /api/animals/import — Bug 2 file-type contract", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe("FILE_PARSE_FAILED");
+    expect(body.error).toBe("FILE_PARSE_FAILED");
   });
 });

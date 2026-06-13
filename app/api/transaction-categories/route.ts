@@ -29,15 +29,15 @@ export async function POST(request: NextRequest) {
   const ctx = await getFarmContext(request);
   if (!ctx) return routeError("AUTH_REQUIRED", "Unauthorized", 401);
   const { prisma, role, slug, session } = ctx;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (role !== "ADMIN") return routeError("FORBIDDEN", "Forbidden");
   // Phase H.2: re-verify ADMIN against meta-db (stale-ADMIN defence).
   if (!(await verifyFreshAdminRole(session.user.id, slug))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return routeError("FORBIDDEN", "Forbidden");
   }
 
   const { name, type } = await request.json();
   if (!name || !type || !["income", "expense"].includes(type)) {
-    return NextResponse.json({ error: "name and type required" }, { status: 400 });
+    return routeError("VALIDATION_FAILED", "name and type required");
   }
 
   const category = await prisma.transactionCategory.create({

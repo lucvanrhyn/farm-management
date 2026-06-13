@@ -375,7 +375,10 @@ describe("POST /api/onboarding/commit-import", () => {
     );
     expect(res.status).toBe(400);
     const err = await res.json();
-    expect(err.error).toMatch(/mappingJson/);
+    // Canonical typed envelope: `error` is the SCREAMING_SNAKE code; the
+    // human sentence (which names the offending field) is in `message`.
+    expect(err.error).toBe("VALIDATION_FAILED");
+    expect(err.message).toMatch(/mappingJson/);
     expect(importJobCreateMock).not.toHaveBeenCalled();
     expect(commitImportMock).not.toHaveBeenCalled();
   });

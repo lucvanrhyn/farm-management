@@ -10,9 +10,12 @@
  *     module; this route is its sole caller).
  *   - 401 envelope migrates from `{ error: "Unauthorized" }` to the
  *     adapter's canonical `{ error: "AUTH_REQUIRED", message: "..." }`.
- *   - 404 (farm-not-found), 403 (not-advanced+), 400 (invalid-date),
- *     500 (internal-error) keep their bare-string `{ error: "<sentence>" }`
- *     envelopes — these are bespoke handler concerns.
+ *   - S26 (ADR-0001 sweep) — 404 (farm-not-found) → NOT_FOUND, 403
+ *     (not-advanced+) → FORBIDDEN, 400 (invalid-date) → VALIDATION_FAILED, 500
+ *     (query failure) → opaque DB_QUERY_FAILED converge on the canonical typed
+ *     envelope (statuses unchanged). The human sentence moves to `message`
+ *     (except the opaque 500, which carries no message to avoid leaking
+ *     internal error text).
  *
  * Tier predicate note: `profitability-by-animal` gates on
  * `!ADVANCED_TIERS.has(creds.tier)` (advanced/enterprise/consulting), not
@@ -22,6 +25,7 @@
 import { NextResponse } from "next/server";
 
 import { tenantReadSlug } from "@/lib/server/route";
+import { routeError } from "@/lib/server/route/envelope";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getProfitabilityByAnimal } from "@/lib/domain/transactions";
 import { logger } from "@/lib/logger";
@@ -37,13 +41,10 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
     // can't rely on session.user.farms[*].tier here.
     const creds = await getFarmCreds(params.farmSlug);
     if (!creds) {
-      return NextResponse.json({ error: "Farm not found" }, { status: 404 });
+      return routeError("NOT_FOUND", "Farm not found", 404);
     }
     if (!ADVANCED_TIERS.has(creds.tier)) {
-      return NextResponse.json(
-        { error: "Advanced plan required" },
-        { status: 403 },
-      );
+      return routeError("FORBIDDEN", "Advanced plan required", 403);
     }
 
     const { searchParams } = new URL(req.url);
@@ -55,10 +56,7 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
       const fromDate = new Date(fromParam);
       const toDate = new Date(toParam);
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-        return NextResponse.json(
-          { error: "Invalid date params" },
-          { status: 400 },
-        );
+        return routeError("VALIDATION_FAILED", "Invalid date params");
       }
       dateRange = { from: fromParam, to: toParam };
     }
@@ -67,11 +65,12 @@ export const GET = tenantReadSlug<{ farmSlug: string }>({
       const rows = await getProfitabilityByAnimal(ctx.prisma, dateRange);
       return NextResponse.json(rows);
     } catch (err) {
+      // S26 ADR-0001 / api-M1 — collapse the query failure to the canonical
+      // opaque DB_QUERY_FAILED envelope (no `message`) so no raw error text can
+      // leak; the full error is preserved in the server log above. Status 500
+      // is DB_QUERY_FAILED's DEFAULT_STATUS, so it is inferred (not passed).
       logger.error("[profitability-by-animal] query failed", err);
-      return NextResponse.json(
-        { error: "Internal server error" },
-        { status: 500 },
-      );
+      return routeError("DB_QUERY_FAILED");
     }
   },
 });
