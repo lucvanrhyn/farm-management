@@ -16,11 +16,36 @@
  */
 import { NextResponse } from "next/server";
 
-import { tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
+import { routeError, tenantReadSlug, tenantWriteSlug } from "@/lib/server/route";
 import { verifyFreshAdminRole } from "@/lib/auth";
 import { revalidateTransactionWrite } from "@/lib/server/revalidate";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * api-F4 — parse a single numeric field, rejecting non-finite input.
+ *
+ * `parseFloat`/`parseInt` silently accept leading-numeric junk
+ * (`parseFloat("12abc") === 12`) and the literals `NaN`/`Infinity`, so a
+ * non-finite or junk value used to be PERSISTED and poison every IT3 /
+ * finance aggregate that sums these columns. We use `Number(...)` (whole-string
+ * coercion) + `Number.isFinite` so only genuinely finite values pass.
+ *
+ * Returns `{ value }` on success or `{ error: true }` when the field is present
+ * but non-finite. `null`/`undefined` optional fields are caller-handled before
+ * this is reached.
+ */
+function parseFiniteNumber(
+  v: unknown,
+  opts: { integer?: boolean } = {},
+): { value: number } | { error: true } {
+  // Reject empty / whitespace-only strings outright — Number("") === 0, which
+  // would otherwise silently coerce a blank to zero.
+  if (typeof v === "string" && v.trim() === "") return { error: true };
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return { error: true };
+  return { value: opts.integer ? Math.trunc(n) : n };
+}
 
 export const GET = tenantReadSlug<{ farmSlug: string }>({
   handle: async (ctx, req) => {
@@ -120,11 +145,49 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
       );
     }
 
+    // api-F4 — finite-guard every numeric field at the input boundary. A
+    // non-finite value (NaN / ±Infinity / "12abc" / blank) must NOT persist:
+    // it silently poisons every IT3 + finance aggregate that sums these
+    // columns. `amount` is required (presence checked above); the rest are
+    // optional and guarded only when present. Rejections use the canonical
+    // ADR-0001 typed envelope.
+    const amountParsed = parseFiniteNumber(amount);
+    if ("error" in amountParsed) {
+      return routeError("VALIDATION_FAILED", "amount must be a finite number", 400);
+    }
+
+    const optionalNumerics: Array<{
+      field: string;
+      raw: unknown;
+      integer?: boolean;
+    }> = [
+      { field: "quantity", raw: quantity, integer: true },
+      { field: "avgMassKg", raw: avgMassKg },
+      { field: "fees", raw: fees },
+      { field: "transportCost", raw: transportCost },
+    ];
+    const optionalValues: Record<string, number | null> = {};
+    for (const { field, raw, integer } of optionalNumerics) {
+      if (raw == null) {
+        optionalValues[field] = null;
+        continue;
+      }
+      const parsed = parseFiniteNumber(raw, { integer });
+      if ("error" in parsed) {
+        return routeError(
+          "VALIDATION_FAILED",
+          `${field} must be a finite number`,
+          400,
+        );
+      }
+      optionalValues[field] = parsed.value;
+    }
+
     const transaction = await ctx.prisma.transaction.create({
       data: {
         type: type as string,
         category: category as string,
-        amount: parseFloat(amount as string),
+        amount: amountParsed.value,
         date: date as string,
         description: (description as string | undefined) ?? "",
         campId: (campId as string | null | undefined) ?? null,
@@ -133,11 +196,10 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
         createdBy: ctx.session.user?.email ?? null,
         saleType: (saleType as string | null | undefined) ?? null,
         counterparty: (counterparty as string | null | undefined) ?? null,
-        quantity: quantity != null ? parseInt(quantity as string, 10) : null,
-        avgMassKg: avgMassKg != null ? parseFloat(avgMassKg as string) : null,
-        fees: fees != null ? parseFloat(fees as string) : null,
-        transportCost:
-          transportCost != null ? parseFloat(transportCost as string) : null,
+        quantity: optionalValues.quantity,
+        avgMassKg: optionalValues.avgMassKg,
+        fees: optionalValues.fees,
+        transportCost: optionalValues.transportCost,
         animalIds: (animalIds as string | null | undefined) ?? null,
       },
     });
