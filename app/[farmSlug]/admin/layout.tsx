@@ -8,6 +8,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { requireSession } from "@/lib/auth";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { verifyFreshFarmAccess } from "@/lib/fresh-farm-access";
 import type { FarmTier } from "@/lib/tier";
 import {
   effectiveAssistantName,
@@ -92,6 +93,19 @@ export default async function AdminLayout({
   // /login?next=/<slug>/admin so they land back here after sign-in (#544).
   const session = await requireSession(`/${farmSlug}/admin`);
   if (getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
+    redirect(`/${farmSlug}/home`);
+  }
+
+  // auth-M3 / H3 — the JWT role above is up to 8h stale (session.maxAge in
+  // auth-options.ts). Re-verify the ADMIN grant against meta-db behind the 60s
+  // `verifyFreshFarmAccess` cache so a demoted admin (or a user removed from the
+  // farm) is bounced to /home instead of seeing the admin shell for up to 8h.
+  // Fail-closed: `verifyFreshFarmAccess` returns null for BOTH a revoked
+  // membership and a meta-db error, and both redirect here. The UX cost — a
+  // transient meta-db blip bounces a real admin to /home until refresh — is the
+  // deliberate, conservative tradeoff, matching the admin-write chokepoint.
+  const fresh = await verifyFreshFarmAccess(session.user.id, farmSlug);
+  if (fresh?.role !== "ADMIN") {
     redirect(`/${farmSlug}/home`);
   }
 

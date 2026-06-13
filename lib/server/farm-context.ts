@@ -41,6 +41,7 @@ import type { PrismaClient } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { getPrismaForFarm, wrapPrismaWithRetry } from '@/lib/farm-prisma';
+import { verifyFreshFarmAccess } from '@/lib/fresh-farm-access';
 
 export interface FarmContext {
   session: Session;
@@ -198,21 +199,34 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
     signedRole &&
     verifyIdentity(userEmail, slug, signedSub, signedRole, sig, secret)
   ) {
+    // H3 / auth-M2 / auth-M3 — the signed headers were minted from the JWT
+    // snapshot, which is up to 8h stale (session.maxAge in auth-options.ts).
+    // Re-verify membership against meta-db behind the 60s `verifyFreshFarmAccess`
+    // cache: a removed member resolves to `null` here (H3 → caller mints
+    // 401/403), and the FRESH role replaces the stale signed role below so
+    // every downstream `ctx.role !== "ADMIN"` check is fresh (auth-M3). The
+    // helper fails closed on a meta-db error (returns null), so we never grant
+    // on an error. Run the re-check before acquiring Prisma — no point opening a
+    // connection for a revoked member.
+    const fresh = await verifyFreshFarmAccess(signedSub, slug);
+    if (!fresh) return null;
+    const freshRole = fresh.role;
+
     const prisma = await getPrismaForFarm(slug);
     if (!prisma) return null;
-    // Synthesise a minimal Session from the signed headers. Handlers that
-    // need the broader session (farms list, role priority) still have
-    // `user.id` + `user.email` + `user.role` populated, which covers every
+    // Synthesise a minimal Session from the signed headers + fresh role.
+    // Handlers that need the broader session (farms list, role priority) still
+    // have `user.id` + `user.email` + `user.role` populated, which covers every
     // `verifyFreshAdminRole(session.user.id, slug)` call site. We keep this
-    // lean — no second meta-db round-trip for the full farms list — because
-    // each migrated handler already works against a single slug.
+    // lean — the fresh farms list for the single active slug is enough because
+    // each migrated handler already works against one slug.
     const session = {
       user: {
         id: signedSub,
         email: userEmail,
         username: '',
-        role: signedRole,
-        farms: [{ slug, role: signedRole } as unknown as Session['user']['farms'][number]],
+        role: freshRole,
+        farms: [{ slug, role: freshRole } as unknown as Session['user']['farms'][number]],
       },
     } as unknown as Session;
     // Wave 4 A5 (Codex 2026-05-02 HIGH): wrap the bare client with one-shot
@@ -221,7 +235,7 @@ async function resolveFarmContext(req: NextRequest | undefined): Promise<FarmCon
     // 500 the first time the cached Turso token expires, until the next
     // cold-start rebuilds the cache. The wrapper resolves the live cached
     // client on each call so post-retry the rebuilt instance is reused.
-    return { session, prisma: wrapPrismaWithRetry(slug, prisma), slug, role: signedRole };
+    return { session, prisma: wrapPrismaWithRetry(slug, prisma), slug, role: freshRole };
   }
 
   // Issue #495 (PRD #479): the request did not pass through the proxy's

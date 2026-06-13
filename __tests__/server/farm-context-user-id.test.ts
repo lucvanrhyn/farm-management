@@ -39,6 +39,20 @@ vi.mock('next-auth', () => ({
 
 vi.mock('@/lib/auth-options', () => ({ authOptions: {} }));
 
+// H3/auth-M3: getFarmContext re-verifies membership at the chokepoint. This
+// test asserts the user.id round-trip, so default-allow the fresh re-check
+// (echo the requested slug as an ADMIN member).
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: vi.fn(async (_userId: string, slug: string) => ({
+    slug,
+    displayName: '',
+    role: 'ADMIN',
+    logoUrl: null,
+    tier: 'advanced',
+    subscriptionStatus: 'active',
+  })),
+}));
+
 describe('proxy → farm-context user.id round-trip', () => {
   beforeEach(() => {
     vi.resetModules();

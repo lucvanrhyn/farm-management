@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createHmac } from 'node:crypto';
+import type { UserFarm } from '@/lib/meta-db';
 
 const SECRET = 'test-nextauth-secret';
 process.env.NEXTAUTH_SECRET = SECRET;
@@ -43,6 +44,23 @@ const getPrismaForFarmMock = vi.fn(async (slug: string) => {
 vi.mock('@/lib/farm-prisma', () => ({
   getPrismaForFarm: getPrismaForFarmMock,
   wrapPrismaWithRetry: (_slug: string, client: unknown) => client,
+}));
+
+// H3/H4/auth-M2/auth-M3: getFarmContext now re-verifies membership via the
+// fresh-access chokepoint. Default-allow so the pre-existing fast-path cases
+// behave as before; the dedicated block below overrides for revocation cases.
+const verifyFreshFarmAccessMock = vi.fn(
+  async (_userId: string, slug: string): Promise<UserFarm | null> => ({
+    slug,
+    displayName: '',
+    role: 'ADMIN',
+    logoUrl: null,
+    tier: 'advanced',
+    subscriptionStatus: 'active',
+  }),
+);
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: verifyFreshFarmAccessMock,
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -76,6 +94,17 @@ describe('getFarmContext', () => {
   beforeEach(() => {
     vi.resetModules();
     getPrismaForFarmMock.mockClear();
+    verifyFreshFarmAccessMock.mockClear();
+    verifyFreshFarmAccessMock.mockImplementation(
+      async (_userId: string, slug: string): Promise<UserFarm | null> => ({
+        slug,
+        displayName: '',
+        role: 'ADMIN',
+        logoUrl: null,
+        tier: 'advanced',
+        subscriptionStatus: 'active',
+      }),
+    );
   });
 
   it('(a) returns {session, prisma, slug} in one await when proxy has signed headers', async () => {
@@ -157,5 +186,45 @@ describe('getFarmContext', () => {
 
     expect(ctx).toBeNull();
     expect(getPrismaForFarmMock).not.toHaveBeenCalled();
+  });
+
+  it('(h) H3/auth-M2: valid HMAC but membership revoked → null, no Prisma acquired', async () => {
+    // The signed headers verify (the JWT was valid when minted up to 8h ago),
+    // but the user has since been removed from the farm. The fresh re-check
+    // returns null → the context resolves to null → caller mints 403/401.
+    verifyFreshFarmAccessMock.mockResolvedValueOnce(null);
+
+    const { getFarmContext } = await import('@/lib/server/farm-context');
+    const req = makeRequest(signHeaders('user-1@example.com', 'trio-b'));
+
+    const ctx = await getFarmContext(req);
+
+    expect(verifyFreshFarmAccessMock).toHaveBeenCalledWith('user-1', 'trio-b');
+    expect(ctx).toBeNull();
+    // No reason to acquire a Prisma client for a revoked member.
+    expect(getPrismaForFarmMock).not.toHaveBeenCalled();
+  });
+
+  it('(i) auth-M3: context carries the FRESH role, not the 8h-stale signed role', async () => {
+    // Signed header claims ADMIN (stale), but the user was demoted to LOGGER.
+    // The resolved context must reflect LOGGER so every downstream
+    // `ctx.role !== "ADMIN"` check denies, not just verifyFreshAdminRole sites.
+    verifyFreshFarmAccessMock.mockResolvedValueOnce({
+      slug: 'trio-b',
+      displayName: '',
+      role: 'LOGGER',
+      logoUrl: null,
+      tier: 'advanced',
+      subscriptionStatus: 'active',
+    });
+
+    const { getFarmContext } = await import('@/lib/server/farm-context');
+    const req = makeRequest(signHeaders('user-1@example.com', 'trio-b', 'user-1', 'ADMIN'));
+
+    const ctx = await getFarmContext(req);
+
+    expect(ctx).not.toBeNull();
+    expect(ctx!.role).toBe('LOGGER');
+    expect(ctx!.session.user.farms[0].role).toBe('LOGGER');
   });
 });

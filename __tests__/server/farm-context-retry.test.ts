@@ -110,6 +110,20 @@ vi.mock('@/lib/meta-db', () => ({
   getFarmCreds: getFarmCredsMock,
 }));
 
+// H3/auth-M3: getFarmContext re-verifies membership at the chokepoint. These
+// retry tests only care about the Prisma auth-retry behaviour, so default-allow
+// the fresh re-check (echo the requested slug as an ADMIN member).
+vi.mock('@/lib/fresh-farm-access', () => ({
+  verifyFreshFarmAccess: vi.fn(async (_userId: string, slug: string) => ({
+    slug,
+    displayName: '',
+    role: 'ADMIN',
+    logoUrl: null,
+    tier: 'advanced',
+    subscriptionStatus: 'active',
+  })),
+}));
+
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn().mockResolvedValue(null),
 }));
