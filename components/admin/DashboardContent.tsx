@@ -24,6 +24,8 @@ interface Props {
    * reflects the selected mode.
    */
   mode: SpeciesId;
+  /** Tenant's resolved assistant name (assistant-name contract — never hardcode "Einstein"). */
+  assistantName: string;
 }
 
 // ── Presentational KPI tile (command layout) ─────────────────────────────────
@@ -92,7 +94,7 @@ function KpiTile({
   );
 }
 
-export default async function DashboardContent({ farmSlug, prisma, tier, mode }: Props) {
+export default async function DashboardContent({ farmSlug, prisma, tier, mode, assistantName }: Props) {
   const isBasic = tier === "basic";
 
   const session = await getSession();
@@ -274,7 +276,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode }:
     briefBullets.push(
       { tone: "good", text: "No urgent grazing, health or withdrawal flags — the herd is steady today." },
       { tone: "fair", text: "Keep weigh-ins and camp inspections current to sharpen the trend lines." },
-      { tone: "good", text: "Ask Einstein for a weekly grazing forecast or a low-ADG shortlist." },
+      { tone: "good", text: `Ask ${assistantName} for a weekly grazing forecast or a low-ADG shortlist.` },
     );
   }
 
@@ -419,7 +421,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode }:
             <div style={{ padding: "14px 18px" }}>
               <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
                 <Icon.einstein size={17} />
-                <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>EINSTEIN · TODAY&apos;S BRIEF</span>
+                <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · TODAY&apos;S BRIEF</span>
                 <span className="flex-1" />
                 <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
               </div>

@@ -102,8 +102,8 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
-        style={{ color: "rgba(210,180,140,0.65)" }}
+        className="ft-action-btn relative"
+        style={{ width: 36, height: 36 }}
         title="Notifications"
         aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         aria-haspopup="true"
@@ -122,15 +122,15 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
 
       {open && (
         <div
-          className="absolute bottom-full left-0 mb-2 w-72 rounded-xl shadow-xl z-50 overflow-hidden"
-          style={{ background: "#1C1815", border: "1px solid rgba(139,105,20,0.25)" }}
+          className="absolute top-full right-0 mt-2 w-72 rounded-xl z-50 overflow-hidden"
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)", boxShadow: "var(--ft-shadow-lg)" }}
         >
           {/* Header */}
           <div
             className="flex items-center justify-between px-3 py-2.5 border-b"
-            style={{ borderColor: "rgba(139,105,20,0.2)" }}
+            style={{ borderColor: "var(--ft-border)" }}
           >
-            <span className="text-xs font-semibold" style={{ color: "#F5EBD4" }}>
+            <span className="text-xs font-semibold" style={{ color: "var(--ft-text)" }}>
               Notifications
             </span>
             <div className="flex items-center gap-1.5">
@@ -139,7 +139,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                   type="button"
                   onClick={() => void markAllRead()}
                   className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded"
-                  style={{ color: "#8B6914", background: "rgba(139,105,20,0.12)" }}
+                  style={{ color: "var(--ft-accent)", background: "var(--ft-accent-faint)" }}
                   title="Mark all as read"
                 >
                   <CheckCheck className="w-3 h-3" />
@@ -149,7 +149,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                style={{ color: "rgba(210,180,140,0.5)" }}
+                style={{ color: "var(--ft-subtle)" }}
                 aria-label="Close notifications"
               >
                 <X className="w-3.5 h-3.5" />
@@ -160,7 +160,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
           {/* Notification list */}
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="px-3 py-5 text-xs text-center" style={{ color: "rgba(210,180,140,0.5)" }}>
+              <p className="px-3 py-5 text-xs text-center" style={{ color: "var(--ft-subtle)" }}>
                 No notifications
               </p>
             ) : (
@@ -171,13 +171,13 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                     key={n.id}
                     className="flex items-start gap-2.5 px-3 py-2.5 border-b transition-colors"
                     style={{
-                      borderColor: "rgba(139,105,20,0.1)",
-                      background: n.isRead ? "transparent" : "rgba(139,105,20,0.05)",
+                      borderColor: "var(--ft-border)",
+                      background: n.isRead ? "transparent" : "var(--ft-accent-faint)",
                     }}
                   >
                     <span
                       className="mt-1 w-2 h-2 rounded-full shrink-0"
-                      style={{ background: n.isRead ? "rgba(210,180,140,0.2)" : colors.dot }}
+                      style={{ background: n.isRead ? "var(--ft-border2)" : colors.dot }}
                     />
                     <Link
                       href={scopeHref(n.href, farmSlug)}
@@ -189,7 +189,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                     >
                       <p
                         className="text-xs leading-snug"
-                        style={{ color: n.isRead ? "rgba(210,180,140,0.55)" : "rgba(210,180,140,0.9)" }}
+                        style={{ color: n.isRead ? "var(--ft-muted)" : "var(--ft-text)" }}
                       >
                         {n.message}
                       </p>
@@ -199,7 +199,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                         type="button"
                         onClick={() => void markRead(n.id)}
                         className="shrink-0 p-0.5 rounded"
-                        style={{ color: "rgba(210,180,140,0.4)" }}
+                        style={{ color: "var(--ft-subtle)" }}
                         title="Mark as read"
                         aria-label="Mark notification as read"
                       >
@@ -213,12 +213,12 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
           </div>
 
           {/* Footer */}
-          <div className="px-3 py-2" style={{ borderTop: "1px solid rgba(139,105,20,0.1)" }}>
+          <div className="px-3 py-2" style={{ borderTop: "1px solid var(--ft-border)" }}>
             <Link
               href={`/${farmSlug}/admin/alerts`}
               onClick={() => setOpen(false)}
               className="text-[10px] font-medium"
-              style={{ color: "#8B6914" }}
+              style={{ color: "var(--ft-accent)" }}
             >
               View all alerts →
             </Link>

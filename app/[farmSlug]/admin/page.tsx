@@ -5,6 +5,7 @@ import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmSettings } from "@/lib/server/cached";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
+import { parseAiSettings, effectiveAssistantName } from "@/lib/einstein/settings-schema";
 import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import { PageHeader, Icon } from "@/components/ds";
@@ -86,6 +87,13 @@ export default async function AdminPage({
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Resolve the tenant's (possibly renamed) assistant name so the dashboard
+  // CTAs/eyebrow honour it — never hardcode "Einstein" (assistant-name contract).
+  const aiRow = await prisma.farmSettings
+    .findFirst({ select: { aiSettings: true } })
+    .catch(() => null);
+  const assistantName = effectiveAssistantName(parseAiSettings(aiRow?.aiSettings));
+
   return (
     <div className="ft-scope min-w-0" style={{ background: "var(--ft-bg)", padding: "28px 32px 80px", maxWidth: 1560, margin: "0 auto" }}>
       {/* Header — renders immediately. Fraunces "Operations" + mono control-room
@@ -100,7 +108,7 @@ export default async function AdminPage({
               <Icon.download size={14} /> Export
             </Link>
             <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary">
-              <Icon.einstein size={14} /> Ask Einstein
+              <Icon.einstein size={14} /> Ask {assistantName}
             </Link>
           </div>
         }
@@ -123,7 +131,7 @@ export default async function AdminPage({
           </>
         }
       >
-        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} mode={mode} />
+        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} mode={mode} assistantName={assistantName} />
       </Suspense>
     </div>
   );

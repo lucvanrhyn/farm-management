@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useFarmModeSafe } from "@/lib/farm-mode";
-import { NAV_BY_MODE } from "@/components/admin/nav-model";
+import { buildNavGroups, flattenNav } from "@/components/admin/nav-model";
 import { Icon } from "./icons";
 import { Kbd } from "./primitives";
 
@@ -21,7 +21,7 @@ type PaletteItem = {
 export function CommandPalette() {
   const router = useRouter();
   const pathname = usePathname();
-  const { mode } = useFarmModeSafe();
+  const { mode, enabledModes } = useFarmModeSafe();
   const farmSlug = pathname.split("/")[1] || "";
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -57,10 +57,15 @@ export function CommandPalette() {
       { kind: "go", label: "Open Farm Map", href: `/${farmSlug}/map` },
       { kind: "go", label: "Open Logger", href: `/${farmSlug}/logger` },
     ];
-    const nav: PaletteItem[] = (NAV_BY_MODE[mode] ?? NAV_BY_MODE.cattle).map((item) => ({
+    // Resolve through the shared nav model so mode + species scoping (and the
+    // single-species settings hide) match the Studio shell. Tier is passed as
+    // "consulting" because the palette only NAVIGATES — premium routes self-gate
+    // server-side with an upsell, so we list them rather than hide them.
+    const groups = buildNavGroups({ mode, tier: "consulting", enabledModes, farmSlug, pathname });
+    const nav: PaletteItem[] = flattenNav(groups).map((l) => ({
       kind: "nav",
-      label: `Open ${item.label}`,
-      href: `/${farmSlug}${item.path}`,
+      label: `Open ${l.label}`,
+      href: l.href,
     }));
     const actions: PaletteItem[] = [
       { kind: "action", label: "+ Log a health issue", href: `/${farmSlug}/logger` },
@@ -68,7 +73,7 @@ export function CommandPalette() {
       { kind: "action", label: "+ Move an animal", href: `/${farmSlug}/logger` },
     ];
     return [...areas, ...nav, ...actions];
-  }, [farmSlug, mode]);
+  }, [farmSlug, mode, enabledModes, pathname]);
 
   const filtered = useMemo(
     () => items.filter((it) => !q || it.label.toLowerCase().includes(q.toLowerCase())).slice(0, 24),

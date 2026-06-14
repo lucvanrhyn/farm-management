@@ -21,6 +21,7 @@
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ds";
 import type { FarmMode } from "@/lib/farm-mode";
+import { useAssistantName } from "@/hooks/useAssistantName";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -293,6 +294,7 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
 
 /** Compact Einstein brief peek (mobile). */
 function PhoneBriefPeek({ onAskEinstein }: { onAskEinstein: () => void }) {
+  const assistantName = useAssistantName();
   return (
     <button
       type="button"
@@ -307,7 +309,7 @@ function PhoneBriefPeek({ onAskEinstein }: { onAskEinstein: () => void }) {
         <div className="ft-mono" style={{ fontSize: 9.5, letterSpacing: ".16em", color: "var(--ft-subtle)" }}>
           TODAY&apos;S BRIEF · 06:00
         </div>
-        <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-accent)" }}>Ask Einstein →</span>
+        <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-accent)" }}>Ask {assistantName} →</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
         {BRIEF.map(([txt, c]) => (
@@ -329,10 +331,11 @@ function PhoneTabBar({
   onNavigate: (path: string) => void;
   onAskEinstein: () => void;
 }) {
+  const assistantName = useAssistantName();
   const items: ReadonlyArray<{ Ico: HomeDestination["Icon"]; label: string; fn: () => void }> = [
     { Ico: Icon.overview, label: "Admin", fn: () => onNavigate("/admin") },
     { Ico: Icon.logger, label: "Logger", fn: () => onNavigate("/logger") },
-    { Ico: Icon.einstein, label: "Einstein", fn: onAskEinstein },
+    { Ico: Icon.einstein, label: assistantName, fn: onAskEinstein },
     { Ico: Icon.map, label: "Map", fn: () => onNavigate("/map") },
   ];
   return (
@@ -385,6 +388,7 @@ export function HomePortal({
   const date = useMemo(() => formatDate(now), [now]);
   const firstName = owner.trim().split(/\s+/)[0] ?? "";
   const { head, tail } = splitName(farmName);
+  const assistantName = useAssistantName();
 
   const destinations: HomeDestination[] = useMemo(
     () => [
@@ -397,7 +401,7 @@ export function HomePortal({
         subtitle: sections.logger, stat: "4 of 19 done today", path: "/logger", featured: true,
       },
       {
-        key: "einstein", Icon: Icon.einstein, label: "EINSTEIN", title: "AI Advisor",
+        key: "einstein", Icon: Icon.einstein, label: assistantName.toUpperCase(), title: "AI Advisor",
         subtitle: "Ask anything · daily brief", stat: "3 items in today's brief", ai: true,
       },
       {
@@ -405,7 +409,7 @@ export function HomePortal({
         subtitle: sections.map, stat: `${campCount} camps`, path: "/map",
       },
     ],
-    [sections, animalCount, campCount],
+    [sections, animalCount, campCount, assistantName],
   );
 
   const activate = (d: HomeDestination) => () => {

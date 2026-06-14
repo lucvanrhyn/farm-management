@@ -148,7 +148,7 @@ export default function StudioShell({
         </nav>
         <div style={{ flex: 1 }} />
         <CommandBar wide />
-        {isMultiMode && <ModeSwitcher variant="solid" />}
+        {isMultiMode && <ModeSwitcher variant="header" />}
         <NotificationBell farmSlug={slug} />
         <SignOutButton />
       </header>
