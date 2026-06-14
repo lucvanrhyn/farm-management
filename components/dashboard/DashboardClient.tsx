@@ -45,14 +45,14 @@ const FarmMap = dynamic(() => import("@/components/map/FarmMap"), {
   loading: () => (
     <div
       className="absolute inset-0 flex items-center justify-center"
-      style={{ background: "var(--ft-text)" }}
+      style={{ background: "#1A1510" }}
     >
       <div className="text-center">
         <div
           className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-3"
-          style={{ borderColor: "var(--ft-fair)", borderTopColor: "transparent" }}
+          style={{ borderColor: "#8B6914", borderTopColor: "transparent" }}
         />
-        <p className="text-sm" style={{ color: "var(--ft-fair)" }}>Loading satellite map...</p>
+        <p className="text-sm" style={{ color: "#8B6914" }}>Loading satellite map...</p>
       </div>
     </div>
   ),
@@ -160,8 +160,8 @@ function ViewToggle({
             cursor: "pointer",
             border: "none",
             transition: "background 0.15s, color 0.15s",
-            background: value === v.id ? "var(--ft-text)" : "transparent",
-            color: value === v.id ? "var(--ft-fair-bg)" : "rgba(26,21,16,0.45)",
+            background: value === v.id ? "#1A1510" : "transparent",
+            color: value === v.id ? "#F5EBD4" : "rgba(26,21,16,0.45)",
           }}
         >
           {v.label}
@@ -400,7 +400,7 @@ export default function DashboardClient({
   return (
     <div
       className="relative flex flex-col"
-      style={{ height: "100svh", background: "var(--ft-text)" }}
+      style={{ height: "100svh", background: "#1A1510" }}
     >
       {/* ── Top bar ──────────────────────────────────────────────────── */}
       <div
@@ -411,7 +411,7 @@ export default function DashboardClient({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 16px",
-          background: "var(--ft-surface)",
+          background: "#FFFFFF",
           borderBottom: "1px solid rgba(0,0,0,0.1)",
           gap: 12,
           zIndex: 30,
@@ -424,7 +424,7 @@ export default function DashboardClient({
               style={{
                 fontFamily: "var(--font-dm-serif)",
                 fontSize: 20,
-                color: "var(--ft-text)",
+                color: "#1A1510",
                 lineHeight: 1,
               }}
             >
@@ -479,7 +479,7 @@ export default function DashboardClient({
               style={{
                 background: "rgba(0,0,0,0.04)",
                 border: "1px solid rgba(0,0,0,0.12)",
-                color: "var(--ft-text)",
+                color: "#1A1510",
                 borderRadius: 8,
                 padding: "4px 8px",
                 fontSize: 11,
@@ -507,7 +507,7 @@ export default function DashboardClient({
             flexShrink: 0,
             padding: "6px 16px",
             background: "rgba(239,68,68,0.1)",
-            color: "var(--ft-crit)",
+            color: "#ef4444",
             fontSize: 12,
             display: "flex",
             alignItems: "center",
@@ -517,7 +517,7 @@ export default function DashboardClient({
           <span>{boundaryError}</span>
           <button
             onClick={() => setBoundaryError(null)}
-            style={{ background: "none", border: "none", color: "var(--ft-crit)", cursor: "pointer", fontSize: 14 }}
+            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14 }}
           >
             Dismiss
           </button>
@@ -529,7 +529,7 @@ export default function DashboardClient({
         style={{
           flexShrink: 0,
           padding: "6px 16px",
-          background: "var(--ft-text)",
+          background: "#1A1510",
           borderBottom: "1px solid rgba(139,105,20,0.15)",
           display: "flex",
           alignItems: "center",
@@ -546,7 +546,7 @@ export default function DashboardClient({
             alignItems: "center",
             gap: 5,
             fontSize: 11,
-            color: "var(--ft-crit)",
+            color: "#B03030",
             fontWeight: 600,
             fontFamily: "var(--font-sans)",
           }}>
@@ -554,7 +554,7 @@ export default function DashboardClient({
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: "var(--ft-crit)",
+              background: "#B03030",
               display: "inline-block",
               animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
             }} />

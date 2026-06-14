@@ -47,7 +47,7 @@ export default async function FeedOnOfferToolPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Feed on Offer"
-        subtitle="feed on offer"
+        subtitle="Farm pasture inventory and grazing capacity. Record cover readings to track Feed on Offer per camp."
       />
 
       <FeedOnOfferSummaryCards summary={payload.summary} />

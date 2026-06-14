@@ -186,7 +186,7 @@ export default async function SubscriptionPage({
                   key={f.name}
                   style={{
                     background: i % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
-                    borderTop: "1px solid var(--ft-surface)",
+                    borderTop: "1px solid var(--ft-border)",
                   }}
                 >
                   <td className="px-4 py-2.5" style={{ color: "var(--ft-text)" }}>

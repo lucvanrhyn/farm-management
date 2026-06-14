@@ -30,7 +30,7 @@ export default async function SheepWoolPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Wool"
-        subtitle="wool clip"
+        subtitle="Shearing records, fleece weights, and clip values"
       />
 
       <div

@@ -183,7 +183,7 @@ export default function RainfallClient({
                     key={r.id}
                     style={{
                       background: i % 2 === 0 ? "var(--ft-bg)" : "#FFFFFF",
-                      borderBottom: "1px solid var(--ft-surface)",
+                      borderBottom: "1px solid var(--ft-border)",
                     }}
                   >
                     <td

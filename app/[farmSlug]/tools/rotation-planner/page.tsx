@@ -82,7 +82,7 @@ export default async function RotationPlannerPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Rotation Planner"
-        subtitle="rotation planner"
+        subtitle="Plan and execute pasture rotation sequences across your camps."
       />
       <RotationPlannerClient
         farmSlug={farmSlug}

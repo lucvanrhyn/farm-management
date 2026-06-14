@@ -109,7 +109,7 @@ export default async function SheepObservationsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Sheep Observations"
-        subtitle="activity log"
+        subtitle="Recent entries · sheep flock only"
       />
 
       {/*

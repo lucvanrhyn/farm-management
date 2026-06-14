@@ -431,7 +431,7 @@ export default function AlertSettingsForm({
               {CATEGORIES.map((cat) => {
                 const isPredator = cat.key === "predator";
                 return (
-                  <tr key={cat.key} className="border-b" style={{ borderColor: "var(--ft-surface)" }}>
+                  <tr key={cat.key} className="border-b" style={{ borderColor: "var(--ft-border)" }}>
                     <td className="px-4 py-3">
                       <div className="font-medium" style={{ color: "var(--ft-text)" }}>
                         {cat.label}

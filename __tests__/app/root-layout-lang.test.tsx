@@ -28,6 +28,7 @@ vi.mock('next/font/google', () => {
   return {
     Geist: fontStub,
     Geist_Mono: fontStub,
+    Fraunces: fontStub,
     Playfair_Display: fontStub,
     DM_Sans: fontStub,
     DM_Serif_Display: fontStub,

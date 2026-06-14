@@ -87,7 +87,7 @@ export default async function AdminMobsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Mobs"
-        subtitle={`${mobs.length} mob${mobs.length !== 1 ? "s" : ""} · mobs & herds`}
+        subtitle={`${mobs.length} mob${mobs.length !== 1 ? "s" : ""} · group and move animals together`}
       />
       <MobsManager
         initialMobs={mobs}

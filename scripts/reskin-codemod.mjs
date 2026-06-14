@@ -36,6 +36,7 @@ const EXCLUDE = [
   "components/logger/",
   "components/map/",
   "components/einstein/",
+  "components/dashboard/", // bespoke dark schematic-map surface — hand-tuned bright colours
   "components/admin/DashboardContent.tsx",
   "components/admin/nav-model.tsx",
   "components/admin/AdminNav.tsx",

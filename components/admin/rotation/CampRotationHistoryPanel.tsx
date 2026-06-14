@@ -55,7 +55,7 @@ export default function CampRotationHistoryPanel({
 
       {/* Current status strip */}
       {status && (
-        <div className="flex flex-wrap items-center gap-4 mb-5 pb-4" style={{ borderBottom: "1px solid var(--ft-surface)" }}>
+        <div className="flex flex-wrap items-center gap-4 mb-5 pb-4" style={{ borderBottom: "1px solid var(--ft-border)" }}>
           <span
             className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full"
             style={{ background: `${meta.color}22`, color: meta.color }}
@@ -110,7 +110,7 @@ export default function CampRotationHistoryPanel({
               <li
                 key={m.id}
                 className="flex items-center gap-3 text-sm py-1.5"
-                style={{ borderBottom: "1px solid var(--ft-surface)" }}
+                style={{ borderBottom: "1px solid var(--ft-border)" }}
               >
                 <span
                   className="font-mono text-base shrink-0"

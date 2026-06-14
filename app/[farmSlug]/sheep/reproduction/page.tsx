@@ -195,7 +195,7 @@ export default async function SheepReproductionPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Lambing Dashboard"
-        subtitle="breeding records"
+        subtitle="Sheep reproduction · 12-month window · SA benchmark: ≥85% lambing rate"
       />
 
       {/* KPI Row */}

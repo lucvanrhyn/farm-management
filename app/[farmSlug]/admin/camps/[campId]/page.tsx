@@ -437,7 +437,7 @@ export default async function CampDetailPage({
                   <li
                     key={r.id}
                     className="flex items-center justify-between text-sm py-1.5 border-b last:border-0"
-                    style={{ borderColor: "var(--ft-surface)" }}
+                    style={{ borderColor: "var(--ft-border)" }}
                   >
                     <span style={{ color: "var(--ft-text)" }}>{date}</span>
                     <span className="font-medium" style={{ color: categoryColor }}>

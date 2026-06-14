@@ -157,7 +157,7 @@ export default async function GameCensusPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Game Census"
-        subtitle="game census"
+        subtitle="Population overview and census status"
       />
 
       {/* KPI Row */}

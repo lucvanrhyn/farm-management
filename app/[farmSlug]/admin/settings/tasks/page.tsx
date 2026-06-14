@@ -90,7 +90,7 @@ export default async function TasksSettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Task Settings"
-        subtitle="task defaults"
+        subtitle="Templates, reminder defaults, and auto-observation behaviour"
       />
 
       <div className="max-w-4xl">

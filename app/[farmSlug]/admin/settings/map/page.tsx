@@ -105,7 +105,7 @@ export default async function MapSettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Map Settings"
-        subtitle="map & layers"
+        subtitle="Layer toggles and GIS integrations (EskomSePush, FMD-zone check)"
       />
 
       <div className="max-w-3xl">

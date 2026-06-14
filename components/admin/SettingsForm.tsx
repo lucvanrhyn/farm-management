@@ -768,7 +768,7 @@ function FieldRow({
   return (
     <div
       className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 items-start py-3"
-      style={{ borderBottom: "1px solid var(--ft-surface)" }}
+      style={{ borderBottom: "1px solid var(--ft-border)" }}
     >
       <div className="sm:col-span-1">
         <label className="block text-sm font-medium" style={{ color: "var(--ft-text)" }}>

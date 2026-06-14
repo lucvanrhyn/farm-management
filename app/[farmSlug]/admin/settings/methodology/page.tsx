@@ -51,7 +51,7 @@ export default async function MethodologyPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Farm Methodology"
-        subtitle="farm methodology"
+        subtitle="The one-page brief Einstein reads before every answer — tell it how this farm actually runs."
       />
 
       {!canEdit ? (

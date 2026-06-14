@@ -78,7 +78,7 @@ export default async function AlertsSettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Alert Settings"
-        subtitle="alert rules"
+        subtitle="Channels, quiet hours, digest frequency, and per-species overrides"
       />
 
       <div className="max-w-4xl">

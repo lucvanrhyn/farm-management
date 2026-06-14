@@ -59,7 +59,7 @@ export default async function SettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Farm Settings"
-        subtitle="configuration"
+        subtitle="Thresholds, location, breeding calendar, and integrations"
       />
 
       <div className="max-w-2xl">

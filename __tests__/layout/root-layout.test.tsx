@@ -37,6 +37,7 @@ vi.mock("next/font/google", () => {
   return {
     Geist: stub("geist"),
     Geist_Mono: stub("geist-mono"),
+    Fraunces: stub("fraunces"),
     Playfair_Display: stub("playfair"),
     DM_Sans: stub("dm-sans"),
     DM_Serif_Display: stub("dm-serif"),

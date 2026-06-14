@@ -20,11 +20,11 @@ const CATEGORY_ORDER: AnimalCategory[] = ["Cow", "Heifer", "Calf", "Bull", "Ox"]
 
 // Warm palette tokens for the panel
 const P = {
-  bg:      "var(--ft-text)",
-  surface: "var(--ft-text)",
+  bg:      "#1E1710",
+  surface: "#261C12",
   border:  "rgba(140,100,60,0.22)",
-  cream:   "var(--ft-fair-bg)",
-  tan:     "var(--ft-subtle)",
+  cream:   "#F5EBD4",
+  tan:     "#B09878",
   dim:     "rgba(176,152,120,0.5)",
   hover:   "rgba(140,100,60,0.08)",
 };
@@ -41,8 +41,8 @@ const WARM_CHIP_TEXT: Record<string, string> = {
   Cow:    "#6FAB80",
   Calf:   "#5AAFCA",
   Heifer: "#9B80D0",
-  Bull:   "var(--ft-fair)",
-  Ox:     "var(--ft-subtle)",
+  Bull:   "#C4A030",
+  Ox:     "#B09878",
 };
 
 export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal, liveCondition }: Props) {
@@ -149,7 +149,7 @@ export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal,
                     fontWeight: 500,
                     fontFamily: "var(--font-sans)",
                     background: WARM_CHIP[cat] ?? "rgba(92,61,46,0.18)",
-                    color: WARM_CHIP_TEXT[cat] ?? "var(--ft-subtle)",
+                    color: WARM_CHIP_TEXT[cat] ?? "#B09878",
                   }}
                 >
                   {getCategoryPluralLabel(cat)}
@@ -200,7 +200,7 @@ export default function CampDetailPanel({ campId, camp, onClose, onSelectAnimal,
                     borderRadius: 20,
                     fontFamily: "var(--font-sans)",
                     background: WARM_CHIP[animal.category] ?? "rgba(92,61,46,0.18)",
-                    color: WARM_CHIP_TEXT[animal.category] ?? "var(--ft-subtle)",
+                    color: WARM_CHIP_TEXT[animal.category] ?? "#B09878",
                   }}
                 >
                   {getCategoryLabel(animal.category)}

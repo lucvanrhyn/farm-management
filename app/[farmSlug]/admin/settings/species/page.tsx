@@ -38,7 +38,7 @@ export default async function SpeciesSettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Species Settings"
-        subtitle="species & modes"
+        subtitle="Enable or disable species modules for this farm"
       />
 
       <div className="max-w-2xl">

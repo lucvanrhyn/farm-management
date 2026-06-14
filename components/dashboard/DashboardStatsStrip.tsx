@@ -43,10 +43,10 @@ function StatChip({
     ? (accent ? "rgba(239,68,68,0.25)" : "rgba(74,222,128,0.15)")
     : (accent ? "rgba(200,50,50,0.2)" : "rgba(0,0,0,0.08)");
   const valueColor = dark
-    ? (accent ? "var(--ft-crit)" : "#4ade80")
-    : (accent ? "var(--ft-crit)" : "var(--ft-text)");
+    ? (accent ? "#ef4444" : "#4ade80")
+    : (accent ? "#B03030" : "#1A1510");
   const labelColor = dark ? "rgba(74,222,128,0.5)" : "rgba(26,21,16,0.45)";
-  const pulseColor = dark ? "var(--ft-crit)" : "var(--ft-crit)";
+  const pulseColor = dark ? "#ef4444" : "#B03030";
 
   return (
     <motion.div

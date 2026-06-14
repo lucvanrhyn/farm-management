@@ -25,7 +25,7 @@ export default async function BreakEvenPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Break-even Calculator"
-        subtitle="break-even"
+        subtitle="Calculate the sell price needed to cover feeding costs and hit your target margin."
       />
       <BreakEvenCalculator />
     </div>

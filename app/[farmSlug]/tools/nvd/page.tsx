@@ -28,7 +28,7 @@ export default async function NvdPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="National Vendor Declarations"
-        subtitle="NVD generator"
+        subtitle="Issue legally-compliant NVDs for livestock sales. All data is frozen at issue time."
       />
       <NvdPageClient farmSlug={farmSlug} isAdmin={isAdmin} />
     </div>

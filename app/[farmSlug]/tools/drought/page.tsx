@@ -36,7 +36,7 @@ export default async function DroughtToolPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Drought Tracking"
-        subtitle="drought tracking"
+        subtitle="Standard Precipitation Index (SPI) based on 30-year ERA5 climatology. Negative SPI = drier than normal; below −1 = meteorological drought."
       />
 
       <DroughtClient payload={droughtPayload} farmSlug={farmSlug} />

@@ -28,7 +28,7 @@ export default async function TaxPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="SARS ITR12 Farming Schedule Export"
-        subtitle="tax estimator"
+        subtitle="Preview and freeze year-end farming income & expense schedules for your ITR12 return. Snapshots are immutable once issued."
       />
       <It3PageClient farmSlug={farmSlug} isAdmin={isAdmin} />
     </div>

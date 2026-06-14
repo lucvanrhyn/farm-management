@@ -70,7 +70,7 @@ export default async function AiSettingsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Einstein AI Settings"
-        subtitle="assistant & einstein"
+        subtitle="Rename your assistant, pick a reply language, and cap the monthly spend."
       />
 
       {!canEdit ? (

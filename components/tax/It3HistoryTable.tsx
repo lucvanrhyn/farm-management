@@ -132,7 +132,7 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
                   key={r.id}
                   style={{
                     background: i % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
-                    borderBottom: "1px solid var(--ft-surface)",
+                    borderBottom: "1px solid var(--ft-border)",
                     opacity: r.voidedAt ? 0.55 : 1,
                   }}
                 >

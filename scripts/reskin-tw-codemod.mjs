@@ -28,7 +28,7 @@ const DRY = process.argv.includes("--dry");
 
 const EXCLUDE = [
   "components/ds/", "components/home/", "components/logger/",
-  "components/map/", "components/einstein/",
+  "components/map/", "components/einstein/", "components/dashboard/",
   "components/admin/DashboardContent.tsx", "components/admin/nav-model.tsx",
   "components/admin/AdminNav.tsx",
 ];
