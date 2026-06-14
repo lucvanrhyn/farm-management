@@ -160,7 +160,7 @@ export default function MethodologyForm({
               onChange={onChange(f.key)}
               placeholder={f.placeholder}
               disabled={disabled}
-              className="rounded-md border px-3 py-2 text-sm disabled:bg-stone-100 disabled:cursor-not-allowed"
+              className="rounded-md border px-3 py-2 text-sm disabled:bg-[var(--ft-surface)] disabled:cursor-not-allowed"
               style={{
                 borderColor: "#E0D5C8",
                 color: "#1C1815",
@@ -174,7 +174,7 @@ export default function MethodologyForm({
               placeholder={f.placeholder}
               rows={f.rows}
               disabled={disabled}
-              className="rounded-md border px-3 py-2 text-sm resize-y disabled:bg-stone-100 disabled:cursor-not-allowed"
+              className="rounded-md border px-3 py-2 text-sm resize-y disabled:bg-[var(--ft-surface)] disabled:cursor-not-allowed"
               style={{
                 borderColor: "#E0D5C8",
                 color: "#1C1815",

@@ -42,6 +42,7 @@ const roots = [
   "components/consulting", "components/settings", "components/telemetry",
   "components/mobs", "components/alerts", "components/camps",
   "components/methodology", "components/tax",
+  "components/veld", "components/feed-on-offer", "components/drought",
 ];
 
 const STATUS = {

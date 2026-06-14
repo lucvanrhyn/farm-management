@@ -160,7 +160,7 @@ export default function AiSettingsForm({
           placeholder={DEFAULT_ASSISTANT_NAME}
           maxLength={ASSISTANT_NAME_MAX_LEN + 8 /* generous, server re-validates */}
           disabled={disabled}
-          className="rounded-md border px-3 py-2 text-sm disabled:bg-stone-100 disabled:cursor-not-allowed"
+          className="rounded-md border px-3 py-2 text-sm disabled:bg-[var(--ft-surface)] disabled:cursor-not-allowed"
           style={{
             borderColor: nameValid ? "#E0D5C8" : "#B23B3B",
             color: "#1C1815",
@@ -234,7 +234,7 @@ export default function AiSettingsForm({
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               disabled={disabled}
-              className="rounded-md border px-3 py-2 text-sm disabled:bg-stone-100 disabled:cursor-not-allowed"
+              className="rounded-md border px-3 py-2 text-sm disabled:bg-[var(--ft-surface)] disabled:cursor-not-allowed"
               style={{
                 borderColor: budgetValid ? "#E0D5C8" : "#B23B3B",
                 color: "#1C1815",

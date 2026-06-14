@@ -74,14 +74,14 @@ export function CoverReadingForm({
   return (
     <form
       onSubmit={submit}
-      className="rounded-lg border bg-white p-4 space-y-4"
+      className="rounded-lg border bg-[var(--ft-surface)] p-4 space-y-4"
     >
-      <h3 className="text-sm font-semibold text-gray-700">Record cover reading</h3>
+      <h3 className="text-sm font-semibold text-[var(--ft-text)]">Record cover reading</h3>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {/* Camp */}
         <div>
-          <label className="text-xs text-gray-500">Camp</label>
+          <label className="text-xs text-[var(--ft-subtle)]">Camp</label>
           <select
             value={campId}
             onChange={(e) => setCampId(e.target.value)}
@@ -97,7 +97,7 @@ export function CoverReadingForm({
 
         {/* Cover category */}
         <div>
-          <label className="text-xs text-gray-500">Cover category</label>
+          <label className="text-xs text-[var(--ft-subtle)]">Cover category</label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as 'Good' | 'Fair' | 'Poor')}
@@ -111,7 +111,7 @@ export function CoverReadingForm({
 
         {/* Override */}
         <div>
-          <label className="text-xs text-gray-500 flex items-center gap-1">
+          <label className="text-xs text-[var(--ft-subtle)] flex items-center gap-1">
             <input
               type="checkbox"
               checked={useOverride}
@@ -136,24 +136,24 @@ export function CoverReadingForm({
         <div className="flex flex-col justify-end text-sm">
           <div>
             Feed on Offer: <strong>{effectiveKg} kg/ha</strong>{' '}
-            <span className={`text-xs ${status === 'critical' ? 'text-red-600' : status === 'low' ? 'text-amber-600' : status === 'good' ? 'text-green-600' : 'text-emerald-600'}`}>
+            <span className={`text-xs ${status === 'critical' ? 'text-[var(--ft-crit)]' : status === 'low' ? 'text-[var(--ft-fair)]' : status === 'good' ? 'text-[var(--ft-good)]' : 'text-[var(--ft-good)]'}`}>
               ({status})
             </span>
           </div>
           {daysGrazing != null && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-[var(--ft-subtle)]">
               ~{daysGrazing.toLocaleString()} LSU-days capacity
             </div>
           )}
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-[var(--ft-crit)]">{error}</p>}
 
       <button
         type="submit"
         disabled={isPending}
-        className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+        className="rounded bg-[var(--ft-good)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ft-good)] disabled:opacity-50"
       >
         {isPending ? 'Saving…' : 'Save reading'}
       </button>

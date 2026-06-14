@@ -55,9 +55,9 @@ export default function LogAtSpotSheet({ open, lngLat, farmSlug, onClose }: Prop
           <button
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded hover:bg-gray-100"
+            className="p-1 rounded hover:bg-[var(--ft-surface)]"
           >
-            <X className="w-4 h-4" style={{ color: "#9C8E7A" }} />
+            <X className="w-4 h-4" style={{ color: "var(--ft-subtle)" }} />
           </button>
         </div>
 

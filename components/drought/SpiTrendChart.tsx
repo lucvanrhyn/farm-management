@@ -26,8 +26,8 @@ export function SpiTrendChart({ monthly }: Props) {
   }));
 
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">
+    <div className="rounded-lg border bg-[var(--ft-surface)] p-4">
+      <h3 className="mb-3 text-sm font-semibold text-[var(--ft-text)]">
         SPI-1 Trend (last 24 months)
       </h3>
       <ResponsiveContainer width="100%" height={220}>
@@ -61,7 +61,7 @@ export function SpiTrendChart({ monthly }: Props) {
           />
         </LineChart>
       </ResponsiveContainer>
-      <p className="mt-1 text-xs text-gray-400">
+      <p className="mt-1 text-xs text-[var(--ft-subtle)]">
         SPI-1 = single-month anomaly. Below −1 = meteorological drought begins.
       </p>
     </div>
