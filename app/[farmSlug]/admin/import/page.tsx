@@ -1,14 +1,16 @@
 import AnimalImporter from "@/components/admin/AnimalImporter";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 
 export default function AdminImportPage() {
   return (
     <AdminPage>
       <div className="max-w-2xl">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)] mb-1">Import Animals</h1>
-        <p className="text-sm mb-2" style={{ color: "var(--ft-subtle)" }}>
-          Upload the two-tab Excel template to import camps and animals in one step.
-        </p>
+        <PageHeader
+          className="px-0 py-0 mb-2"
+          title="Import Animals"
+          subtitle="data import · upload the two-tab Excel template to import camps and animals in one step"
+        />
         <ol className="text-sm mb-8 space-y-1 list-decimal list-inside" style={{ color: "var(--ft-muted)" }}>
           <li>Download the template below</li>
           <li>Fill in the <strong>Camps</strong> tab — each camp you want to create</li>

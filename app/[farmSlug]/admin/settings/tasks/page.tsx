@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 import { requireSession, requireFarmAdmin } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { PageHeader } from "@/components/ds";
 import TaskSettingsClient, {
   type TaskTemplateRow,
 } from "@/components/admin/tasks/TaskSettingsClient";
@@ -86,14 +87,11 @@ export default async function TasksSettingsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Task Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Templates, reminder defaults, and auto-observation behaviour
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Task Settings"
+        subtitle="task defaults"
+      />
 
       <div className="max-w-4xl">
         <TaskSettingsClient

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Scissors } from "lucide-react";
+import { PageHeader } from "@/components/ds";
 
 /**
  * Stub for the wool-tracking dashboard.
@@ -26,14 +27,11 @@ export default async function SheepWoolPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Wool
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Shearing records, fleece weights, and clip values
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Wool"
+        subtitle="wool clip"
+      />
 
       <div
         className="rounded-2xl border p-8 flex flex-col items-center text-center gap-3"

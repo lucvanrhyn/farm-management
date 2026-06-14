@@ -5,6 +5,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { PageHeader } from "@/components/ds";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import RotationPlannerClient from "@/components/rotation/RotationPlannerClient";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
@@ -78,14 +79,11 @@ export default async function RotationPlannerPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Rotation Planner
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Plan and execute pasture rotation sequences across your camps.
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Rotation Planner"
+        subtitle="rotation planner"
+      />
       <RotationPlannerClient
         farmSlug={farmSlug}
         plans={plans}

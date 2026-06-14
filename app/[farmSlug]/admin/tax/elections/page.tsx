@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { STANDARD_VALUES_SOURCE } from "@/lib/calculators/sars-livestock-values";
+import { PageHeader } from "@/components/ds";
 
 interface ElectionRow {
   id: string;
@@ -55,9 +56,11 @@ export default async function ElectionsPage({
   return (
     <div className="min-h-screen bg-[var(--ft-bg)] p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-semibold text-[var(--ft-text)] mb-2">
-          SARS Adopted-Value Elections
-        </h1>
+        <PageHeader
+          className="px-0 py-0 mb-2"
+          title="SARS Adopted-Value Elections"
+          subtitle="sars elections"
+        />
         <p className="text-sm text-[var(--ft-muted)] mb-6">
           Per-class adopted standard values under First Schedule paragraph 6
           (binding per paragraph 7). The IT3 farming schedule applies the

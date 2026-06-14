@@ -7,6 +7,7 @@ import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { TaskBoard } from "@/components/admin/TaskBoard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import { redirect } from "next/navigation";
 import {
   TASK_CURSOR_ORDER_BY,
@@ -89,13 +90,11 @@ export default async function TasksPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Tasks</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Showing first {pageTasks.length.toLocaleString()} task{pageTasks.length !== 1 ? "s" : ""}
-          {hasMore ? " · scroll or Load more to see the rest" : ""}
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Tasks"
+        subtitle={`task board · showing first ${pageTasks.length.toLocaleString()} task${pageTasks.length !== 1 ? "s" : ""}${hasMore ? " · scroll or Load more to see the rest" : ""}`}
+      />
 
       <TaskBoard
         initialTasks={pageTasks.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() }))}

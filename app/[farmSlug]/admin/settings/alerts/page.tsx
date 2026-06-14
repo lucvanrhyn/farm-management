@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { PageHeader } from "@/components/ds";
 import AlertSettingsForm, {
   type AlertPreferenceRow,
   type FarmAlertSettings,
@@ -74,14 +75,11 @@ export default async function AlertsSettingsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Alert Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Channels, quiet hours, digest frequency, and per-species overrides
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Alert Settings"
+        subtitle="alert rules"
+      />
 
       <div className="max-w-4xl">
         <AlertSettingsForm

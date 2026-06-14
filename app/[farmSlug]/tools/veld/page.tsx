@@ -4,6 +4,7 @@ import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { getFarmMode } from '@/lib/server/get-farm-mode';
 import { scoped } from '@/lib/server/species-scoped-prisma';
 import { getFarmSummary } from '@/lib/server/veld-score';
+import { PageHeader } from '@/components/ds';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { VeldAssessmentForm } from '@/components/veld/VeldAssessmentForm';
 import { VeldCampSummaryCards } from '@/components/veld/VeldCampSummaryCards';
@@ -49,18 +50,20 @@ export default async function VeldToolPage({
 
   return (
     <div className="space-y-6 p-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-[var(--ft-good)]">Veld Condition Scoring</h1>
-        <p className="text-sm text-[var(--ft-muted)]">
-          DFFE-aligned rangeland assessment. Biome:{' '}
-          <strong>{settings?.biomeType ?? 'not set'}</strong>.{' '}
-          {!settings?.biomeType && (
-            <a href={`/${farmSlug}/admin/settings`} className="underline">
-              Set biome in Settings
-            </a>
-          )}
-        </p>
-      </header>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Veld Condition Scoring"
+        subtitle="veld condition"
+      />
+      <p className="text-sm text-[var(--ft-muted)]">
+        DFFE-aligned rangeland assessment. Biome:{' '}
+        <strong>{settings?.biomeType ?? 'not set'}</strong>.{' '}
+        {!settings?.biomeType && (
+          <a href={`/${farmSlug}/admin/settings`} className="underline">
+            Set biome in Settings
+          </a>
+        )}
+      </p>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Kpi label="Avg score" value={summary.averageScore?.toFixed(1) ?? '—'} tone="neutral" />

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAllSpeciesConfigs } from "@/lib/species/registry";
+import { PageHeader } from "@/components/ds";
 import SpeciesSettingsForm, { type SpeciesRow } from "@/components/admin/SpeciesSettingsForm";
 
 
@@ -34,14 +35,11 @@ export default async function SpeciesSettingsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Species Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Enable or disable species modules for this farm
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Species Settings"
+        subtitle="species & modes"
+      />
 
       <div className="max-w-2xl">
         <SpeciesSettingsForm farmSlug={farmSlug} species={speciesRows} />

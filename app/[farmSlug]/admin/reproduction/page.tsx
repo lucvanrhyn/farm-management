@@ -28,6 +28,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { COPY_BY_MODE } from "./copy";
 import type { GestationBreed } from "@/lib/species/gestation";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 
 
@@ -185,19 +186,16 @@ export default async function ReproductionPage({
   return (
     <AdminPage className="max-w-5xl">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
-              {copy.pageTitle}
-            </h1>
-            <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-              {totalEvents > 0
-                ? copy.benchmarkLine
-                : `No reproductive events recorded yet — log heat, insemination, scan or ${copy.birthEventLower} events via the Logger`}
-            </p>
-          </div>
-          <ExportButton farmSlug={farmSlug} exportType="calvings" label="Export" />
-        </div>
+        <PageHeader
+          className="px-0 py-0 mb-8"
+          title={copy.pageTitle}
+          subtitle={
+            totalEvents > 0
+              ? copy.benchmarkLine
+              : `No reproductive events recorded yet — log heat, insemination, scan or ${copy.birthEventLower} events via the Logger`
+          }
+          right={<ExportButton farmSlug={farmSlug} exportType="calvings" label="Export" />}
+        />
 
         {/* Date range filter */}
         <div className="mb-6">

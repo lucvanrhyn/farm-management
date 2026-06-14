@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
+import { PageHeader } from "@/components/ds";
 
 
 const zarFormatter = new Intl.NumberFormat("en-US", {
@@ -90,12 +91,11 @@ export default async function TelemetryPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-[var(--ft-text)]">AI Import Telemetry</h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Cost & usage dashboard for AI-powered data imports
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-5"
+        title="AI Import Telemetry"
+        subtitle="diagnostics · cost & usage for AI-powered data imports"
+      />
 
       {totalImports === 0 ? (
         <div className="rounded-2xl p-8 text-center" style={cardStyle}>

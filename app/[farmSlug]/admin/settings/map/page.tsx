@@ -18,6 +18,7 @@ import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import type { FarmTier } from "@/lib/tier";
+import { PageHeader } from "@/components/ds";
 import MapSettingsClient, {
   type FmdZoneResult,
 } from "@/components/admin/map/MapSettingsClient";
@@ -101,14 +102,11 @@ export default async function MapSettingsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Map Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Layer toggles and GIS integrations (EskomSePush, FMD-zone check)
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Map Settings"
+        subtitle="map & layers"
+      />
 
       <div className="max-w-3xl">
         <MapSettingsClient

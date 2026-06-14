@@ -4,6 +4,7 @@ import { Check, Minus } from "lucide-react";
 import type { FarmTier } from "@/lib/tier";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import AdminPage from "@/app/_components/AdminPage";
+import { PageHeader } from "@/components/ds";
 
 
 type TierKey = "basic" | "advanced" | "consulting";
@@ -100,14 +101,11 @@ export default async function SubscriptionPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Subscription
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Plans, pricing, and features
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Subscription"
+        subtitle="plan & billing"
+      />
 
       <div className="max-w-4xl space-y-6">
         {/* Current plan card */}

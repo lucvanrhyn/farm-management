@@ -5,6 +5,7 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import RecordBirthButton from "@/components/admin/RecordBirthButton";
 import ExportButton from "@/components/admin/ExportButton";
 import AnimalAnalyticsSection from "@/components/admin/AnimalAnalyticsSection";
+import { PageHeader } from "@/components/ds";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
@@ -111,15 +112,17 @@ export default async function SheepAnimalsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Catalogue</h1>
-        </div>
-        <div className="flex gap-2 items-center">
-          <ExportButton farmSlug={farmSlug} exportType="animals" species={SPECIES} />
-          <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
-        </div>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Sheep Catalogue"
+        subtitle="flock catalogue"
+        right={
+          <div className="flex items-center gap-2">
+            <ExportButton farmSlug={farmSlug} exportType="animals" species={SPECIES} />
+            <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
+          </div>
+        }
+      />
       <AnimalsTable
         animals={animals as unknown as PrismaAnimal[]}
         camps={camps}

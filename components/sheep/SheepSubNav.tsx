@@ -60,7 +60,7 @@ export default function SheepSubNav({ farmSlug }: { farmSlug: string }) {
               className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
               style={
                 isActive
-                  ? { background: "rgba(74,124,89,0.12)", color: "var(--ft-good)" }
+                  ? { background: "var(--ft-accent-faint)", color: "var(--ft-accent)", fontWeight: 600 }
                   : { color: "var(--ft-subtle)" }
               }
             >

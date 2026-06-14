@@ -15,6 +15,7 @@ import {
   getSpeciesWithOverdueCensus,
 } from "@/lib/species/game/analytics";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import SpeciesPopulationTable from "@/components/game/SpeciesPopulationTable";
 import OverdueCensusTable from "@/components/game/OverdueCensusTable";
 import type { SpeciesAlert } from "@/lib/species/types";
@@ -153,14 +154,11 @@ export default async function GameCensusPage({
     <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Game Census
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Population overview and census status
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Game Census"
+        subtitle="game census"
+      />
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

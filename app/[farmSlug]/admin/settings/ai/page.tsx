@@ -27,6 +27,7 @@ import {
   parseAiSettings,
 } from "@/lib/einstein/settings-schema";
 import AiSettingsForm from "@/components/einstein/settings/AiSettingsForm";
+import { PageHeader } from "@/components/ds";
 
 
 export default async function AiSettingsPage({
@@ -66,14 +67,11 @@ export default async function AiSettingsPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Einstein AI Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          Rename your assistant, pick a reply language, and cap the monthly spend.
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Einstein AI Settings"
+        subtitle="assistant & einstein"
+      />
 
       {!canEdit ? (
         <div

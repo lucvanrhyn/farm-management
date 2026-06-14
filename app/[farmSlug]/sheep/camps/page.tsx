@@ -4,6 +4,7 @@ import AddCampForm from "@/components/admin/AddCampForm";
 import CampsTable from "@/components/admin/CampsTable";
 import CampAnalyticsSection from "@/components/admin/CampAnalyticsSection";
 import CampsEmptyState from "@/components/camps/CampsEmptyState";
+import { PageHeader } from "@/components/ds";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp } from "@/lib/types";
@@ -62,12 +63,11 @@ export default async function SheepCampsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Camps</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          {camps.length} camps · sheep grazing surface
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Sheep Camps"
+        subtitle={`${camps.length} camps · grazing camps`}
+      />
 
       <AddCampForm />
 

@@ -18,6 +18,7 @@ import {
   type FarmMethodology,
 } from "@/lib/einstein/settings-schema";
 import MethodologyForm from "@/components/einstein/settings/MethodologyForm";
+import { PageHeader } from "@/components/ds";
 
 
 export default async function MethodologyPage({
@@ -47,14 +48,11 @@ export default async function MethodologyPage({
 
   return (
     <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
-          Farm Methodology
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
-          The one-page brief Einstein reads before every answer — tell it how this farm actually runs.
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Farm Methodology"
+        subtitle="farm methodology"
+      />
 
       {!canEdit ? (
         <div

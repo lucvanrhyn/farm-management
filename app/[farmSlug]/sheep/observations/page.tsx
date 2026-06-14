@@ -4,6 +4,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 import SheepObservationsPageClient from "./SheepObservationsPageClient";
 
@@ -105,12 +106,11 @@ export default async function SheepObservationsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Observations</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Recent entries · sheep flock only
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Sheep Observations"
+        subtitle="activity log"
+      />
 
       {/*
         #496 — the visible timeline is owned by the page client now: it

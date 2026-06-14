@@ -8,6 +8,7 @@ import DroughtExportCard from "@/components/admin/DroughtExportCard";
 import It3ExportCard from "@/components/admin/It3ExportCard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmCreds } from "@/lib/meta-db";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 
 
@@ -74,12 +75,11 @@ export default async function ReportsPage({
 
   return (
     <AdminPage>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Reports</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          Export farm data as CSV or PDF for offline analysis and record keeping.
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-8"
+        title="Reports"
+        subtitle="exports & summaries · CSV or PDF for offline analysis"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {REPORTS.map((report) => (

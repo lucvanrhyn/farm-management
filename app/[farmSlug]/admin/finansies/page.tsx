@@ -15,6 +15,7 @@ import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import AdminPage from "@/app/_components/AdminPage";
+import { PageHeader } from "@/components/ds";
 
 // Finance transactions page size. 50 keeps the initial HTML payload bounded
 // while the visible ledger (TransactionLedger) is ordered newest-first, so
