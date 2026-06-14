@@ -28,7 +28,9 @@ const DeathModal = dynamic(() => import("@/components/logger/DeathModal"), { ssr
 const MobMoveModal = dynamic(() => import("@/components/logger/MobMoveModal"), { ssr: false });
 
 import { submitCalvingObservation, submitMobMove, type CalvingData } from "@/lib/logger-actions";
-import { getGrazingDot, getGrazingTailwindBg, relativeTime } from "@/lib/utils";
+import { relativeTime } from "@/lib/utils";
+import { Icon, StatusPill, Button } from "@/components/ds";
+import { grazingToStatus } from "@/components/logger/grazing-status";
 import type { Camp } from "@/lib/types";
 import { getAnimalsByCampCached, getPendingObservations, queueObservation, queuePhoto, queueCoverReading, updateCampCondition, updateAnimalCamp, updateAnimalStatus } from "@/lib/offline-store";
 import { useOffline } from "@/components/logger/OfflineProvider";
@@ -565,54 +567,56 @@ export default function CampInspectionPage({
 
   if (!campsLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p style={{ color: '#D2B48C' }}>Loading…</p>
+      <div className="dark-surface ft-scope min-h-screen flex items-center justify-center">
+        <p className="ft-mono" style={{ color: 'var(--ft-muted)' }}>Loading…</p>
       </div>
     );
   }
 
   if (!camp) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p style={{ color: '#D2B48C' }}>Camp not found: {decodedId}</p>
+      <div className="dark-surface ft-scope min-h-screen flex items-center justify-center">
+        <p className="ft-mono" style={{ color: 'var(--ft-muted)' }}>Camp not found: {decodedId}</p>
       </div>
     );
   }
 
-  // Use grey when no condition has ever been recorded; do not default to "Fair"
+  // Use neutral subtle when no condition has ever been recorded; do not default to "Fair"
   const grazingQuality = campWithCondition?.grazing_quality ?? null;
-  const grazingDot = grazingQuality ? getGrazingDot(grazingQuality) : "bg-gray-500";
-  const grazingBadge = grazingQuality ? getGrazingTailwindBg(grazingQuality) : "bg-gray-800/50 text-gray-400";
+  const grazingStatus = grazingQuality ? grazingToStatus(grazingQuality) : null;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Sticky header */}
+    <div className="dark-surface ft-scope min-h-screen flex flex-col">
+      {/* Sticky header — PageHeader-style editorial chrome */}
       <div
-        className="text-white sticky top-0 z-10"
+        className="sticky top-0 z-10"
         style={{
-          backgroundColor: 'rgba(26, 13, 5, 0.85)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          borderBottom: '1px solid rgba(92, 61, 46, 0.5)',
-          boxShadow: '0 2px 20px rgba(0,0,0,0.4)',
+          backgroundColor: 'color-mix(in oklab, var(--ft-bg) 88%, transparent)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          borderBottom: '1px solid var(--ft-border)',
+          boxShadow: 'var(--ft-shadow-sm)',
         }}
       >
-        <div className="flex items-center gap-3 px-4 py-4">
+        <div className="flex items-start gap-3 px-4 py-4">
           <Link
             href={loggerRoot}
-            className="w-10 h-10 flex items-center justify-center rounded-full text-lg shrink-0"
-            style={{ backgroundColor: 'rgba(92, 61, 46, 0.6)', color: '#D2B48C' }}
+            aria-label="Back to camp picker"
+            className="ft-action-btn mt-1 shrink-0"
           >
-            ←
+            <Icon.chevronL size={20} />
           </Link>
           <div className="flex-1 min-w-0">
+            <div className="ft-mono" style={{ fontSize: 10, letterSpacing: '.16em', color: 'var(--ft-subtle)', textTransform: 'uppercase' }}>
+              Logger
+            </div>
             <h1
-              className="text-lg font-bold truncate"
-              style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+              className="ft-serif truncate"
+              style={{ fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, marginTop: 2, color: 'var(--ft-text)' }}
             >
               Camp {camp.camp_name}
             </h1>
-            <p className="text-xs" style={{ color: '#D2B48C' }}>
+            <p className="ft-mono text-[11px] mt-1.5" style={{ color: 'var(--ft-muted)' }}>
               {/* Issue #437 — surface species-scoped last_inspected_at next
                   to the head count. The value comes from the active-mode
                   IDB partition (sync-manager writes the species-scoped
@@ -630,40 +634,47 @@ export default function CampInspectionPage({
               </span>
             </p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${grazingDot}`} />
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${grazingBadge}`}>
-              {grazingQuality ?? "No data"}
-            </span>
+          <div className="shrink-0 mt-1">
+            {grazingStatus ? (
+              <StatusPill status={grazingStatus} label={grazingQuality ?? undefined} />
+            ) : (
+              <span className="ft-pill ft-pill-muted">
+                <span
+                  className="inline-block rounded-full"
+                  style={{ width: 6, height: 6, background: 'var(--ft-subtle)' }}
+                />
+                No data
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Sticky "All Normal" button */}
       <div
-        className="sticky top-[72px] z-10 px-4 pt-3 pb-2"
+        className="sticky top-[88px] z-10 px-4 pt-3 pb-2"
         style={{
-          backgroundColor: 'rgba(26, 13, 5, 0.55)',
+          backgroundColor: 'color-mix(in oklab, var(--ft-bg) 70%, transparent)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
         }}
       >
         {allNormalDone ? (
           <div
-            className="w-full font-bold py-5 rounded-3xl text-base text-center"
-            style={{ backgroundColor: 'rgba(44, 78, 44, 0.9)', color: '#A8D87A', border: '1px solid rgba(80, 140, 60, 0.4)' }}
+            className="w-full font-semibold py-5 rounded-2xl text-base text-center flex items-center justify-center gap-2"
+            style={{ backgroundColor: 'var(--ft-good-bg)', color: 'var(--ft-good)', border: '1px solid var(--ft-good)' }}
           >
-            ✓ Visit recorded
+            <Icon.check size={20} /> Visit recorded
           </div>
         ) : (
           <>
             {/* Issue #440 — observation-aware banner. getCampVisitCompletenessLabel
                 returns { label, severity } from the 5-row matrix in the helper.
-                Severity drives the button accent colour reusing the same
-                amber/orange tokens the camp-condition badge already uses:
-                  good      → copper (#B87333, unchanged)
-                  attention → amber  (#B8860B)
-                  critical  → red    (#B83333)
+                Severity drives the button accent colour, now mapped onto the
+                warm token scale:
+                  good      → rust accent (var(--ft-accent))
+                  attention → amber       (var(--ft-fair))
+                  critical  → red         (var(--ft-crit))
                 The caption (Issue #406) is preserved for the Good-veld baseline. */}
             {(() => {
               const { label, severity } = getCampVisitCompletenessLabel({
@@ -671,16 +682,20 @@ export default function CampInspectionPage({
                 observationCount: visitObsCount,
                 flaggedCount: flaggedAnimalIds.size,
               });
-              const btnBg = severity === 'critical' ? '#B83333' : severity === 'attention' ? '#B8860B' : '#B87333';
-              const btnShadow = severity === 'critical' ? '0 4px 20px rgba(184,51,51,0.4)' : severity === 'attention' ? '0 4px 20px rgba(184,134,11,0.4)' : '0 4px 20px rgba(184,115,51,0.4)';
+              const btnBg = severity === 'critical' ? 'var(--ft-crit)' : severity === 'attention' ? 'var(--ft-fair)' : 'var(--ft-accent)';
+              const btnShadow = severity === 'critical'
+                ? '0 8px 26px -10px color-mix(in oklab, var(--ft-crit) 70%, transparent)'
+                : severity === 'attention'
+                  ? '0 8px 26px -10px color-mix(in oklab, var(--ft-fair) 70%, transparent)'
+                  : '0 8px 26px -10px color-mix(in oklab, var(--ft-accent) 70%, transparent)';
               return (
                 <button
                   onClick={handleCompleteVisit}
                   data-testid="camp-visit-completeness-btn"
-                  className="w-full font-bold py-5 rounded-3xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
-                  style={{ backgroundColor: btnBg, color: '#F5F0E8', boxShadow: btnShadow }}
+                  className="w-full font-semibold py-5 rounded-2xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
+                  style={{ backgroundColor: btnBg, color: '#FFF6EE', boxShadow: btnShadow }}
                 >
-                  <span className="text-xl">✓</span>
+                  <Icon.check size={20} />
                   <span>{label}</span>
                 </button>
               );
@@ -691,23 +706,17 @@ export default function CampInspectionPage({
 
       {/* Animal list */}
       <div
-        className="flex-1 mt-3 mx-3 mb-3 rounded-2xl overflow-hidden"
-        style={{
-          backgroundColor: 'rgba(44, 21, 8, 0.65)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(139, 105, 20, 0.2)',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-        }}
+        className="ft-card flex-1 mt-3 mx-3 mb-3 overflow-hidden"
+        style={{ padding: 0 }}
       >
         <div
           className="px-4 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.35)' }}
+          style={{ borderBottom: '1px solid var(--ft-border)' }}
         >
-          <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
-            Animals in camp ({stats.total})
+          <p className="text-sm font-semibold" style={{ color: 'var(--ft-text)' }}>
+            Animals in camp <span className="ft-mono" style={{ color: 'var(--ft-subtle)' }}>({stats.total})</span>
           </p>
-          <p className="text-xs" style={{ color: 'rgba(210, 180, 140, 0.6)' }}>
+          <p className="ft-label">
             Tap icon to report
           </p>
         </div>
@@ -717,21 +726,15 @@ export default function CampInspectionPage({
       {/* Mobs in this camp */}
       {mobsInCamp.length > 0 && (
         <div
-          className="mx-3 mb-3 rounded-2xl overflow-hidden"
-          style={{
-            backgroundColor: 'rgba(44, 21, 8, 0.65)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(139, 105, 20, 0.2)',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-          }}
+          className="ft-card mx-3 mb-3 overflow-hidden"
+          style={{ padding: 0 }}
         >
           <div
             className="px-4 py-3"
-            style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.35)' }}
+            style={{ borderBottom: '1px solid var(--ft-border)' }}
           >
-            <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
-              Mobs in camp ({mobsInCamp.length})
+            <p className="text-sm font-semibold" style={{ color: 'var(--ft-text)' }}>
+              Mobs in camp <span className="ft-mono" style={{ color: 'var(--ft-subtle)' }}>({mobsInCamp.length})</span>
             </p>
           </div>
           <div className="flex flex-col gap-2 p-3">
@@ -740,32 +743,31 @@ export default function CampInspectionPage({
                 key={mob.id}
                 className="flex items-center justify-between px-4 py-3 rounded-xl"
                 style={{
-                  backgroundColor: 'rgba(92, 61, 46, 0.4)',
-                  border: '1px solid rgba(139, 105, 20, 0.15)',
+                  backgroundColor: 'var(--ft-surface2)',
+                  border: '1px solid var(--ft-border)',
                 }}
               >
                 <div>
-                  <p className="text-sm font-semibold" style={{ color: '#F5F0E8' }}>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ft-text)' }}>
                     {mob.name}
                   </p>
-                  <p className="text-xs" style={{ color: '#D2B48C' }}>
+                  <p className="ft-mono text-xs" style={{ color: 'var(--ft-muted)' }}>
                     {mob.animal_count} animal{mob.animal_count !== 1 ? 's' : ''}
                   </p>
                 </div>
-                <button
+                <Button
+                  variant="primary"
+                  icon={<Icon.move size={15} />}
                   onClick={() => {
                     setSelectedMob(mob);
                     setMobDestCamp("");
                     setActiveModal("mob_move");
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95"
-                  style={{
-                    backgroundColor: '#B87333',
-                    color: '#F5F0E8',
-                  }}
+                  className="text-xs active:scale-95"
+                  style={{ padding: '7px 13px' }}
                 >
                   Move Mob
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -776,33 +778,25 @@ export default function CampInspectionPage({
       <div
         className="sticky bottom-0 px-4 py-3 flex flex-col gap-2"
         style={{
-          backgroundColor: 'rgba(26, 13, 5, 0.75)',
+          backgroundColor: 'color-mix(in oklab, var(--ft-bg) 82%, transparent)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          borderTop: '1px solid rgba(92, 61, 46, 0.4)',
+          borderTop: '1px solid var(--ft-border)',
         }}
       >
         <button
           onClick={() => setActiveModal("cover")}
-          className="w-full font-semibold py-3.5 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 active:scale-95"
-          style={{
-            backgroundColor: 'rgba(92, 61, 46, 0.6)',
-            color: '#F5F0E8',
-            border: '1px solid rgba(139, 105, 20, 0.3)',
-          }}
+          className="ft-btn w-full active:scale-95"
+          style={{ justifyContent: 'center', padding: '13px' }}
         >
-          Record Cover
+          <Icon.edit size={16} /> <span>Record Cover</span>
         </button>
         <button
           onClick={() => setActiveModal("condition")}
-          className="w-full font-semibold py-3.5 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 active:scale-95"
-          style={{
-            backgroundColor: 'rgba(92, 61, 46, 0.6)',
-            color: '#F5F0E8',
-            border: '1px solid rgba(139, 105, 20, 0.3)',
-          }}
+          className="ft-btn w-full active:scale-95"
+          style={{ justifyContent: 'center', padding: '13px' }}
         >
-          Report Camp Condition
+          <Icon.grass size={16} /> <span>Report Camp Condition</span>
         </button>
       </div>
 
@@ -907,11 +901,9 @@ export default function CampInspectionPage({
           style={{
             backgroundColor:
               submitToast.kind === "duplicate"
-                ? "#B87333"
-                : submitToast.kind === "invalid"
-                  ? "#B33A3A"
-                  : "#B33A3A",
-            color: "#F5F0E8",
+                ? "var(--ft-accent)"
+                : "var(--ft-crit)",
+            color: "#FFF6EE",
           }}
         >
           {submitToast.message}

@@ -5,18 +5,18 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSsrSafeState } from "@/lib/client/use-ssr-safe-state";
 import { parseOpenMeteoForecast } from "@/lib/server/adapters/openmeteo-door";
+import { Icon } from "@/components/ds";
 
-// ── WMO weather code → icon + label ──────────────────────────────────────────
-
-function wmoToIcon(code: number): string {
-  if (code === 0) return "☀️";
-  if (code <= 3) return "🌤️";
-  if (code === 45 || code === 48) return "🌫️";
-  if (code >= 51 && code <= 67) return "🌧️";
-  if (code >= 71 && code <= 77) return "❄️";
-  if (code >= 80 && code <= 82) return "🌦️";
-  if (code >= 95 && code <= 99) return "⛈️";
-  return "🌡️";
+// ── WMO weather code → monoline kit glyph ─────────────────────────────────────
+// Restyle of the old emoji map onto the design-system Icon set (sun / cloud /
+// rain). The clear-vs-cloud-vs-rain bucketing mirrors wmoToLabel below so the
+// glyph and the label always agree.
+function WeatherGlyph({ code, size }: { code: number; size: number }) {
+  if (code === 0) return <Icon.sun size={size} />;
+  if (code >= 51 && code <= 67) return <Icon.rain size={size} />;
+  if (code >= 80 && code <= 82) return <Icon.rain size={size} />;
+  if (code >= 95 && code <= 99) return <Icon.rain size={size} />;
+  return <Icon.cloud size={size} />;
 }
 
 function wmoToLabel(code: number): string {
@@ -223,19 +223,19 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   if (effectiveGeoFailed || (!loading && !coords)) {
     return (
       <div
-        className="rounded-xl px-4 py-3 flex items-center gap-3"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        className="ft-card flex items-center gap-3"
+        style={{ padding: "12px 16px" }}
       >
-        <span style={{ fontSize: 20 }}>🗺️</span>
+        <span style={{ color: "var(--ft-muted)" }}><Icon.locate size={20} /></span>
         <div>
-          <p className="text-xs font-medium" style={{ color: "#1C1815" }}>
+          <p className="text-xs font-medium" style={{ color: "var(--ft-text)" }}>
             No location set
           </p>
           {farmSlug && (
             <Link
               href={`/${farmSlug}/admin/settings`}
               className="text-xs hover:underline"
-              style={{ color: "#4A7C59" }}
+              style={{ color: "var(--ft-accent)" }}
             >
               Set farm location in Settings →
             </Link>
@@ -249,13 +249,13 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   if (loading) {
     return (
       <div
-        className="rounded-xl px-4 py-3 animate-pulse flex items-center gap-3"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        className="ft-card animate-pulse flex items-center gap-3"
+        style={{ padding: "12px 16px" }}
       >
-        <div className="w-8 h-8 rounded-full bg-zinc-200" />
+        <div className="w-8 h-8 rounded-full" style={{ background: "var(--ft-surface2)" }} />
         <div className="flex gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="w-10 h-8 rounded bg-zinc-100" />
+            <div key={i} className="w-10 h-8 rounded" style={{ background: "var(--ft-border)" }} />
           ))}
         </div>
       </div>
@@ -266,10 +266,10 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   if (error || !weather) {
     return (
       <div
-        className="rounded-xl px-4 py-3 flex items-center gap-2"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        className="ft-card flex items-center gap-2"
+        style={{ padding: "12px 16px" }}
       >
-        <span className="text-xs" style={{ color: "#9C8E7A" }}>
+        <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           {error ?? "Weather unavailable"}
         </span>
       </div>
@@ -279,49 +279,54 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   // ── Weather display ────────────────────────────────────────────────────────
   return (
     <div
-      className="rounded-xl px-4 py-3 flex items-center gap-4 overflow-x-auto"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      className="ft-card flex items-center gap-4 overflow-x-auto"
+      style={{ padding: "12px 16px" }}
     >
       {/* Current condition */}
-      <div className="flex items-center gap-2 shrink-0 pr-4" style={{ borderRight: "1px solid #E0D5C8" }}>
-        <span style={{ fontSize: 24, lineHeight: 1 }}>{wmoToIcon(weather.current.code)}</span>
+      <div className="flex items-center gap-2.5 shrink-0 pr-4" style={{ borderRight: "1px dashed var(--ft-border2)" }}>
+        <span style={{ color: weather.current.code >= 51 && weather.current.code <= 82 ? "var(--ft-info)" : "var(--ft-fair)" }}>
+          <WeatherGlyph code={weather.current.code} size={26} />
+        </span>
         <div>
           <p
+            className="ft-tabnums"
             style={{
-              fontFamily: "var(--font-dm-serif)",
-              fontSize: 20,
+              fontSize: 22,
+              fontWeight: 500,
               lineHeight: 1,
-              color: "#1C1815",
+              color: "var(--ft-text)",
             }}
           >
             {weather.current.temp}°
           </p>
-          <p className="text-[10px]" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px]" style={{ color: "var(--ft-muted)", marginTop: 3 }}>
             {wmoToLabel(weather.current.code)}
           </p>
         </div>
       </div>
 
       {/* 5-day forecast strip */}
-      <div className="flex gap-3">
+      <div className="flex gap-4">
         {weather.daily.map((day) => (
           <div
             key={day.date}
             className="flex flex-col items-center gap-0.5"
-            style={{ minWidth: 40 }}
+            style={{ minWidth: 42 }}
           >
-            <span className="text-[10px] font-medium uppercase" style={{ color: "#9C8E7A", letterSpacing: "0.05em" }}>
+            <span className="text-[9px] font-medium uppercase ft-mono" style={{ color: "var(--ft-subtle)", letterSpacing: "0.1em" }}>
               {getDayName(day.date)}
             </span>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>{wmoToIcon(day.code)}</span>
-            <span className="text-xs font-semibold font-mono" style={{ color: "#1C1815" }}>
+            <span style={{ color: day.code >= 51 && day.code <= 82 ? "var(--ft-info)" : "var(--ft-muted)", margin: "4px 0" }}>
+              <WeatherGlyph code={day.code} size={16} />
+            </span>
+            <span className="text-xs font-semibold ft-mono ft-tabnums" style={{ color: "var(--ft-text)" }}>
               {day.maxTemp}°
             </span>
-            <span className="text-[10px] font-mono" style={{ color: "#9C8E7A" }}>
+            <span className="text-[10px] ft-mono ft-tabnums" style={{ color: "var(--ft-subtle)" }}>
               {day.minTemp}°
             </span>
             {day.precip > 0 && (
-              <span className="text-[9px] font-mono" style={{ color: "#4A7C59" }}>
+              <span className="text-[9px] ft-mono" style={{ color: "var(--ft-info)" }}>
                 {day.precip}mm
               </span>
             )}

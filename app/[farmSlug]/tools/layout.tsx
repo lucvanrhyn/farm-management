@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
 import { requireSession, getUserRoleForFarm } from "@/lib/auth";
@@ -48,10 +48,7 @@ export default async function ToolsLayout({
 
   return (
     <TierProvider tier={tier}>
-      <div className="flex min-h-screen">
-        <AdminNav tier={tier} />
-        <main className="flex-1">{children}</main>
-      </div>
+      <StudioShell tier={tier}>{children}</StudioShell>
     </TierProvider>
   );
 }

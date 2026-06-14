@@ -144,24 +144,27 @@ export default function LayerToggle({ value, onChange }: Props) {
         zIndex: 11,
         display: "flex",
         flexDirection: "column",
-        gap: 2,
-        padding: "10px 12px",
-        borderRadius: 10,
+        gap: 3,
+        padding: "14px 16px",
+        borderRadius: 14,
+        // Dark-glass card — floats over the satellite map, outside any
+        // .dark-surface scope, so it carries literal glass values.
         background: "rgba(26,21,16,0.92)",
-        backdropFilter: "blur(8px)",
-        border: "1px solid rgba(140,100,60,0.25)",
-        fontFamily: "var(--font-sans)",
-        minWidth: 168,
+        backdropFilter: "blur(14px) saturate(140%)",
+        border: "1px solid rgba(255,235,210,0.13)",
+        boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
+        color: "#EFE7D8",
+        minWidth: 208,
       }}
     >
       <div
+        className="ft-mono"
         style={{
           fontSize: 10,
-          fontWeight: 700,
-          color: "rgba(210,180,140,0.7)",
+          letterSpacing: "0.16em",
           textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          marginBottom: 4,
+          color: "rgba(255,235,210,0.6)",
+          marginBottom: 8,
         }}
       >
         Layers
@@ -172,11 +175,11 @@ export default function LayerToggle({ value, onChange }: Props) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            padding: "4px 4px",
-            fontSize: 12,
-            fontWeight: 500,
-            color: value[opt.key] ? "#F5EBD4" : "rgba(210,180,140,0.7)",
+            gap: 10,
+            padding: "4px 0",
+            fontSize: 13,
+            color: "#EFE7D8",
+            opacity: value[opt.key] ? 1 : 0.55,
             cursor: "pointer",
             userSelect: "none",
           }}
@@ -185,11 +188,11 @@ export default function LayerToggle({ value, onChange }: Props) {
             type="checkbox"
             checked={value[opt.key]}
             onChange={(e) => onChange({ [opt.key]: e.target.checked } as Partial<LayerState>)}
-            style={{ cursor: "pointer" }}
+            style={{ cursor: "pointer", accentColor: "var(--ft-accent)", width: 15, height: 15, flexShrink: 0 }}
           />
-          <span>{opt.label}</span>
+          <span style={{ whiteSpace: "nowrap" }}>{opt.label}</span>
           {opt.note && (
-            <span style={{ fontSize: 9, color: "rgba(210,180,140,0.5)" }}>{opt.note}</span>
+            <span style={{ fontSize: 9, color: "rgba(255,235,210,0.5)" }}>{opt.note}</span>
           )}
         </label>
       ))}

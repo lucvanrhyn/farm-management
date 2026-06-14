@@ -25,6 +25,7 @@ import {
   parseAiSettings,
 } from "@/lib/einstein/settings-schema";
 import { EinsteinChat } from "@/components/einstein/EinsteinChat";
+import { PageHeader } from "@/components/ds";
 
 
 export default async function EinsteinPage({
@@ -58,23 +59,24 @@ export default async function EinsteinPage({
   }
 
   return (
-    <div className="min-w-0 bg-[#FAFAF8] min-h-screen flex flex-col">
-      <header className="px-4 md:px-8 pt-4 md:pt-8 pb-3">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
-          {assistantName}
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Ask a question about your farm — every answer cites the records it came from.
-        </p>
-      </header>
+    <div
+      className="ft-scope flex min-h-screen min-w-0 flex-col"
+      style={{ background: "var(--ft-bg)", color: "var(--ft-text)" }}
+    >
+      {/* Light "Operations" shell header — Fraunces title + mono subtitle.
+          assistantName routes through useAssistantName() / the SSR fetch above;
+          "AI Advisor" is the surface label, never a hardcoded assistant name. */}
+      <PageHeader
+        className="px-4 pt-4 md:px-8 md:pt-8"
+        title="AI Advisor"
+        subtitle={`${assistantName} · every answer cites the records it came from`}
+      />
 
-      {/* The chat component styles its own dark bubble — wrap it in a rounded
-          card so it sits naturally inside the light-theme admin shell. */}
-      <div className="flex-1 min-h-0 px-4 md:px-8 pb-4 md:pb-8">
-        <div
-          className="h-full rounded-2xl overflow-hidden"
-          style={{ border: "1px solid #E0D5C8" }}
-        >
+      {/* The chat component styles its own dark panel — wrap it in a token
+          surface card so the dark-on-light intent reads as a deliberate inset
+          inside the light admin shell. */}
+      <div className="min-h-0 flex-1 px-4 pb-4 md:px-8 md:pb-8">
+        <div className="ft-card h-full overflow-hidden">
           <EinsteinChat farmSlug={farmSlug} className="h-full" />
         </div>
       </div>

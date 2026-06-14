@@ -10,11 +10,12 @@
  *
  * Fix: converted to an async RSC that calls getFarmIdentity() server-side.
  * The branded farm data (name, breed, hero image, counts) is in the initial
- * HTML — AnimatedHero renders it on first paint with no client-side fetch.
+ * HTML — the HomePortal headline renders it on first paint with no client fetch.
  *
- * Interactive parts (signOut, FarmMode hook, ModeSwitcher, section navigation)
- * live in HomePageClient which is a "use client" component. This matches the
- * standard Next.js App Router RSC → Client Component composition pattern.
+ * Interactive parts (signOut, FarmMode toggle, section navigation, the in-place
+ * Einstein AI Advisor overlay) live in HomePageClient (a "use client" component)
+ * which renders the dark HomePortal. This matches the standard Next.js App
+ * Router RSC → Client Component composition pattern.
  *
  * Per feedback-next16-page-export-contract.md: page files must only export
  * `default` (and optionally the reserved Next.js named exports like

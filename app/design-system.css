@@ -1,0 +1,346 @@
+/* ============================================================================
+ * FarmTrack Overhaul — Design System
+ * ----------------------------------------------------------------------------
+ * Ported from the "FarmTrack Overhaul" Claude Design handoff (warm "Classic"
+ * skin, landed defaults). Single source of truth for the reskin:
+ *
+ *   • Token system with three surface modes:
+ *       :root            → light "Operations" surface (default)
+ *       .dark-surface    → dark surface (Home, Logger, Map)
+ *       .light-surface   → light chrome over a dark map
+ *   • Density modes (.density-airy | .density-balanced | .density-dense)
+ *   • Shared primitive classes (.card, .pill, .btn, .segmented, .label, kbd …)
+ *   • The landed "polish" FX baked in as defaults (card spotlight-glow,
+ *     primary-button sheen, Einstein brief border-beam, page transitions).
+ *
+ * Fonts (Geist / Geist Mono / Fraunces) are loaded by next/font in
+ * app/layout.tsx and surfaced as --font-geist-sans / --font-geist-mono /
+ * --font-fraunces, which the --font-* tokens below reference.
+ * ========================================================================== */
+
+/* ----------------------------------------------------------------------------
+ * 1. Tokens — light "Operations" surface (default)
+ * -------------------------------------------------------------------------- */
+:root {
+  --ft-bg:        #FAF8F4;
+  --ft-surface:   #F2EDE4;
+  --ft-surface2:  #E9E2D5;
+  --ft-border:    #E0D5C2;
+  --ft-border2:   #C9BBA3;
+  --ft-text:      #1C1612;
+  --ft-muted:     #6B5C4E;
+  --ft-subtle:    #9C8E7A;
+
+  --ft-accent:       #C4633A; /* rust — primary brand accent */
+  --ft-accent-soft:  #E8C9B5;
+  --ft-accent-faint: #F4E6DA;
+
+  --ft-good:    #4A7C59;  --ft-good-bg: #E5EFE6;
+  --ft-fair:    #B48B2A;  --ft-fair-bg: #F4E9CC;
+  --ft-poor:    #C45A2E;  --ft-poor-bg: #F4D8C7;
+  --ft-crit:    #8B3A3A;  --ft-crit-bg: #F2D3CF;
+  --ft-info:    #3B6E8F;  --ft-info-bg: #DCE7EE;
+
+  --ft-shadow-sm: 0 1px 2px rgba(28,22,18,.06), 0 1px 1px rgba(28,22,18,.04);
+  --ft-shadow:    0 6px 24px -8px rgba(28,22,18,.18), 0 2px 6px rgba(28,22,18,.06);
+  --ft-shadow-lg: 0 24px 60px -20px rgba(28,22,18,.30);
+
+  --ft-r-sm: 8px;  --ft-r: 12px;  --ft-r-lg: 16px;  --ft-r-xl: 22px;
+
+  --ft-font-sans:  var(--font-geist-sans), "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --ft-font-mono:  var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --ft-font-serif: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
+
+  /* default density (balanced) */
+  --ft-row-pad: 14px; --ft-gap: 12px; --ft-card-pad: 18px;
+}
+
+/* ----------------------------------------------------------------------------
+ * 2. Tokens — dark surfaces (Home, Logger, Map)
+ * -------------------------------------------------------------------------- */
+.dark-surface {
+  --ft-bg:        #14110D;
+  --ft-surface:   #1E1915;
+  --ft-surface2:  #2A231C;
+  --ft-border:    #2F2820;
+  --ft-border2:   #443A2E;
+  --ft-text:      #EFE7D8;
+  --ft-muted:     #B6A993;
+  --ft-subtle:    #807461;
+
+  --ft-accent-faint: #2A1F17;
+  --ft-good-bg: #1E2A1F;
+  --ft-fair-bg: #2E2715;
+  --ft-poor-bg: #2C1F17;
+  --ft-crit-bg: #2C1A18;
+  --ft-info-bg: #182229;
+
+  --ft-shadow:    0 8px 32px -8px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.4);
+  --ft-shadow-lg: 0 24px 80px -20px rgba(0,0,0,.7);
+
+  background: var(--ft-bg);
+  color: var(--ft-text);
+}
+
+/* light chrome rendered over a dark map (panels/popups) */
+.light-surface {
+  --ft-bg:        #FAF8F4;
+  --ft-surface:   #F2EDE4;
+  --ft-surface2:  #E9E2D5;
+  --ft-border:    #E0D5C2;
+  --ft-border2:   #C9BBA3;
+  --ft-text:      #1C1612;
+  --ft-muted:     #6B5C4E;
+  --ft-subtle:    #9C8E7A;
+  --ft-accent-faint: #F4E6DA;
+  --ft-good-bg: #E5EFE6;
+  --ft-fair-bg: #F4E9CC;
+  --ft-poor-bg: #F4D8C7;
+  --ft-crit-bg: #F2D3CF;
+  --ft-info-bg: #DCE7EE;
+  --ft-shadow:    0 6px 24px -8px rgba(28,22,18,.18), 0 2px 6px rgba(28,22,18,.06);
+  --ft-shadow-lg: 0 24px 60px -20px rgba(28,22,18,.30);
+  background: var(--ft-bg);
+  color: var(--ft-text);
+}
+
+/* ----------------------------------------------------------------------------
+ * 3. Density
+ * -------------------------------------------------------------------------- */
+.density-airy     { --ft-row-pad: 18px; --ft-gap: 16px; --ft-card-pad: 24px; }
+.density-balanced { --ft-row-pad: 14px; --ft-gap: 12px; --ft-card-pad: 18px; }
+.density-dense    { --ft-row-pad: 10px; --ft-gap: 8px;  --ft-card-pad: 14px; }
+
+/* ----------------------------------------------------------------------------
+ * 4. Typography helpers + selection + scrollbar
+ * -------------------------------------------------------------------------- */
+.ft-root { font-family: var(--ft-font-sans); font-feature-settings: "ss01", "cv11"; }
+.ft-mono   { font-family: var(--ft-font-mono); font-feature-settings: "ss01"; }
+.ft-serif  { font-family: var(--ft-font-serif); letter-spacing: -0.01em; }
+.ft-tabnums { font-variant-numeric: tabular-nums; }
+
+.ft-scope ::selection { background: var(--ft-accent-soft); color: var(--ft-text); }
+
+.ft-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+.ft-scrollbar::-webkit-scrollbar-thumb { background: var(--ft-border2); border-radius: 10px; }
+.ft-scrollbar::-webkit-scrollbar-track { background: transparent; }
+
+/* eyebrow label */
+.ft-label {
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ft-subtle); font-weight: 500; white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------------------
+ * 5. Status pills + dots
+ * -------------------------------------------------------------------------- */
+.ft-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.02em; white-space: nowrap;
+}
+.ft-pill-good  { background: var(--ft-good-bg);  color: var(--ft-good); }
+.ft-pill-fair  { background: var(--ft-fair-bg);  color: var(--ft-fair); }
+.ft-pill-poor  { background: var(--ft-poor-bg);  color: var(--ft-poor); }
+.ft-pill-crit  { background: var(--ft-crit-bg);  color: var(--ft-crit); }
+.ft-pill-info  { background: var(--ft-info-bg);  color: var(--ft-info); }
+.ft-pill-muted { background: var(--ft-surface2); color: var(--ft-muted); }
+
+/* ----------------------------------------------------------------------------
+ * 6. Card (with default spotlight-glow hover — landed "classic" feel)
+ * -------------------------------------------------------------------------- */
+.ft-card {
+  position: relative;
+  isolation: isolate;
+  background: var(--ft-surface);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-r-lg);
+  box-shadow: var(--ft-shadow-sm);
+  transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
+}
+.ft-card-interactive::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none; opacity: 0; transition: opacity .3s ease; z-index: 2;
+  background: radial-gradient(220px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+              color-mix(in oklab, var(--ft-accent) 14%, transparent), transparent 60%);
+}
+.ft-card-interactive:hover::after { opacity: 1; }
+.ft-card-interactive:hover {
+  border-color: color-mix(in oklab, var(--ft-accent) 35%, var(--ft-border));
+}
+.ft-card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--ft-shadow);
+  border-color: var(--ft-border2);
+}
+
+/* dotted divider */
+.ft-dotline { height: 0; border-top: 1px dashed var(--ft-border2); opacity: .7; }
+/* row hover */
+.ft-row-hover:hover { background: var(--ft-accent-faint); }
+
+/* ----------------------------------------------------------------------------
+ * 7. Buttons (primary gets a default diagonal "sheen" sweep on hover)
+ * -------------------------------------------------------------------------- */
+.ft-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 14px; border-radius: 10px;
+  border: 1px solid var(--ft-border2);
+  background: var(--ft-surface);
+  color: var(--ft-text);
+  font-size: 13px; font-weight: 500;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+  white-space: nowrap; cursor: pointer;
+}
+.ft-btn:hover { background: var(--ft-surface2); }
+.ft-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.ft-btn-primary {
+  position: relative; overflow: hidden;
+  background: var(--ft-accent); color: #FFF6EE; border-color: transparent;
+}
+.ft-btn-primary > * { position: relative; z-index: 1; }
+.ft-btn-primary:hover { background: #B45630; }
+.ft-btn-primary::after {
+  content: ""; position: absolute; top: -20%; left: -160%;
+  width: 55%; height: 140%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.4), transparent);
+  transform: skewX(-18deg);
+}
+.ft-btn-primary:hover::after { animation: ftSheen .8s cubic-bezier(.3,.7,.4,1); }
+@keyframes ftSheen { to { left: 160%; } }
+
+.ft-btn-ghost { border-color: transparent; background: transparent; }
+.ft-btn-ghost:hover { background: var(--ft-surface2); }
+
+/* small square icon-action button */
+.ft-action-btn {
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; color: var(--ft-muted);
+  transition: background .15s ease, color .15s ease; cursor: pointer;
+}
+.ft-action-btn:hover { background: var(--ft-accent-faint); color: var(--ft-accent); }
+.ft-action-btn.is-danger:hover { color: var(--ft-crit); background: var(--ft-crit-bg); }
+
+/* ----------------------------------------------------------------------------
+ * 8. Segmented control + tabs
+ * -------------------------------------------------------------------------- */
+.ft-segmented {
+  display: inline-flex; padding: 3px; border-radius: 10px;
+  background: var(--ft-surface); border: 1px solid var(--ft-border);
+}
+.ft-segmented button {
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; color: var(--ft-muted);
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+  border: 0; background: none; cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.ft-segmented button.active {
+  background: var(--ft-surface2); color: var(--ft-text); box-shadow: var(--ft-shadow-sm);
+}
+
+.ft-tab {
+  padding: 10px 2px; color: var(--ft-muted); font-size: 13px; font-weight: 500;
+  border-bottom: 2px solid transparent; cursor: pointer; background: none; border-top: 0;
+  border-left: 0; border-right: 0; font-family: inherit;
+}
+.ft-tab.active { color: var(--ft-text); border-bottom-color: var(--ft-accent); }
+
+/* ----------------------------------------------------------------------------
+ * 9. Keycap
+ * -------------------------------------------------------------------------- */
+.ft-kbd {
+  font-family: var(--ft-font-mono); font-size: 11px;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--ft-surface2); color: var(--ft-muted);
+  border: 1px solid var(--ft-border); border-bottom-width: 2px;
+}
+
+/* ----------------------------------------------------------------------------
+ * 10. Einstein "Today's Brief" — accent-faint card with rotating border beam
+ * -------------------------------------------------------------------------- */
+@property --ft-beam-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.ft-brief {
+  position: relative;
+  background: var(--ft-accent-faint);
+  border: 1px solid color-mix(in oklab, var(--ft-accent) 22%, var(--ft-border));
+  border-radius: var(--ft-r-lg);
+}
+.ft-brief::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.4px;
+  pointer-events: none;
+  background: conic-gradient(from var(--ft-beam-angle),
+              transparent 0 66%,
+              color-mix(in oklab, var(--ft-accent) 70%, #fff) 80%,
+              color-mix(in oklab, var(--ft-accent) 95%, #fff) 86%,
+              transparent 92% 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: ftBeam 4.5s linear infinite;
+}
+@keyframes ftBeam { to { --ft-beam-angle: 360deg; } }
+
+/* ----------------------------------------------------------------------------
+ * 11. Backdrops used by Home / Map
+ * -------------------------------------------------------------------------- */
+.ft-hero-photo {
+  background:
+    radial-gradient(ellipse at 70% 60%, rgba(196,99,58,.22) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 30%, rgba(180,139,42,.16) 0%, transparent 55%),
+    linear-gradient(180deg, #1c1612 0%, #241b13 60%, #1a1410 100%);
+}
+.ft-hero-grain {
+  background-image: radial-gradient(rgba(255,240,210,.06) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+.ft-sat-bg {
+  background:
+    radial-gradient(circle at 25% 35%, #4a5a3a 0%, transparent 30%),
+    radial-gradient(circle at 70% 25%, #5d6b48 0%, transparent 32%),
+    radial-gradient(circle at 40% 70%, #3e4a32 0%, transparent 35%),
+    radial-gradient(circle at 80% 65%, #6b6a45 0%, transparent 28%),
+    radial-gradient(circle at 55% 50%, #4a5538 0%, transparent 40%),
+    linear-gradient(135deg, #3e4a32 0%, #4d5a3d 50%, #3a4530 100%);
+}
+
+/* ----------------------------------------------------------------------------
+ * 12. Phone frame (Logger desktop preview / mobile mockups)
+ * -------------------------------------------------------------------------- */
+.ft-phone-frame {
+  width: 390px; height: 800px; border-radius: 44px;
+  background: #0a0807; padding: 14px;
+  box-shadow: 0 40px 120px -20px rgba(0,0,0,.5); position: relative;
+}
+.ft-phone-screen { width: 100%; height: 100%; border-radius: 32px; overflow: hidden; position: relative; background: var(--ft-bg); }
+.ft-phone-notch { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 100px; height: 26px; background: #0a0807; border-radius: 14px; z-index: 50; }
+
+/* ----------------------------------------------------------------------------
+ * 13. Animations + page transitions
+ * -------------------------------------------------------------------------- */
+@keyframes ftSpin { to { transform: rotate(360deg); } }
+.ft-spin { animation: ftSpin 1s linear infinite; }
+
+@keyframes ftFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ftSlide { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.ft-tr-fade  { animation: ftFade .28s ease both; }
+.ft-tr-slide { animation: ftSlide .34s cubic-bezier(.3,.7,.4,1) both; }
+
+@keyframes ftSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes ftModalIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.ft-sheet-up { animation: ftSheetUp .32s cubic-bezier(.3,.7,.4,1) both; }
+.ft-modal-in { animation: ftModalIn .22s ease both; }
+
+@keyframes ftPulseSoft { 0%,100% { box-shadow: 0 0 0 0 rgba(196,99,58,.4); } 50% { box-shadow: 0 0 0 6px rgba(196,99,58,0); } }
+.ft-pulse-soft { animation: ftPulseSoft 2.2s ease-in-out infinite; }
+
+/* ----------------------------------------------------------------------------
+ * 14. Focus ring (scoped to reskinned surfaces)
+ * -------------------------------------------------------------------------- */
+.ft-scope :focus-visible { outline: 2px solid var(--ft-accent); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ft-brief::before { animation: none; }
+  .ft-btn-primary:hover::after { animation: none; }
+  .ft-tr-fade, .ft-tr-slide, .ft-pulse-soft, .ft-spin { animation: none; }
+}

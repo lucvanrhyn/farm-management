@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import SheepSubNav from "@/components/sheep/SheepSubNav";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -48,13 +48,10 @@ export default async function SheepLayout({
 
   return (
     <TierProvider tier={tier}>
-      <div className="flex min-h-screen">
-        <AdminNav tier={tier} />
-        <main className="flex-1">
-          <SheepSubNav farmSlug={farmSlug} />
-          {children}
-        </main>
-      </div>
+      <StudioShell tier={tier}>
+        <SheepSubNav farmSlug={farmSlug} />
+        {children}
+      </StudioShell>
     </TierProvider>
   );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import { TierProvider } from "@/components/tier-provider";
 import { AssistantNameProvider } from "@/hooks/useAssistantName";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -204,17 +204,14 @@ export default async function AdminLayout({
   return (
     <AssistantNameProvider name={assistantName}>
       <TierProvider tier={tier}>
-        <div className="flex min-h-screen">
-          <AdminNav tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount} />
-          <main className="flex-1">
-            <MethodologyNudgeBanner
-              farmSlug={farmSlug}
-              einsteinEnabled={einsteinEnabled}
-              completeness={methodologyScore}
-            />
-            {children}
-          </main>
-        </div>
+        <StudioShell tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount}>
+          <MethodologyNudgeBanner
+            farmSlug={farmSlug}
+            einsteinEnabled={einsteinEnabled}
+            completeness={methodologyScore}
+          />
+          {children}
+        </StudioShell>
       </TierProvider>
     </AssistantNameProvider>
   );

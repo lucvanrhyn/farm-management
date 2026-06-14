@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display, Fraunces } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -75,6 +75,18 @@ const dmSerifDisplay = DM_Serif_Display({
   preload: true,
 });
 
+// FarmTrack Overhaul reskin headline face. The design's "Classic" skin uses
+// Fraunces for every serif heading (Operations/Home/Logger/Map titles). Exposed
+// as --font-fraunces and wired to --ft-font-serif / Tailwind `font-serif`.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+  preload: true,
+});
+
 export const metadata: Metadata = {
   title: "FarmTrack",
   description: "Livestock farm management system",
@@ -106,7 +118,7 @@ export default function RootLayout({
     // attribute from a per-user / per-route locale instead of a literal.
     <html lang="en-ZA">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} ${fraunces.variable} antialiased`}
       >
         {/*
           D2 — skip-to-content link. Visually hidden until focused

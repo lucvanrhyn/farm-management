@@ -88,7 +88,8 @@ export function CitationChip({
     <span className="relative inline-block align-super">
       <button
         type="button"
-        className="text-[0.65rem] font-mono font-medium text-amber-300 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-300 rounded px-0.5"
+        className="ft-mono rounded px-0.5 text-[0.65rem] font-medium transition-colors focus-visible:outline-none"
+        style={{ color: "var(--ft-accent)" }}
         aria-label={`Citation ${index}: ${label}`}
         aria-describedby={open ? tooltipId : undefined}
         onMouseEnter={() => setOpen(true)}
@@ -103,9 +104,17 @@ export function CitationChip({
         <span
           id={tooltipId}
           role="tooltip"
-          className="absolute bottom-full left-1/2 z-20 mb-1 w-64 -translate-x-1/2 rounded-md border border-stone-700 bg-stone-900/95 p-2 text-xs text-stone-200 shadow-lg"
+          className="ft-card absolute bottom-full left-1/2 z-20 mb-1 w-64 -translate-x-1/2 p-2.5 text-xs"
+          style={{
+            background: "var(--ft-surface)",
+            color: "var(--ft-text)",
+            boxShadow: "var(--ft-shadow-lg)",
+          }}
         >
-          <span className="block text-[0.65rem] font-semibold uppercase tracking-wider text-amber-300">
+          <span
+            className="ft-mono block text-[0.65rem] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--ft-accent)" }}
+          >
             {label}
             {citation.relevance === "direct"
               ? " · primary source"
@@ -113,7 +122,10 @@ export function CitationChip({
                 ? " · supporting"
                 : " · context"}
           </span>
-          <span className="mt-1 block italic text-stone-300">
+          <span
+            className="mt-1 block italic"
+            style={{ color: "var(--ft-muted)" }}
+          >
             &ldquo;{citation.quote}&rdquo;
           </span>
           <a
@@ -125,7 +137,8 @@ export function CitationChip({
               e.stopPropagation();
               onActivate();
             }}
-            className="mt-2 inline-block text-[0.7rem] font-medium text-amber-300 underline-offset-2 hover:underline"
+            className="mt-2 inline-block text-[0.7rem] font-medium underline-offset-2 hover:underline"
+            style={{ color: "var(--ft-accent)" }}
           >
             Open source →
           </a>

@@ -1,66 +1,54 @@
 export const dynamic = "force-dynamic";
 import { Suspense } from "react";
+import Link from "next/link";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getCachedFarmSettings } from "@/lib/server/cached";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import DashboardContent from "@/components/admin/DashboardContent";
 import WeatherWidget from "@/components/dashboard/WeatherWidget";
+import { PageHeader, Icon } from "@/components/ds";
 import type { FarmTier } from "@/lib/tier";
 
 
-// ── Skeleton components ───────────────────────────────────────────────────────
+// ── Skeleton components (restyled to .ft-card placeholders) ───────────────────
 
-function StatBarSkeleton() {
+function KpiRibbonSkeleton() {
   return (
     <div
-      className="rounded-2xl overflow-hidden mb-6 animate-pulse"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      className="grid gap-3 mb-5 animate-pulse"
+      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
     >
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
-        {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="p-3 sm:p-4" style={{ borderRight: i < 8 ? "1px solid rgba(139,105,20,0.12)" : undefined }}>
-            <div className="h-3 w-16 bg-zinc-200 rounded mb-3" />
-            <div className="h-7 w-12 bg-zinc-200 rounded mb-2" />
-            <div className="h-2.5 w-20 bg-zinc-100 rounded" />
-          </div>
-        ))}
-      </div>
+      {Array.from({ length: 9 }).map((_, i) => (
+        <div key={i} className="ft-card" style={{ padding: "var(--ft-card-pad)" }}>
+          <div className="h-4 w-4 rounded mb-4" style={{ background: "var(--ft-surface2)" }} />
+          <div className="h-7 w-12 rounded mb-2" style={{ background: "var(--ft-surface2)" }} />
+          <div className="h-3 w-20 rounded" style={{ background: "var(--ft-border)" }} />
+        </div>
+      ))}
     </div>
   );
 }
 
-function AlertPanelSkeleton() {
+function CommandBodySkeleton() {
   return (
-    <div
-      className="rounded-xl p-4 mb-6 animate-pulse"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-    >
-      <div className="h-3 w-32 bg-zinc-200 rounded mb-3" />
-      <div className="flex flex-col gap-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-8 bg-zinc-100 rounded-lg" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BottomGridSkeleton() {
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-xl p-4 animate-pulse"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", minHeight: 160 }}
-        >
-          <div className="h-3 w-28 bg-zinc-200 rounded mb-3" />
-          <div className="flex flex-col gap-2">
-            <div className="h-4 bg-zinc-100 rounded" />
-            <div className="h-4 bg-zinc-100 rounded w-4/5" />
-            <div className="h-4 bg-zinc-100 rounded w-3/5" />
-          </div>
+    <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr]">
+      {Array.from({ length: 3 }).map((_, col) => (
+        <div key={col} className="flex flex-col gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="ft-card animate-pulse"
+              style={{ padding: "var(--ft-card-pad)", minHeight: 160 }}
+            >
+              <div className="h-3 w-28 rounded mb-3" style={{ background: "var(--ft-surface2)" }} />
+              <div className="flex flex-col gap-2">
+                <div className="h-4 rounded" style={{ background: "var(--ft-border)" }} />
+                <div className="h-4 w-4/5 rounded" style={{ background: "var(--ft-border)" }} />
+                <div className="h-4 w-3/5 rounded" style={{ background: "var(--ft-border)" }} />
+              </div>
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -96,32 +84,42 @@ export default async function AdminPage({
     );
   }
 
+  const today = new Date().toISOString().split("T")[0];
+
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-      {/* Header — renders immediately */}
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-[#1C1815]">Operations Overview</h1>
-          <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-            {new Date().toISOString().split("T")[0]} · Farm Management
-          </p>
-        </div>
-        {/* Weather widget in admin header */}
-        <div className="sm:max-w-sm w-full">
-          <WeatherWidget
-            latitude={farmSettings.latitude}
-            longitude={farmSettings.longitude}
-          />
-        </div>
+    <div className="ft-scope min-w-0" style={{ background: "var(--ft-bg)", padding: "28px 32px 80px", maxWidth: 1560, margin: "0 auto" }}>
+      {/* Header — renders immediately. Fraunces "Operations" + mono control-room
+          subtitle, Export + Ask Einstein actions, with the live weather widget. */}
+      <PageHeader
+        className="px-0 py-0 mb-5"
+        title={<span style={{ fontSize: 36 }}>Operations</span>}
+        subtitle={`${today} · control room`}
+        right={
+          <div className="flex items-center gap-2">
+            <Link href={`/${farmSlug}/admin/reports`} className="ft-btn">
+              <Icon.download size={14} /> Export
+            </Link>
+            <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary">
+              <Icon.einstein size={14} /> Ask Einstein
+            </Link>
+          </div>
+        }
+      />
+
+      {/* Weather widget in admin header */}
+      <div className="mb-5 sm:max-w-md">
+        <WeatherWidget
+          latitude={farmSettings.latitude}
+          longitude={farmSettings.longitude}
+        />
       </div>
 
       {/* Data-dependent content streams in once ready */}
       <Suspense
         fallback={
           <>
-            <StatBarSkeleton />
-            <AlertPanelSkeleton />
-            <BottomGridSkeleton />
+            <KpiRibbonSkeleton />
+            <CommandBodySkeleton />
           </>
         }
       >

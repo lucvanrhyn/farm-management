@@ -52,20 +52,31 @@ vi.mock("@/lib/farm-mode", async () => {
   };
 });
 
-// next/dynamic loads HomeSectionGrid via an async chunk. In jsdom we just
-// render a placeholder so the dynamic import doesn't drag framer-motion in.
-vi.mock("@/components/home/HomeSectionGrid", () => ({
-  __esModule: true,
-  default: () => <div data-testid="home-section-grid" />,
+// HomePageClient navigates section tiles via next/navigation's useRouter.
+// jsdom has no app-router context, so stub the navigation surface it touches.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
-// next-auth/react signOut is unused in the leak path — stub it.
-vi.mock("next-auth/react", () => ({ signOut: vi.fn() }));
+// next-auth/react: signOut (sign-out wiring) + useSession (owner display name).
+vi.mock("next-auth/react", () => ({
+  signOut: vi.fn(),
+  useSession: () => ({ data: { user: { name: "Test Owner" } }, status: "authenticated" }),
+}));
 
-// ModeSwitcher renders nothing in single-mode farms but jsdom still needs
-// a no-op so the import resolves cleanly.
-vi.mock("@/components/ui/ModeSwitcher", () => ({
-  ModeSwitcher: () => null,
+// The Einstein overlay wraps the real streaming chat; in jsdom we only need a
+// resolvable stub so the import graph doesn't drag the SSE/network surface in.
+vi.mock("@/components/home/EinsteinOverlay", () => ({
+  __esModule: true,
+  EinsteinOverlay: () => null,
+  default: () => null,
 }));
 
 afterEach(() => {

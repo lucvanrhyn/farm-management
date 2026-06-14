@@ -144,42 +144,60 @@ export default async function LoggerPage({
       }),
   ]);
 
+  // Weekday for the editorial mono subtitle ("{user} · {weekday}").
+  const weekday = new Intl.DateTimeFormat("en-ZA", { weekday: "long" }).format(new Date());
+
   return (
-    <div className="min-h-screen">
-      {/* Header — white */}
+    <div className="dark-surface ft-scope min-h-screen">
+      {/* Header — dark editorial chrome */}
       <div
         className="sticky top-0 z-10"
         style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.97)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+          backgroundColor: 'color-mix(in oklab, var(--ft-bg) 92%, transparent)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          borderBottom: '1px solid var(--ft-border)',
         }}
       >
-        <div className="flex items-center justify-between px-4 py-4">
-          <div>
-            <h1
-              className="text-2xl font-bold leading-tight"
-              style={{ fontFamily: 'var(--font-display)', color: '#1A1510' }}
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+          <div className="min-w-0 flex-1">
+            <div
+              className="ft-mono"
+              style={{ fontSize: 10, letterSpacing: '.16em', color: 'var(--ft-subtle)', textTransform: 'uppercase' }}
             >
-              {farmName}
+              Logger · {farmName}
+            </div>
+            <h1
+              className="ft-serif truncate"
+              style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, marginTop: 4, color: 'var(--ft-text)' }}
+            >
+              Camp Rounds
             </h1>
-            <p className="text-xs" style={{ color: '#5C3D2E' }}>{loggerName} · Select a camp</p>
+            <div className="ft-mono" style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 5 }}>
+              {loggerName} · {weekday}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <SignOutButton />
           </div>
         </div>
 
         {/* Date bar */}
         <div
-          className="text-xs px-4 py-2 text-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.03)', color: 'rgba(92,61,46,0.7)' }}
+          className="ft-mono text-center"
+          style={{
+            fontSize: 11,
+            letterSpacing: '.04em',
+            padding: '6px 16px',
+            backgroundColor: 'var(--ft-surface)',
+            borderTop: '1px solid var(--ft-border)',
+            color: 'var(--ft-subtle)',
+          }}
         >
           {todayLabel}
         </div>
 
-        {/* Offline status bar */}
+        {/* Offline status bar — logic preserved, chrome restyled to tokens */}
         <LoggerStatusBar />
       </div>
 
@@ -201,20 +219,15 @@ export default async function LoggerPage({
         <div className="flex justify-center p-4">
           <div
             data-testid="logger-sheep-empty-state-banner"
-            className="flex flex-col items-center gap-3 rounded-2xl px-8 py-12 text-center w-full max-w-sm"
-            style={{
-              backgroundColor: 'rgba(250, 240, 220, 0.10)',
-              border: '1px solid rgba(210, 180, 140, 0.28)',
-              boxShadow: 'inset 0 1px 0 rgba(255,248,235,0.10)',
-            }}
+            className="ft-card flex flex-col items-center gap-3 px-8 py-12 text-center w-full max-w-sm"
           >
             <div
               aria-hidden="true"
               className="flex size-14 items-center justify-center rounded-full"
               style={{
-                backgroundColor: 'rgba(255, 248, 235, 0.10)',
-                border: '1px solid rgba(210, 180, 140, 0.35)',
-                color: '#5C3D2E',
+                backgroundColor: 'var(--ft-surface2)',
+                border: '1px solid var(--ft-border2)',
+                color: 'var(--ft-accent)',
               }}
             >
               <svg
@@ -234,12 +247,12 @@ export default async function LoggerPage({
               </svg>
             </div>
             <h2
-              className="text-lg font-bold"
-              style={{ fontFamily: 'var(--font-display)', color: '#1A1510' }}
+              className="ft-serif text-lg font-semibold"
+              style={{ color: 'var(--ft-text)' }}
             >
               No sheep mob structure yet
             </h2>
-            <p className="text-sm" style={{ color: '#5C3D2E', lineHeight: 1.5 }}>
+            <p className="text-sm" style={{ color: 'var(--ft-muted)', lineHeight: 1.5 }}>
               {/* #382 spacing pin — `{" "}` literal preserved after the
                   inline {expression} so the SWC space-strip transform does
                   not glue the next word ("Mobs" / "Cattle"). */}

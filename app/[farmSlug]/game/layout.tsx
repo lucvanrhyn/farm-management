@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import GameSubNav from "@/components/game/GameSubNav";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -48,13 +48,10 @@ export default async function GameLayout({
 
   return (
     <TierProvider tier={tier}>
-      <div className="flex min-h-screen">
-        <AdminNav tier={tier} />
-        <main className="flex-1">
-          <GameSubNav farmSlug={farmSlug} />
-          {children}
-        </main>
-      </div>
+      <StudioShell tier={tier}>
+        <GameSubNav farmSlug={farmSlug} />
+        {children}
+      </StudioShell>
     </TierProvider>
   );
 }

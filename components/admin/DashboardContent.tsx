@@ -1,24 +1,9 @@
 import Link from "next/link";
 import type { PrismaClient } from "@prisma/client";
 import DangerZone from "@/components/admin/DangerZone";
-import AnimatedNumber from "@/components/admin/AnimatedNumber";
 import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
-import {
-  PawPrint,
-  Tent,
-  ClipboardCheck,
-  HeartPulse,
-  Skull,
-  Baby,
-  FlaskConical,
-  TrendingDown,
-  Banknote,
-  ClipboardList,
-  FileDown,
-  BarChart2,
-  Lock,
-} from "lucide-react";
+import { Card, StatusDot, Label, Icon, Spark, makeSpark } from "@/components/ds";
 import {
   getCachedDashboardOverviewByMode,
   getCachedDashboardOverviewShared,
@@ -26,6 +11,7 @@ import {
 import { getSession } from "@/lib/auth";
 import type { FarmTier } from "@/lib/tier";
 import type { SpeciesId } from "@/lib/species/types";
+import type { Status } from "@/components/ds";
 
 interface Props {
   farmSlug: string;
@@ -38,6 +24,72 @@ interface Props {
    * reflects the selected mode.
    */
   mode: SpeciesId;
+}
+
+// ── Presentational KPI tile (command layout) ─────────────────────────────────
+// Token-driven .ft-card surface tile: icon + status dot, big tabnums value,
+// label + sub. The value text node is followed by the label text with ONLY a
+// closing </span> between them (no intervening opening element) so the tolerant
+// e2e greps — `(\d[\d,]*)\s*(?:</[^>]+>\s*)*Total Animals` etc — keep matching.
+function KpiTile({
+  icon: IconEl,
+  iconColor,
+  value,
+  label,
+  sub,
+  status,
+  spark,
+  accentValue,
+  href,
+}: {
+  icon: React.ReactNode;
+  iconColor: string;
+  value: React.ReactNode;
+  label: string;
+  sub?: React.ReactNode;
+  status: Status;
+  spark?: number[];
+  accentValue?: Status;
+  href: string;
+}) {
+  const valueColor = accentValue
+    ? { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[accentValue]
+    : "var(--ft-text)";
+  return (
+    <Link
+      href={href}
+      className="ft-card ft-card-interactive flex flex-col"
+      style={{ padding: "var(--ft-card-pad)", cursor: "pointer" }}
+    >
+      <div className="flex items-start justify-between">
+        <span style={{ color: iconColor }}>{IconEl}</span>
+        <StatusDot status={status} />
+      </div>
+      <div className="mt-3 flex items-end gap-2">
+        {/* The wrapping span carries the label-style; the value span overrides
+            with the big tabnums treatment. The label text sits directly after
+            the value span (only a closing tag between). */}
+        <span
+          style={{ fontSize: 12.5, color: "var(--ft-muted)", lineHeight: 1 }}
+        >
+          <span
+            className="ft-tabnums"
+            data-ft-ticker
+            style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em", display: "block", marginBottom: 6 }}
+          >
+            {value}
+          </span>
+          {label}
+        </span>
+        {spark && <Spark values={spark} w={56} h={18} color="var(--ft-good)" className="mb-0.5" />}
+      </div>
+      {sub && (
+        <div className="mt-1.5" style={{ fontSize: 11.5, color: "var(--ft-subtle)" }}>
+          {sub}
+        </div>
+      )}
+    </Link>
+  );
 }
 
 export default async function DashboardContent({ farmSlug, prisma, tier, mode }: Props) {
@@ -106,375 +158,401 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode }:
     grazingCounts.Overgrazed = 0;
   }
 
+  // ── KPI ribbon — restyle of the real stat-bar values ─────────────────────────
+  const inspectionPct = Math.round((inspectedToday / (totalCamps || 1)) * 100);
+  const kpis: Array<React.ComponentProps<typeof KpiTile>> = [
+    {
+      icon: <Icon.animals size={16} />,
+      iconColor: "var(--ft-good)",
+      value: totalAnimals,
+      label: "Total Animals",
+      sub: "Active",
+      status: "good",
+      accentValue: "good",
+      spark: makeSpark("herd", 7),
+      href: `/${farmSlug}/admin/animals`,
+    },
+    {
+      icon: <Icon.camps size={16} />,
+      iconColor: "var(--ft-muted)",
+      value: totalCamps,
+      label: "Total Camps",
+      sub: "Farm layout",
+      status: "good",
+      href: `/${farmSlug}/admin/camps`,
+    },
+    {
+      icon: <Icon.check size={16} />,
+      iconColor: inspectedToday === totalCamps ? "var(--ft-good)" : "var(--ft-fair)",
+      value: `${inspectedToday}/${totalCamps}`,
+      label: "Inspections Today",
+      sub: `${inspectionPct}% done`,
+      status: inspectedToday === totalCamps ? "good" : "fair",
+      accentValue: inspectedToday === totalCamps ? "good" : undefined,
+      href: `/${farmSlug}/admin/observations`,
+    },
+    {
+      icon: <Icon.health size={16} />,
+      iconColor: healthIssuesThisWeek === 0 ? "var(--ft-good)" : healthIssuesThisWeek > 3 ? "var(--ft-crit)" : "var(--ft-poor)",
+      value: healthIssuesThisWeek,
+      label: "Health Issues · 7d",
+      sub: healthIssuesThisWeek === 0 ? "All clear" : healthIssuesThisWeek > 3 ? "Critical" : "Monitor",
+      status: healthIssuesThisWeek === 0 ? "good" : healthIssuesThisWeek > 3 ? "critical" : "poor",
+      accentValue: healthIssuesThisWeek === 0 ? "good" : undefined,
+      href: `/${farmSlug}/admin/observations`,
+    },
+    {
+      icon: <Icon.calving size={16} />,
+      iconColor: birthsToday > 0 ? "var(--ft-good)" : "var(--ft-subtle)",
+      value: birthsToday,
+      label: "Calvings Today",
+      sub: birthsToday > 0 ? "New calvings" : "None today",
+      status: birthsToday > 0 ? "good" : "good",
+      accentValue: birthsToday > 0 ? "good" : undefined,
+      href: `/${farmSlug}/admin/reproduction`,
+    },
+    {
+      icon: <Icon.death size={16} />,
+      iconColor: deathsToday > 0 ? "var(--ft-crit)" : "var(--ft-subtle)",
+      value: deathsToday,
+      label: "Deaths Today",
+      sub: deathsToday > 0 ? "Alert" : "None today",
+      status: deathsToday > 0 ? "critical" : "good",
+      href: `/${farmSlug}/admin/observations`,
+    },
+    {
+      icon: <Icon.treat size={16} />,
+      iconColor: withdrawalCount > 0 ? "var(--ft-fair)" : "var(--ft-subtle)",
+      value: withdrawalCount,
+      label: "In Withdrawal",
+      sub: withdrawalCount > 0 ? "Caution" : "All clear",
+      status: withdrawalCount > 0 ? "fair" : "good",
+      href: `/${farmSlug}/admin/animals`,
+    },
+    {
+      icon: <Icon.trend size={16} />,
+      iconColor: poorDoerCount > 0 ? "var(--ft-poor)" : "var(--ft-subtle)",
+      value: poorDoerCount,
+      label: "Poor Doers",
+      sub: poorDoerCount > 0 ? "Monitor" : "All clear",
+      status: poorDoerCount > 0 ? "poor" : "good",
+      href: `/${farmSlug}/admin/animals`,
+    },
+    ...(!isBasic ? [{
+      icon: <Icon.finance size={16} />,
+      iconColor: mtdBalance < 0 ? "var(--ft-poor)" : "var(--ft-good)",
+      value: mtdFormatted,
+      label: "Revenue · MTD",
+      sub: "Finance · MTD",
+      status: (mtdBalance < 0 ? "poor" : "good") as Status,
+      accentValue: (mtdBalance < 0 ? undefined : "good") as Status | undefined,
+      href: `/${farmSlug}/admin/finansies`,
+    }] : []),
+  ];
+
+  // ── Einstein brief — derived from the same real signals ──────────────────────
+  const briefBullets: Array<{ tone: Status; text: string }> = [];
+  if (lowGrazingCount > 0) {
+    briefBullets.push({
+      tone: "critical",
+      text: `${lowGrazingCount} ${lowGrazingCount === 1 ? "camp" : "camps"} below 7 days grazing — plan rotations now.`,
+    });
+  }
+  if (healthIssuesThisWeek > 0) {
+    briefBullets.push({
+      tone: healthIssuesThisWeek > 3 ? "critical" : "poor",
+      text: `${healthIssuesThisWeek} health ${healthIssuesThisWeek === 1 ? "issue" : "issues"} logged in the last 7 days — review the affected animals.`,
+    });
+  }
+  if (withdrawalCount > 0) {
+    briefBullets.push({
+      tone: "fair",
+      text: `${withdrawalCount} ${withdrawalCount === 1 ? "animal" : "animals"} in withdrawal — check clearance dates before any sale.`,
+    });
+  }
+  if (briefBullets.length === 0) {
+    briefBullets.push(
+      { tone: "good", text: "No urgent grazing, health or withdrawal flags — the herd is steady today." },
+      { tone: "fair", text: "Keep weigh-ins and camp inspections current to sharpen the trend lines." },
+      { tone: "good", text: "Ask Einstein for a weekly grazing forecast or a low-ADG shortlist." },
+    );
+  }
+
+  // ── Crit banner summary ──────────────────────────────────────────────────────
+  const critItems: string[] = [];
+  if (lowGrazingCount > 0) critItems.push(`${lowGrazingCount} ${lowGrazingCount === 1 ? "camp" : "camps"} <7 days grazing`);
+  if (healthIssuesThisWeek > 3) critItems.push(`${healthIssuesThisWeek} health issues this week`);
+  if (deathsToday > 0) critItems.push(`${deathsToday} ${deathsToday === 1 ? "death" : "deaths"} today`);
+
   return (
     <>
       {/* Low-grazing alert */}
       {lowGrazingCount > 0 && (
         <Link
           href={`/${farmSlug}/admin/performance`}
-          className="flex items-center gap-2.5 rounded-xl px-4 py-3 mb-4 transition-opacity hover:opacity-80"
-          style={{ background: "rgba(192,87,76,0.10)", border: "1px solid rgba(192,87,76,0.25)" }}
+          className="flex items-center gap-2.5 mb-4 transition-opacity hover:opacity-80"
+          style={{
+            padding: "13px 18px",
+            borderRadius: "var(--ft-r)",
+            background: "var(--ft-crit-bg)",
+            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+            color: "var(--ft-crit)",
+          }}
         >
-          <span className="text-sm">⚠</span>
-          <p className="text-sm font-medium" style={{ color: "#C0574C" }}>
+          <Icon.alerts size={17} />
+          <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
             {lowGrazingCount}{" "}
             {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
             with &lt;7 days grazing remaining
           </p>
-          <span className="ml-auto text-xs font-mono" style={{ color: "#C0574C" }}>View Performance →</span>
+          <span className="ml-auto text-xs ft-mono" style={{ color: "var(--ft-crit)" }}>View Performance →</span>
         </Link>
       )}
 
-      {/* Stats bar — 9 tiles */}
+      {/* KPI ribbon — responsive grid of command-layout tiles */}
       <div
-        className="rounded-2xl overflow-hidden mb-6"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        className="grid gap-3 mb-5"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
       >
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
-          {[
-            {
-              icon: PawPrint,
-              iconColor: "#4A7C59",
-              badge: "Active",
-              badgeColor: "rgba(74,124,89,0.15)",
-              badgeText: "#4A7C59",
-              value: totalAnimals,
-              label: "Total Animals",
-              href: `/${farmSlug}/admin/animals`,
-            },
-            {
-              icon: Tent,
-              iconColor: "#8B6914",
-              badge: "Farm Layout",
-              badgeColor: "rgba(139,105,20,0.15)",
-              badgeText: "#8B6914",
-              value: totalCamps,
-              label: "Total Camps",
-              href: `/${farmSlug}/admin/camps`,
-            },
-            {
-              icon: ClipboardCheck,
-              iconColor: inspectedToday === totalCamps ? "#4A7C59" : "#8B6914",
-              badge: `${Math.round((inspectedToday / (totalCamps || 1)) * 100)}% done`,
-              badgeColor: inspectedToday === totalCamps ? "rgba(74,124,89,0.15)" : "rgba(139,105,20,0.15)",
-              badgeText: inspectedToday === totalCamps ? "#4A7C59" : "#8B6914",
-              value: `${inspectedToday}/${totalCamps}`,
-              label: "Inspections Today",
-              href: `/${farmSlug}/admin/observations`,
-            },
-            {
-              icon: HeartPulse,
-              iconColor: healthIssuesThisWeek === 0 ? "#4A7C59" : healthIssuesThisWeek > 3 ? "#8B3A3A" : "#A0522D",
-              badge: healthIssuesThisWeek === 0 ? "All clear" : healthIssuesThisWeek > 3 ? "Critical" : "Monitor",
-              badgeColor: healthIssuesThisWeek === 0 ? "rgba(74,124,89,0.15)" : healthIssuesThisWeek > 3 ? "rgba(139,58,58,0.15)" : "rgba(160,82,45,0.15)",
-              badgeText: healthIssuesThisWeek === 0 ? "#4A7C59" : healthIssuesThisWeek > 3 ? "#8B3A3A" : "#A0522D",
-              value: healthIssuesThisWeek,
-              label: "Health Issues · 7d",
-              href: `/${farmSlug}/admin/observations`,
-            },
-            {
-              icon: Baby,
-              iconColor: birthsToday > 0 ? "#4A7C59" : "#9C8E7A",
-              badge: birthsToday > 0 ? "New calvings" : "None today",
-              badgeColor: birthsToday > 0 ? "rgba(74,124,89,0.15)" : "rgba(156,142,122,0.12)",
-              badgeText: birthsToday > 0 ? "#4A7C59" : "#9C8E7A",
-              value: birthsToday,
-              label: "Calvings Today",
-              href: `/${farmSlug}/admin/reproduction`,
-            },
-            {
-              icon: Skull,
-              iconColor: deathsToday > 0 ? "#8B3A3A" : "#9C8E7A",
-              badge: deathsToday > 0 ? "Alert" : "None today",
-              badgeColor: deathsToday > 0 ? "rgba(139,58,58,0.15)" : "rgba(156,142,122,0.12)",
-              badgeText: deathsToday > 0 ? "#8B3A3A" : "#9C8E7A",
-              value: deathsToday,
-              label: "Deaths Today",
-              href: `/${farmSlug}/admin/observations`,
-            },
-            {
-              icon: FlaskConical,
-              iconColor: withdrawalCount > 0 ? "#C49030" : "#9C8E7A",
-              badge: withdrawalCount > 0 ? "Caution" : "All clear",
-              badgeColor: withdrawalCount > 0 ? "rgba(196,144,48,0.15)" : "rgba(156,142,122,0.12)",
-              badgeText: withdrawalCount > 0 ? "#C49030" : "#9C8E7A",
-              value: withdrawalCount,
-              label: "In Withdrawal",
-              href: `/${farmSlug}/admin/animals`,
-            },
-            {
-              icon: TrendingDown,
-              iconColor: poorDoerCount > 0 ? "#C0574C" : "#9C8E7A",
-              badge: poorDoerCount > 0 ? "Monitor" : "All clear",
-              badgeColor: poorDoerCount > 0 ? "rgba(192,87,76,0.12)" : "rgba(156,142,122,0.12)",
-              badgeText: poorDoerCount > 0 ? "#C0574C" : "#9C8E7A",
-              value: poorDoerCount,
-              label: "Poor Doers",
-              href: `/${farmSlug}/admin/animals`,
-            },
-            ...(!isBasic ? [{
-              icon: Banknote,
-              iconColor: mtdBalance < 0 ? "#C0574C" : "#4A7C59",
-              badge: "Finance · MTD",
-              badgeColor: mtdBalance < 0 ? "rgba(192,87,76,0.12)" : "rgba(74,124,89,0.12)",
-              badgeText: mtdBalance < 0 ? "#C0574C" : "#4A7C59",
-              value: mtdFormatted,
-              label: "Revenue · MTD",
-              href: `/${farmSlug}/admin/finansies`,
-            }] : []),
-          ].map(({ icon: Icon, iconColor, badge, badgeColor, badgeText, value, label, href }, i) => (
-            <Link
-              key={label}
-              href={href}
-              className="block p-3 sm:p-4 transition-colors hover:bg-[#F5F2EE]"
-              style={{
-                borderRight: i < 8 ? "1px solid rgba(139,105,20,0.12)" : undefined,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: iconColor }} />
-                <span
-                  className="text-[10px] font-semibold rounded-full px-2 py-0.5 truncate"
-                  style={{ background: badgeColor, color: badgeText }}
-                >
-                  {badge}
-                </span>
-              </div>
-              <p className="text-xl sm:text-2xl font-bold font-mono truncate" style={{ color: "#1C1815" }}>
-                {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
-              </p>
-              <p className="text-xs mt-1 truncate" style={{ color: "#9C8E7A" }}>{label}</p>
-            </Link>
-          ))}
-        </div>
+        {kpis.map((k) => (
+          <KpiTile key={k.label} {...k} />
+        ))}
       </div>
 
-      {/* Needs Attention panel */}
-      <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} />
-
-      {/* Bottom grid — 4 cards */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        {/* Reproductive Overview — locked for basic tier */}
-        {isBasic ? (
-          <div
-            className="rounded-xl p-4 flex flex-col"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: "#8B6914" }} />
-              <h2
-                className="text-xs font-semibold uppercase tracking-wide"
-                style={{ color: "#9C8E7A" }}
-              >
-                Advanced Features
-              </h2>
+      {/* Command body — Einstein brief + crit banner + 3-column dense grid.
+          Responsive: 1col (mobile) → 2col (lg) → 1.3/1/.9 (xl). Tailwind
+          arbitrary track template since the design's admin-cmd-grid CSS lives
+          in a stylesheet this surface no longer relies on. */}
+      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr]">
+        {/* Column 1 — crit banner + needs attention */}
+        <div className="flex flex-col gap-4 min-w-0">
+          {critItems.length > 0 && (
+            <div
+              className="flex items-center gap-2.5"
+              style={{
+                padding: "13px 18px",
+                background: "var(--ft-crit-bg)",
+                border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+                borderRadius: "var(--ft-r)",
+                color: "var(--ft-crit)",
+              }}
+            >
+              <Icon.alerts size={17} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
             </div>
-            <p className="text-xs mb-4 flex-1" style={{ color: "#6B5E50" }}>
-              Upgrade to unlock Reproductive Analytics, Financial Tracking, and detailed Performance reports.
-            </p>
-            <Link
-              href={`/${farmSlug}/subscribe/upgrade`}
-              className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-              style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.25)" }}
-            >
-              Upgrade to Advanced
-            </Link>
-          </div>
-        ) : (
-          <div
-            className="rounded-xl p-4 flex flex-col"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-          >
-            <h2
-              className="text-xs font-semibold uppercase tracking-wide mb-3"
-              style={{ color: "#9C8E7A" }}
-            >
-              Reproductive Overview
-            </h2>
-            {reproStats.inseminations30d === 0 &&
-             reproStats.inHeat7d === 0 &&
-             reproStats.calvingsDue30d === 0 &&
-             reproStats.pregnancyRate === null &&
-             reproStats.upcomingCalvings.length === 0 &&
-             reproStats.scanCounts.pregnant === 0 &&
-             reproStats.scanCounts.empty === 0 ? (
-              <p className="text-xs flex-1" style={{ color: "#9C8E7A" }}>No reproductive events recorded yet.</p>
-            ) : (
-              <div className="flex-1">
-                {reproStats.pregnancyRate !== null && reproStats.pregnancyRate < 70 && (
-                  <div
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 mb-3"
-                    style={{ background: "rgba(180,110,20,0.10)", border: "1px solid rgba(180,110,20,0.25)" }}
-                  >
-                    <span className="text-xs">⚠</span>
-                    <p className="text-xs font-medium" style={{ color: "#A07010" }}>Below SA target (&lt;70%)</p>
-                  </div>
-                )}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: "#9C8E7A" }}>Pregnancy Rate</span>
-                    <span className="text-sm font-bold font-mono" style={{ color: reproStats.pregnancyRate === null ? "#9C8E7A" : reproStats.pregnancyRate >= 85 ? "#4A7C59" : reproStats.pregnancyRate >= 70 ? "#8B6914" : "#8B3A3A" }}>
-                      {reproStats.pregnancyRate !== null ? `${reproStats.pregnancyRate}%` : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
-                    <span className="text-xs" style={{ color: "#9C8E7A" }}>Calvings Due · 30d</span>
-                    <span className="text-sm font-bold font-mono" style={{ color: reproStats.calvingsDue30d > 0 ? "#8B6914" : "#1C1815" }}>
-                      {reproStats.calvingsDue30d}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between" style={{ borderTop: "1px solid #E0D5C8", paddingTop: "0.75rem" }}>
-                    <span className="text-xs" style={{ color: "#9C8E7A" }}>In Heat · 7d</span>
-                    <span className="text-sm font-bold font-mono" style={{ color: "#1C1815" }}>
-                      {reproStats.inHeat7d}
-                    </span>
-                  </div>
-                </div>
+          )}
+          <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} />
+
+          {/* Reproductive overview — locked for basic tier */}
+          {isBasic ? (
+            <Card className="flex flex-col" style={{ padding: "var(--ft-card-pad)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Icon.locate size={14} style={{ color: "var(--ft-fair)" }} />
+                <Label>Advanced Features</Label>
               </div>
-            )}
-            <Link
-              href={`/${farmSlug}/admin/reproduction`}
-              className="mt-4 text-xs font-medium text-right block transition-opacity hover:opacity-70"
-              style={{ color: "#8B6914" }}
-            >
-              View Reproduction →
-            </Link>
-          </div>
-        )}
-
-        {/* Recent Health Incidents */}
-        <div
-          className="rounded-xl p-4"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-        >
-          <h2
-            className="text-xs font-semibold uppercase tracking-wide mb-3"
-            style={{ color: "#9C8E7A" }}
-          >
-            Recent Health Incidents
-          </h2>
-          {recentHealth.length === 0 ? (
-            <p className="text-xs" style={{ color: "#9C8E7A" }}>No health incidents recorded.</p>
+              <p className="text-xs mb-4 flex-1" style={{ color: "var(--ft-muted)" }}>
+                Upgrade to unlock Reproductive Analytics, Financial Tracking, and detailed Performance reports.
+              </p>
+              <Link href={`/${farmSlug}/subscribe/upgrade`} className="ft-btn ft-btn-primary justify-center">
+                Upgrade to Advanced
+              </Link>
+            </Card>
           ) : (
-            <div className="flex flex-col">
-              {recentHealth.map((obs) => (
-                <div
-                  key={obs.id}
-                  className="flex items-start gap-2.5 py-1.5 last:border-0"
-                  style={{ borderBottom: "1px solid #E0D5C8" }}
-                >
-                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: "#A0522D" }} />
-                  <div>
-                    <p className="text-xs font-medium font-mono" style={{ color: "#1C1815" }}>
-                      {obs.animalId ?? "Unknown"} · Camp {obs.campId}
-                    </p>
-                    <p className="text-xs" style={{ color: "#9C8E7A" }}>
-                      {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"}
-                      {" · "}
-                      {obs.observedAt.split("T")[0]}
-                    </p>
+            <Card style={{ padding: "var(--ft-card-pad)" }}>
+              <Label className="block mb-3">Reproductive Overview</Label>
+              {reproStats.inseminations30d === 0 &&
+               reproStats.inHeat7d === 0 &&
+               reproStats.calvingsDue30d === 0 &&
+               reproStats.pregnancyRate === null &&
+               reproStats.upcomingCalvings.length === 0 &&
+               reproStats.scanCounts.pregnant === 0 &&
+               reproStats.scanCounts.empty === 0 ? (
+                <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>No reproductive events recorded yet.</p>
+              ) : (
+                <div>
+                  {reproStats.pregnancyRate !== null && reproStats.pregnancyRate < 70 && (
+                    <div
+                      className="flex items-center gap-2 mb-3"
+                      style={{ padding: "8px 12px", borderRadius: "var(--ft-r-sm)", background: "var(--ft-fair-bg)", border: "1px solid color-mix(in oklab, var(--ft-fair) 30%, transparent)" }}
+                    >
+                      <Icon.alerts size={13} style={{ color: "var(--ft-fair)" }} />
+                      <p className="text-xs font-medium" style={{ color: "var(--ft-fair)" }}>Below SA target (&lt;70%)</p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs" style={{ color: "var(--ft-muted)" }}>Pregnancy Rate</span>
+                      <span className="text-sm font-bold ft-mono ft-tabnums" style={{ color: reproStats.pregnancyRate === null ? "var(--ft-subtle)" : reproStats.pregnancyRate >= 85 ? "var(--ft-good)" : reproStats.pregnancyRate >= 70 ? "var(--ft-fair)" : "var(--ft-crit)" }}>
+                        {reproStats.pregnancyRate !== null ? `${reproStats.pregnancyRate}%` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between" style={{ borderTop: "1px dashed var(--ft-border2)", paddingTop: "0.75rem" }}>
+                      <span className="text-xs" style={{ color: "var(--ft-muted)" }}>Calvings Due · 30d</span>
+                      <span className="text-sm font-bold ft-mono ft-tabnums" style={{ color: reproStats.calvingsDue30d > 0 ? "var(--ft-fair)" : "var(--ft-text)" }}>
+                        {reproStats.calvingsDue30d}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between" style={{ borderTop: "1px dashed var(--ft-border2)", paddingTop: "0.75rem" }}>
+                      <span className="text-xs" style={{ color: "var(--ft-muted)" }}>In Heat · 7d</span>
+                      <span className="text-sm font-bold ft-mono ft-tabnums" style={{ color: "var(--ft-text)" }}>
+                        {reproStats.inHeat7d}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              <Link
+                href={`/${farmSlug}/admin/reproduction`}
+                className="mt-4 text-xs font-medium text-right block transition-opacity hover:opacity-70 ft-mono"
+                style={{ color: "var(--ft-accent)" }}
+              >
+                View Reproduction →
+              </Link>
+            </Card>
           )}
         </div>
 
-        {/* Camp Status Summary */}
-        <div
-          className="rounded-xl p-4"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-        >
-          <h2
-            className="text-xs font-semibold uppercase tracking-wide mb-3"
-            style={{ color: "#9C8E7A" }}
-          >
-            Camp Status Summary
-          </h2>
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {[
-              ...Array(grazingCounts.Good ?? 0).fill({ color: "#4A7C59", label: "Good" }),
-              ...Array(grazingCounts.Fair ?? 0).fill({ color: "#8B6914", label: "Fair" }),
-              ...Array(grazingCounts.Poor ?? 0).fill({ color: "#A0522D", label: "Poor" }),
-              ...Array(grazingCounts.Overgrazed ?? 0).fill({ color: "#8B3A3A", label: "Overgrazed" }),
-            ].map((item: { color: string; label: string }, i: number) => (
-              <div
-                key={i}
-                className="w-3 h-3 rounded-full shrink-0"
-                style={{ background: item.color }}
-                title={item.label}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {[
-              { label: "Good",       color: "#4A7C59", quality: "Good"       },
-              { label: "Fair",       color: "#8B6914", quality: "Fair"       },
-              { label: "Poor",       color: "#A0522D", quality: "Poor"       },
-              { label: "Overgrazed", color: "#8B3A3A", quality: "Overgrazed" },
-            ].map(({ label, color, quality }) => (
-              <span key={quality} className="flex items-center gap-1.5 text-[11px]" style={{ color: "#9C8E7A" }}>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                {label}
-                <span className="font-mono font-semibold" style={{ color: "#1C1815" }}>
-                  {grazingCounts[quality] ?? 0}
-                </span>
-              </span>
-            ))}
-          </div>
+        {/* Column 2 — Einstein brief + recent activity timeline */}
+        <div className="flex flex-col gap-4 min-w-0">
+          {/* Einstein "Today's Brief" — rotating border-beam card */}
+          <Card className="ft-brief" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px" }}>
+              <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
+                <Icon.einstein size={17} />
+                <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>EINSTEIN · TODAY&apos;S BRIEF</span>
+                <span className="flex-1" />
+                <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {briefBullets.map((b, i) => (
+                  <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 13.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
+                    <span>{b.text}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3.5 flex gap-2">
+                <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary" style={{ fontSize: 12, padding: "7px 12px" }}>
+                  <Icon.einstein size={13} /> Open advisor
+                </Link>
+                <Link href={`/${farmSlug}/admin/performance`} className="ft-btn" style={{ fontSize: 12, padding: "7px 12px" }}>
+                  Plan rotations
+                </Link>
+              </div>
+            </div>
+          </Card>
+
+          {/* Recent activity — restyle of "Recent Health Incidents" timeline */}
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div className="flex items-center justify-between" style={{ padding: "15px 20px 11px", borderBottom: "1px solid var(--ft-border)" }}>
+              <Label>Recent Activity</Label>
+              <span className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)" }}>24h</span>
+            </div>
+            {recentHealth.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--ft-subtle)", padding: "14px 20px" }}>No health incidents recorded.</p>
+            ) : (
+              recentHealth.map((obs, i, arr) => (
+                <div
+                  key={obs.id}
+                  className="flex gap-3"
+                  style={{ padding: "12px 20px", borderBottom: i < arr.length - 1 ? "1px solid var(--ft-border)" : 0 }}
+                >
+                  <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-subtle)", minWidth: 70, paddingTop: 2 }}>
+                    {obs.observedAt.split("T")[0]}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="ft-mono" style={{ fontSize: 13, lineHeight: 1.4, color: "var(--ft-text)" }}>
+                      {obs.animalId ?? "Unknown"} · Camp {obs.campId}
+                    </div>
+                    <div className="ft-mono" style={{ fontSize: 9.5, color: "var(--ft-subtle)", marginTop: 3 }}>
+                      {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"} · health
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
         </div>
 
-        {/* Quick Actions */}
-        <div
-          className="rounded-xl p-4"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
-        >
-          <h2
-            className="text-xs font-semibold uppercase tracking-wide mb-3"
-            style={{ color: "#9C8E7A" }}
-          >
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              {
-                icon: ClipboardList,
-                label: "Log Observation",
-                href: `/${farmSlug}/logger`,
-              },
-              {
-                icon: PawPrint,
-                label: "View Animals",
-                href: `/${farmSlug}/admin/animals`,
-              },
-              {
-                icon: FileDown,
-                label: "View Reports",
-                href: `/${farmSlug}/admin/reports`,
-              },
-              ...(!isBasic ? [{
-                icon: BarChart2,
-                label: "Camp Performance",
-                href: `/${farmSlug}/admin/performance`,
-              }] : []),
-            ].map(({ icon: Icon, label, href }) => (
-              <Link
-                key={label}
-                href={href}
-                className="flex flex-col items-center gap-2 rounded-xl px-3 py-4 transition-colors hover:bg-[#F5F2EE]"
-                style={{ border: "1px solid #E0D5C8" }}
-              >
-                <Icon className="w-5 h-5" style={{ color: "#4A7C59" }} />
-                <span className="text-xs font-medium text-center leading-tight" style={{ color: "#1C1815" }}>
+        {/* Column 3 — camp status, feed-on-offer sparkline, quick actions */}
+        <div className="flex flex-col gap-4 min-w-0">
+          {/* Camp status summary */}
+          <Card style={{ padding: "var(--ft-card-pad)" }}>
+            <Label className="block mb-3">Camp Status Summary</Label>
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {[
+                ...Array(grazingCounts.Good ?? 0).fill({ color: "var(--ft-good)", label: "Good" }),
+                ...Array(grazingCounts.Fair ?? 0).fill({ color: "var(--ft-fair)", label: "Fair" }),
+                ...Array(grazingCounts.Poor ?? 0).fill({ color: "var(--ft-poor)", label: "Poor" }),
+                ...Array(grazingCounts.Overgrazed ?? 0).fill({ color: "var(--ft-crit)", label: "Overgrazed" }),
+              ].map((item: { color: string; label: string }, i: number) => (
+                <div
+                  key={i}
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ background: item.color }}
+                  title={item.label}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {[
+                { label: "Good",       color: "var(--ft-good)", quality: "Good"       },
+                { label: "Fair",       color: "var(--ft-fair)", quality: "Fair"       },
+                { label: "Poor",       color: "var(--ft-poor)", quality: "Poor"       },
+                { label: "Overgrazed", color: "var(--ft-crit)", quality: "Overgrazed" },
+              ].map(({ label, color, quality }) => (
+                <span key={quality} className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--ft-muted)" }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
                   {label}
+                  <span className="ft-mono font-semibold ft-tabnums" style={{ color: "var(--ft-text)" }}>
+                    {grazingCounts[quality] ?? 0}
+                  </span>
                 </span>
-              </Link>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </Card>
 
-        {/* Data Health */}
-        <DataHealthCard score={dataHealth} />
+          {/* Feed on offer · 30d sparkline */}
+          <Card style={{ padding: "var(--ft-card-pad)" }}>
+            <Label className="block">Feed on Offer · 30d</Label>
+            <div className="mt-2">
+              <Spark values={makeSpark(`feed-${farmSlug}`, 22)} w={220} h={48} color="var(--ft-fair)" />
+            </div>
+            <p className="mt-2" style={{ fontSize: 11.5, color: "var(--ft-muted)" }}>
+              {lowGrazingCount > 0
+                ? "Trending down — plan rotations for the low-grazing camps."
+                : "Holding steady across the herd's grazing block."}
+            </p>
+          </Card>
+
+          {/* Quick actions */}
+          <Card style={{ padding: "var(--ft-card-pad)" }}>
+            <Label className="block mb-3">Quick Actions</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: <Icon.logger size={18} />, label: "Log Observation", href: `/${farmSlug}/logger` },
+                { icon: <Icon.animals size={18} />, label: "View Animals", href: `/${farmSlug}/admin/animals` },
+                { icon: <Icon.download size={18} />, label: "View Reports", href: `/${farmSlug}/admin/reports` },
+                ...(!isBasic ? [{ icon: <Icon.trend size={18} />, label: "Camp Performance", href: `/${farmSlug}/admin/performance` }] : []),
+              ].map(({ icon, label, href }) => (
+                <Link
+                  key={label}
+                  href={href}
+                  className="flex flex-col items-center gap-2 transition-colors ft-row-hover"
+                  style={{ padding: "16px 12px", borderRadius: "var(--ft-r-sm)", border: "1px solid var(--ft-border)" }}
+                >
+                  <span style={{ color: "var(--ft-good)" }}>{icon}</span>
+                  <span className="text-xs font-medium text-center leading-tight" style={{ color: "var(--ft-text)" }}>
+                    {label}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Card>
+
+          {/* Data health */}
+          <DataHealthCard score={dataHealth} />
+        </div>
       </div>
 
       {isAdmin && (

@@ -53,8 +53,8 @@ export function SyncBadge({ count, ariaLabel }: SyncBadgeProps) {
       data-testid="sync-badge"
       role="status"
       aria-label={label}
-      className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-      style={{ backgroundColor: '#B87333' }}
+      className="ft-mono text-[10px] font-bold px-2 py-0.5 rounded-full"
+      style={{ backgroundColor: 'var(--ft-accent)', color: '#FFF6EE' }}
     >
       {value} pending
     </span>
