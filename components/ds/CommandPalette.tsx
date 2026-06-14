@@ -25,6 +25,7 @@ export function CommandPalette() {
   const farmSlug = pathname.split("/")[1] || "";
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [prevOpen, setPrevOpen] = useState(open);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -46,9 +47,12 @@ export function CommandPalette() {
     };
   }, []);
 
-  useEffect(() => {
+  // Clear the query when the palette opens. Render-phase reset (not an effect)
+  // to avoid a setState-in-effect cascade.
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) setQ("");
-  }, [open]);
+  }
 
   const items = useMemo<PaletteItem[]>(() => {
     if (!farmSlug) return [];

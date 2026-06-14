@@ -98,10 +98,15 @@ export default function StudioShell({
   const { mode, isMultiMode, enabledModes } = useFarmModeSafe();
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [toast, setToast] = useState(false);
+  const [prevPath, setPrevPath] = useState(pathname);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
-  useEffect(() => { setSectionsOpen(false); }, [pathname]);
+  // Close the sections sheet on navigation — render-phase reset, not an effect.
+  if (pathname !== prevPath) {
+    setPrevPath(pathname);
+    setSectionsOpen(false);
+  }
 
   const groups = useMemo(
     () => buildNavGroups({ mode, tier, enabledSpecies, enabledModes, farmSlug: slug, pathname }),

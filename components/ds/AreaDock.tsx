@@ -44,6 +44,7 @@ export function AreaDock() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [prevPath, setPrevPath] = useState(pathname);
   const ref = useRef<HTMLDivElement>(null);
 
   const segs = pathname.split("/");
@@ -65,10 +66,13 @@ export function AreaDock() {
     };
   }, []);
 
-  // Close the menu after navigation.
-  useEffect(() => {
+  // Close the menu on navigation. Render-phase reset (React's "adjust state
+  // when a prop changes" pattern) rather than an effect — avoids a cascading
+  // setState-in-effect render.
+  if (pathname !== prevPath) {
+    setPrevPath(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   if (!slug || HIDE_ON.some((p) => rest.startsWith(p))) return null;
 
