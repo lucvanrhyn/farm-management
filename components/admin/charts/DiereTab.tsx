@@ -17,22 +17,22 @@ import {
 import type { GrafiekeData } from "@/components/admin/charts/chart-types";
 
 const cardStyle = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
   borderRadius: "1rem",
   padding: "1.5rem",
 };
-const titleStyle = { fontWeight: 600, color: "#1C1815", marginBottom: "0.25rem" };
-const subtitleStyle = { fontSize: "0.75rem", color: "#9C8E7A", marginBottom: "1rem" };
-const emptyStyle = { fontSize: "0.875rem", color: "#9C8E7A", padding: "2rem 0", textAlign: "center" as const };
-const gridStroke = "#E0D5C8";
-const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+const titleStyle = { fontWeight: 600, color: "var(--ft-text)", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "var(--ft-subtle)", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "var(--ft-subtle)", padding: "2rem 0", textAlign: "center" as const };
+const gridStroke = "var(--ft-border)";
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 
 // Tooltips stay dark for contrast on light background
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(139,105,20,0.3)",
-  color: "#F5EBD4",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
@@ -83,7 +83,7 @@ function buildHerdAdgSeries(herdAdgTrend: GrafiekeData["herdAdgTrend"]) {
 
 // Distinct colours for up to 10 camps
 const CAMP_COLORS = [
-  "#4A7C59", "#8B6914", "#C0574C", "#3b82f6", "#a855f7",
+  "var(--ft-good)", "var(--ft-fair)", "var(--ft-poor)", "var(--ft-info)", "#a855f7",
   "#f97316", "#06b6d4", "#84cc16", "#f43f5e", "#64748b",
 ];
 
@@ -107,7 +107,7 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
               <XAxis dataKey="month" tick={tickStyle} />
               <YAxis tick={tickStyle} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, "Calvings"]} />
-              <Bar dataKey="count" fill="#22c55e" name="Calvings" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="var(--ft-good)" name="Calvings" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -124,9 +124,9 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
               <XAxis dataKey="month" tick={tickStyle} />
               <YAxis tick={tickStyle} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
-              <Bar dataKey="deaths" fill="#ef4444" name="Deaths" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="sales" fill="#3b82f6" name="Sales" radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "var(--ft-muted)" }} />
+              <Bar dataKey="deaths" fill="var(--ft-crit)" name="Deaths" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="sales" fill="var(--ft-info)" name="Sales" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -152,12 +152,12 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
                   contentStyle={tooltipStyle}
                   formatter={(v, name) => [typeof v === "number" ? `${v.toFixed(2)} kg/day` : String(v), String(name)]}
                 />
-                <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "var(--ft-muted)" }} />
                 <ReferenceLine
                   y={0.7}
-                  stroke="#C0574C"
+                  stroke="var(--ft-poor)"
                   strokeDasharray="4 3"
-                  label={{ value: "Poor doer threshold (0.7)", position: "insideTopRight", fill: "#C0574C", fontSize: 9 }}
+                  label={{ value: "Poor doer threshold (0.7)", position: "insideTopRight", fill: "var(--ft-poor)", fontSize: 9 }}
                 />
                 {campNames.map((name, i) => (
                   <Line
@@ -187,7 +187,7 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
             <div className="overflow-x-auto">
               <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ fontSize: "0.75rem", color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}>
+                  <tr style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Animal</th>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Camp</th>
                     <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Medicine</th>
@@ -200,19 +200,19 @@ export default function DiereTab({ data }: { data: GrafiekeData }) {
                     <tr
                       key={w.id}
                       style={{
-                        borderBottom: "1px solid #E0D5C8",
+                        borderBottom: "1px solid var(--ft-border)",
                         background: w.daysRemaining <= 3 ? "rgba(139,20,20,0.06)" : "transparent",
                       }}
                     >
-                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#1C1815" }}>{w.animalId ?? "—"}</td>
-                      <td style={{ padding: "0.5rem 0", color: "#6B5C4E" }}>{w.campId}</td>
-                      <td style={{ padding: "0.5rem 0", color: "#1C1815", fontWeight: 500 }}>{w.drug}</td>
-                      <td style={{ padding: "0.5rem 0", color: "#9C8E7A", fontSize: "0.75rem" }}>{w.observedAt}</td>
+                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "var(--ft-text)" }}>{w.animalId ?? "—"}</td>
+                      <td style={{ padding: "0.5rem 0", color: "var(--ft-muted)" }}>{w.campId}</td>
+                      <td style={{ padding: "0.5rem 0", color: "var(--ft-text)", fontWeight: 500 }}>{w.drug}</td>
+                      <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)", fontSize: "0.75rem" }}>{w.observedAt}</td>
                       <td style={{
                         padding: "0.5rem 0",
                         textAlign: "right",
                         fontWeight: 600,
-                        color: w.daysRemaining <= 3 ? "#C0574C" : "#1C1815",
+                        color: w.daysRemaining <= 3 ? "var(--ft-poor)" : "var(--ft-text)",
                       }}>
                         {w.daysRemaining} days
                         {w.daysRemaining <= 3 && " ⚠️"}

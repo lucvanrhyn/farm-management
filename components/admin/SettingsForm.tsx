@@ -100,14 +100,14 @@ function PushNotificationToggle() {
   return (
     <div
       className="rounded-xl p-4 mb-2"
-      style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium" style={{ color: "#1C1815" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>
             Push Notifications
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
             {pushStatus === "subscribed"
               ? "Enabled — you'll receive alerts for critical farm events."
               : pushStatus === "denied"
@@ -121,13 +121,13 @@ function PushNotificationToggle() {
             onClick={() => void handleEnable()}
             disabled={pushStatus === "loading"}
             className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity disabled:opacity-60"
-            style={{ background: "#4A7C59", color: "#FFFFFF" }}
+            style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
           >
             {pushStatus === "loading" ? "Enabling…" : "Enable"}
           </button>
         )}
         {pushStatus === "subscribed" && (
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(74,124,89,0.12)", color: "#2D6A4F" }}>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(74,124,89,0.12)", color: "var(--ft-good)" }}>
             Active
           </span>
         )}
@@ -286,11 +286,11 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             onClick={handleUseMyLocation}
             disabled={geoLoading}
             className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-60"
-            style={{ background: "rgba(74,124,89,0.12)", color: "#4A7C59", border: "1px solid rgba(74,124,89,0.3)" }}
+            style={{ background: "rgba(74,124,89,0.12)", color: "var(--ft-good)", border: "1px solid rgba(74,124,89,0.3)" }}
           >
             {geoLoading ? "Detecting…" : "Use My Location"}
           </button>
-          <p className="text-xs mt-1.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-1.5" style={{ color: "var(--ft-subtle)" }}>
             Fills latitude and longitude from your browser&apos;s GPS.
           </p>
         </div>
@@ -516,7 +516,7 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
         >
           <div className="space-y-2">
             {values.openaiApiKeyConfigured && (
-              <p className="text-xs font-medium" style={{ color: "#4A7C59" }}>
+              <p className="text-xs font-medium" style={{ color: "var(--ft-good)" }}>
                 ✓ Key configured
               </p>
             )}
@@ -536,7 +536,7 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
                 type="button"
                 onClick={() => setShowApiKey((v) => !v)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-1 rounded"
-                style={{ color: "#9C8E7A", background: "rgba(0,0,0,0.04)" }}
+                style={{ color: "var(--ft-subtle)", background: "rgba(0,0,0,0.04)" }}
               >
                 {showApiKey ? "Hide" : "Show"}
               </button>
@@ -697,18 +697,18 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
           type="submit"
           disabled={status === "saving"}
           className="px-5 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-60"
-          style={{ background: "#4A7C59", color: "#FFFFFF" }}
+          style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
         >
           {status === "saving" ? "Saving…" : "Save Settings"}
         </button>
 
         {status === "success" && (
-          <p className="text-sm font-medium" style={{ color: "#4A7C59" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-good)" }}>
             Settings saved successfully.
           </p>
         )}
         {status === "error" && errorMsg && (
-          <p className="text-sm font-medium" style={{ color: "#8B3A3A" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
             {errorMsg}
           </p>
         )}
@@ -721,21 +721,21 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
 
 const inputCls = "w-full rounded-lg px-3 py-2 text-sm font-mono outline-none transition-colors";
 const inputStyle: React.CSSProperties = {
-  background: "#FAFAF8",
-  border: "1px solid #E0D5C8",
-  color: "#1C1815",
+  background: "var(--ft-bg)",
+  border: "1px solid var(--ft-border)",
+  color: "var(--ft-text)",
 };
 
 function focusStyle(
   e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
 ) {
-  e.currentTarget.style.borderColor = "#4A7C59";
+  e.currentTarget.style.borderColor = "var(--ft-good)";
 }
 
 function blurStyle(
   e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
 ) {
-  e.currentTarget.style.borderColor = "#E0D5C8";
+  e.currentTarget.style.borderColor = "var(--ft-border)";
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
@@ -744,9 +744,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div
       className="rounded-xl p-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
-      <h2 className="text-sm font-semibold mb-5" style={{ color: "#1C1815" }}>
+      <h2 className="text-sm font-semibold mb-5" style={{ color: "var(--ft-text)" }}>
         {title}
       </h2>
       <div className="space-y-0">{children}</div>
@@ -768,13 +768,13 @@ function FieldRow({
   return (
     <div
       className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 items-start py-3"
-      style={{ borderBottom: "1px solid #F0E8DE" }}
+      style={{ borderBottom: "1px solid var(--ft-surface)" }}
     >
       <div className="sm:col-span-1">
-        <label className="block text-sm font-medium" style={{ color: "#1C1815" }}>
+        <label className="block text-sm font-medium" style={{ color: "var(--ft-text)" }}>
           {label}
         </label>
-        <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
           {description}
         </p>
       </div>

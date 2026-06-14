@@ -121,7 +121,7 @@ export default async function AdminAnimalsPage({
     <AdminPage>
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1C1815]">Animal Catalogue</h1>
+          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Animal Catalogue</h1>
           {/* Header count line moved into <AnimalsTable /> (issue #205) so the
               "Showing X of Y" denominator updates as Load more streams the
               next cursor window, and so multi-species tenants see the
@@ -144,7 +144,7 @@ export default async function AdminAnimalsPage({
         deceasedTotal={deceasedTotal}
         crossSpeciesActiveTotal={crossSpeciesTotal}
       />
-      <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+      <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>
       {/*
@@ -157,11 +157,11 @@ export default async function AdminAnimalsPage({
       */}
       <div
         data-testid="danger-zone"
-        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+        className="mt-12 pt-6 border-t border-[var(--ft-surface2)]"
       >
         <p
           className="text-xs uppercase tracking-wider mb-3"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           Danger zone
         </p>

@@ -16,11 +16,11 @@ export default function GameSubNav({ farmSlug }: { farmSlug: string }) {
   return (
     <div
       className="px-4 md:px-8 pt-5 pb-0"
-      style={{ background: "#FAFAF8" }}
+      style={{ background: "var(--ft-bg)" }}
     >
       <div
         className="inline-flex gap-0.5 p-1 rounded-lg border"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
         {TABS.map((tab) => {
           const href = `/${farmSlug}${tab.href}`;
@@ -47,8 +47,8 @@ export default function GameSubNav({ farmSlug }: { farmSlug: string }) {
               className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
               style={
                 isActive
-                  ? { background: "rgba(139,105,20,0.12)", color: "#8B6914" }
-                  : { color: "#9C8E7A" }
+                  ? { background: "rgba(139,105,20,0.12)", color: "var(--ft-fair)" }
+                  : { color: "var(--ft-subtle)" }
               }
             >
               {tab.label}

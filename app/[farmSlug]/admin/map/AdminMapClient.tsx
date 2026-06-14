@@ -88,7 +88,7 @@ export default function AdminMapClient({
       {upgradeToast && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] rounded-xl px-5 py-3 shadow-lg flex items-center gap-3"
-          style={{ background: "#1C1815", color: "#F5EBD4", border: "1px solid rgba(196,144,48,0.4)" }}
+          style={{ background: "var(--ft-text)", color: "var(--ft-fair-bg)", border: "1px solid rgba(196,144,48,0.4)" }}
         >
           <span className="text-sm">Log-at-spot is an Advanced-tier feature.</span>
           <Link

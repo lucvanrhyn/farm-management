@@ -36,27 +36,27 @@ export default function CostOfGainCard({
   return (
     <div
       className="rounded-xl p-4 md:p-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Cost of Gain
           </h3>
-          <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
             Rand per kilogram gained from first to latest weighing.
           </p>
         </div>
         <p
           className="text-lg font-bold font-mono"
-          style={{ color: "#8B6914" }}
+          style={{ color: "var(--ft-fair)" }}
         >
           {insufficient ? "—" : fmtCog(result.costOfGain)}
         </p>
       </div>
 
       {insufficient ? (
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           Need at least two weighings with positive gain to compute Cost of Gain
           for this animal.
         </p>
@@ -65,16 +65,16 @@ export default function CostOfGainCard({
           <div
             className="rounded-lg p-3"
             style={{
-              background: "#FAFAF8",
-              border: "1px solid #E0D5C8",
+              background: "var(--ft-bg)",
+              border: "1px solid var(--ft-border)",
             }}
           >
-            <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+            <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
               Total Cost
             </p>
             <p
               className="text-sm font-bold font-mono"
-              style={{ color: "#1C1815" }}
+              style={{ color: "var(--ft-text)" }}
             >
               {fmtR(investment.totalCost)}
             </p>
@@ -82,16 +82,16 @@ export default function CostOfGainCard({
           <div
             className="rounded-lg p-3"
             style={{
-              background: "#FAFAF8",
-              border: "1px solid #E0D5C8",
+              background: "var(--ft-bg)",
+              border: "1px solid var(--ft-border)",
             }}
           >
-            <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+            <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
               Gain
             </p>
             <p
               className="text-sm font-bold font-mono"
-              style={{ color: "#1C1815" }}
+              style={{ color: "var(--ft-text)" }}
             >
               {kgGained.toFixed(1)} kg
             </p>
@@ -99,16 +99,16 @@ export default function CostOfGainCard({
           <div
             className="rounded-lg p-3"
             style={{
-              background: "#FAFAF8",
-              border: "1px solid #E0D5C8",
+              background: "var(--ft-bg)",
+              border: "1px solid var(--ft-border)",
             }}
           >
-            <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+            <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
               Period
             </p>
             <p
               className="text-sm font-bold font-mono"
-              style={{ color: "#1C1815" }}
+              style={{ color: "var(--ft-text)" }}
             >
               {first.observedAt.toISOString().slice(0, 10)} →{" "}
               {last.observedAt.toISOString().slice(0, 10)}

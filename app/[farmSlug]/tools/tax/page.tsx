@@ -23,12 +23,12 @@ export default async function TaxPage({
   const isAdmin = getUserRoleForFarm(session, farmSlug) === "ADMIN";
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
       <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
           SARS ITR12 Farming Schedule Export
         </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
           Preview and freeze year-end farming income &amp; expense schedules for your ITR12 return. Snapshots are immutable once issued.
         </p>
       </div>

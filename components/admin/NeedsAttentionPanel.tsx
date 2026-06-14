@@ -9,11 +9,11 @@ interface Props {
 
 function AlertRow({ alert }: { alert: DashboardAlert }) {
   const isRed = alert.severity === "red";
-  const dotColor = isRed ? "#C0574C" : "#8B6914";
+  const dotColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
   const borderColor = isRed ? "rgba(192,87,76,0.25)" : "rgba(139,105,20,0.25)";
   const bgColor = isRed ? "rgba(192,87,76,0.06)" : "rgba(139,105,20,0.06)";
   const badgeBg = isRed ? "rgba(192,87,76,0.12)" : "rgba(139,105,20,0.12)";
-  const textColor = isRed ? "#C0574C" : "#8B6914";
+  const textColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
 
   return (
     <Link
@@ -31,7 +31,7 @@ function AlertRow({ alert }: { alert: DashboardAlert }) {
       />
 
       {/* Message */}
-      <span className="flex-1 text-sm" style={{ color: "#1C1815" }}>
+      <span className="flex-1 text-sm" style={{ color: "var(--ft-text)" }}>
         {alert.message}
       </span>
 
@@ -56,9 +56,9 @@ export default function NeedsAttentionPanel({ alerts, farmSlug: _farmSlug }: Pro
         className="rounded-xl px-5 py-4 flex items-center gap-3 mb-6"
         style={{ background: "rgba(74,124,89,0.08)", border: "1px solid rgba(74,124,89,0.2)" }}
       >
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#4A7C59" }} />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--ft-good)" }} />
         <div>
-          <p className="text-sm font-semibold" style={{ color: "#4A7C59" }}>All clear</p>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-good)" }}>All clear</p>
           <p className="text-xs mt-0.5" style={{ color: "#6B8F72" }}>No immediate actions required.</p>
         </div>
       </div>
@@ -73,16 +73,16 @@ export default function NeedsAttentionPanel({ alerts, farmSlug: _farmSlug }: Pro
     <div
       className="rounded-xl p-4 mb-6"
       style={{
-        background: "#FFFFFF",
+        background: "var(--ft-surface)",
         border: `1px solid ${borderStyle}`,
-        borderLeft: `4px solid ${alerts.red.length > 0 ? "#C0574C" : "#8B6914"}`,
+        borderLeft: `4px solid ${alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)"}`,
       }}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <span
           className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: alerts.red.length > 0 ? "#C0574C" : "#8B6914" }}
+          style={{ color: alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)" }}
         >
           Needs Attention
         </span>
@@ -90,7 +90,7 @@ export default function NeedsAttentionPanel({ alerts, farmSlug: _farmSlug }: Pro
           className="text-xs font-semibold font-mono px-2 py-0.5 rounded-full"
           style={{
             background: alerts.red.length > 0 ? "rgba(192,87,76,0.12)" : "rgba(139,105,20,0.12)",
-            color: alerts.red.length > 0 ? "#C0574C" : "#8B6914",
+            color: alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)",
           }}
         >
           {alerts.totalCount} {alerts.totalCount === 1 ? "item" : "items"}
@@ -112,7 +112,7 @@ export default function NeedsAttentionPanel({ alerts, farmSlug: _farmSlug }: Pro
           {alerts.red.length > 0 && (
             <div
               className="my-2"
-              style={{ borderTop: "1px solid #F0EAE0" }}
+              style={{ borderTop: "1px solid var(--ft-surface2)" }}
             />
           )}
           <div className="flex flex-col gap-2">

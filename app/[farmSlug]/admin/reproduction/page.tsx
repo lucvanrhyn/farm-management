@@ -119,18 +119,18 @@ export default async function ReproductionPage({
     return (
       <AdminPage className="max-w-3xl">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
             {copy.pageTitle}
           </h1>
         </div>
         <div
           className="rounded-2xl border px-6 py-10 text-center"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <p className="text-base font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-base font-semibold" style={{ color: "var(--ft-text)" }}>
             {copy.birthEvent} analytics are not available for {copy.dam}s yet
           </p>
-          <p className="mt-2 text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="mt-2 text-sm" style={{ color: "var(--ft-subtle)" }}>
             This dashboard&rsquo;s reproduction KPIs (pregnancy rate, {copy.birthEventLower}{" "}
             interval, days open) are calibrated for cattle. Species-specific{" "}
             {copy.birthEventLower} analytics are coming soon.
@@ -139,7 +139,7 @@ export default async function ReproductionPage({
             <Link
               href={`/${farmSlug}/sheep/reproduction`}
               className="mt-5 inline-block rounded-lg px-4 py-2 text-sm font-medium"
-              style={{ background: "#4A7C59", color: "#FFFFFF" }}
+              style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
             >
               Go to Sheep Reproduction →
             </Link>
@@ -187,10 +187,10 @@ export default async function ReproductionPage({
         {/* Header */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+            <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
               {copy.pageTitle}
             </h1>
-            <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
               {totalEvents > 0
                 ? copy.benchmarkLine
                 : `No reproductive events recorded yet — log heat, insemination, scan or ${copy.birthEventLower} events via the Logger`}
@@ -343,18 +343,18 @@ export default async function ReproductionPage({
         {/* Expected Births (species-aware) */}
         <div
           className="rounded-2xl border mb-6"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Expected {copy.birthEvent}s
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Scan date (preferred) or insemination date + {copy.gestationDays} days · showing next 90 days
             </p>
           </div>
           {stats.upcomingCalvings.length === 0 ? (
-            <p className="px-6 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="px-6 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
               No upcoming {copy.birthEventLower}s calculated. Log insemination or scan events via the Logger to track
               expected {copy.birthEventLower} dates.
             </p>
@@ -364,7 +364,7 @@ export default async function ReproductionPage({
                 <thead>
                   <tr
                     className="text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}
+                    style={{ color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}
                   >
                     <th className="px-6 py-3 text-left">Animal</th>
                     <th className="px-4 py-3 text-left">Camp</th>
@@ -380,18 +380,18 @@ export default async function ReproductionPage({
                       <tr
                         key={c.animalId}
                         className="border-b last:border-0"
-                        style={{ borderColor: "#F0EAE0" }}
+                        style={{ borderColor: "var(--ft-surface2)" }}
                       >
                         <td className="px-6 py-3">
                           <Link
                             href={`/${farmSlug}/admin/animals/${c.animalId}?tab=reproduction`}
                             className="font-mono font-semibold hover:underline"
-                            style={{ color: "#1C1815" }}
+                            style={{ color: "var(--ft-text)" }}
                           >
                             {c.animalId}
                           </Link>
                         </td>
-                        <td className="px-4 py-3" style={{ color: "#6B5E50" }}>
+                        <td className="px-4 py-3" style={{ color: "var(--ft-muted)" }}>
                           {c.campName}
                         </td>
                         <td className="px-4 py-3">
@@ -399,14 +399,14 @@ export default async function ReproductionPage({
                             className="text-xs px-2 py-0.5 rounded-full font-medium"
                             style={
                               c.source === "scan"
-                                ? { backgroundColor: "rgba(74,124,89,0.1)", color: "#3A6B49" }
-                                : { backgroundColor: "rgba(139,105,20,0.12)", color: "#7A5C00" }
+                                ? { backgroundColor: "rgba(74,124,89,0.1)", color: "var(--ft-good)" }
+                                : { backgroundColor: "rgba(139,105,20,0.12)", color: "var(--ft-fair)" }
                             }
                           >
                             {c.source === "scan" ? "🔬 Scan" : "💉 Insem"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 tabular-nums" style={{ color: "#1C1815" }}>
+                        <td className="px-4 py-3 tabular-nums" style={{ color: "var(--ft-text)" }}>
                           {formatDate(c.expectedCalving)}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -414,10 +414,10 @@ export default async function ReproductionPage({
                             className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full"
                             style={
                               urgency === "alert"
-                                ? { backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }
+                                ? { backgroundColor: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }
                                 : urgency === "warning"
-                                ? { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
-                                : { backgroundColor: "rgba(34,197,94,0.1)", color: "#166534" }
+                                ? { backgroundColor: "rgba(245,158,11,0.12)", color: "var(--ft-fair)" }
+                                : { backgroundColor: "rgba(34,197,94,0.1)", color: "var(--ft-good)" }
                             }
                           >
                             {c.daysAway < 0
@@ -437,13 +437,13 @@ export default async function ReproductionPage({
         {/* Pregnancy Scan Results */}
         <div
           className="rounded-2xl border mb-6"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Pregnancy Scan Results
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Most recent scan per animal · SA target ≥85% pregnancy rate
             </p>
           </div>
@@ -453,21 +453,21 @@ export default async function ReproductionPage({
                 {
                   key: "pregnant" as const,
                   label: "Pregnant",
-                  color: "#166534",
+                  color: "var(--ft-good)",
                   bg: "rgba(34,197,94,0.08)",
                   border: "rgba(34,197,94,0.2)",
                 },
                 {
                   key: "empty" as const,
                   label: "Empty",
-                  color: "#991B1B",
+                  color: "var(--ft-crit)",
                   bg: "rgba(220,38,38,0.07)",
                   border: "rgba(220,38,38,0.2)",
                 },
                 {
                   key: "uncertain" as const,
                   label: "Recheck",
-                  color: "#92400E",
+                  color: "var(--ft-fair)",
                   bg: "rgba(245,158,11,0.08)",
                   border: "rgba(245,158,11,0.25)",
                 },
@@ -490,24 +490,24 @@ export default async function ReproductionPage({
           {stats.conceptionRate !== null && (
             <div
               className="px-6 pb-5 pt-1 flex items-center gap-2"
-              style={{ borderTop: "1px solid #F0EAE0" }}
+              style={{ borderTop: "1px solid var(--ft-surface2)" }}
             >
-              <span className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+              <span className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
                 Scan conception rate:
               </span>
               <span
                 className="text-sm font-bold px-2 py-0.5 rounded-full"
                 style={
                   stats.conceptionRate >= 85
-                    ? { backgroundColor: "rgba(34,197,94,0.1)", color: "#166534" }
+                    ? { backgroundColor: "rgba(34,197,94,0.1)", color: "var(--ft-good)" }
                     : stats.conceptionRate >= 70
-                    ? { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
-                    : { backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }
+                    ? { backgroundColor: "rgba(245,158,11,0.12)", color: "var(--ft-fair)" }
+                    : { backgroundColor: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }
                 }
               >
                 {stats.conceptionRate}%
               </span>
-              <span className="text-xs" style={{ color: "#9C8E7A" }}>
+              <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
                 (target ≥85%)
               </span>
             </div>
@@ -517,13 +517,13 @@ export default async function ReproductionPage({
         {/* 21-Day Pregnancy Rate by Cycle */}
         <div
           className="rounded-2xl border mb-6"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               21-Day Pregnancy Rate — by Cycle
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Confirmed pregnancies per 21-day estrus window · SA target: &gt;22% per cycle
             </p>
           </div>
@@ -535,13 +535,13 @@ export default async function ReproductionPage({
         {/* Days Open Distribution histogram (§E point 2) */}
         <div
           className="rounded-2xl border mb-6"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Days Open Distribution
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Binned by 20-day intervals · SA target ≤95d (UT Beef W973)
             </p>
           </div>
@@ -568,13 +568,13 @@ export default async function ReproductionPage({
           return (
           <div
             className="rounded-2xl border mb-6"
-            style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+            style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
           >
-            <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-              <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+            <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
                 Days Open — Per Animal
               </h2>
-              <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+              <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                 Days from {copy.birthEventLower} to confirmed conception · SA target: &lt;90 days
                 {hiddenCount > 0 && (
                   <>
@@ -588,7 +588,7 @@ export default async function ReproductionPage({
                 <thead>
                   <tr
                     className="text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}
+                    style={{ color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}
                   >
                     <th className="px-6 py-3 text-left">Animal</th>
                     <th className="px-4 py-3 text-left">Last {copy.birthEvent}</th>
@@ -601,23 +601,23 @@ export default async function ReproductionPage({
                       <tr
                         key={row.animalId}
                         className="border-b last:border-0"
-                        style={{ borderColor: "#F0EAE0" }}
+                        style={{ borderColor: "var(--ft-surface2)" }}
                       >
                         <td className="px-6 py-3">
                           <Link
                             href={`/${farmSlug}/admin/animals/${row.animalId}?tab=reproduction`}
                             className="font-mono font-semibold hover:underline"
-                            style={{ color: "#1C1815" }}
+                            style={{ color: "var(--ft-text)" }}
                           >
                             {row.animalId}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 tabular-nums" style={{ color: "#6B5E50" }}>
+                        <td className="px-4 py-3 tabular-nums" style={{ color: "var(--ft-muted)" }}>
                           {formatDate(row.calvingDate)}
                         </td>
-                        <td className="px-4 py-3 tabular-nums" style={{ color: "#6B5E50" }}>
+                        <td className="px-4 py-3 tabular-nums" style={{ color: "var(--ft-muted)" }}>
                           {row.conceptionDate ? formatDate(row.conceptionDate) : (
-                            <span style={{ color: "#C0574C", fontStyle: "italic" }}>No return to service</span>
+                            <span style={{ color: "var(--ft-poor)", fontStyle: "italic" }}>No return to service</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -626,10 +626,10 @@ export default async function ReproductionPage({
                               className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full"
                               style={
                                 row.daysOpen <= 90
-                                  ? { backgroundColor: "rgba(34,197,94,0.1)", color: "#166534" }
+                                  ? { backgroundColor: "rgba(34,197,94,0.1)", color: "var(--ft-good)" }
                                   : row.daysOpen <= 120
-                                  ? { backgroundColor: "rgba(245,158,11,0.12)", color: "#92400E" }
-                                  : { backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }
+                                  ? { backgroundColor: "rgba(245,158,11,0.12)", color: "var(--ft-fair)" }
+                                  : { backgroundColor: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }
                               }
                             >
                               {row.daysOpen}d
@@ -637,7 +637,7 @@ export default async function ReproductionPage({
                           ) : (
                             <span
                               className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                              style={{ backgroundColor: "rgba(220,38,38,0.1)", color: "#991B1B" }}
+                              style={{ backgroundColor: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }}
                             >
                               Open
                             </span>
@@ -651,7 +651,7 @@ export default async function ReproductionPage({
             {hiddenCount > 0 && (
               <div
                 className="px-6 py-3 text-xs border-t"
-                style={{ color: "#9C8E7A", borderColor: "#F0EAE0" }}
+                style={{ color: "var(--ft-subtle)", borderColor: "var(--ft-surface2)" }}
               >
                 {hiddenCount} more {hiddenCount === 1 ? "animal" : "animals"} not shown —
                 use the Export button for the full list.
@@ -669,27 +669,27 @@ export default async function ReproductionPage({
         {/* Recent Events timeline */}
         <div
           className="rounded-2xl border"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Recent Events
             </h2>
           </div>
           {recentEvents.length === 0 ? (
-            <p className="px-6 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="px-6 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
               No reproductive events recorded yet.
             </p>
           ) : (
-            <div className="px-6 py-4 relative" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "29px" }}>
+            <div className="px-6 py-4 relative" style={{ borderLeft: "2px solid var(--ft-border)", marginLeft: "29px" }}>
               {recentEvents.map((obs) => {
                 const det = parseDetails(obs.details);
                 const campName = campMap.get(obs.campId) ?? obs.campId;
 
                 const DOT_COLORS: Record<string, string> = {
                   heat_detection: "#D47EB5",
-                  insemination: "#8B6914",
-                  pregnancy_scan: "#4A7C59",
+                  insemination: "var(--ft-fair)",
+                  pregnancy_scan: "var(--ft-good)",
                   calving: "#0D9488",
                   lambing: "#0D9488",
                   fawning: "#0D9488",
@@ -702,7 +702,7 @@ export default async function ReproductionPage({
                   lambing: "Lambing",
                   fawning: "Fawning",
                 };
-                const dotColor = DOT_COLORS[obs.type] ?? "#9C8E7A";
+                const dotColor = DOT_COLORS[obs.type] ?? "var(--ft-subtle)";
                 const label = EVENT_LABELS[obs.type] ?? obs.type;
 
                 let subDetail = "";
@@ -731,19 +731,19 @@ export default async function ReproductionPage({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium" style={{ color: "#1C1815" }}>
+                        <span className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>
                           {label}
                         </span>
                         {subDetail && (
                           <span
                             className="text-xs px-2 py-0.5 rounded-full"
-                            style={{ background: "rgba(139,105,20,0.1)", color: "#8B6914" }}
+                            style={{ background: "rgba(139,105,20,0.1)", color: "var(--ft-fair)" }}
                           >
                             {subDetail}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+                      <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
                         {formatDate(obs.observedAt)}
                         {obs.animalId && (
                           <>

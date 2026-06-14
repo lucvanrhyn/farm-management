@@ -130,12 +130,12 @@ export default async function AdminLayout({
   if (credsResult.status === "rejected") {
     logger.error('[AdminLayout] getFarmCreds failed', { farmSlug, reason: credsResult.reason });
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-lg font-bold mb-2" style={{ color: "#1C1815" }}>
+          <h1 className="text-lg font-bold mb-2" style={{ color: "var(--ft-text)" }}>
             Connection Error
           </h1>
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             Could not connect to the database. Please try refreshing the page or contact support if the issue persists.
           </p>
         </div>

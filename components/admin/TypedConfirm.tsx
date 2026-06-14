@@ -93,7 +93,7 @@ export default function TypedConfirm({
         className={`${textSize} ${padding} font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
         style={{
           border: "1px solid rgba(192,87,76,0.5)",
-          color: "#C0574C",
+          color: "var(--ft-poor)",
           background: "transparent",
         }}
       >
@@ -104,14 +104,14 @@ export default function TypedConfirm({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs" style={{ color: "#6B5C4E" }}>
+      <p className="text-xs" style={{ color: "var(--ft-muted)" }}>
         {description ? `${description} ` : ""}
         This action is{" "}
-        <span className="font-semibold" style={{ color: "#C0574C" }}>
+        <span className="font-semibold" style={{ color: "var(--ft-poor)" }}>
           irreversible
         </span>
         . Type{" "}
-        <span className="font-mono font-bold" style={{ color: "#1C1815" }}>
+        <span className="font-mono font-bold" style={{ color: "var(--ft-text)" }}>
           {phrase}
         </span>{" "}
         to confirm.
@@ -125,13 +125,13 @@ export default function TypedConfirm({
         autoFocus
         className="w-48 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none disabled:opacity-50"
         style={{
-          background: "#FFFFFF",
+          background: "var(--ft-surface)",
           border: "1px solid rgba(192,87,76,0.4)",
-          color: "#1C1815",
+          color: "var(--ft-text)",
         }}
       />
       {error && (
-        <p className="text-xs" style={{ color: "#C0574C" }}>
+        <p className="text-xs" style={{ color: "var(--ft-poor)" }}>
           {error}
         </p>
       )}
@@ -141,7 +141,7 @@ export default function TypedConfirm({
           onClick={handleConfirm}
           disabled={!matches || isBusy}
           className={`flex items-center gap-1.5 ${padding} ${textSize} font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
-          style={{ background: "#8B3A3A", color: "#F5EBD4" }}
+          style={{ background: "var(--ft-crit)", color: "var(--ft-fair-bg)" }}
         >
           {isBusy && <Loader2 className="w-3 h-3 animate-spin" />}
           {isBusy ? busyLabel ?? confirmLabel : confirmLabel}
@@ -152,8 +152,8 @@ export default function TypedConfirm({
           disabled={isBusy}
           className={`${padding} ${textSize} rounded-lg transition-colors disabled:opacity-40`}
           style={{
-            border: "1px solid #E0D5C8",
-            color: "#6B5C4E",
+            border: "1px solid var(--ft-border)",
+            color: "var(--ft-muted)",
             background: "transparent",
           }}
         >

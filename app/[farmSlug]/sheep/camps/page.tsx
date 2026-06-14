@@ -63,8 +63,8 @@ export default async function SheepCampsPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Camps</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Camps</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           {camps.length} camps · sheep grazing surface
         </p>
       </div>
@@ -80,7 +80,7 @@ export default async function SheepCampsPage({
         <>
           <CampsTable camps={camps} farmSlug={farmSlug} />
 
-          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
             <CampAnalyticsSection farmSlug={farmSlug} />
           </Suspense>
         </>

@@ -52,7 +52,7 @@ export default function CampsEmptyState({
       data-testid={testId}
       className="flex flex-col items-center gap-5 rounded-2xl px-8 py-12 text-center"
       style={{
-        background: "#FFFFFF",
+        background: "var(--ft-surface)",
         border: "1px solid rgba(196,144,48,0.2)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         maxWidth: "32rem",
@@ -64,7 +64,7 @@ export default function CampsEmptyState({
         style={{
           background: "rgba(196,144,48,0.10)",
           border: "1px solid rgba(196,144,48,0.28)",
-          color: "#8B6914",
+          color: "var(--ft-fair)",
         }}
       >
         {/* Inline paddock / fenced-area glyph, pure CSS — no new asset. */}
@@ -85,7 +85,7 @@ export default function CampsEmptyState({
         </svg>
       </div>
 
-      <h2 className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+      <h2 className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
         {/* #384: pin the space with {" "} — a bare literal space after an
             {expression} is stripped by the build-time SWC transform (same
             class as #369 / #382). */}
@@ -104,20 +104,20 @@ export default function CampsEmptyState({
       <div
         className="w-full max-w-md text-left rounded-xl px-4 py-3 text-xs space-y-2"
         style={{
-          background: "#FAFAF8",
-          border: "1px solid #E0D5C8",
-          color: "#6B5C4E",
+          background: "var(--ft-bg)",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-muted)",
           lineHeight: 1.55,
         }}
       >
         <p>
-          <strong style={{ color: "#1C1815" }}>Why this is empty:</strong> This
+          <strong style={{ color: "var(--ft-text)" }}>Why this is empty:</strong> This
           surface is scoped to your <strong>{speciesLabel}</strong> herd. Camps
           you created for a different species won&apos;t show here — each
           species keeps its own paddocks.
         </p>
         <p>
-          <strong style={{ color: "#1C1815" }}>How to get started:</strong> Add
+          <strong style={{ color: "var(--ft-text)" }}>How to get started:</strong> Add
           a camp with a name and size, then draw its boundary on the map. Once
           a camp exists you can move animals into it and log grazing.
         </p>
@@ -127,8 +127,8 @@ export default function CampsEmptyState({
         href={addCampHref}
         className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
         style={{
-          background: "#8B6914",
-          color: "#FAFAF8",
+          background: "var(--ft-fair)",
+          color: "var(--ft-bg)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
         }}
       >
@@ -144,8 +144,8 @@ export default function CampsEmptyState({
       <div
         className="flex items-center justify-center rounded-2xl p-6"
         style={{
-          background: "#FAFAF8",
-          border: "1px dashed #E0D5C8",
+          background: "var(--ft-bg)",
+          border: "1px dashed var(--ft-border)",
           minHeight: "320px",
           height: "calc(100dvh - 9rem)",
         }}

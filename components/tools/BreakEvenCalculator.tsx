@@ -10,15 +10,15 @@ import {
 } from "@/lib/calculators/break-even";
 
 const SECTION = "rounded-2xl p-5 mb-4";
-const SECTION_STYLE = { backgroundColor: "#fff", border: "1px solid #E8E2D9" };
-const LABEL_STYLE = { color: "#6B5E52", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" as const };
+const SECTION_STYLE = { backgroundColor: "#fff", border: "1px solid var(--ft-surface2)" };
+const LABEL_STYLE = { color: "var(--ft-muted)", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" as const };
 const INPUT_STYLE = {
   width: "100%",
   padding: "0.5rem 0.75rem",
   borderRadius: "0.625rem",
-  border: "1px solid #D6CEC4",
-  background: "#FAFAF8",
-  color: "#1C1815",
+  border: "1px solid var(--ft-border)",
+  background: "var(--ft-bg)",
+  color: "var(--ft-text)",
   fontSize: "0.875rem",
   outline: "none",
 };
@@ -126,13 +126,13 @@ export default function BreakEvenCalculator() {
     }
   }, [inputs]);
 
-  const marginColors: Record<number, string> = { 0: "#6B5E52", 10: "#2E7D46", 20: "#1A5C8A" };
+  const marginColors: Record<number, string> = { 0: "var(--ft-muted)", 10: "var(--ft-good)", 20: "var(--ft-info)" };
 
   return (
     <div className="max-w-3xl">
       {/* ── Purchase ── */}
       <div className={SECTION} style={SECTION_STYLE}>
-        <h2 className="text-sm font-bold mb-4" style={{ color: "#1C1815" }}>Purchase Details</h2>
+        <h2 className="text-sm font-bold mb-4" style={{ color: "var(--ft-text)" }}>Purchase Details</h2>
         <div className="grid grid-cols-2 gap-4">
           <label className="flex flex-col gap-1">
             <span style={LABEL_STYLE}>Purchase mass (kg)</span>
@@ -151,8 +151,8 @@ export default function BreakEvenCalculator() {
                   onClick={() => set("priceInputMode", m)}
                   className={TOGGLE_BASE}
                   style={{
-                    background: form.priceInputMode === m ? "#1C1815" : "#F0EBE3",
-                    color: form.priceInputMode === m ? "#F5F0E8" : "#6B5E52",
+                    background: form.priceInputMode === m ? "var(--ft-text)" : "var(--ft-surface)",
+                    color: form.priceInputMode === m ? "var(--ft-surface)" : "var(--ft-muted)",
                   }}
                 >
                   {m === "per_kg" ? "R/kg" : "R/animal"}
@@ -178,7 +178,7 @@ export default function BreakEvenCalculator() {
 
       {/* ── Feed cost ── */}
       <div className={SECTION} style={SECTION_STYLE}>
-        <h2 className="text-sm font-bold mb-4" style={{ color: "#1C1815" }}>Feed Cost</h2>
+        <h2 className="text-sm font-bold mb-4" style={{ color: "var(--ft-text)" }}>Feed Cost</h2>
         <div className="flex gap-2 mb-4">
           {(["daily_rate", "fcr"] as FeedCostMode[]).map((m) => (
             <button
@@ -186,8 +186,8 @@ export default function BreakEvenCalculator() {
               onClick={() => set("feedCostMode", m)}
               className={TOGGLE_BASE}
               style={{
-                background: form.feedCostMode === m ? "#1C1815" : "#F0EBE3",
-                color: form.feedCostMode === m ? "#F5F0E8" : "#6B5E52",
+                background: form.feedCostMode === m ? "var(--ft-text)" : "var(--ft-surface)",
+                color: form.feedCostMode === m ? "var(--ft-surface)" : "var(--ft-muted)",
               }}
             >
               {m === "daily_rate" ? "Daily rate" : "FCR"}
@@ -215,7 +215,7 @@ export default function BreakEvenCalculator() {
 
       {/* ── Variable costs ── */}
       <div className={SECTION} style={SECTION_STYLE}>
-        <h2 className="text-sm font-bold mb-4" style={{ color: "#1C1815" }}>Other Costs (R/animal)</h2>
+        <h2 className="text-sm font-bold mb-4" style={{ color: "var(--ft-text)" }}>Other Costs (R/animal)</h2>
         <div className="grid grid-cols-2 gap-4">
           <label className="flex flex-col gap-1">
             <span style={LABEL_STYLE}>Transport in</span>
@@ -241,7 +241,7 @@ export default function BreakEvenCalculator() {
         <>
           {/* Cost breakdown */}
           <div className={SECTION} style={{ ...SECTION_STYLE, borderColor: "#C4A882" }}>
-            <h2 className="text-sm font-bold mb-4" style={{ color: "#1C1815" }}>Cost Breakdown</h2>
+            <h2 className="text-sm font-bold mb-4" style={{ color: "var(--ft-text)" }}>Cost Breakdown</h2>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
               {[
                 ["Days on feed", `${Math.round(result.costs.daysOnFeed)} days`],
@@ -254,16 +254,16 @@ export default function BreakEvenCalculator() {
                 ["Fixed overhead", fmtR(result.costs.fixedOverheadPerAnimal)],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-2">
-                  <dt style={{ color: "#6B5E52" }}>{label}</dt>
-                  <dd className="font-medium tabular-nums" style={{ color: "#1C1815" }}>{value}</dd>
+                  <dt style={{ color: "var(--ft-muted)" }}>{label}</dt>
+                  <dd className="font-medium tabular-nums" style={{ color: "var(--ft-text)" }}>{value}</dd>
                 </div>
               ))}
             </dl>
-            <div className="mt-4 pt-4 border-t flex justify-between text-sm font-bold" style={{ borderColor: "#E8E2D9" }}>
-              <span style={{ color: "#1C1815" }}>Total cost / animal</span>
-              <span style={{ color: "#1C1815" }}>{fmtR(result.costs.totalCostPerAnimal)}</span>
+            <div className="mt-4 pt-4 border-t flex justify-between text-sm font-bold" style={{ borderColor: "var(--ft-surface2)" }}>
+              <span style={{ color: "var(--ft-text)" }}>Total cost / animal</span>
+              <span style={{ color: "var(--ft-text)" }}>{fmtR(result.costs.totalCostPerAnimal)}</span>
             </div>
-            <div className="flex justify-between text-xs mt-1" style={{ color: "#9C8E7A" }}>
+            <div className="flex justify-between text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
               <span>Cost per kg gained</span>
               <span>{fmtR(result.costs.totalCostPerKgGained)}/kg</span>
             </div>
@@ -271,21 +271,21 @@ export default function BreakEvenCalculator() {
 
           {/* Break-even prices */}
           <div className={SECTION} style={SECTION_STYLE}>
-            <h2 className="text-sm font-bold mb-4" style={{ color: "#1C1815" }}>Break-even Sell Price</h2>
+            <h2 className="text-sm font-bold mb-4" style={{ color: "var(--ft-text)" }}>Break-even Sell Price</h2>
             <div className="grid grid-cols-3 gap-3">
               {result.prices.map((p) => (
                 <div
                   key={p.margin}
                   className="rounded-xl p-4 text-center"
-                  style={{ background: "#F5F0E8" }}
+                  style={{ background: "var(--ft-surface)" }}
                 >
-                  <div className="text-xs font-semibold mb-1" style={{ color: marginColors[p.margin] ?? "#6B5E52" }}>
+                  <div className="text-xs font-semibold mb-1" style={{ color: marginColors[p.margin] ?? "var(--ft-muted)" }}>
                     {p.margin}% margin
                   </div>
-                  <div className="text-lg font-bold tabular-nums" style={{ color: "#1C1815" }}>
+                  <div className="text-lg font-bold tabular-nums" style={{ color: "var(--ft-text)" }}>
                     {fmtR(p.pricePerKg)}/kg
                   </div>
-                  <div className="text-xs mt-0.5 tabular-nums" style={{ color: "#9C8E7A" }}>
+                  <div className="text-xs mt-0.5 tabular-nums" style={{ color: "var(--ft-subtle)" }}>
                     {fmtR(p.pricePerAnimal)}/animal
                   </div>
                 </div>
@@ -295,17 +295,17 @@ export default function BreakEvenCalculator() {
 
           {/* Sensitivity table */}
           <div className={SECTION} style={SECTION_STYLE}>
-            <h2 className="text-sm font-bold mb-1" style={{ color: "#1C1815" }}>Sensitivity Table</h2>
-            <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>Break-even price (R/kg) by sell mass × margin target</p>
+            <h2 className="text-sm font-bold mb-1" style={{ color: "var(--ft-text)" }}>Sensitivity Table</h2>
+            <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>Break-even price (R/kg) by sell mass × margin target</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr>
-                    <th className="text-left py-2 pr-3 font-semibold" style={{ color: "#6B5E52" }}>
+                    <th className="text-left py-2 pr-3 font-semibold" style={{ color: "var(--ft-muted)" }}>
                       Sell mass (kg)
                     </th>
                     {result.table[0].map((cell) => (
-                      <th key={cell.marginPercent} className="py-2 px-2 text-right font-semibold" style={{ color: "#6B5E52" }}>
+                      <th key={cell.marginPercent} className="py-2 px-2 text-right font-semibold" style={{ color: "var(--ft-muted)" }}>
                         {cell.marginPercent}%
                       </th>
                     ))}
@@ -318,20 +318,20 @@ export default function BreakEvenCalculator() {
                       <tr
                         key={i}
                         style={{
-                          background: isBase ? "#F5F0E8" : "transparent",
-                          borderTop: "1px solid #E8E2D9",
+                          background: isBase ? "var(--ft-surface)" : "transparent",
+                          borderTop: "1px solid var(--ft-surface2)",
                         }}
                       >
-                        <td className="py-2 pr-3 font-medium" style={{ color: "#1C1815" }}>
+                        <td className="py-2 pr-3 font-medium" style={{ color: "var(--ft-text)" }}>
                           {fmt(row[0].targetMass, 0)} kg
                           {isBase && (
-                            <span className="ml-1 text-xs" style={{ color: "#9C8E7A" }}>
+                            <span className="ml-1 text-xs" style={{ color: "var(--ft-subtle)" }}>
                               ←
                             </span>
                           )}
                         </td>
                         {row.map((cell) => (
-                          <td key={cell.marginPercent} className="py-2 px-2 text-right tabular-nums" style={{ color: "#1C1815" }}>
+                          <td key={cell.marginPercent} className="py-2 px-2 text-right tabular-nums" style={{ color: "var(--ft-text)" }}>
                             {fmtR(cell.pricePerKg)}
                           </td>
                         ))}
@@ -346,7 +346,7 @@ export default function BreakEvenCalculator() {
       )}
 
       {!result && inputs === null && (
-        <div className="rounded-2xl p-6 text-center text-sm" style={{ background: "#F5F0E8", color: "#9C8E7A" }}>
+        <div className="rounded-2xl p-6 text-center text-sm" style={{ background: "var(--ft-surface)", color: "var(--ft-subtle)" }}>
           Fill in the fields above to see results.
         </div>
       )}

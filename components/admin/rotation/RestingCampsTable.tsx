@@ -13,7 +13,7 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: "#9C8E7A" }}>
+      <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: "var(--ft-subtle)" }}>
         {value}d / {max}d
       </span>
     </div>
@@ -21,9 +21,9 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 }
 
 const STATUS_CHIP: Record<RotationStatus, { label: string; color: string; bg: string } | null> = {
-  resting:       { label: "Resting",       color: "#166534",  bg: "rgba(134,239,172,0.2)" },
-  resting_ready: { label: "Ready",          color: "#166534",  bg: "rgba(22,163,74,0.15)" },
-  overdue_rest:  { label: "Overdue Rest",   color: "#92400E",  bg: "rgba(245,158,11,0.12)" },
+  resting:       { label: "Resting",       color: "var(--ft-good)",  bg: "rgba(134,239,172,0.2)" },
+  resting_ready: { label: "Ready",          color: "var(--ft-good)",  bg: "rgba(22,163,74,0.15)" },
+  overdue_rest:  { label: "Overdue Rest",   color: "var(--ft-fair)",  bg: "rgba(245,158,11,0.12)" },
   grazing:       null,
   overstayed:    null,
   unknown:       null,
@@ -40,8 +40,8 @@ function formatDate(iso: string): string {
 }
 
 function barColorForStatus(status: RotationStatus): string {
-  if (status === "overdue_rest")  return "#f59e0b";
-  if (status === "resting_ready") return "#16a34a";
+  if (status === "overdue_rest")  return "var(--ft-fair)";
+  if (status === "resting_ready") return "var(--ft-good)";
   return "#86efac";
 }
 
@@ -49,25 +49,25 @@ export default function RestingCampsTable({ camps }: { camps: CampRotationStatus
   const rows = camps.filter((c) => (RESTING_STATUSES as string[]).includes(c.status));
 
   return (
-    <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "#E0D5C8" }}>
-      <div className="px-5 py-3 border-b" style={{ background: "#FAFAF8", borderColor: "#E0D5C8" }}>
-        <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+    <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "var(--ft-border)" }}>
+      <div className="px-5 py-3 border-b" style={{ background: "var(--ft-bg)", borderColor: "var(--ft-border)" }}>
+        <h3 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Resting Camps
         </h3>
       </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b" style={{ borderColor: "#F0EAE0" }}>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Camp</th>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Rest Progress</th>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "#9C8E7A" }}>Next Eligible</th>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Status</th>
+          <tr className="border-b" style={{ borderColor: "var(--ft-surface2)" }}>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Camp</th>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Rest Progress</th>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>Next Eligible</th>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Status</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-5 py-6 text-center text-sm" style={{ color: "#9C8E7A" }}>
+              <td colSpan={4} className="px-5 py-6 text-center text-sm" style={{ color: "var(--ft-subtle)" }}>
                 No camps currently resting.
               </td>
             </tr>
@@ -75,8 +75,8 @@ export default function RestingCampsTable({ camps }: { camps: CampRotationStatus
           {rows.map((camp) => {
             const chip = STATUS_CHIP[camp.status];
             return (
-              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "#F0EAE0" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: "#1C1815" }}>
+              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "var(--ft-surface2)" }}>
+                <td className="px-5 py-3 font-medium" style={{ color: "var(--ft-text)" }}>
                   {camp.campName}
                 </td>
                 <td className="px-5 py-3" style={{ minWidth: 160 }}>
@@ -87,7 +87,7 @@ export default function RestingCampsTable({ camps }: { camps: CampRotationStatus
                       color={barColorForStatus(camp.status)}
                     />
                   ) : (
-                    <span style={{ color: "#9C8E7A" }}>—</span>
+                    <span style={{ color: "var(--ft-subtle)" }}>—</span>
                   )}
                 </td>
                 <td className="px-5 py-3 hidden md:table-cell" style={{ color: "#4B3D2E" }}>

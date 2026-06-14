@@ -84,8 +84,8 @@ export default async function AdminMobsPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Mob Management</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Mob Management</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           {mobs.length} mob{mobs.length !== 1 ? "s" : ""} · group and move animals together
         </p>
       </div>

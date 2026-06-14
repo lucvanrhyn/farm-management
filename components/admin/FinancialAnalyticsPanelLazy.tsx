@@ -7,7 +7,7 @@ const FinancialAnalyticsPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />
+      <div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />
     ),
   },
 );

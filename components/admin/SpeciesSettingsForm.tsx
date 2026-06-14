@@ -39,7 +39,7 @@ function SpeciesToggle({
       onClick={onToggle}
       className="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
       style={{
-        background: enabled ? "#3A6B49" : "#9C8E7A",
+        background: enabled ? "var(--ft-good)" : "var(--ft-subtle)",
         opacity: disabled ? 0.5 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -71,7 +71,7 @@ function SpeciesCard({
     <div
       className="flex items-center justify-between gap-4 rounded-xl p-4"
       style={{
-        background: "#FFFFFF",
+        background: "var(--ft-surface)",
         border: "1px solid rgba(28,24,21,0.08)",
       }}
     >
@@ -80,18 +80,18 @@ function SpeciesCard({
           className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: "rgba(58,107,73,0.1)" }}
         >
-          <Icon className="w-4 h-4" style={{ color: "#3A6B49" }} />
+          <Icon className="w-4 h-4" style={{ color: "var(--ft-good)" }} />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             {row.label}
           </p>
           {row.required ? (
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Core species — always enabled
             </p>
           ) : (
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               {row.enabled ? "Enabled" : "Disabled"}
             </p>
           )}
@@ -100,17 +100,17 @@ function SpeciesCard({
 
       <div className="flex items-center gap-3 shrink-0">
         {status === "saved" && (
-          <span className="text-xs font-medium" style={{ color: "#3A6B49" }}>
+          <span className="text-xs font-medium" style={{ color: "var(--ft-good)" }}>
             Saved
           </span>
         )}
         {status === "error" && (
-          <span className="text-xs font-medium" style={{ color: "#B91C1C" }}>
+          <span className="text-xs font-medium" style={{ color: "var(--ft-crit)" }}>
             Error
           </span>
         )}
         {status === "saving" && (
-          <span className="text-xs" style={{ color: "#9C8E7A" }}>
+          <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             Saving…
           </span>
         )}
@@ -208,13 +208,13 @@ export default function SpeciesSettingsForm({
           className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: "rgba(58,107,73,0.12)" }}
         >
-          <Mail className="w-4 h-4" style={{ color: "#3A6B49" }} />
+          <Mail className="w-4 h-4" style={{ color: "var(--ft-good)" }} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Multi-species rollout
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
             Need a species beyond cattle, sheep, and game? Adding new species
             modules is a guided rollout — get in touch and we&apos;ll switch it
             on for your farm.
@@ -222,7 +222,7 @@ export default function SpeciesSettingsForm({
           <a
             href="mailto:hello@farmtrack.app?subject=Multi-species%20rollout%20request"
             className="inline-flex items-center gap-1 text-xs font-medium mt-2 underline"
-            style={{ color: "#3A6B49" }}
+            style={{ color: "var(--ft-good)" }}
           >
             Contact us
           </a>

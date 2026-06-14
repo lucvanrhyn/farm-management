@@ -12,7 +12,7 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: "#9C8E7A" }}>
+      <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: "var(--ft-subtle)" }}>
         {value}d / {max}d
       </span>
     </div>
@@ -27,42 +27,42 @@ export default function CurrentlyGrazingTable({
   const rows = camps.filter((c) => c.status === "grazing" || c.status === "overstayed");
 
   return (
-    <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "#E0D5C8" }}>
-      <div className="px-5 py-3 border-b" style={{ background: "#FAFAF8", borderColor: "#E0D5C8" }}>
-        <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+    <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "var(--ft-border)" }}>
+      <div className="px-5 py-3 border-b" style={{ background: "var(--ft-bg)", borderColor: "var(--ft-border)" }}>
+        <h3 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Currently Grazing
         </h3>
       </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b" style={{ borderColor: "#F0EAE0" }}>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Camp</th>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Mob(s)</th>
-            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Days Grazed</th>
-            <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>LSU</th>
-            <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "#9C8E7A" }}>Size</th>
+          <tr className="border-b" style={{ borderColor: "var(--ft-surface2)" }}>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Camp</th>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Mob(s)</th>
+            <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Days Grazed</th>
+            <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>LSU</th>
+            <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>Size</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-5 py-6 text-center text-sm" style={{ color: "#9C8E7A" }}>
+              <td colSpan={5} className="px-5 py-6 text-center text-sm" style={{ color: "var(--ft-subtle)" }}>
                 No camps currently being grazed.
               </td>
             </tr>
           )}
           {rows.map((camp) => {
             const isOverstayed = camp.status === "overstayed";
-            const barColor = isOverstayed ? "#dc2626" : "#3b82f6";
+            const barColor = isOverstayed ? "var(--ft-crit)" : "var(--ft-info)";
             return (
-              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "#F0EAE0" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: "#1C1815" }}>
+              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "var(--ft-surface2)" }}>
+                <td className="px-5 py-3 font-medium" style={{ color: "var(--ft-text)" }}>
                   <div className="flex items-center gap-2">
                     {camp.campName}
                     {isOverstayed && (
                       <span
                         className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold"
-                        style={{ background: "rgba(220,38,38,0.12)", color: "#dc2626" }}
+                        style={{ background: "rgba(220,38,38,0.12)", color: "var(--ft-crit)" }}
                       >
                         ! Overstayed
                       </span>
@@ -71,7 +71,7 @@ export default function CurrentlyGrazingTable({
                 </td>
                 <td className="px-5 py-3" style={{ color: "#4B3D2E" }}>
                   {camp.currentMobs.length === 0 ? (
-                    <span style={{ color: "#9C8E7A" }}>—</span>
+                    <span style={{ color: "var(--ft-subtle)" }}>—</span>
                   ) : (
                     camp.currentMobs.map((m) => m.mobName).join(", ")
                   )}
@@ -84,13 +84,13 @@ export default function CurrentlyGrazingTable({
                       color={barColor}
                     />
                   ) : (
-                    <span style={{ color: "#9C8E7A" }}>—</span>
+                    <span style={{ color: "var(--ft-subtle)" }}>—</span>
                   )}
                 </td>
                 <td className="px-5 py-3 text-right tabular-nums" style={{ color: "#4B3D2E" }}>
                   {camp.totalLsu.toFixed(1)}
                 </td>
-                <td className="px-5 py-3 text-right hidden md:table-cell" style={{ color: "#9C8E7A" }}>
+                <td className="px-5 py-3 text-right hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>
                   {camp.sizeHectares != null ? `${camp.sizeHectares} ha` : "—"}
                 </td>
               </tr>

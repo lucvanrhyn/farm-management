@@ -113,7 +113,7 @@ export default async function SheepAnimalsPage({
     <AdminPage>
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Catalogue</h1>
+          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Catalogue</h1>
         </div>
         <div className="flex gap-2 items-center">
           <ExportButton farmSlug={farmSlug} exportType="animals" species={SPECIES} />
@@ -132,14 +132,14 @@ export default async function SheepAnimalsPage({
         deceasedTotal={deceasedTotal}
         crossSpeciesActiveTotal={crossSpeciesTotal}
       />
-      <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+      <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
         <AnimalAnalyticsSection farmSlug={farmSlug} />
       </Suspense>
       <div
         data-testid="danger-zone"
-        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+        className="mt-12 pt-6 border-t border-[var(--ft-surface2)]"
       >
-        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "var(--ft-subtle)" }}>
           Danger zone
         </p>
         <ClearSectionButton endpoint="/api/animals/reset" label="Clear All Sheep" />

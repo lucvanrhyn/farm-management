@@ -26,10 +26,10 @@ export interface CampRow {
 const VELD_TYPES = ["sweetveld", "sourveld", "mixedveld", "cultivated"] as const;
 
 function grazingColor(g: string): { color: string; bg: string } {
-  if (g === "Excellent") return { color: "#4A7C59", bg: "rgba(74,124,89,0.18)" };
+  if (g === "Excellent") return { color: "var(--ft-good)", bg: "rgba(74,124,89,0.18)" };
   if (g === "Good")      return { color: "#6B9E5E", bg: "rgba(107,158,94,0.15)" };
-  if (g === "Poor")      return { color: "#A0522D", bg: "rgba(160,82,45,0.18)" };
-  return { color: "#8B6914", bg: "rgba(139,105,20,0.15)" };
+  if (g === "Poor")      return { color: "var(--ft-poor)", bg: "rgba(160,82,45,0.18)" };
+  return { color: "var(--ft-fair)", bg: "rgba(139,105,20,0.15)" };
 }
 
 interface EditForm {
@@ -44,12 +44,12 @@ interface EditForm {
 }
 
 const FIELD_STYLE = {
-  background: "#FAFAF8", border: "1px solid #D8CFC4", borderRadius: 8,
-  color: "#1C1815", fontSize: 13, padding: "6px 10px", width: "100%", outline: "none",
+  background: "var(--ft-bg)", border: "1px solid var(--ft-border)", borderRadius: 8,
+  color: "var(--ft-text)", fontSize: 13, padding: "6px 10px", width: "100%", outline: "none",
 } as const;
 
 const LABEL_STYLE: React.CSSProperties = {
-  display: "block", fontSize: 11, fontWeight: 600, color: "#6B5C4E",
+  display: "block", fontSize: 11, fontWeight: 600, color: "var(--ft-muted)",
   marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em",
 };
 
@@ -163,17 +163,17 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
           <form
             onSubmit={handleEditSubmit}
             className="w-full max-w-md rounded-2xl p-6 space-y-4"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+            style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+              <h3 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
                 Edit Camp — <span className="font-mono">{editing}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setEditing(null)}
                 className="text-lg leading-none transition-opacity hover:opacity-60"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 ×
               </button>
@@ -217,9 +217,9 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                     type="color"
                     value={editForm.color || "#94a3b8"}
                     onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                    style={{ width: 36, height: 36, border: "1px solid #D8CFC4", borderRadius: 6, cursor: "pointer", padding: 2 }}
+                    style={{ width: 36, height: 36, border: "1px solid var(--ft-border)", borderRadius: 6, cursor: "pointer", padding: 2 }}
                   />
-                  <span className="text-xs font-mono" style={{ color: "#9C8E7A" }}>{editForm.color || "Auto"}</span>
+                  <span className="text-xs font-mono" style={{ color: "var(--ft-subtle)" }}>{editForm.color || "Auto"}</span>
                 </div>
               </div>
             </div>
@@ -227,9 +227,9 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
             {/* Rotation overrides */}
             <div
               className="rounded-lg p-3 space-y-3"
-              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+              style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
             >
-              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#6B5C4E" }}>
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-muted)" }}>
                 Rotation Overrides
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -283,13 +283,13 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                   />
                 </div>
               </div>
-              <p className="text-[11px]" style={{ color: "#9C8E7A" }}>
+              <p className="text-[11px]" style={{ color: "var(--ft-subtle)" }}>
                 Rest Days Override replaces the farm default and disables the seasonal multiplier for this camp.
               </p>
             </div>
 
             {editError && (
-              <p className="text-xs" style={{ color: "#C0574C" }}>{editError}</p>
+              <p className="text-xs" style={{ color: "var(--ft-poor)" }}>{editError}</p>
             )}
 
             <div className="flex gap-2 pt-1">
@@ -297,7 +297,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                 type="submit"
                 disabled={editSaving}
                 className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-                style={{ background: "#4A7C59", color: "#FFFFFF" }}
+                style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
               >
                 {editSaving ? "Saving…" : "Save Changes"}
               </button>
@@ -305,7 +305,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                 type="button"
                 onClick={() => setEditing(null)}
                 className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
-                style={{ background: "#F0EBE3", color: "#6B5C4E" }}
+                style={{ background: "var(--ft-surface)", color: "var(--ft-muted)" }}
               >
                 Cancel
               </button>
@@ -316,10 +316,10 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
 
       <div
         className="overflow-x-auto rounded-2xl"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         {rows.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm" style={{ color: "#9C8E7A" }}>
+          <div className="px-6 py-12 text-center text-sm" style={{ color: "var(--ft-subtle)" }}>
             No camps yet. Add your first camp above.
           </div>
         ) : (
@@ -327,7 +327,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
             <thead>
               <tr
                 className="text-xs uppercase tracking-wide"
-                style={{ borderBottom: "1px solid #E0D5C8", background: "#F5F2EE", color: "#9C8E7A" }}
+                style={{ borderBottom: "1px solid var(--ft-border)", background: "var(--ft-surface)", color: "var(--ft-subtle)" }}
               >
                 <th className="text-left px-4 py-3 font-semibold">Camp</th>
                 <th className="text-right px-4 py-3 font-semibold">Animals</th>
@@ -347,7 +347,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                   <tr
                     key={camp.camp_id}
                     className="admin-row"
-                    style={{ borderBottom: "1px solid #E0D5C8", opacity: isDeleting ? 0.5 : 1 }}
+                    style={{ borderBottom: "1px solid var(--ft-border)", opacity: isDeleting ? 0.5 : 1 }}
                   >
                     <td className="px-4 py-3 font-semibold">
                       <div className="flex items-center gap-2">
@@ -359,25 +359,25 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                         )}
                         <Link
                           href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
-                          className="transition-colors hover:text-[#8B6914]"
-                          style={{ color: "#1C1815" }}
+                          className="transition-colors hover:text-[var(--ft-fair)]"
+                          style={{ color: "var(--ft-text)" }}
                         >
                           {camp.camp_name}
                         </Link>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono" style={{ color: "#6B5C4E" }}>
+                    <td className="px-4 py-3 text-right font-mono" style={{ color: "var(--ft-muted)" }}>
                       {camp.liveCount}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs" style={{ color: "#9C8E7A" }}>
+                    <td className="px-4 py-3 text-right font-mono text-xs" style={{ color: "var(--ft-subtle)" }}>
                       {camp.sizeHectares && camp.sizeHectares > 0
                         ? (camp.liveCount / camp.sizeHectares).toFixed(1)
                         : "—"}
                     </td>
-                    <td className="px-4 py-3 capitalize" style={{ color: "#9C8E7A" }}>
+                    <td className="px-4 py-3 capitalize" style={{ color: "var(--ft-subtle)" }}>
                       {camp.water_source ?? "—"}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "#9C8E7A" }}>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--ft-subtle)" }}>
                       {camp.lastDate !== "—" ? `${camp.lastDate} · ${camp.lastBy}` : "Never"}
                     </td>
                     <td className="px-4 py-3">
@@ -393,8 +393,8 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                         className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
                         style={
                           camp.fence === "Intact"
-                            ? { background: "rgba(74,124,89,0.18)", color: "#4A7C59" }
-                            : { background: "rgba(139,20,20,0.2)", color: "#C0574C" }
+                            ? { background: "rgba(74,124,89,0.18)", color: "var(--ft-good)" }
+                            : { background: "rgba(139,20,20,0.2)", color: "var(--ft-poor)" }
                         }
                       >
                         {camp.fence === "Intact" ? "Intact" : "Damaged"}
@@ -405,14 +405,14 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                         <Link
                           href={`/${farmSlug}/admin/camps/${camp.camp_id}`}
                           className="text-xs transition-opacity hover:opacity-70"
-                          style={{ color: "#8B6914" }}
+                          style={{ color: "var(--ft-fair)" }}
                         >
                           Performance →
                         </Link>
                         <button
                           onClick={() => openEdit(camp)}
                           className="text-xs transition-opacity hover:opacity-70"
-                          style={{ color: "#4A7C59" }}
+                          style={{ color: "var(--ft-good)" }}
                         >
                           Edit
                         </button>
@@ -420,7 +420,7 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
                           onClick={() => handleDelete(camp.camp_id, camp.camp_name)}
                           disabled={isDeleting}
                           className="text-xs transition-opacity hover:opacity-70 disabled:opacity-40"
-                          style={{ color: "#C0574C" }}
+                          style={{ color: "var(--ft-poor)" }}
                         >
                           {isDeleting ? "…" : "Delete"}
                         </button>
@@ -446,16 +446,16 @@ export default function CampsTableClient({ rows, farmSlug }: { rows: CampRow[]; 
           style={{ border: "1px solid rgba(160,50,50,0.3)", background: "rgba(139,20,20,0.05)" }}
         >
           <div className="flex items-center gap-2 px-4 py-3">
-            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "#C0574C" }} />
-            <span className="text-sm font-semibold" style={{ color: "#C0574C" }}>Danger Zone</span>
+            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "var(--ft-poor)" }} />
+            <span className="text-sm font-semibold" style={{ color: "var(--ft-poor)" }}>Danger Zone</span>
           </div>
           <div
             className="px-4 pb-4 pt-3 flex flex-col gap-3"
             style={{ borderTop: "1px solid rgba(160,50,50,0.2)" }}
           >
             <div>
-              <p className="text-sm font-medium" style={{ color: "#1C1815" }}>Remove All Camps</p>
-              <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+              <p className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>Remove All Camps</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                 Permanently deletes every camp on this farm. Blocked if any camp still holds active animals.
               </p>
             </div>

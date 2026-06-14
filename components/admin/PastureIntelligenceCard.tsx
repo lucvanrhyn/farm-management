@@ -6,16 +6,16 @@ function daysAgo(dateStr: string): number {
 }
 
 function statusColors(days: number | null): { text: string; bg: string; label: string } {
-  if (days === null) return { text: "#9C8E7A", bg: "#F7F4F0", label: "No data" };
-  if (days <= 3) return { text: "#B91C1C", bg: "#FFF5F5", label: "Move soon" };
-  if (days <= 7) return { text: "#B45309", bg: "#FFFBEB", label: "Plan move" };
-  return { text: "#2A7D4F", bg: "#F0FBF5", label: "Good" };
+  if (days === null) return { text: "var(--ft-subtle)", bg: "var(--ft-bg)", label: "No data" };
+  if (days <= 3) return { text: "var(--ft-crit)", bg: "var(--ft-crit-bg)", label: "Move soon" };
+  if (days <= 7) return { text: "var(--ft-fair)", bg: "var(--ft-fair-bg)", label: "Plan move" };
+  return { text: "var(--ft-good)", bg: "var(--ft-good-bg)", label: "Good" };
 }
 
 function categoryColor(cat: string): string {
-  if (cat === "Good") return "#2A7D4F";
-  if (cat === "Fair") return "#B45309";
-  return "#B91C1C";
+  if (cat === "Good") return "var(--ft-good)";
+  if (cat === "Fair") return "var(--ft-fair)";
+  return "var(--ft-crit)";
 }
 
 interface Props {
@@ -42,15 +42,15 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
     return (
       <div
         className="rounded-2xl border p-5"
-        style={{ background: "#FAFAF8", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-bg)", borderColor: "var(--ft-border)" }}
       >
         <div className="flex items-center gap-2 mb-1">
           <span className="text-base">🌿</span>
-          <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Pasture Intelligence
           </p>
         </div>
-        <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
           No cover recorded yet. Use the form below to record the first reading.
         </p>
       </div>
@@ -60,12 +60,12 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
   return (
     <div
       className="rounded-2xl border p-5"
-      style={{ background: statusBg, borderColor: "#E0D5C8" }}
+      style={{ background: statusBg, borderColor: "var(--ft-border)" }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-base">🌿</span>
-          <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Pasture Intelligence
           </p>
         </div>
@@ -82,12 +82,12 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
         {daysRemaining !== null ? (
           <p className="text-3xl font-bold tabular-nums" style={{ color: statusText }}>
             {daysRemaining}
-            <span className="text-base font-normal ml-1" style={{ color: "#6B5E50" }}>
+            <span className="text-base font-normal ml-1" style={{ color: "var(--ft-muted)" }}>
               days remaining
             </span>
           </p>
         ) : (
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             {!sizeHectares
               ? "Add camp size (ha) to calculate days remaining"
               : "No animals in camp"}
@@ -97,7 +97,7 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
 
       {/* Reading details */}
       <div className="mt-3 space-y-1">
-        <div className="flex items-center gap-2 text-xs" style={{ color: "#6B5E50" }}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ft-muted)" }}>
           <span
             className="font-semibold"
             style={{ color: categoryColor(latest.coverCategory) }}
@@ -115,7 +115,7 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
               : `${readingAge} days ago`}
           </span>
         </div>
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           By {latest.recordedBy}
           {sizeHectares && animalCount > 0 && (
             <span>
@@ -129,7 +129,7 @@ export default function PastureIntelligenceCard({ latest, sizeHectares, animalCo
 
       {/* Stale reading warning */}
       {readingAge !== null && readingAge > 14 && (
-        <p className="mt-3 text-xs" style={{ color: "#B45309" }}>
+        <p className="mt-3 text-xs" style={{ color: "var(--ft-fair)" }}>
           ⚠ Cover data is {readingAge} days old — record a fresh reading for accuracy
         </p>
       )}

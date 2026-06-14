@@ -54,7 +54,7 @@ export default async function CampDetailPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <p className="text-red-500 text-sm">Farm not found.</p>
       </div>
     );
@@ -198,22 +198,22 @@ export default async function CampDetailPage({
   };
 
   return (
-    <div className="min-w-0 p-8 max-w-4xl bg-[#FAFAF8]">
+    <div className="min-w-0 p-8 max-w-4xl bg-[var(--ft-bg)]">
         {/* Back */}
         <Link
           href={`/${farmSlug}/admin/camps`}
           className="inline-flex items-center gap-1 text-sm mb-6 transition-opacity hover:opacity-70"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           ← Back to Camps
         </Link>
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
             {camp.campName}
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
             {[
               camp.sizeHectares ? `${camp.sizeHectares} ha` : null,
               camp.waterSource ? camp.waterSource : null,
@@ -330,7 +330,7 @@ export default async function CampDetailPage({
 
         {/* Pasture Intelligence */}
         <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3" style={{ color: "#1C1815" }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--ft-text)" }}>
             Pasture Intelligence
           </h2>
           <div className="space-y-4">
@@ -342,9 +342,9 @@ export default async function CampDetailPage({
             />
             <div
               className="rounded-2xl border p-5"
-              style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+              style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
             >
-              <p className="text-xs font-semibold mb-3" style={{ color: "#6B5E50" }}>
+              <p className="text-xs font-semibold mb-3" style={{ color: "var(--ft-muted)" }}>
                 Record New Cover Reading
               </p>
               <CampCoverForm
@@ -361,9 +361,9 @@ export default async function CampDetailPage({
         {coverHistory.length > 0 && (
           <div
             className="rounded-2xl border p-5 mb-6"
-            style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+            style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
           >
-            <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
               Pasture Trends
             </h2>
 
@@ -371,10 +371,10 @@ export default async function CampDetailPage({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
               {/* Current cover */}
               <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs font-medium" style={{ color: "var(--ft-subtle)" }}>
                   Current Cover
                 </p>
-                <p className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+                <p className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
                   {growthRate.currentKgDmPerHa !== null
                     ? `${growthRate.currentKgDmPerHa.toLocaleString()} kg DM/ha`
                     : "—"}
@@ -383,21 +383,21 @@ export default async function CampDetailPage({
 
               {/* Growth rate */}
               <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs font-medium" style={{ color: "var(--ft-subtle)" }}>
                   Growth Rate
                 </p>
                 {growthRate.growthRateKgPerDay !== null ? (
                   <p
                     className="text-lg font-semibold"
                     style={{
-                      color: growthRate.growthRateKgPerDay >= 0 ? "#2E7D32" : "#C62828",
+                      color: growthRate.growthRateKgPerDay >= 0 ? "var(--ft-good)" : "var(--ft-crit)",
                     }}
                   >
                     {growthRate.growthRateKgPerDay >= 0 ? "+" : ""}
                     {growthRate.growthRateKgPerDay} kg DM/ha/day
                   </p>
                 ) : (
-                  <p className="text-lg font-semibold" style={{ color: "#9C8E7A" }}>
+                  <p className="text-lg font-semibold" style={{ color: "var(--ft-subtle)" }}>
                     — (need 2+ readings)
                   </p>
                 )}
@@ -405,10 +405,10 @@ export default async function CampDetailPage({
 
               {/* Recovery projection */}
               <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs font-medium" style={{ color: "var(--ft-subtle)" }}>
                   Days to Recovery (1 500 kg DM/ha)
                 </p>
-                <p className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+                <p className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
                   {growthRate.projectedRecoveryDays !== null
                     ? `${growthRate.projectedRecoveryDays} days`
                     : "—"}
@@ -417,7 +417,7 @@ export default async function CampDetailPage({
             </div>
 
             {/* Cover history list */}
-            <p className="text-xs font-semibold mb-2" style={{ color: "#6B5E50" }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: "var(--ft-muted)" }}>
               Recent Readings
             </p>
             <ol className="space-y-2">
@@ -429,21 +429,21 @@ export default async function CampDetailPage({
                 });
                 const categoryColor =
                   r.coverCategory === "Good"
-                    ? "#2E7D32"
+                    ? "var(--ft-good)"
                     : r.coverCategory === "Fair"
-                    ? "#E65100"
-                    : "#C62828";
+                    ? "var(--ft-poor)"
+                    : "var(--ft-crit)";
                 return (
                   <li
                     key={r.id}
                     className="flex items-center justify-between text-sm py-1.5 border-b last:border-0"
-                    style={{ borderColor: "#F0E8DE" }}
+                    style={{ borderColor: "var(--ft-surface)" }}
                   >
-                    <span style={{ color: "#1C1815" }}>{date}</span>
+                    <span style={{ color: "var(--ft-text)" }}>{date}</span>
                     <span className="font-medium" style={{ color: categoryColor }}>
                       {r.coverCategory}
                     </span>
-                    <span className="font-mono text-xs" style={{ color: "#6B5E50" }}>
+                    <span className="font-mono text-xs" style={{ color: "var(--ft-muted)" }}>
                       {r.kgDmPerHa.toLocaleString()} kg DM/ha
                     </span>
                   </li>
@@ -463,13 +463,13 @@ export default async function CampDetailPage({
         {/* Recent activity timeline */}
         <div
           className="rounded-2xl border p-6"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+          <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
             Recent Activity
           </h2>
           {recentObs.length === 0 ? (
-            <p className="text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
               No observations recorded yet.
             </p>
           ) : (
@@ -486,11 +486,11 @@ export default async function CampDetailPage({
                       {(OBS_LABELS[obs.type] ?? "📌 " + obs.type).split(" ")[0]}
                     </span>
                     <div className="min-w-0">
-                      <p className="font-medium" style={{ color: "#1C1815" }}>
+                      <p className="font-medium" style={{ color: "var(--ft-text)" }}>
                         {OBS_LABELS[obs.type]?.replace(/^[^ ]+ /, "") ??
                           obs.type.replace(/_/g, " ")}
                         {obs.animalId && (
-                          <span style={{ color: "#9C8E7A" }}>
+                          <span style={{ color: "var(--ft-subtle)" }}>
                             {" "}
                             ·{" "}
                             <Link
@@ -502,7 +502,7 @@ export default async function CampDetailPage({
                           </span>
                         )}
                       </p>
-                      <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                         {date}
                         {obs.loggedBy && ` · ${obs.loggedBy}`}
                       </p>

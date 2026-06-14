@@ -34,7 +34,7 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
   }
 
   const isIncome = type === "income";
-  const chipColor = isIncome ? "#4A7C59" : "#A0522D";
+  const chipColor = isIncome ? "var(--ft-good)" : "var(--ft-poor)";
   const chipBg = isIncome ? "rgba(74,124,89,0.15)" : "rgba(160,82,45,0.15)";
 
   return (
@@ -80,9 +80,9 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
           }}
           className="flex-1 rounded-xl px-3 py-1.5 text-sm focus:outline-none"
           style={{
-            background: "#FFFFFF",
-            border: "1px solid #E0D5C8",
-            color: "#1C1815",
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
+            color: "var(--ft-text)",
           }}
         />
         <button
@@ -90,15 +90,15 @@ function CategoryList({ categories, type, onDelete, onAdd, deletingId, addingTyp
           disabled={addingType === `add-${type}` || !newVal.trim()}
           className="px-3 py-1.5 rounded-xl text-sm disabled:opacity-40 transition-colors"
           style={{
-            background: "#F5F2EE",
-            color: "#6B5C4E",
-            border: "1px solid #E0D5C8",
+            background: "var(--ft-surface)",
+            color: "var(--ft-muted)",
+            border: "1px solid var(--ft-border)",
           }}
         >
           ＋
         </button>
       </div>
-      {error && <p className="text-xs" style={{ color: "#A0522D" }}>{error}</p>}
+      {error && <p className="text-xs" style={{ color: "var(--ft-poor)" }}>{error}</p>}
     </div>
   );
 }
@@ -149,9 +149,9 @@ export default function CategoryManager({ incomeCategories, expenseCategories, o
   return (
     <div
       className="rounded-2xl p-6 space-y-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
-      <h2 className="text-sm font-semibold" style={{ color: "#6B5C4E" }}>Manage Categories</h2>
+      <h2 className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>Manage Categories</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CategoryList
           categories={incomeCategories}

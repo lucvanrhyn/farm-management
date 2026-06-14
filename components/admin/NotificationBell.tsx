@@ -16,8 +16,8 @@ interface NotificationItem {
 }
 
 const SEVERITY_COLORS = {
-  red: { dot: "#C0574C", bg: "rgba(192,87,76,0.1)", border: "rgba(192,87,76,0.2)" },
-  amber: { dot: "#8B6914", bg: "rgba(139,105,20,0.1)", border: "rgba(139,105,20,0.25)" },
+  red: { dot: "var(--ft-poor)", bg: "rgba(192,87,76,0.1)", border: "rgba(192,87,76,0.2)" },
+  amber: { dot: "var(--ft-fair)", bg: "rgba(139,105,20,0.1)", border: "rgba(139,105,20,0.25)" },
 };
 
 // Fetch helper lives outside the component so the linter cannot trace setState
@@ -113,7 +113,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
         {unreadCount > 0 && (
           <span
             className="absolute top-0.5 right-0.5 flex items-center justify-center text-[9px] font-bold rounded-full min-w-[14px] h-[14px] px-0.5"
-            style={{ background: "#C0574C", color: "#FFFFFF" }}
+            style={{ background: "var(--ft-poor)", color: "#FFFFFF" }}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>

@@ -67,7 +67,7 @@ export function PhotoLightbox({ open, url, alt, onClose }: Props) {
           top: '1rem',
           right: '1rem',
           background: 'rgba(255, 255, 255, 0.15)',
-          color: '#FAFAF8',
+          color: 'var(--ft-bg)',
           border: 'none',
           borderRadius: '999px',
           width: '40px',

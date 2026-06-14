@@ -5,10 +5,10 @@ import { useState } from "react";
 import { useFarmModeSafe, type FarmMode } from "@/lib/farm-mode";
 
 const FIELD_STYLE = {
-  background: "#FAFAF8",
-  border: "1px solid #D8CFC4",
+  background: "var(--ft-bg)",
+  border: "1px solid var(--ft-border)",
   borderRadius: 8,
-  color: "#1C1815",
+  color: "var(--ft-text)",
   fontSize: 14,
   padding: "8px 12px",
   width: "100%",
@@ -19,7 +19,7 @@ const LABEL_STYLE = {
   display: "block",
   fontSize: 12,
   fontWeight: 600,
-  color: "#6B5C4E",
+  color: "var(--ft-muted)",
   marginBottom: 4,
   textTransform: "uppercase" as const,
   letterSpacing: "0.05em",
@@ -117,7 +117,7 @@ export default function AddCampForm() {
       <button
         onClick={() => { setOpen((o) => !o); setError(null); }}
         className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80"
-        style={{ background: "#4A7C59", color: "#FFFFFF", border: "none" }}
+        style={{ background: "var(--ft-good)", color: "#FFFFFF", border: "none" }}
       >
         {open ? "Cancel" : "+ Add Camp"}
       </button>
@@ -126,9 +126,9 @@ export default function AddCampForm() {
         <form
           onSubmit={handleSubmit}
           className="mt-4 p-5 rounded-2xl"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
-          <h3 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>New Camp</h3>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>New Camp</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -188,7 +188,7 @@ export default function AddCampForm() {
                   <label
                     key={s}
                     className="inline-flex items-center gap-2 cursor-pointer text-sm"
-                    style={{ color: "#1C1815" }}
+                    style={{ color: "var(--ft-text)" }}
                   >
                     <input
                       type="radio"
@@ -208,7 +208,7 @@ export default function AddCampForm() {
               {!speciesTouched && (
                 <p
                   className="mt-2 text-xs"
-                  style={{ color: "#9C8E7A" }}
+                  style={{ color: "var(--ft-subtle)" }}
                   data-testid="species-confirm-hint"
                 >
                   Please confirm species before saving.
@@ -220,7 +220,7 @@ export default function AddCampForm() {
           )}
 
           {error && (
-            <p className="mt-3 text-xs" style={{ color: "#C0574C" }}>{error}</p>
+            <p className="mt-3 text-xs" style={{ color: "var(--ft-poor)" }}>{error}</p>
           )}
 
           <div className="mt-4 flex gap-2">
@@ -228,7 +228,7 @@ export default function AddCampForm() {
               type="submit"
               disabled={saving}
               className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-              style={{ background: "#4A7C59", color: "#FFFFFF" }}
+              style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
             >
               {saving ? "Saving…" : "Save Camp"}
             </button>
@@ -236,7 +236,7 @@ export default function AddCampForm() {
               type="button"
               onClick={() => setOpen(false)}
               className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
-              style={{ background: "#F0EBE3", color: "#6B5C4E" }}
+              style={{ background: "var(--ft-surface)", color: "var(--ft-muted)" }}
             >
               Cancel
             </button>

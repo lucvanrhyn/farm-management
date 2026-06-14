@@ -134,7 +134,7 @@ export default async function PerformanceSection({
   return (
     <div>
       <div className="mb-4 flex items-start justify-between gap-4">
-        <p className="text-xs font-mono mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs font-mono mt-1" style={{ color: "var(--ft-subtle)" }}>
           {camps.length} camps · stocking density, grazing, pasture cover
         </p>
         <ExportButton farmSlug={farmSlug} exportType="camps" label="Export" />

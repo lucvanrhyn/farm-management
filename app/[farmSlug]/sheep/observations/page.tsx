@@ -106,8 +106,8 @@ export default async function SheepObservationsPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Observations</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Sheep Observations</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           Recent entries · sheep flock only
         </p>
       </div>
@@ -129,8 +129,8 @@ export default async function SheepObservationsPage({
         button is intentionally kept so a Basson-equivalent sheep tenant
         has feature parity in the UX.
       */}
-      <div data-testid="danger-zone" className="mt-12 pt-6 border-t border-[#E8DFD2]">
-        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#9C8E7A" }}>
+      <div data-testid="danger-zone" className="mt-12 pt-6 border-t border-[var(--ft-surface2)]">
+        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "var(--ft-subtle)" }}>
           Danger zone
         </p>
         <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />

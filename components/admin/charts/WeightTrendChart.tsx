@@ -51,12 +51,12 @@ interface Props {
   adgTarget?: number;
 }
 
-const gridStroke = "#E0D5C8";
-const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+const gridStroke = "var(--ft-border)";
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(139,105,20,0.3)",
-  color: "#F5EBD4",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
@@ -66,10 +66,10 @@ const tooltipStyle = {
  * Exported for unit tests.
  */
 export function adgColor(adg: number | null, adgTarget: number): string {
-  if (adg === null) return "#4A7C59"; // existing default green when ADG not provided
-  if (adg >= adgTarget) return "#10b981"; // good
-  if (adg >= 0.7) return "#f59e0b"; // ok / warning
-  return "#ef4444"; // poor
+  if (adg === null) return "var(--ft-good)"; // existing default green when ADG not provided
+  if (adg >= adgTarget) return "var(--ft-good)"; // good
+  if (adg >= 0.7) return "var(--ft-fair)"; // ok / warning
+  return "var(--ft-crit)"; // poor
 }
 
 interface LinearFit {
@@ -108,7 +108,7 @@ export default function WeightTrendChart({
 }: Props) {
   if (points.length < 2) {
     return (
-      <p style={{ color: "#9C8E7A", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
+      <p style={{ color: "var(--ft-subtle)", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
         Need 2+ weight readings to display chart
       </p>
     );
@@ -141,16 +141,16 @@ export default function WeightTrendChart({
               return [`${value.toFixed(1)} kg`, labelMap[String(name)] ?? String(name)];
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
+          <Legend wrapperStyle={{ fontSize: 11, color: "var(--ft-muted)" }} />
           {targetWeight != null && (
             <ReferenceLine
               y={targetWeight}
-              stroke="#10b981"
+              stroke="var(--ft-good)"
               strokeDasharray="4 3"
               label={{
                 value: `Target ${targetWeight} kg`,
                 position: "insideTopRight",
-                fill: "#10b981",
+                fill: "var(--ft-good)",
                 fontSize: 10,
               }}
             />
@@ -158,12 +158,12 @@ export default function WeightTrendChart({
           {projectedDate && (
             <ReferenceLine
               x={projectedDate}
-              stroke="#3b82f6"
+              stroke="var(--ft-info)"
               strokeDasharray="3 3"
               label={{
                 value: `Projected reach`,
                 position: "insideTopLeft",
-                fill: "#3b82f6",
+                fill: "var(--ft-info)",
                 fontSize: 10,
               }}
             />
@@ -180,7 +180,7 @@ export default function WeightTrendChart({
           <Line
             type="monotone"
             dataKey="trend"
-            stroke="#C0574C"
+            stroke="var(--ft-poor)"
             strokeWidth={1.5}
             strokeDasharray="5 3"
             dot={false}

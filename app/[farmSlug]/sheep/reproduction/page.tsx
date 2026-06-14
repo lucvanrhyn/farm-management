@@ -31,10 +31,10 @@ function lambingPctStatus(pct: number | null): "good" | "warning" | "alert" | "n
 }
 
 const STATUS_COLORS = {
-  good:    { color: "#166534", bg: "rgba(34,197,94,0.1)" },
-  warning: { color: "#92400E", bg: "rgba(245,158,11,0.12)" },
-  alert:   { color: "#991B1B", bg: "rgba(220,38,38,0.1)" },
-  neutral: { color: "#9C8E7A", bg: "rgba(156,142,122,0.1)" },
+  good:    { color: "var(--ft-good)", bg: "rgba(34,197,94,0.1)" },
+  warning: { color: "var(--ft-fair)", bg: "rgba(245,158,11,0.12)" },
+  alert:   { color: "var(--ft-crit)", bg: "rgba(220,38,38,0.1)" },
+  neutral: { color: "var(--ft-subtle)", bg: "rgba(156,142,122,0.1)" },
 };
 
 const ALERT_ICONS: Record<string, React.ElementType> = {
@@ -46,8 +46,8 @@ const ALERT_ICONS: Record<string, React.ElementType> = {
 
 const EVENT_DOT: Record<string, string> = {
   lambing:  "#0D9488",
-  joining:  "#8B6914",
-  shearing: "#9C8E7A",
+  joining:  "var(--ft-fair)",
+  shearing: "var(--ft-subtle)",
 };
 
 const EVENT_LABEL: Record<string, string> = {
@@ -73,9 +73,9 @@ function KpiCard({
   return (
     <div
       className="rounded-2xl border p-5 flex flex-col gap-1"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {label}
       </p>
       <p className="text-3xl font-bold tabular-nums" style={{ color }}>
@@ -97,8 +97,8 @@ function AlertCard({ alert }: { alert: SpeciesAlert }) {
   const Icon = ALERT_ICONS[alert.icon] ?? AlertTriangle;
   const isRed = alert.severity === "red";
   const style = isRed
-    ? { background: "rgba(220,38,38,0.06)", borderColor: "rgba(220,38,38,0.25)", color: "#991B1B" }
-    : { background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)", color: "#92400E" };
+    ? { background: "rgba(220,38,38,0.06)", borderColor: "rgba(220,38,38,0.25)", color: "var(--ft-crit)" }
+    : { background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)", color: "var(--ft-fair)" };
 
   return (
     <Link
@@ -157,8 +157,8 @@ export default async function SheepReproductionPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-sm" style={{ color: "#C0574C" }}>Farm not found.</p>
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
+        <p className="text-sm" style={{ color: "var(--ft-poor)" }}>Farm not found.</p>
       </div>
     );
   }
@@ -188,14 +188,14 @@ export default async function SheepReproductionPage({
   const ss = dashData.speciesSpecific as { ewesActive: number; ramsActive: number; lambsActive: number };
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
           Lambing Dashboard
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           Sheep reproduction · 12-month window · SA benchmark: ≥85% lambing rate
         </p>
       </div>
@@ -256,21 +256,21 @@ export default async function SheepReproductionPage({
         {/* Recent Events Timeline */}
         <div
           className="rounded-2xl border"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Recent Events
             </h2>
           </div>
           {recentEvents.length === 0 ? (
-            <p className="px-5 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="px-5 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
               No recent sheep events recorded.
             </p>
           ) : (
-            <div className="px-5 py-4 relative" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "28px" }}>
+            <div className="px-5 py-4 relative" style={{ borderLeft: "2px solid var(--ft-border)", marginLeft: "28px" }}>
               {recentEvents.map((obs, i) => {
-                const dotColor = EVENT_DOT[obs.type] ?? "#9C8E7A";
+                const dotColor = EVENT_DOT[obs.type] ?? "var(--ft-subtle)";
                 const label = EVENT_LABEL[obs.type] ?? obs.type;
                 const campName = campMap.get(obs.campId) ?? obs.campId;
 
@@ -284,10 +284,10 @@ export default async function SheepReproductionPage({
                       style={{ background: dotColor, border: "2px solid #FFFFFF", boxShadow: `0 0 0 1px ${dotColor}` }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium" style={{ color: "#1C1815" }}>
+                      <p className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>
                         {label}
                       </p>
-                      <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+                      <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
                         {formatDate(obs.observedAt)}
                         {obs.animalId && ` · ${obs.animalId}`}
                         {` · ${campName}`}
@@ -303,13 +303,13 @@ export default async function SheepReproductionPage({
         {/* Flock Summary */}
         <div
           className="rounded-2xl border"
-          style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
         >
-          <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Flock Summary
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Active sheep by category
             </p>
           </div>
@@ -322,18 +322,18 @@ export default async function SheepReproductionPage({
               ] as const
             ).map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: "#6B5E50" }}>{label}</span>
-                <span className="text-sm font-bold tabular-nums" style={{ color: "#1C1815" }}>
+                <span className="text-sm" style={{ color: "var(--ft-muted)" }}>{label}</span>
+                <span className="text-sm font-bold tabular-nums" style={{ color: "var(--ft-text)" }}>
                   {value}
                 </span>
               </div>
             ))}
             <div
               className="flex items-center justify-between pt-3 mt-1"
-              style={{ borderTop: "1px solid #E0D5C8" }}
+              style={{ borderTop: "1px solid var(--ft-border)" }}
             >
-              <span className="text-sm font-semibold" style={{ color: "#1C1815" }}>Total</span>
-              <span className="text-sm font-bold tabular-nums" style={{ color: "#1C1815" }}>
+              <span className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>Total</span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: "var(--ft-text)" }}>
                 {dashData.activeCount}
               </span>
             </div>

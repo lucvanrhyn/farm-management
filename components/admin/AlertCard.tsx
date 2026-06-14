@@ -36,19 +36,19 @@ const ICON_MAP: Record<string, LucideIcon> = {
 };
 
 const SPECIES_BADGE: Record<AlertSource, { label: string; bg: string; text: string }> = {
-  cattle: { label: "Cattle", bg: "rgba(139,105,20,0.10)", text: "#8B6914" },
-  sheep:  { label: "Sheep",  bg: "rgba(74,124,89,0.10)",  text: "#4A7C59" },
-  game:   { label: "Game",   bg: "rgba(107,94,80,0.12)",  text: "#6B5E50" },
-  farm:   { label: "Farm",   bg: "rgba(28,24,21,0.07)",   text: "#9C8E7A" },
+  cattle: { label: "Cattle", bg: "rgba(139,105,20,0.10)", text: "var(--ft-fair)" },
+  sheep:  { label: "Sheep",  bg: "rgba(74,124,89,0.10)",  text: "var(--ft-good)" },
+  game:   { label: "Game",   bg: "rgba(107,94,80,0.12)",  text: "var(--ft-muted)" },
+  farm:   { label: "Farm",   bg: "rgba(28,24,21,0.07)",   text: "var(--ft-subtle)" },
 };
 
 export default function AlertCard({ alert }: { alert: DashboardAlert }) {
   const isRed = alert.severity === "red";
-  const dotColor = isRed ? "#C0574C" : "#8B6914";
+  const dotColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
   const borderColor = isRed ? "rgba(192,87,76,0.25)" : "rgba(139,105,20,0.25)";
   const bgColor = isRed ? "rgba(192,87,76,0.06)" : "rgba(139,105,20,0.06)";
   const badgeBg = isRed ? "rgba(192,87,76,0.12)" : "rgba(139,105,20,0.12)";
-  const textColor = isRed ? "#C0574C" : "#8B6914";
+  const textColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
 
   const Icon = ICON_MAP[alert.icon];
   const badge = SPECIES_BADGE[alert.species];
@@ -75,7 +75,7 @@ export default function AlertCard({ alert }: { alert: DashboardAlert }) {
       </span>
 
       {/* Message */}
-      <span className="flex-1 text-sm min-w-0 truncate" style={{ color: "#1C1815" }}>
+      <span className="flex-1 text-sm min-w-0 truncate" style={{ color: "var(--ft-text)" }}>
         {alert.message}
       </span>
 

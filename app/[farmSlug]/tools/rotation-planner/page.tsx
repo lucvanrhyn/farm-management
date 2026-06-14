@@ -77,12 +77,12 @@ export default async function RotationPlannerPage({
   );
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
           Rotation Planner
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           Plan and execute pasture rotation sequences across your camps.
         </p>
       </div>

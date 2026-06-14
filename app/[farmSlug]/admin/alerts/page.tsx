@@ -49,8 +49,8 @@ export default async function AlertsPage({
   return (
     <AdminPage>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-[#1C1815]">Alerts</h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-xl font-bold text-[var(--ft-text)]">Alerts</h1>
+        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
           All alerts across cattle, sheep, game &amp; farm
         </p>
       </div>

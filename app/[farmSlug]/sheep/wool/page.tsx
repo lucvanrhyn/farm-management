@@ -25,30 +25,30 @@ export default async function SheepWoolPage({
   await params;
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
           Wool
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           Shearing records, fleece weights, and clip values
         </p>
       </div>
 
       <div
         className="rounded-2xl border p-8 flex flex-col items-center text-center gap-3"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center"
           style={{ background: "rgba(156,142,122,0.1)" }}
         >
-          <Scissors className="w-6 h-6" style={{ color: "#9C8E7A" }} />
+          <Scissors className="w-6 h-6" style={{ color: "var(--ft-subtle)" }} />
         </div>
-        <h2 className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
           Coming soon
         </h2>
-        <p className="text-sm max-w-md" style={{ color: "#6B5E50" }}>
+        <p className="text-sm max-w-md" style={{ color: "var(--ft-muted)" }}>
           Wool tracking is in development. Log shearing events under
           observations today — the dashboard will roll them up here once
           released.

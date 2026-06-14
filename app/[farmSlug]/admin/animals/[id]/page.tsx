@@ -101,20 +101,20 @@ export default async function AnimalDetailPage({
   const movementObs = observations.filter((o) => o.type === "animal_movement");
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-3xl space-y-4 bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 max-w-3xl space-y-4 bg-[var(--ft-bg)]">
         {/* Back */}
         <Link
           href={`/${farmSlug}/admin/animals`}
           className="inline-flex items-center gap-1 text-sm"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           ← Back to Animals
         </Link>
 
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>{animal.animalId}</h1>
-          {animal.name && <span className="text-lg" style={{ color: "#9C8E7A" }}>— {animal.name}</span>}
+          <h1 className="text-2xl font-bold font-mono" style={{ color: "var(--ft-text)" }}>{animal.animalId}</h1>
+          {animal.name && <span className="text-lg" style={{ color: "var(--ft-subtle)" }}>— {animal.name}</span>}
           <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${getCategoryChipColor(animal.category as AnimalCategory)}`}>
             {getCategoryLabel(animal.category as AnimalCategory)}
           </span>
@@ -129,7 +129,7 @@ export default async function AnimalDetailPage({
         {/* Tab bar */}
         <div
           className="flex gap-0 rounded-xl overflow-hidden border"
-          style={{ border: "1px solid #E0D5C8", background: "#FFFFFF" }}
+          style={{ border: "1px solid var(--ft-border)", background: "var(--ft-surface)" }}
         >
           {tabs.map((t) => {
             const isActive = t.key === activeTab;
@@ -139,9 +139,9 @@ export default async function AnimalDetailPage({
                 href={`/${farmSlug}/admin/animals/${id}?tab=${t.key}`}
                 className="flex-1 text-center py-2.5 text-xs font-semibold transition-colors"
                 style={{
-                  background: isActive ? "#1C1815" : "transparent",
-                  color: isActive ? "#FAFAF8" : "#9C8E7A",
-                  borderRight: "1px solid #E0D5C8",
+                  background: isActive ? "var(--ft-text)" : "transparent",
+                  color: isActive ? "var(--ft-bg)" : "var(--ft-subtle)",
+                  borderRight: "1px solid var(--ft-border)",
                 }}
               >
                 {t.label}

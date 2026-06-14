@@ -129,8 +129,8 @@ function TabButton({
       onClick={() => onSelect(tab)}
       className="px-4 py-2 text-sm font-medium transition-colors"
       style={{
-        color: isActive ? "#1C1815" : "#9C8E7A",
-        borderBottom: isActive ? "2px solid #8B6914" : "2px solid transparent",
+        color: isActive ? "var(--ft-text)" : "var(--ft-subtle)",
+        borderBottom: isActive ? "2px solid var(--ft-fair)" : "2px solid transparent",
         marginBottom: -1,
       }}
     >
@@ -164,7 +164,7 @@ function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
 
   return (
     <div id="mapset-panel-layers" role="tabpanel" aria-labelledby="mapset-tab-layers">
-      <p className="text-sm mb-4" style={{ color: "#6B5E48" }}>
+      <p className="text-sm mb-4" style={{ color: "var(--ft-muted)" }}>
         Choose which layers appear on the FarmMap. Settings persist on this device.
       </p>
 
@@ -196,7 +196,7 @@ function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
                 style={{ cursor: locked ? "not-allowed" : "pointer" }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium" style={{ color: "#1C1815" }}>
+                  <span className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>
                     {opt.label}
                   </span>
                   {opt.moat && (
@@ -204,14 +204,14 @@ function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
                       className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded-full"
                       style={{
                         background: "rgba(139,105,20,0.15)",
-                        color: "#8B6914",
+                        color: "var(--ft-fair)",
                       }}
                     >
                       Advanced
                     </span>
                   )}
                 </div>
-                <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                   {opt.description}
                 </p>
               </label>
@@ -219,7 +219,7 @@ function LayersTab({ farmSlug, tier }: { farmSlug: string; tier: FarmTier }) {
                 <Link
                   href={`/${farmSlug}/subscribe/upgrade`}
                   className="shrink-0 self-center text-xs font-medium underline"
-                  style={{ color: "#8B6914" }}
+                  style={{ color: "var(--ft-fair)" }}
                 >
                   Upgrade
                 </Link>
@@ -290,10 +290,10 @@ function GisTab({
   return (
     <div id="mapset-panel-gis" role="tabpanel" aria-labelledby="mapset-tab-gis" className="flex flex-col gap-6">
       <section>
-        <h2 className="text-sm font-semibold mb-2" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--ft-text)" }}>
           EskomSePush area
         </h2>
-        <p className="text-xs mb-3" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mb-3" style={{ color: "var(--ft-subtle)" }}>
           Select your load-shedding area so the map banner and alert engine can pull the right schedule.
         </p>
 
@@ -327,7 +327,7 @@ function GisTab({
             style={{
               background: "rgba(220,38,38,0.08)",
               borderColor: "rgba(220,38,38,0.4)",
-              color: "#b91c1c",
+              color: "var(--ft-crit)",
             }}
           >
             {errorMessage}
@@ -343,12 +343,12 @@ function GisTab({
 
       <section
         className="rounded-lg border px-4 py-3"
-        style={{ borderColor: "rgba(156,142,122,0.25)", background: "#FFFFFF" }}
+        style={{ borderColor: "rgba(156,142,122,0.25)", background: "var(--ft-surface)" }}
       >
-        <h2 className="text-sm font-semibold mb-1" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--ft-text)" }}>
           FMD red-line zone
         </h2>
-        <p className="text-xs mb-2" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mb-2" style={{ color: "var(--ft-subtle)" }}>
           Computed from your camp polygons vs. the published DALRRD foot-and-mouth control zones.
         </p>
         <FmdZoneBadge result={fmdZone} />
@@ -360,7 +360,7 @@ function GisTab({
 function FmdZoneBadge({ result }: { result: FmdZoneResult }) {
   if (result.status === "inside") {
     return (
-      <p className="text-sm" style={{ color: "#b45309" }}>
+      <p className="text-sm" style={{ color: "var(--ft-fair)" }}>
         Your farm centroid is <strong>inside the FMD control zone</strong>: {result.zoneName}.
         Statutory movement restrictions apply.
       </p>
@@ -374,7 +374,7 @@ function FmdZoneBadge({ result }: { result: FmdZoneResult }) {
     );
   }
   return (
-    <p className="text-sm" style={{ color: "#6B5E48" }}>
+    <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
       FMD zone status unavailable — add camp polygons on the FarmMap to enable this check.
     </p>
   );

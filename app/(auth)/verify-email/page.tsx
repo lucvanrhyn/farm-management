@@ -73,19 +73,19 @@ function VerifyShell({
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5"
-      style={{ background: "#1A1510" }}
+      style={{ background: "var(--ft-text)" }}
     >
       <div
         className="w-full max-w-sm px-8 py-10 flex flex-col items-center gap-6"
         style={{
           borderRadius: "2rem",
-          background: "#241C14",
+          background: "var(--ft-text)",
           border: "1px solid rgba(196,144,48,0.18)",
           boxShadow: "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
         }}
       >
         {status === "loading" && (
-          <p style={{ color: "#F0DEB8", fontFamily: "var(--font-sans)" }}>
+          <p style={{ color: "var(--ft-fair-bg)", fontFamily: "var(--font-sans)" }}>
             Verifying your email...
           </p>
         )}
@@ -116,7 +116,7 @@ function SuccessPanel() {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#4A7C59"
+          stroke="var(--ft-good)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -127,7 +127,7 @@ function SuccessPanel() {
       <h1
         style={{
           fontFamily: "var(--font-display)",
-          color: "#F0DEB8",
+          color: "var(--ft-fair-bg)",
           fontSize: "1.5rem",
           fontWeight: 700,
         }}
@@ -153,7 +153,7 @@ function SuccessPanel() {
           border: "1px solid rgba(196,144,48,0.35)",
           borderRadius: "10px",
           padding: "0.75rem 2rem",
-          color: "#F0DEB8",
+          color: "var(--ft-fair-bg)",
           fontFamily: "var(--font-sans)",
           fontSize: "0.9375rem",
           fontWeight: 500,
@@ -219,7 +219,7 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
     border: "1px solid rgba(140,100,60,0.25)",
     borderRadius: "10px",
     padding: "0.625rem 0.875rem",
-    color: "#F0DEB8",
+    color: "var(--ft-fair-bg)",
     fontFamily: "var(--font-sans)",
     fontSize: "0.9375rem",
     outline: "none",
@@ -256,7 +256,7 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
       <h1
         style={{
           fontFamily: "var(--font-display)",
-          color: "#F0DEB8",
+          color: "var(--ft-fair-bg)",
           fontSize: "1.5rem",
           fontWeight: 700,
         }}
@@ -353,7 +353,7 @@ function ErrorPanel({ errorMessage }: { errorMessage: string }) {
               borderRadius: "10px",
               padding: "0.625rem 1rem",
               color:
-                resendState === "sending" ? "rgba(240,222,184,0.5)" : "#F0DEB8",
+                resendState === "sending" ? "rgba(240,222,184,0.5)" : "var(--ft-fair-bg)",
               fontFamily: "var(--font-sans)",
               fontSize: "0.9rem",
               fontWeight: 500,

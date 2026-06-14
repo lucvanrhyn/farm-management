@@ -95,9 +95,9 @@ export default function RecordBirthButton({ animals, camps }: Props) {
       <button
         onClick={() => { reset(); setOpen(true); }}
         className="px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-        style={{ background: "#4A7C59", color: "#FFFFFF" }}
+        style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "#3D6849")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "#4A7C59")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "var(--ft-good)")}
       >
         + Record Birth
       </button>
@@ -106,21 +106,21 @@ export default function RecordBirthButton({ animals, camps }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div
             className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-            style={{ border: "1px solid #E0D5C8" }}
+            style={{ border: "1px solid var(--ft-border)" }}
           >
-            <h2 className="text-lg font-bold" style={{ color: "#1C1815" }}>Record Birth</h2>
+            <h2 className="text-lg font-bold" style={{ color: "var(--ft-text)" }}>Record Birth</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Calf ID */}
               <div>
-                <label className={labelCls} style={{ color: "#6B5C4E" }}>Calf ID / Tag *</label>
+                <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Calf ID / Tag *</label>
                 <input
                   type="text"
                   placeholder="e.g. TB-2026-001"
                   value={calfId}
                   onChange={(e) => setCalfId(e.target.value)}
                   className={inputCls}
-                  style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                  style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                   required
                 />
               </div>
@@ -128,8 +128,8 @@ export default function RecordBirthButton({ animals, camps }: Props) {
               {/* Sex + Category */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls} style={{ color: "#6B5C4E" }}>Sex *</label>
-                  <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid #E0D5C8" }}>
+                  <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Sex *</label>
+                  <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid var(--ft-border)" }}>
                     {(["Female", "Male"] as const).map((s) => (
                       <button
                         key={s}
@@ -138,8 +138,8 @@ export default function RecordBirthButton({ animals, camps }: Props) {
                         className="flex-1 py-2 text-sm font-medium transition-colors"
                         style={
                           sex === s
-                            ? { background: "#7A5C1E", color: "#FFFFFF" }
-                            : { background: "#FFFFFF", color: "#9C8E7A" }
+                            ? { background: "var(--ft-fair)", color: "#FFFFFF" }
+                            : { background: "var(--ft-surface)", color: "var(--ft-subtle)" }
                         }
                       >
                         {s}
@@ -148,12 +148,12 @@ export default function RecordBirthButton({ animals, camps }: Props) {
                   </div>
                 </div>
                 <div>
-                  <label className={labelCls} style={{ color: "#6B5C4E" }}>Category *</label>
+                  <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Category *</label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className={inputCls}
-                    style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                    style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                   >
                     {["Calf", "Heifer", "Cow", "Bull", "Ox"].map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -165,23 +165,23 @@ export default function RecordBirthButton({ animals, camps }: Props) {
               {/* DOB + Camp */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls} style={{ color: "#6B5C4E" }}>Date of birth *</label>
+                  <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Date of birth *</label>
                   <input
                     type="date"
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     className={inputCls}
-                    style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                    style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                     required
                   />
                 </div>
                 <div>
-                  <label className={labelCls} style={{ color: "#6B5C4E" }}>Starting camp *</label>
+                  <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Starting camp *</label>
                   <select
                     value={camp}
                     onChange={(e) => setCamp(e.target.value)}
                     className={inputCls}
-                    style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                    style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                     required
                   >
                     <option value="">Select camp…</option>
@@ -194,12 +194,12 @@ export default function RecordBirthButton({ animals, camps }: Props) {
 
               {/* Dam */}
               <div>
-                <label className={labelCls} style={{ color: "#6B5C4E" }}>Dam (mother)</label>
+                <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Dam (mother)</label>
                 <select
                   value={motherId}
                   onChange={(e) => setMotherId(e.target.value)}
                   className={inputCls}
-                  style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                  style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                 >
                   <option value="">Unknown / not recorded</option>
                   {females.map((a) => (
@@ -212,12 +212,12 @@ export default function RecordBirthButton({ animals, camps }: Props) {
 
               {/* Sire */}
               <div>
-                <label className={labelCls} style={{ color: "#6B5C4E" }}>Sire (father)</label>
+                <label className={labelCls} style={{ color: "var(--ft-muted)" }}>Sire (father)</label>
                 <select
                   value={fatherId}
                   onChange={(e) => setFatherId(e.target.value)}
                   className={inputCls}
-                  style={{ border: "1px solid #E0D5C8", color: "#1C1815" }}
+                  style={{ border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
                 >
                   <option value="">Unknown / not recorded</option>
                   {males.map((a) => (
@@ -228,14 +228,14 @@ export default function RecordBirthButton({ animals, camps }: Props) {
                 </select>
               </div>
 
-              {error && <p className="text-sm" style={{ color: "#8B3A3A" }}>{error}</p>}
+              {error && <p className="text-sm" style={{ color: "var(--ft-crit)" }}>{error}</p>}
 
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => { setOpen(false); reset(); }}
                   className="flex-1 py-2 rounded-xl text-sm transition-colors"
-                  style={{ border: "1px solid #E0D5C8", color: "#6B5C4E", background: "transparent" }}
+                  style={{ border: "1px solid var(--ft-border)", color: "var(--ft-muted)", background: "transparent" }}
                 >
                   Cancel
                 </button>
@@ -243,7 +243,7 @@ export default function RecordBirthButton({ animals, camps }: Props) {
                   type="submit"
                   disabled={loading}
                   className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-                  style={{ background: "#4A7C59", color: "#FFFFFF" }}
+                  style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
                 >
                   {loading ? "Saving…" : "Record Birth"}
                 </button>

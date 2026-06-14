@@ -85,9 +85,9 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
     return (
       <div
         className="rounded-xl p-8 text-center"
-        style={{ background: "#FFFFFF", border: "1px solid #E8DFD2" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-surface2)" }}
       >
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           Loading sheep observations…
         </p>
       </div>
@@ -98,9 +98,9 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
     return (
       <div
         className="rounded-xl p-8 text-center"
-        style={{ background: "#FFFFFF", border: "1px solid #E8DFD2" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-surface2)" }}
       >
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           No sheep observations yet. Use <span className="font-semibold">+ New Entry</span> above to log the first one.
         </p>
       </div>
@@ -110,7 +110,7 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
   return (
     <ol className="space-y-2" data-testid="sheep-observations-timeline">
       {observations.map((o) => {
-        const badge = TYPE_BADGE[o.type] ?? { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" };
+        const badge = TYPE_BADGE[o.type] ?? { color: "var(--ft-subtle)", bg: "rgba(156,142,122,0.12)" };
         const label = TYPE_LABEL[o.type] ?? o.type;
         const summary = parseDetails(o.details, o.type);
         const observedAt = new Date(o.observedAt);
@@ -119,7 +119,7 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
             key={o.id}
             data-testid="sheep-observation-row"
             className="rounded-xl p-4 flex flex-col gap-2"
-            style={{ background: "#FFFFFF", border: "1px solid #E8DFD2" }}
+            style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-surface2)" }}
           >
             <div className="flex items-center gap-2 text-xs">
               <span
@@ -128,13 +128,13 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
               >
                 {label}
               </span>
-              <span style={{ color: "#9C8E7A" }}>{observedAt.toLocaleString()}</span>
+              <span style={{ color: "var(--ft-subtle)" }}>{observedAt.toLocaleString()}</span>
               {o.loggedBy ? (
-                <span style={{ color: "#9C8E7A" }}>· {o.loggedBy}</span>
+                <span style={{ color: "var(--ft-subtle)" }}>· {o.loggedBy}</span>
               ) : null}
             </div>
-            <div className="text-sm" style={{ color: "#1C1815" }}>
-              {summary || <span style={{ color: "#9C8E7A" }}>(no details)</span>}
+            <div className="text-sm" style={{ color: "var(--ft-text)" }}>
+              {summary || <span style={{ color: "var(--ft-subtle)" }}>(no details)</span>}
             </div>
             {/* Issue #492 — free-text note, unobtrusive italic line below the
                 structured summary. */}
@@ -142,12 +142,12 @@ export default function SheepObservationsTimeline({ refreshKey = 0 }: Props) {
               <div
                 className="text-sm italic"
                 data-testid="sheep-observation-note"
-                style={{ color: "#6B5C4E" }}
+                style={{ color: "var(--ft-muted)" }}
               >
                 “{o.notes}”
               </div>
             ) : null}
-            <div className="text-xs" style={{ color: "#9C8E7A" }}>
+            <div className="text-xs" style={{ color: "var(--ft-subtle)" }}>
               Camp {o.campId}
               {o.animalId ? ` · Animal ${o.animalId}` : ""}
             </div>

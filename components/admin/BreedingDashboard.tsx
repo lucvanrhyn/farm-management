@@ -12,16 +12,16 @@ interface BreedingDashboardProps {
 }
 
 const STATUS_COLORS = {
-  good:    { bar: "#4A7C59", text: "#4A7C59", bg: "rgba(74,124,89,0.10)" },
-  warning: { bar: "#8B6914", text: "#8B6914", bg: "rgba(139,105,20,0.10)" },
-  alert:   { bar: "#C0574C", text: "#C0574C", bg: "rgba(192,87,76,0.10)" },
-  neutral: { bar: "#9C8E7A", text: "#9C8E7A", bg: "rgba(156,142,122,0.10)" },
+  good:    { bar: "var(--ft-good)", text: "var(--ft-good)", bg: "rgba(74,124,89,0.10)" },
+  warning: { bar: "var(--ft-fair)", text: "var(--ft-fair)", bg: "rgba(139,105,20,0.10)" },
+  alert:   { bar: "var(--ft-poor)", text: "var(--ft-poor)", bg: "rgba(192,87,76,0.10)" },
+  neutral: { bar: "var(--ft-subtle)", text: "var(--ft-subtle)", bg: "rgba(156,142,122,0.10)" },
 };
 
 function getScoreColor(score: number): { bg: string; text: string; border: string } {
-  if (score > 70) return { bg: "rgba(74,124,89,0.12)", text: "#4A7C59", border: "rgba(74,124,89,0.3)" };
-  if (score >= 40) return { bg: "rgba(139,105,20,0.12)", text: "#8B6914", border: "rgba(139,105,20,0.3)" };
-  return { bg: "rgba(192,87,76,0.12)", text: "#C0574C", border: "rgba(192,87,76,0.3)" };
+  if (score > 70) return { bg: "rgba(74,124,89,0.12)", text: "var(--ft-good)", border: "rgba(74,124,89,0.3)" };
+  if (score >= 40) return { bg: "rgba(139,105,20,0.12)", text: "var(--ft-fair)", border: "rgba(139,105,20,0.3)" };
+  return { bg: "rgba(192,87,76,0.12)", text: "var(--ft-poor)", border: "rgba(192,87,76,0.3)" };
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -44,7 +44,7 @@ function CoiBadge({ coi }: { coi: number }) {
       className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium tabular-nums"
       style={{
         background: isHigh ? "rgba(192,87,76,0.08)" : "rgba(156,142,122,0.08)",
-        color: isHigh ? "#C0574C" : "#9C8E7A",
+        color: isHigh ? "var(--ft-poor)" : "var(--ft-subtle)",
       }}
     >
       COI {pct}%
@@ -58,7 +58,7 @@ function RiskChip({ label }: { label: string }) {
       className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
       style={{
         background: "rgba(192,87,76,0.10)",
-        color: "#C0574C",
+        color: "var(--ft-poor)",
         border: "1px solid rgba(192,87,76,0.2)",
       }}
     >
@@ -70,14 +70,14 @@ function RiskChip({ label }: { label: string }) {
 function TraitDot({ label, value }: { label: string; value: number | null }) {
   if (value === null) return null;
   const color =
-    value >= 70 ? "#4A7C59" : value >= 40 ? "#8B6914" : "#C0574C";
+    value >= 70 ? "var(--ft-good)" : value >= 40 ? "var(--ft-fair)" : "var(--ft-poor)";
   return (
     <div className="flex items-center gap-1.5">
       <div
         className="w-2 h-2 rounded-full shrink-0"
         style={{ backgroundColor: color }}
       />
-      <span className="text-xs" style={{ color: "#9C8E7A" }}>
+      <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
         {label}
       </span>
       <span className="text-xs font-medium tabular-nums" style={{ color }}>
@@ -102,16 +102,16 @@ function KPICard({
   return (
     <div
       className="rounded-2xl overflow-hidden border"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
       <div className="h-1" style={{ background: c.bar }} />
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
               {label}
             </p>
-            <p className="text-3xl font-bold mt-1 font-mono leading-none" style={{ color: "#1C1815" }}>
+            <p className="text-3xl font-bold mt-1 font-mono leading-none" style={{ color: "var(--ft-text)" }}>
               {value}
             </p>
           </div>
@@ -124,7 +124,7 @@ function KPICard({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-base font-semibold mb-3" style={{ color: "#1C1815" }}>
+    <h2 className="text-base font-semibold mb-3" style={{ color: "var(--ft-text)" }}>
       {children}
     </h2>
   );
@@ -134,7 +134,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   return (
     <div
       className={`rounded-xl border p-5 ${className ?? ""}`}
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
       {children}
     </div>
@@ -218,7 +218,7 @@ export default function BreedingDashboard({
             className="rounded-xl border p-5 space-y-2"
             style={{ background: "rgba(139,105,20,0.05)", borderColor: "rgba(139,105,20,0.3)" }}
           >
-            <p className="text-sm font-semibold" style={{ color: "#8B6914" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-fair)" }}>
               {inbreedingRisks.length} potential inbreeding {inbreedingRisks.length === 1 ? "risk" : "risks"} detected
             </p>
             <ul className="space-y-1">
@@ -246,16 +246,16 @@ export default function BreedingDashboard({
               type="checkbox"
               checked={hideRisky}
               onChange={(e) => setHideRisky(e.target.checked)}
-              className="rounded border-[#E0D5C8] text-[#4A7C59] focus:ring-[#4A7C59]"
+              className="rounded border-[var(--ft-border)] text-[var(--ft-good)] focus:ring-[var(--ft-good)]"
             />
-            <span className="text-xs font-medium" style={{ color: "#9C8E7A" }}>
+            <span className="text-xs font-medium" style={{ color: "var(--ft-subtle)" }}>
               Hide risky (COI &gt; 3.125%)
             </span>
           </label>
         </div>
         <Card>
           {filteredPairings.length === 0 ? (
-            <p className="text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
               {pairings.length === 0
                 ? "No pairings available. Ensure there are active bulls and open cows with lineage data."
                 : "All pairings filtered out. Uncheck the filter to see risky pairings."}
@@ -266,15 +266,15 @@ export default function BreedingDashboard({
                 <div
                   key={i}
                   className="rounded-2xl border p-4"
-                  style={{ borderColor: "#E0D5C8", background: "#FAFAF8" }}
+                  style={{ borderColor: "var(--ft-border)", background: "var(--ft-bg)" }}
                 >
                   {/* Header row: tags, score, COI */}
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="font-mono text-sm font-bold" style={{ color: "#1C1815" }}>
+                      <span className="font-mono text-sm font-bold" style={{ color: "var(--ft-text)" }}>
                         {p.bullTag}
                       </span>
-                      <span className="text-xs" style={{ color: "#9C8E7A" }}>x</span>
+                      <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>x</span>
                       <span className="font-mono text-sm font-medium" style={{ color: "#4A3728" }}>
                         {p.cowTag}
                       </span>
@@ -311,7 +311,7 @@ export default function BreedingDashboard({
                 </div>
               ))}
               {pairings.length > filteredPairings.length && (
-                <p className="text-xs" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
                   Showing {filteredPairings.length} of {pairings.length} pairings (risky pairings hidden)
                 </p>
               )}
@@ -330,8 +330,8 @@ export default function BreedingDashboard({
               disabled={loading}
               className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
               style={{
-                background: loading ? "rgba(139,105,20,0.3)" : "#8B6914",
-                color: "#F5EBD4",
+                background: loading ? "rgba(139,105,20,0.3)" : "var(--ft-fair)",
+                color: "var(--ft-fair-bg)",
                 border: "none",
                 cursor: loading ? "not-allowed" : "pointer",
               }}
@@ -341,7 +341,7 @@ export default function BreedingDashboard({
             {loading && (
               <div
                 className="w-4 h-4 rounded-full border-2 animate-spin"
-                style={{ borderColor: "#8B6914", borderTopColor: "transparent" }}
+                style={{ borderColor: "var(--ft-fair)", borderTopColor: "transparent" }}
               />
             )}
           </div>
@@ -349,7 +349,7 @@ export default function BreedingDashboard({
           {aiError && (
             <div
               className="rounded-lg px-4 py-3 text-sm"
-              style={{ background: "rgba(192,87,76,0.08)", color: "#C0574C", border: "1px solid rgba(192,87,76,0.2)" }}
+              style={{ background: "rgba(192,87,76,0.08)", color: "var(--ft-poor)", border: "1px solid rgba(192,87,76,0.2)" }}
             >
               {aiError}
             </div>
@@ -358,34 +358,34 @@ export default function BreedingDashboard({
           {aiResult && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold" style={{ color: "#4A7C59" }}>
+                <p className="text-sm font-semibold" style={{ color: "var(--ft-good)" }}>
                   Analysis complete
                 </p>
                 <button
                   onClick={() => setExpanded((v) => !v)}
                   className="text-xs underline"
-                  style={{ color: "#8B6914" }}
+                  style={{ color: "var(--ft-fair)" }}
                 >
                   {expanded ? "Collapse" : "Expand"}
                 </button>
               </div>
 
               {expanded && (
-                <div className="space-y-4 pt-2" style={{ borderTop: "1px solid #E0D5C8" }}>
+                <div className="space-y-4 pt-2" style={{ borderTop: "1px solid var(--ft-border)" }}>
                   {/* Summary */}
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#9C8E7A" }}>Summary</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ft-subtle)" }}>Summary</p>
                     <p className="text-sm" style={{ color: "#4A3728" }}>{aiResult.summary}</p>
                   </div>
 
                   {/* Bull Recommendations */}
                   {aiResult.bullRecommendations?.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#9C8E7A" }}>Bull Recommendations</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ft-subtle)" }}>Bull Recommendations</p>
                       <ul className="space-y-1">
                         {aiResult.bullRecommendations.map((rec, i) => (
                           <li key={i} className="text-sm flex gap-2" style={{ color: "#4A3728" }}>
-                            <span style={{ color: "#8B6914" }}>•</span>
+                            <span style={{ color: "var(--ft-fair)" }}>•</span>
                             <span>{rec}</span>
                           </li>
                         ))}
@@ -396,10 +396,10 @@ export default function BreedingDashboard({
                   {/* Calving Alerts */}
                   {aiResult.calvingAlerts?.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#9C8E7A" }}>Calving Alerts</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ft-subtle)" }}>Calving Alerts</p>
                       <ul className="space-y-1">
                         {aiResult.calvingAlerts.map((alert, i) => (
-                          <li key={i} className="text-sm flex gap-2" style={{ color: "#C0574C" }}>
+                          <li key={i} className="text-sm flex gap-2" style={{ color: "var(--ft-poor)" }}>
                             <span>!</span>
                             <span>{alert}</span>
                           </li>
@@ -411,7 +411,7 @@ export default function BreedingDashboard({
                   {/* Breeding Window Suggestion */}
                   {aiResult.breedingWindowSuggestion && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#9C8E7A" }}>Breeding Window</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ft-subtle)" }}>Breeding Window</p>
                       <p className="text-sm" style={{ color: "#4A3728" }}>{aiResult.breedingWindowSuggestion}</p>
                     </div>
                   )}
@@ -419,10 +419,10 @@ export default function BreedingDashboard({
                   {/* Risk Flags */}
                   {aiResult.riskFlags?.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#9C8E7A" }}>Risk Flags</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ft-subtle)" }}>Risk Flags</p>
                       <ul className="space-y-1">
                         {aiResult.riskFlags.map((flag, i) => (
-                          <li key={i} className="text-sm flex gap-2" style={{ color: "#C0574C" }}>
+                          <li key={i} className="text-sm flex gap-2" style={{ color: "var(--ft-poor)" }}>
                             <span>!</span>
                             <span>{flag}</span>
                           </li>
@@ -453,12 +453,12 @@ export default function BreedingDashboard({
                   <li
                     key={i}
                     className="flex items-center justify-between gap-4 py-2"
-                    style={{ borderBottom: i < snapshot.calendarEntries.length - 1 ? "1px solid #F0EBE4" : "none" }}
+                    style={{ borderBottom: i < snapshot.calendarEntries.length - 1 ? "1px solid var(--ft-surface)" : "none" }}
                   >
-                    <span className="font-mono text-sm font-medium" style={{ color: "#1C1815" }}>
+                    <span className="font-mono text-sm font-medium" style={{ color: "var(--ft-text)" }}>
                       {entry.animalTag}
                     </span>
-                    <span className="text-sm" style={{ color: "#9C8E7A" }}>
+                    <span className="text-sm" style={{ color: "var(--ft-subtle)" }}>
                       {date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
                     <span

@@ -85,8 +85,8 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
 
   if (loading && !data) {
     return (
-      <div className="rounded-xl p-6 text-center" style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}>
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>Loading IT3 history…</p>
+      <div className="rounded-xl p-6 text-center" style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>Loading IT3 history…</p>
       </div>
     );
   }
@@ -97,33 +97,33 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E0D5C8" }}>
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--ft-border)" }}>
       <div
         className="px-4 py-3 flex items-center justify-between"
-        style={{ background: "#F5F0E8", borderBottom: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderBottom: "1px solid var(--ft-border)" }}
       >
-        <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Issued snapshots
         </p>
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           {total} total
         </p>
       </div>
 
       {records.length === 0 ? (
-        <div className="p-6 text-center" style={{ background: "#FFFFFF" }}>
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>No IT3 snapshots issued yet.</p>
+        <div className="p-6 text-center" style={{ background: "var(--ft-surface)" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>No IT3 snapshots issued yet.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto" style={{ background: "#FFFFFF" }}>
+        <div className="overflow-x-auto" style={{ background: "var(--ft-surface)" }}>
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "#FAFAF8", borderBottom: "1px solid #E0D5C8" }}>
-                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "#9C8E7A" }}>Tax Year</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "#9C8E7A" }}>Period</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "#9C8E7A" }}>Issued</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "#9C8E7A" }}>Status</th>
-                <th className="text-right px-4 py-2.5 font-semibold text-xs" style={{ color: "#9C8E7A" }}>Actions</th>
+              <tr style={{ background: "var(--ft-bg)", borderBottom: "1px solid var(--ft-border)" }}>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "var(--ft-subtle)" }}>Tax Year</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "var(--ft-subtle)" }}>Period</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "var(--ft-subtle)" }}>Issued</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs" style={{ color: "var(--ft-subtle)" }}>Status</th>
+                <th className="text-right px-4 py-2.5 font-semibold text-xs" style={{ color: "var(--ft-subtle)" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -131,25 +131,25 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
                 <tr
                   key={r.id}
                   style={{
-                    background: i % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
-                    borderBottom: "1px solid #F0E8DE",
+                    background: i % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
+                    borderBottom: "1px solid var(--ft-surface)",
                     opacity: r.voidedAt ? 0.55 : 1,
                   }}
                 >
-                  <td className="px-4 py-2.5 font-mono text-xs font-semibold" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-2.5 font-mono text-xs font-semibold" style={{ color: "var(--ft-text)" }}>
                     {r.taxYear}
                   </td>
-                  <td className="px-4 py-2.5 text-xs font-mono" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-2.5 text-xs font-mono" style={{ color: "var(--ft-text)" }}>
                     {r.periodStart} → {r.periodEnd}
                   </td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-2.5 text-xs" style={{ color: "var(--ft-text)" }}>
                     {r.issuedAt.slice(0, 10)}
                   </td>
                   <td className="px-4 py-2.5">
                     {r.voidedAt ? (
                       <span
                         className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(139,58,58,0.1)", color: "#8B3A3A" }}
+                        style={{ background: "rgba(139,58,58,0.1)", color: "var(--ft-crit)" }}
                         title={r.voidReason ?? ""}
                       >
                         Voided
@@ -157,7 +157,7 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
                     ) : (
                       <span
                         className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(74,124,89,0.1)", color: "#2D6A4F" }}
+                        style={{ background: "rgba(74,124,89,0.1)", color: "var(--ft-good)" }}
                       >
                         Issued
                       </span>
@@ -170,7 +170,7 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
                         onClick={() => void handleDownload(r.id, r.taxYear)}
                         title="Download PDF"
                         className="p-1 rounded transition-opacity hover:opacity-70"
-                        style={{ color: "#4A7C59" }}
+                        style={{ color: "var(--ft-good)" }}
                       >
                         <FileDown className="w-4 h-4" />
                       </button>
@@ -181,7 +181,7 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
                           disabled={voidingId === r.id}
                           title="Void snapshot"
                           className="p-1 rounded transition-opacity hover:opacity-70 disabled:opacity-40"
-                          style={{ color: "#8B3A3A" }}
+                          style={{ color: "var(--ft-crit)" }}
                         >
                           <XCircle className="w-4 h-4" />
                         </button>
@@ -196,17 +196,17 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3" style={{ background: "#FAFAF8", borderTop: "1px solid #E0D5C8" }}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: "var(--ft-bg)", borderTop: "1px solid var(--ft-border)" }}>
           <button
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40"
-            style={{ background: "rgba(74,124,89,0.1)", color: "#4A7C59" }}
+            style={{ background: "rgba(74,124,89,0.1)", color: "var(--ft-good)" }}
           >
             Previous
           </button>
-          <p className="text-xs" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             Page {page} of {totalPages}
           </p>
           <button
@@ -214,7 +214,7 @@ export default function It3HistoryTable({ farmSlug, isAdmin, refreshKey = 0 }: I
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40"
-            style={{ background: "rgba(74,124,89,0.1)", color: "#4A7C59" }}
+            style={{ background: "rgba(74,124,89,0.1)", color: "var(--ft-good)" }}
           >
             Next
           </button>

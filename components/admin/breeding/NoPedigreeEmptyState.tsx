@@ -14,7 +14,7 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
     <div
       className="mt-6 flex flex-col items-center gap-5 rounded-2xl px-8 py-12 text-center"
       style={{
-        background: "#FFFFFF",
+        background: "var(--ft-surface)",
         border: "1px solid rgba(196,144,48,0.2)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
       }}
@@ -26,7 +26,7 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
         style={{
           background: "rgba(196,144,48,0.10)",
           border: "1px solid rgba(196,144,48,0.28)",
-          color: "#8B6914",
+          color: "var(--ft-fair)",
         }}
       >
         <svg
@@ -46,7 +46,7 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
           <path d="M7 15.5 10.5 12h3L17 15.5" />
         </svg>
       </div>
-      <h2 className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+      <h2 className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
         Pedigree data needed
       </h2>
       <p className="text-sm max-w-md" style={{ color: "#6A4E30", lineHeight: 1.55 }}>
@@ -59,21 +59,21 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
       <div
         className="w-full max-w-md text-left rounded-xl px-4 py-3 text-xs space-y-2"
         style={{
-          background: "#FAFAF8",
-          border: "1px solid #E0D5C8",
-          color: "#6B5C4E",
+          background: "var(--ft-bg)",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-muted)",
           lineHeight: 1.55,
         }}
       >
         <p>
-          <strong style={{ color: "#1C1815" }}>Why we need pedigree data:</strong>{" "}
+          <strong style={{ color: "var(--ft-text)" }}>Why we need pedigree data:</strong>{" "}
           Breeding AI ranks pairings by inbreeding coefficient (COI) and EBV
           match. We need at least 10% of your herd to have mother + father IDs
           before suggestions are meaningful. Below that threshold, the rankings
           would be noise.
         </p>
         <p>
-          <strong style={{ color: "#1C1815" }}>How to add it:</strong> Easiest
+          <strong style={{ color: "var(--ft-text)" }}>How to add it:</strong> Easiest
           way is to bulk-import a pedigree CSV. Download our sample template
           and fill in the columns from your stud register or SA Stud Book Logix
           export.
@@ -83,7 +83,7 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
             href="/sample-pedigree.csv"
             download
             className="inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline"
-            style={{ color: "#8B6914" }}
+            style={{ color: "var(--ft-fair)" }}
           >
             Download sample pedigree CSV
             <span aria-hidden="true">↓</span>
@@ -95,8 +95,8 @@ export default function NoPedigreeEmptyState({ farmSlug }: { farmSlug: string })
         href={`/${farmSlug}/admin/import?template=pedigree`}
         className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
         style={{
-          background: "#8B6914",
-          color: "#FAFAF8",
+          background: "var(--ft-fair)",
+          color: "var(--ft-bg)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
         }}
       >

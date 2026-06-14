@@ -12,10 +12,10 @@ import QuotaUtilizationTable from "@/components/game/QuotaUtilizationTable";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS = {
-  good:    { color: "#166534", bg: "rgba(34,197,94,0.1)" },
-  warning: { color: "#92400E", bg: "rgba(245,158,11,0.12)" },
-  alert:   { color: "#991B1B", bg: "rgba(220,38,38,0.1)" },
-  neutral: { color: "#9C8E7A", bg: "rgba(156,142,122,0.1)" },
+  good:    { color: "var(--ft-good)", bg: "rgba(34,197,94,0.1)" },
+  warning: { color: "var(--ft-fair)", bg: "rgba(245,158,11,0.12)" },
+  alert:   { color: "var(--ft-crit)", bg: "rgba(220,38,38,0.1)" },
+  neutral: { color: "var(--ft-subtle)", bg: "rgba(156,142,122,0.1)" },
 };
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
@@ -35,9 +35,9 @@ function KpiCard({
   return (
     <div
       className="rounded-2xl border p-5 flex flex-col gap-1"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {label}
       </p>
       <p className="text-3xl font-bold tabular-nums" style={{ color }}>
@@ -70,8 +70,8 @@ export default async function GameOfftakePage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-sm" style={{ color: "#C0574C" }}>Farm not found.</p>
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
+        <p className="text-sm" style={{ color: "var(--ft-poor)" }}>Farm not found.</p>
       </div>
     );
   }
@@ -88,14 +88,14 @@ export default async function GameOfftakePage({
   const hasAtRisk = quotaData.some((q) => q.atRisk);
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
           Offtake Planning
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           {currentSeason} season · Quota utilisation and sustainable harvest
         </p>
       </div>
@@ -130,33 +130,33 @@ export default async function GameOfftakePage({
         <div className="mt-6">
           <div
             className="rounded-2xl border"
-            style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+            style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
           >
-            <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-              <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+            <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
                 Population Context
               </h2>
-              <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+              <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                 Latest census population for reference
               </p>
             </div>
             <div className="px-5 py-4 flex flex-col gap-3">
               {Object.values(censusData.bySpecies).map((sp) => (
                 <div key={sp.speciesId} className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: "#6B5E50" }}>{sp.commonName}</span>
-                  <span className="text-sm font-bold tabular-nums" style={{ color: "#1C1815" }}>
+                  <span className="text-sm" style={{ color: "var(--ft-muted)" }}>{sp.commonName}</span>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: "var(--ft-text)" }}>
                     {sp.totalCount}
                   </span>
                 </div>
               ))}
               <div
                 className="flex items-center justify-between pt-3 mt-1"
-                style={{ borderTop: "1px solid #E0D5C8" }}
+                style={{ borderTop: "1px solid var(--ft-border)" }}
               >
-                <span className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+                <span className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
                   Total Estimated
                 </span>
-                <span className="text-sm font-bold tabular-nums" style={{ color: "#1C1815" }}>
+                <span className="text-sm font-bold tabular-nums" style={{ color: "var(--ft-text)" }}>
                   {censusData.totalPopulation}
                 </span>
               </div>

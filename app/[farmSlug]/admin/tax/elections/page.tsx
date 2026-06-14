@@ -35,7 +35,7 @@ export default async function ElectionsPage({
 
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <p className="text-red-500">Farm not found.</p>
       </div>
     );
@@ -53,9 +53,9 @@ export default async function ElectionsPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] p-6">
+    <div className="min-h-screen bg-[var(--ft-bg)] p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-semibold text-[#1C1815] mb-2">
+        <h1 className="text-2xl font-semibold text-[var(--ft-text)] mb-2">
           SARS Adopted-Value Elections
         </h1>
         <p className="text-sm text-zinc-600 mb-6">
@@ -66,7 +66,7 @@ export default async function ElectionsPage({
         </p>
 
         <div className="rounded-lg border border-zinc-200 bg-white p-4 mb-6">
-          <h2 className="text-base font-semibold text-[#1C1815] mb-2">Source</h2>
+          <h2 className="text-base font-semibold text-[var(--ft-text)] mb-2">Source</h2>
           <p className="text-xs text-zinc-600 leading-relaxed">
             {STANDARD_VALUES_SOURCE}
           </p>
@@ -116,7 +116,7 @@ export default async function ElectionsPage({
         )}
 
         <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-[#1C1815] mb-2">
+          <h3 className="text-sm font-semibold text-[var(--ft-text)] mb-2">
             Election rules
           </h3>
           <ul className="text-xs text-zinc-600 list-disc pl-5 space-y-1">

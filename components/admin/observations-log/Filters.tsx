@@ -34,7 +34,7 @@ export function Filters({ camps, campFilter, typeFilter, loading, onChange }: Fi
         {OBS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
       </select>
 
-      {loading && <span className="self-center text-xs" style={{ color: "#9C8E7A" }}>Loading...</span>}
+      {loading && <span className="self-center text-xs" style={{ color: "var(--ft-subtle)" }}>Loading...</span>}
     </div>
   );
 }

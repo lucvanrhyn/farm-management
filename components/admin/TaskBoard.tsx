@@ -41,15 +41,15 @@ interface TaskBoardProps {
 const PAGE_SIZE = 50;
 
 const PRIORITY_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  low:    { label: "Low",    bg: "rgba(156,142,122,0.12)", text: "#9C8E7A" },
-  normal: { label: "Normal", bg: "rgba(59,130,246,0.1)",  text: "#3B82F6" },
-  high:   { label: "High",   bg: "rgba(220,38,38,0.1)",   text: "#DC2626" },
+  low:    { label: "Low",    bg: "rgba(156,142,122,0.12)", text: "var(--ft-subtle)" },
+  normal: { label: "Normal", bg: "rgba(59,130,246,0.1)",  text: "var(--ft-info)" },
+  high:   { label: "High",   bg: "rgba(220,38,38,0.1)",   text: "var(--ft-crit)" },
 };
 
 const STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  pending:     { label: "Pending",     bg: "rgba(234,179,8,0.1)",  text: "#CA8A04" },
-  in_progress: { label: "In Progress", bg: "rgba(59,130,246,0.1)", text: "#3B82F6" },
-  completed:   { label: "Completed",   bg: "rgba(34,197,94,0.1)",  text: "#16A34A" },
+  pending:     { label: "Pending",     bg: "rgba(234,179,8,0.1)",  text: "var(--ft-fair)" },
+  in_progress: { label: "In Progress", bg: "rgba(59,130,246,0.1)", text: "var(--ft-info)" },
+  completed:   { label: "Completed",   bg: "rgba(34,197,94,0.1)",  text: "var(--ft-good)" },
 };
 
 const FILTER_STATUSES = ["all", "pending", "in_progress", "completed"] as const;
@@ -205,8 +205,8 @@ export function TaskBoard({
               onClick={() => setFilterStatus(s)}
               className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
               style={{
-                background: filterStatus === s ? "#1C1815" : "rgba(0,0,0,0.05)",
-                color: filterStatus === s ? "#F5EBD4" : "#5C3D2E",
+                background: filterStatus === s ? "var(--ft-text)" : "rgba(0,0,0,0.05)",
+                color: filterStatus === s ? "var(--ft-fair-bg)" : "#5C3D2E",
               }}
             >
               {s === "all" ? "All" : STATUS_STYLES[s]?.label ?? s}
@@ -221,14 +221,14 @@ export function TaskBoard({
           value={filterAssignee}
           onChange={(e) => setFilterAssignee(e.target.value)}
           className="px-3 py-1.5 text-xs rounded-lg border outline-none"
-          style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815", minWidth: 160 }}
+          style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)", minWidth: 160 }}
         />
 
         <div className="ml-auto">
           <button
             onClick={() => { setShowCreate((v) => !v); setCreateError(null); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
-            style={{ background: "#1C1815", color: "#F5EBD4" }}
+            style={{ background: "var(--ft-text)", color: "var(--ft-fair-bg)" }}
           >
             {showCreate ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {showCreate ? "Cancel" : "New Task"}
@@ -240,9 +240,9 @@ export function TaskBoard({
       {showCreate && (
         <div
           className="rounded-xl p-4 mb-5"
-          style={{ background: "#F5F2EE", border: "1px solid rgba(0,0,0,0.08)" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid rgba(0,0,0,0.08)" }}
         >
-          <h3 className="text-sm font-semibold mb-3" style={{ color: "#1C1815" }}>Create Task</h3>
+          <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--ft-text)" }}>Create Task</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium mb-1" style={{ color: "#5C3D2E" }}>
@@ -254,7 +254,7 @@ export function TaskBoard({
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               />
             </div>
             <div className="sm:col-span-2">
@@ -265,7 +265,7 @@ export function TaskBoard({
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={2}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none resize-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               />
             </div>
             <div>
@@ -277,7 +277,7 @@ export function TaskBoard({
                 value={form.dueDate}
                 onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               />
             </div>
             <div>
@@ -290,7 +290,7 @@ export function TaskBoard({
                 value={form.assignedTo}
                 onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               />
             </div>
             <div>
@@ -299,7 +299,7 @@ export function TaskBoard({
                 value={form.priority}
                 onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               >
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
@@ -312,7 +312,7 @@ export function TaskBoard({
                 value={form.campId}
                 onChange={(e) => setForm((f) => ({ ...f, campId: e.target.value }))}
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#1C1815" }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "var(--ft-text)" }}
               >
                 <option value="">No camp</option>
                 {camps.map((c) => (
@@ -333,7 +333,7 @@ export function TaskBoard({
               onClick={handleCreate}
               disabled={creating}
               className="px-4 py-2 rounded-lg text-sm font-medium"
-              style={{ background: "#1C1815", color: "#F5EBD4", opacity: creating ? 0.6 : 1 }}
+              style={{ background: "var(--ft-text)", color: "var(--ft-fair-bg)", opacity: creating ? 0.6 : 1 }}
             >
               {creating ? "Creating..." : "Create Task"}
             </button>
@@ -345,10 +345,10 @@ export function TaskBoard({
       {filtered.length === 0 ? (
         <div
           className="rounded-xl p-8 text-center"
-          style={{ background: "#F5F2EE", border: "1px solid rgba(0,0,0,0.06)" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid rgba(0,0,0,0.06)" }}
         >
-          <CheckSquare className="w-8 h-8 mx-auto mb-2" style={{ color: "#9C8E7A" }} />
-          <p className="text-sm font-medium" style={{ color: "#9C8E7A" }}>No tasks found</p>
+          <CheckSquare className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--ft-subtle)" }} />
+          <p className="text-sm font-medium" style={{ color: "var(--ft-subtle)" }}>No tasks found</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -371,8 +371,8 @@ export function TaskBoard({
                   onClick={() => handleComplete(task.id, task.status)}
                   className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
                   style={{
-                    borderColor: task.status === "completed" ? "#16A34A" : "rgba(0,0,0,0.2)",
-                    background: task.status === "completed" ? "#16A34A" : "transparent",
+                    borderColor: task.status === "completed" ? "var(--ft-good)" : "rgba(0,0,0,0.2)",
+                    background: task.status === "completed" ? "var(--ft-good)" : "transparent",
                   }}
                   title={task.status === "completed" ? "Mark as pending" : "Mark as completed"}
                 >
@@ -385,7 +385,7 @@ export function TaskBoard({
                     <span
                       className="text-sm font-medium"
                       style={{
-                        color: "#1C1815",
+                        color: "var(--ft-text)",
                         textDecoration: task.status === "completed" ? "line-through" : "none",
                         opacity: task.status === "completed" ? 0.6 : 1,
                       }}
@@ -414,14 +414,14 @@ export function TaskBoard({
                   </div>
 
                   {task.description && (
-                    <p className="text-xs mt-0.5 mb-1" style={{ color: "#9C8E7A" }}>{task.description}</p>
+                    <p className="text-xs mt-0.5 mb-1" style={{ color: "var(--ft-subtle)" }}>{task.description}</p>
                   )}
 
                   <div className="flex flex-wrap items-center gap-3 mt-1">
-                    <span className="flex items-center gap-1 text-xs" style={{ color: "#9C8E7A" }}>
+                    <span className="flex items-center gap-1 text-xs" style={{ color: "var(--ft-subtle)" }}>
                       <Calendar className="w-3 h-3" /> {task.dueDate}
                     </span>
-                    <span className="flex items-center gap-1 text-xs" style={{ color: "#9C8E7A" }}>
+                    <span className="flex items-center gap-1 text-xs" style={{ color: "var(--ft-subtle)" }}>
                       <Clock className="w-3 h-3" /> {task.assignedTo}
                     </span>
                     {campName(task.campId) && (
@@ -438,7 +438,7 @@ export function TaskBoard({
                     value={task.status}
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
                     className="text-xs rounded-lg border px-2 py-1 outline-none"
-                    style={{ borderColor: "rgba(0,0,0,0.12)", background: "#F5F2EE", color: "#1C1815" }}
+                    style={{ borderColor: "rgba(0,0,0,0.12)", background: "var(--ft-surface)", color: "var(--ft-text)" }}
                   >
                     <option value="pending">Pending</option>
                     <option value="in_progress">In Progress</option>
@@ -468,9 +468,9 @@ export function TaskBoard({
             disabled={loadingMore}
             className="px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
             style={{
-              border: "1px solid #E0D5C8",
-              color: "#6B5C4E",
-              background: "#FFFFFF",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-muted)",
+              background: "var(--ft-surface)",
             }}
           >
             {loadingMore ? "Loading…" : `Load more (${tasks.length.toLocaleString()} loaded)`}

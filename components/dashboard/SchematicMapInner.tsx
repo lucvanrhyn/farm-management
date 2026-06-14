@@ -86,10 +86,10 @@ export function campSize(ha: number): { w: number; h: number } {
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
 export const WARM = {
-  good:  { border: "#4A7C59", bg: "rgba(74,124,89,0.08)",   text: "#3A6A48", label: "Good"     },
-  fair:  { border: "#8B6914", bg: "rgba(139,105,20,0.08)",  text: "#6B4E10", label: "Fair"     },
-  poor:  { border: "#A0522D", bg: "rgba(160,82,45,0.10)",   text: "#7A3A18", label: "Poor"     },
-  bad:   { border: "#8B3A3A", bg: "rgba(139,58,58,0.12)",   text: "#8B1A1A", label: "Critical" },
+  good:  { border: "var(--ft-good)", bg: "rgba(74,124,89,0.08)",   text: "#3A6A48", label: "Good"     },
+  fair:  { border: "var(--ft-fair)", bg: "rgba(139,105,20,0.08)",  text: "var(--ft-fair)", label: "Fair"     },
+  poor:  { border: "var(--ft-poor)", bg: "rgba(160,82,45,0.10)",   text: "var(--ft-poor)", label: "Poor"     },
+  bad:   { border: "var(--ft-crit)", bg: "rgba(139,58,58,0.12)",   text: "var(--ft-crit)", label: "Critical" },
   water: { border: "#3B7A8B", bg: "rgba(59,122,139,0.08)",  text: "#2A6070", label: "Full"     },
 };
 
@@ -257,7 +257,7 @@ function ExpandedCampCard({
     >
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 3 }}>
-        <span style={{ fontFamily: "var(--font-dm-serif)", color: "#1A1510", fontSize: 11, fontWeight: 600, lineHeight: 1.1, flex: 1 }}>
+        <span style={{ fontFamily: "var(--font-dm-serif)", color: "var(--ft-text)", fontSize: 11, fontWeight: 600, lineHeight: 1.1, flex: 1 }}>
           {camp.camp_name}
         </span>
         <span style={{
@@ -281,7 +281,7 @@ function ExpandedCampCard({
       <div style={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         {[
           { label: "Grazing", val: grazingQ, color: colors.text },
-          { label: "Water",   val: waterS,   color: waterS === "Full" ? "#2A6070" : "#8B3A3A" },
+          { label: "Water",   val: waterS,   color: waterS === "Full" ? "#2A6070" : "var(--ft-crit)" },
           { label: "Last",    val: lastLabel, color: "inherit" },
         ].map(({ label, val, color }) => (
           <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 8, fontFamily: "var(--font-sans)", color: "rgba(26,21,16,0.55)" }}>
@@ -381,7 +381,7 @@ export default function SchematicMap({
       ref={containerRef}
       style={{
         position: "relative", width: "100%", height: "100%",
-        background: "#FFFFFF", overflow: "hidden",
+        background: "var(--ft-surface)", overflow: "hidden",
         cursor: zoomedCampId ? "zoom-out" : "default",
       }}
       onClick={handleContainerClick}
@@ -461,7 +461,7 @@ export default function SchematicMap({
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "5px 7px 4px" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
                     <span style={{
-                      fontFamily: "var(--font-dm-serif)", color: "#1A1510",
+                      fontFamily: "var(--font-dm-serif)", color: "var(--ft-text)",
                       fontSize: "clamp(9px, 1.1vw, 13px)", lineHeight: 1.1,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
                     }}>
@@ -535,7 +535,7 @@ export default function SchematicMap({
               padding: "6px 12px", borderRadius: 8,
               background: "rgba(26,21,16,0.88)",
               border: "1px solid rgba(139,105,20,0.35)",
-              color: "#F5EBD4", fontSize: 11,
+              color: "var(--ft-fair-bg)", fontSize: 11,
               fontFamily: "var(--font-sans)", fontWeight: 500,
               letterSpacing: "0.03em", cursor: "pointer",
               backdropFilter: "blur(6px)",

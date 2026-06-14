@@ -79,7 +79,7 @@ export default async function AdminPage({
   const tier = (creds?.tier ?? "advanced") as FarmTier;
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <p className="text-red-500">Farm not found.</p>
       </div>
     );

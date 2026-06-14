@@ -265,7 +265,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
           style={{
             background: "rgba(192,87,76,0.1)",
             border: "1px solid rgba(192,87,76,0.3)",
-            color: "#C0574C",
+            color: "var(--ft-poor)",
           }}
         >
           {error}
@@ -288,7 +288,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
         }}
         className="self-start px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
         style={{
-          background: "#4A7C59",
+          background: "var(--ft-good)",
           color: "#FFFFFF",
         }}
       >
@@ -299,25 +299,25 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
       {mobs.length === 0 ? (
         <div
           className="rounded-2xl p-8 text-center"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
-          <p style={{ color: "#9C8E7A" }}>
+          <p style={{ color: "var(--ft-subtle)" }}>
             No mobs yet. Create one to start grouping animals.
           </p>
         </div>
       ) : (
         <div
           className="overflow-x-auto rounded-2xl"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+              <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
                 {["Name", "Camp", "Animals", "Actions"].map((h) => (
                   <th
                     key={h}
                     className="text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide"
-                    style={{ color: "#9C8E7A", background: "#F5F2EE" }}
+                    style={{ color: "var(--ft-subtle)", background: "var(--ft-surface)" }}
                   >
                     {h}
                   </th>
@@ -329,7 +329,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                 <tr
                   key={mob.id}
                   className="transition-colors"
-                  style={{ borderBottom: "1px solid #E0D5C8" }}
+                  style={{ borderBottom: "1px solid var(--ft-border)" }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background = "rgba(122,92,30,0.05)")
                   }
@@ -337,10 +337,10 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                     (e.currentTarget.style.background = "transparent")
                   }
                 >
-                  <td className="px-3 py-2 font-semibold" style={{ color: "#1C1815" }}>
+                  <td className="px-3 py-2 font-semibold" style={{ color: "var(--ft-text)" }}>
                     {mob.name}
                   </td>
-                  <td className="px-3 py-2 font-mono text-sm" style={{ color: "#6B5C4E" }}>
+                  <td className="px-3 py-2 font-mono text-sm" style={{ color: "var(--ft-muted)" }}>
                     {campName(mob.current_camp)}
                   </td>
                   <td className="px-3 py-2">
@@ -348,7 +348,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
                       style={{
                         background: "rgba(74,124,89,0.12)",
-                        color: "#4A7C59",
+                        color: "var(--ft-good)",
                       }}
                     >
                       {mob.animal_count ?? 0}
@@ -364,8 +364,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                         }}
                         className="text-xs px-2.5 py-1 rounded-lg transition-colors"
                         style={{
-                          border: "1px solid #E0D5C8",
-                          color: "#6B5C4E",
+                          border: "1px solid var(--ft-border)",
+                          color: "var(--ft-muted)",
                         }}
                       >
                         Rename
@@ -378,8 +378,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                         }}
                         className="text-xs px-2.5 py-1 rounded-lg transition-colors"
                         style={{
-                          border: "1px solid #E0D5C8",
-                          color: "#6B5C4E",
+                          border: "1px solid var(--ft-border)",
+                          color: "var(--ft-muted)",
                         }}
                       >
                         Move
@@ -392,8 +392,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                         }}
                         className="text-xs px-2.5 py-1 rounded-lg transition-colors"
                         style={{
-                          border: "1px solid #E0D5C8",
-                          color: "#6B5C4E",
+                          border: "1px solid var(--ft-border)",
+                          color: "var(--ft-muted)",
                         }}
                       >
                         Animals
@@ -404,7 +404,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                         className="text-xs px-2.5 py-1 rounded-lg transition-colors"
                         style={{
                           border: "1px solid rgba(192,87,76,0.3)",
-                          color: "#C0574C",
+                          color: "var(--ft-poor)",
                         }}
                       >
                         Delete
@@ -428,8 +428,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
           <div
             className="relative rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto"
             style={{
-              background: "#FAFAF8",
-              border: "1px solid #E0D5C8",
+              background: "var(--ft-bg)",
+              border: "1px solid var(--ft-border)",
               boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
             }}
           >
@@ -438,13 +438,13 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
               <>
                 <h2
                   className="text-lg font-bold mb-4"
-                  style={{ color: "#1C1815" }}
+                  style={{ color: "var(--ft-text)" }}
                 >
                   Create Mob
                 </h2>
                 <div className="flex flex-col gap-3">
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold" style={{ color: "#9C8E7A" }}>
+                    <span className="text-xs font-semibold" style={{ color: "var(--ft-subtle)" }}>
                       Name
                     </span>
                     <input
@@ -454,14 +454,14 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       placeholder="e.g. Spring Weaners"
                       className="rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
                       style={{
-                        background: "#FFFFFF",
-                        border: "1px solid #E0D5C8",
-                        color: "#1C1815",
+                        background: "var(--ft-surface)",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-text)",
                       }}
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold" style={{ color: "#9C8E7A" }}>
+                    <span className="text-xs font-semibold" style={{ color: "var(--ft-subtle)" }}>
                       Starting Camp
                     </span>
                     <select
@@ -469,9 +469,9 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       onChange={(e) => setNewCamp(e.target.value)}
                       className="rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
                       style={{
-                        background: "#FFFFFF",
-                        border: "1px solid #E0D5C8",
-                        color: "#1C1815",
+                        background: "var(--ft-surface)",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-text)",
                       }}
                     >
                       {camps.map((c) => (
@@ -487,8 +487,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading}
                       className="flex-1 px-4 py-2 rounded-xl text-sm"
                       style={{
-                        border: "1px solid #E0D5C8",
-                        color: "#6B5C4E",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-muted)",
                       }}
                     >
                       Cancel
@@ -498,7 +498,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading || !newName.trim() || !newCamp}
                       className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
                       style={{
-                        background: "#4A7C59",
+                        background: "var(--ft-good)",
                         color: "#FFFFFF",
                       }}
                     >
@@ -514,17 +514,17 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
               <>
                 <h2
                   className="text-lg font-bold mb-1"
-                  style={{ color: "#1C1815" }}
+                  style={{ color: "var(--ft-text)" }}
                 >
                   Move Mob: {modal.mob.name}
                 </h2>
-                <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>
                   Currently in {campName(modal.mob.current_camp)} with{" "}
                   {modal.mob.animal_count ?? 0} animal(s). All animals move together.
                 </p>
                 <div className="flex flex-col gap-3">
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold" style={{ color: "#9C8E7A" }}>
+                    <span className="text-xs font-semibold" style={{ color: "var(--ft-subtle)" }}>
                       Destination Camp
                     </span>
                     <select
@@ -532,9 +532,9 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       onChange={(e) => setDestCamp(e.target.value)}
                       className="rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
                       style={{
-                        background: "#FFFFFF",
-                        border: "1px solid #E0D5C8",
-                        color: "#1C1815",
+                        background: "var(--ft-surface)",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-text)",
                       }}
                     >
                       <option value="">Select camp...</option>
@@ -553,8 +553,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading}
                       className="flex-1 px-4 py-2 rounded-xl text-sm"
                       style={{
-                        border: "1px solid #E0D5C8",
-                        color: "#6B5C4E",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-muted)",
                       }}
                     >
                       Cancel
@@ -564,7 +564,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading || !destCamp}
                       className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
                       style={{
-                        background: "#4A7C59",
+                        background: "var(--ft-good)",
                         color: "#FFFFFF",
                       }}
                     >
@@ -580,7 +580,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
               <>
                 <h2
                   className="text-lg font-bold mb-4"
-                  style={{ color: "#1C1815" }}
+                  style={{ color: "var(--ft-text)" }}
                 >
                   Rename Mob
                 </h2>
@@ -591,9 +591,9 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                     onChange={(e) => setEditName(e.target.value)}
                     className="rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
                     style={{
-                      background: "#FFFFFF",
-                      border: "1px solid #E0D5C8",
-                      color: "#1C1815",
+                      background: "var(--ft-surface)",
+                      border: "1px solid var(--ft-border)",
+                      color: "var(--ft-text)",
                     }}
                   />
                   <div className="flex gap-2 mt-2">
@@ -602,8 +602,8 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading}
                       className="flex-1 px-4 py-2 rounded-xl text-sm"
                       style={{
-                        border: "1px solid #E0D5C8",
-                        color: "#6B5C4E",
+                        border: "1px solid var(--ft-border)",
+                        color: "var(--ft-muted)",
                       }}
                     >
                       Cancel
@@ -613,7 +613,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       disabled={loading || !editName.trim()}
                       className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
                       style={{
-                        background: "#4A7C59",
+                        background: "var(--ft-good)",
                         color: "#FFFFFF",
                       }}
                     >
@@ -629,11 +629,11 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
               <>
                 <h2
                   className="text-lg font-bold mb-1"
-                  style={{ color: "#1C1815" }}
+                  style={{ color: "var(--ft-text)" }}
                 >
                   Manage Animals: {modal.mob.name}
                 </h2>
-                <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>
                   Camp: {campName(modal.mob.current_camp)}
                 </p>
 
@@ -644,7 +644,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                     <div className="mb-4">
                       <p
                         className="text-xs font-semibold mb-2"
-                        style={{ color: "#9C8E7A" }}
+                        style={{ color: "var(--ft-subtle)" }}
                       >
                         In this mob ({mobAnimals.length})
                       </p>
@@ -655,17 +655,17 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                             className="flex items-center justify-between px-3 py-1.5 rounded-lg"
                             style={{ background: "rgba(74,124,89,0.06)" }}
                           >
-                            <span className="text-sm font-mono" style={{ color: "#1C1815" }}>
+                            <span className="text-sm font-mono" style={{ color: "var(--ft-text)" }}>
                               {a.animalId}
                               {a.name && (
-                                <span style={{ color: "#9C8E7A" }}> ({a.name})</span>
+                                <span style={{ color: "var(--ft-subtle)" }}> ({a.name})</span>
                               )}
                             </span>
                             <button
                               onClick={() => handleRemoveAnimals(modal.mob, [a.animalId])}
                               disabled={loading}
                               className="text-xs px-2 py-0.5 rounded-lg"
-                              style={{ color: "#C0574C", border: "1px solid rgba(192,87,76,0.3)" }}
+                              style={{ color: "var(--ft-poor)", border: "1px solid rgba(192,87,76,0.3)" }}
                             >
                               Remove
                             </button>
@@ -674,7 +674,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>
+                    <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>
                       No animals assigned yet.
                     </p>
                   );
@@ -694,7 +694,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                     onClick={() => handleAddAnimals(modal.mob)}
                     disabled={loading}
                     className="mt-2 w-full px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
-                    style={{ background: "#4A7C59", color: "#FFFFFF" }}
+                    style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
                   >
                     {loading
                       ? "Adding..."
@@ -705,7 +705,7 @@ export default function MobsManager({ initialMobs, camps, membership }: Props) {
                 <button
                   onClick={() => setModal(null)}
                   className="mt-3 w-full px-4 py-2 rounded-xl text-sm"
-                  style={{ border: "1px solid #E0D5C8", color: "#6B5C4E" }}
+                  style={{ border: "1px solid var(--ft-border)", color: "var(--ft-muted)" }}
                 >
                   Close
                 </button>

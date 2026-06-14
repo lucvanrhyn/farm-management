@@ -60,10 +60,10 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
     return () => controller.abort();
   }, [animalId]);
 
-  const panelBg  = "#1E1710";
-  const surfaceBg = "#261C12";
+  const panelBg  = "var(--ft-text)";
+  const surfaceBg = "var(--ft-text)";
   const border    = "rgba(140,100,60,0.22)";
-  const textMuted = "#B09878";
+  const textMuted = "var(--ft-subtle)";
 
   if (animal === "loading") {
     return (
@@ -103,7 +103,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
               style={{
                 fontFamily: "var(--font-dm-serif)",
                 fontSize: 17,
-                color: "#F5EBD4",
+                color: "var(--ft-fair-bg)",
               }}
             >{animal.animalId}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryChipColor(animal.category)}`}>
@@ -145,7 +145,7 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
                 display: "inline-block",
                 marginTop: 2,
                 background: animal.status === "Active" ? "rgba(74,124,89,0.2)" : "rgba(92,61,46,0.2)",
-                color:      animal.status === "Active" ? "#6FAB80"             : "#B09878",
+                color:      animal.status === "Active" ? "#6FAB80"             : "var(--ft-subtle)",
               }}
             >
               {animal.status === "Active" ? "Active" : animal.status}
@@ -166,8 +166,8 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
             onClick={() => setTab(t.key)}
             className="flex-1 py-2.5 text-xs font-medium transition-colors"
             style={{
-              color: tab === t.key ? "#C4A030" : textMuted,
-              borderBottom: tab === t.key ? "2px solid #8B6914" : "2px solid transparent",
+              color: tab === t.key ? "var(--ft-fair)" : textMuted,
+              borderBottom: tab === t.key ? "2px solid var(--ft-fair)" : "2px solid transparent",
               background: "transparent",
             }}
           >
@@ -183,13 +183,13 @@ export default function AnimalProfile({ animalId, onClose, onBack }: Props) {
             {animal.motherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
                 <p className="text-xs font-semibold text-white mb-1">Mother</p>
-                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.motherId}</p>
+                <p className="text-sm font-mono" style={{ color: "var(--ft-fair)" }}>{animal.motherId}</p>
               </div>
             )}
             {animal.fatherId && (
               <div style={{ background: surfaceBg, borderRadius: 12, padding: "12px 14px" }}>
                 <p className="text-xs font-semibold text-white mb-1">Father (Sire)</p>
-                <p className="text-sm font-mono" style={{ color: "#C4A030" }}>{animal.fatherId}</p>
+                <p className="text-sm font-mono" style={{ color: "var(--ft-fair)" }}>{animal.fatherId}</p>
               </div>
             )}
             {animal.registrationNumber && (

@@ -74,23 +74,23 @@ export default function It3ExportCard({ farmSlug }: { farmSlug: string }) {
   return (
     <div
       className="rounded-xl p-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-start gap-3">
         <div
           className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center"
           style={{ background: "rgba(74,124,89,0.1)" }}
         >
-          <Receipt className="w-4 h-4" style={{ color: "#4A7C59" }} />
+          <Receipt className="w-4 h-4" style={{ color: "var(--ft-good)" }} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-[#1C1815]">SARS IT3 Tax Export</h2>
-          <p className="text-xs mt-1 leading-relaxed" style={{ color: "#9C8E7A" }}>
+          <h2 className="text-sm font-semibold text-[var(--ft-text)]">SARS IT3 Tax Export</h2>
+          <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--ft-subtle)" }}>
             Year-end farming income &amp; expense schedule mapped onto ITR12 line codes. Issue snapshots on the{" "}
             <a
               href={`/${farmSlug}/tools/tax`}
               className="underline"
-              style={{ color: "#4A7C59" }}
+              style={{ color: "var(--ft-good)" }}
             >
               Tax tools
             </a>{" "}
@@ -101,12 +101,12 @@ export default function It3ExportCard({ farmSlug }: { farmSlug: string }) {
 
       <div className="mt-4 space-y-2">
         {loading && (
-          <p className="text-xs" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             Loading snapshots…
           </p>
         )}
         {!loading && activeSnapshots.size === 0 && (
-          <p className="text-xs" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             No active snapshots yet. Issue one from the Tax tools page.
           </p>
         )}
@@ -120,9 +120,9 @@ export default function It3ExportCard({ farmSlug }: { farmSlug: string }) {
                 <div
                   key={y}
                   className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
-                  style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+                  style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
                 >
-                  <span className="text-xs font-mono font-semibold" style={{ color: "#1C1815" }}>
+                  <span className="text-xs font-mono font-semibold" style={{ color: "var(--ft-text)" }}>
                     Tax year {y}
                   </span>
                   <div className="flex gap-2">
@@ -130,7 +130,7 @@ export default function It3ExportCard({ farmSlug }: { farmSlug: string }) {
                       type="button"
                       onClick={() => triggerCsv(y)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-                      style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+                      style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
                       title="Download CSV"
                     >
                       <Download className="w-3 h-3" />
@@ -140,7 +140,7 @@ export default function It3ExportCard({ farmSlug }: { farmSlug: string }) {
                       type="button"
                       onClick={() => triggerDownload(id, y)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium"
-                      style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+                      style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
                       title="Download PDF"
                     >
                       <Download className="w-3 h-3" />

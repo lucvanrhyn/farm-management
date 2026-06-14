@@ -113,9 +113,9 @@ export default function AddAnimalToMobPicker({
   return (
     <div
       className="rounded-xl p-3"
-      style={{ border: "1px solid #E0D5C8", background: "#FFFFFF" }}
+      style={{ border: "1px solid var(--ft-border)", background: "var(--ft-surface)" }}
     >
-      <p className="text-xs font-semibold mb-2" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold mb-2" style={{ color: "var(--ft-subtle)" }}>
         Add animals (unassigned only)
       </p>
       <input
@@ -125,19 +125,19 @@ export default function AddAnimalToMobPicker({
         onChange={(e) => setQuery(e.target.value)}
         className="w-full rounded-lg px-3 py-1.5 text-sm mb-2 focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]"
         style={{
-          background: "#FAFAF8",
-          border: "1px solid #E0D5C8",
-          color: "#1C1815",
+          background: "var(--ft-bg)",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-text)",
         }}
       />
       {error && (
-        <p className="text-xs mb-2" style={{ color: "#C0574C" }}>
+        <p className="text-xs mb-2" style={{ color: "var(--ft-poor)" }}>
           {error}
         </p>
       )}
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
         {animals.length === 0 && !loading && (
-          <p className="text-xs py-2 text-center" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs py-2 text-center" style={{ color: "var(--ft-subtle)" }}>
             No unassigned animals match.
           </p>
         )}
@@ -154,15 +154,15 @@ export default function AddAnimalToMobPicker({
                 onChange={() => onToggle(a.animalId)}
                 className="rounded"
               />
-              <span className="text-sm font-mono" style={{ color: "#1C1815" }}>
+              <span className="text-sm font-mono" style={{ color: "var(--ft-text)" }}>
                 {a.animalId}
               </span>
               {a.name && (
-                <span className="text-xs" style={{ color: "#9C8E7A" }}>
+                <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
                   {a.name}
                 </span>
               )}
-              <span className="text-[10px] ml-auto" style={{ color: "#9C8E7A" }}>
+              <span className="text-[10px] ml-auto" style={{ color: "var(--ft-subtle)" }}>
                 {a.category} - {campLabel(a.currentCamp)}
               </span>
             </label>
@@ -177,13 +177,13 @@ export default function AddAnimalToMobPicker({
           }
           disabled={loading}
           className="mt-2 w-full px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-          style={{ border: "1px solid #E0D5C8", color: "#6B5C4E" }}
+          style={{ border: "1px solid var(--ft-border)", color: "var(--ft-muted)" }}
         >
           {loading ? "Loading..." : "Load more"}
         </button>
       )}
       {loading && animals.length === 0 && (
-        <p className="text-xs py-2 text-center" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs py-2 text-center" style={{ color: "var(--ft-subtle)" }}>
           Loading…
         </p>
       )}

@@ -38,7 +38,7 @@ const SchematicMap = dynamic(() => import("./SchematicMapInner"), {
         position: "relative",
         width: "100%",
         height: "100%",
-        background: "#FFFFFF",
+        background: "var(--ft-surface)",
       }}
       aria-hidden
     />

@@ -9,13 +9,13 @@ function fmt(n: number): string {
 function statusColor(row: BudgetVsActualRow): string {
   const pct = row.variancePercent;
   if (row.type === "expense") {
-    if (row.variance <= 0) return "#4A7C59";
-    if (pct === null || pct > 10) return "#C0574C";
-    return "#C98A2B";
+    if (row.variance <= 0) return "var(--ft-good)";
+    if (pct === null || pct > 10) return "var(--ft-poor)";
+    return "var(--ft-fair)";
   }
-  if (row.variance >= 0) return "#4A7C59";
-  if (pct === null || pct < -10) return "#C0574C";
-  return "#C98A2B";
+  if (row.variance >= 0) return "var(--ft-good)";
+  if (pct === null || pct < -10) return "var(--ft-poor)";
+  return "var(--ft-fair)";
 }
 
 function BudgetTable({
@@ -30,23 +30,23 @@ function BudgetTable({
   if (rows.length === 0) {
     return (
       <div>
-        <h3 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+        <h3 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
           {title}
         </h3>
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>{emptyHint}</p>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>{emptyHint}</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h3 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <h3 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {title}
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}>
+            <tr style={{ color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}>
               <th className="text-left py-2 pr-3 font-medium">Category</th>
               <th className="text-right py-2 px-3 font-medium">Budget</th>
               <th className="text-right py-2 px-3 font-medium">Actual</th>
@@ -64,16 +64,16 @@ function BudgetTable({
                   : `${row.variancePercent > 0 ? "+" : ""}${row.variancePercent.toFixed(1)}%`;
               const varianceSign = row.variance > 0 ? "+" : row.variance < 0 ? "−" : "";
               return (
-                <tr key={`${row.type}-${row.categoryName}`} style={{ borderBottom: "1px solid #F0EAE1" }}>
-                  <td className="py-2 pr-3" style={{ color: "#1C1815" }}>{row.categoryName}</td>
-                  <td className="py-2 px-3 text-right font-mono" style={{ color: "#1C1815" }}>
-                    {row.budgeted > 0 ? fmt(row.budgeted) : <span style={{ color: "#9C8E7A" }}>—</span>}
+                <tr key={`${row.type}-${row.categoryName}`} style={{ borderBottom: "1px solid var(--ft-surface2)" }}>
+                  <td className="py-2 pr-3" style={{ color: "var(--ft-text)" }}>{row.categoryName}</td>
+                  <td className="py-2 px-3 text-right font-mono" style={{ color: "var(--ft-text)" }}>
+                    {row.budgeted > 0 ? fmt(row.budgeted) : <span style={{ color: "var(--ft-subtle)" }}>—</span>}
                   </td>
-                  <td className="py-2 px-3 text-right font-mono" style={{ color: "#1C1815" }}>
+                  <td className="py-2 px-3 text-right font-mono" style={{ color: "var(--ft-text)" }}>
                     {fmt(row.actual)}
                   </td>
                   <td className="py-2 px-3 text-right font-mono" style={{ color }}>
-                    {row.budgeted > 0 ? `${varianceSign}${fmt(row.variance)}` : <span style={{ color: "#9C8E7A" }}>—</span>}
+                    {row.budgeted > 0 ? `${varianceSign}${fmt(row.variance)}` : <span style={{ color: "var(--ft-subtle)" }}>—</span>}
                   </td>
                   <td className="py-2 px-3 text-right font-mono" style={{ color }}>
                     {pctLabel}
@@ -137,45 +137,45 @@ export default async function BudgetVsActualSection({
   return (
     <div
       className="mt-6 rounded-xl p-4 md:p-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Budget vs Actual ({periodLabel})
         </h2>
         <BudgetEditor farmSlug={farmSlug} categories={categories} />
       </div>
 
       {!hasAnyBudget ? (
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           No budgets set yet. Click <span className="font-medium">Set Budgets</span> to enter monthly
           targets per category and start tracking variance.
         </p>
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-lg p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>Expense Budget</p>
-              <p className="text-base font-bold font-mono" style={{ color: "#1C1815" }}>{fmt(totalBudgetExpense)}</p>
+            <div className="rounded-lg p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>Expense Budget</p>
+              <p className="text-base font-bold font-mono" style={{ color: "var(--ft-text)" }}>{fmt(totalBudgetExpense)}</p>
             </div>
-            <div className="rounded-lg p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>Expense Actual</p>
+            <div className="rounded-lg p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>Expense Actual</p>
               <p
                 className="text-base font-bold font-mono"
-                style={{ color: totalActualExpense > totalBudgetExpense && totalBudgetExpense > 0 ? "#C0574C" : "#1C1815" }}
+                style={{ color: totalActualExpense > totalBudgetExpense && totalBudgetExpense > 0 ? "var(--ft-poor)" : "var(--ft-text)" }}
               >
                 {fmt(totalActualExpense)}
               </p>
             </div>
-            <div className="rounded-lg p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>Income Budget</p>
-              <p className="text-base font-bold font-mono" style={{ color: "#1C1815" }}>{fmt(totalBudgetIncome)}</p>
+            <div className="rounded-lg p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>Income Budget</p>
+              <p className="text-base font-bold font-mono" style={{ color: "var(--ft-text)" }}>{fmt(totalBudgetIncome)}</p>
             </div>
-            <div className="rounded-lg p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>Income Actual</p>
+            <div className="rounded-lg p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>Income Actual</p>
               <p
                 className="text-base font-bold font-mono"
-                style={{ color: totalActualIncome < totalBudgetIncome && totalBudgetIncome > 0 ? "#C0574C" : "#4A7C59" }}
+                style={{ color: totalActualIncome < totalBudgetIncome && totalBudgetIncome > 0 ? "var(--ft-poor)" : "var(--ft-good)" }}
               >
                 {fmt(totalActualIncome)}
               </p>

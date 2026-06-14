@@ -54,9 +54,9 @@ const PAGE_LIMIT = 20;
 const SEARCH_DEBOUNCE_MS = 250;
 
 const fieldInput: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
-  color: "#1C1815",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
+  color: "var(--ft-text)",
   borderRadius: "0.75rem",
   padding: "0.5rem 0.75rem",
   fontSize: "0.875rem",
@@ -166,24 +166,24 @@ export default function AnimalPicker({
         aria-label="Search animals"
       />
       {error && (
-        <p className="text-xs" style={{ color: "#C0574C" }} role="alert">
+        <p className="text-xs" style={{ color: "var(--ft-poor)" }} role="alert">
           {error}
         </p>
       )}
       {loading && (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           Loading…
         </p>
       )}
       {showEmpty && (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           No animals match.
         </p>
       )}
       {results.length > 0 && (
         <ul
           className="rounded-xl max-h-48 overflow-y-auto"
-          style={{ border: "1px solid #E0D5C8", background: "#FFFFFF" }}
+          style={{ border: "1px solid var(--ft-border)", background: "var(--ft-surface)" }}
         >
           {results.map((a) => {
             const selected = a.animalId === value;
@@ -195,18 +195,18 @@ export default function AnimalPicker({
                   className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[rgba(122,92,30,0.05)]"
                   style={{
                     background: selected ? "rgba(74,124,89,0.08)" : "transparent",
-                    color: "#1C1815",
+                    color: "var(--ft-text)",
                   }}
                 >
                   <span className="font-mono">{a.animalId}</span>
                   {a.name && (
-                    <span className="text-xs" style={{ color: "#9C8E7A" }}>
+                    <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
                       {a.name}
                     </span>
                   )}
                   <span
                     className="text-[10px] ml-auto"
-                    style={{ color: "#9C8E7A" }}
+                    style={{ color: "var(--ft-subtle)" }}
                   >
                     {a.category}
                   </span>

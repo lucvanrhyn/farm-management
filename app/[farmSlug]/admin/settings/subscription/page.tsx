@@ -44,21 +44,21 @@ const TIER_META: Record<TierKey, { label: string; tagline: string; color: string
   basic: {
     label: "Basic",
     tagline: "Records your farm.",
-    color: "#9C8E7A",
+    color: "var(--ft-subtle)",
     priceLine: "R1,800 + R0.75 × LSU / yr",
     priceSub: "Monthly option at +20%",
   },
   advanced: {
     label: "Advanced",
     tagline: "Runs your farm.",
-    color: "#8B6914",
+    color: "var(--ft-fair)",
     priceLine: "R3,000 + R10 × LSU / yr",
     priceSub: "Monthly option at +20%",
   },
   consulting: {
     label: "Consulting",
     tagline: "Builds what you need.",
-    color: "#3A6B49",
+    color: "var(--ft-good)",
     priceLine: "R15,000 setup + R1,499/mo",
     priceSub: "12-month minimum retainer",
   },
@@ -66,7 +66,7 @@ const TIER_META: Record<TierKey, { label: string; tagline: string; color: string
 
 function FeatureCell({ included }: { included: boolean }) {
   return included ? (
-    <Check className="w-4 h-4" style={{ color: "#3A6B49" }} />
+    <Check className="w-4 h-4" style={{ color: "var(--ft-good)" }} />
   ) : (
     <Minus className="w-4 h-4" style={{ color: "rgba(156,142,122,0.4)" }} />
   );
@@ -80,7 +80,7 @@ function TierBadge({ tier }: { tier: FarmTier }) {
       style={
         isBasic
           ? { background: "rgba(210,180,140,0.3)", color: "rgba(156,142,122,0.85)" }
-          : { background: "rgba(139,105,20,0.2)", color: "#8B6914" }
+          : { background: "rgba(139,105,20,0.2)", color: "var(--ft-fair)" }
       }
     >
       {tier}
@@ -101,10 +101,10 @@ export default async function SubscriptionPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
           Subscription
         </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
           Plans, pricing, and features
         </p>
       </div>
@@ -113,15 +113,15 @@ export default async function SubscriptionPage({
         {/* Current plan card */}
         <div
           className="rounded-xl p-5"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <div className="flex items-center gap-3 mb-2">
-            <h2 className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
               Your plan: {isBasic ? "Basic" : "Advanced"}
             </h2>
             <TierBadge tier={tier} />
           </div>
-          <p className="text-sm" style={{ color: "#6B5E50" }}>
+          <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
             {isBasic
               ? "You're on the Basic plan — daily ops essentials. Upgrade to Advanced for the full intelligence stack: reproduction, breeding AI, financial analytics, veld scoring, drought, and more."
               : "You have full access to the Advanced intelligence stack. Contact us about Consulting if you need custom fields or bespoke analytics."}
@@ -136,20 +136,20 @@ export default async function SubscriptionPage({
               <div
                 key={key}
                 className="rounded-xl p-4"
-                style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+                style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
               >
                 <div className="flex items-baseline gap-2 mb-1">
                   <h3 className="text-base font-semibold" style={{ color: meta.color }}>
                     {meta.label}
                   </h3>
                 </div>
-                <p className="text-xs italic mb-3" style={{ color: "#6B5E50" }}>
+                <p className="text-xs italic mb-3" style={{ color: "var(--ft-muted)" }}>
                   {meta.tagline}
                 </p>
-                <p className="text-sm font-semibold font-mono" style={{ color: "#1C1815" }}>
+                <p className="text-sm font-semibold font-mono" style={{ color: "var(--ft-text)" }}>
                   {meta.priceLine}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                   {meta.priceSub}
                 </p>
               </div>
@@ -160,14 +160,14 @@ export default async function SubscriptionPage({
         {/* Feature comparison table */}
         <div
           className="rounded-xl overflow-hidden"
-          style={{ border: "1px solid #E0D5C8" }}
+          style={{ border: "1px solid var(--ft-border)" }}
         >
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "#F5F0EA" }}>
+              <tr style={{ background: "var(--ft-surface)" }}>
                 <th
                   className="text-left px-4 py-2.5 font-semibold"
-                  style={{ color: "#1C1815" }}
+                  style={{ color: "var(--ft-text)" }}
                 >
                   Feature
                 </th>
@@ -187,11 +187,11 @@ export default async function SubscriptionPage({
                 <tr
                   key={f.name}
                   style={{
-                    background: i % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
-                    borderTop: "1px solid #F0EBE3",
+                    background: i % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
+                    borderTop: "1px solid var(--ft-surface)",
                   }}
                 >
-                  <td className="px-4 py-2.5" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-2.5" style={{ color: "var(--ft-text)" }}>
                     {f.name}
                   </td>
                   {(Object.keys(TIER_META) as TierKey[]).map((key) => (
@@ -210,17 +210,17 @@ export default async function SubscriptionPage({
         {/* LSU pricing explainer */}
         <div
           className="rounded-xl p-5"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "#1C1815" }}>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--ft-text)" }}>
             How LSU pricing works
           </h3>
-          <p className="text-sm mb-2" style={{ color: "#6B5E50" }}>
+          <p className="text-sm mb-2" style={{ color: "var(--ft-muted)" }}>
             Pricing is based on Large Stock Units (LSU) — a species-weighted headcount.
             Cattle count 1.0, sheep and goats 0.15, horses 1.2, impala 0.15, kudu 0.4,
             wildebeest 0.6, eland 0.9, giraffe 1.5, zebra 0.7.
           </p>
-          <p className="text-sm" style={{ color: "#6B5E50" }}>
+          <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
             Your LSU is locked at sign-up and recomputed at renewal. Mid-term growth is
             free. Consulting is a flat retainer regardless of herd size.
           </p>

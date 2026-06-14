@@ -67,8 +67,8 @@ export default async function AdminObservationsPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>All field observations — filter and edit</p>
+        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Observations</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>All field observations — filter and edit</p>
       </div>
       <ObservationsPageClient camps={camps} animals={animals} species={mode} />
       {/*
@@ -78,11 +78,11 @@ export default async function AdminObservationsPage({
       */}
       <div
         data-testid="danger-zone"
-        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+        className="mt-12 pt-6 border-t border-[var(--ft-surface2)]"
       >
         <p
           className="text-xs uppercase tracking-wider mb-3"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           Danger zone
         </p>

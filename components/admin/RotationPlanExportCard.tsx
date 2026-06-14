@@ -49,18 +49,18 @@ export default function RotationPlanExportCard({ farmSlug }: Props) {
   return (
     <div
       className="rounded-xl p-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-[#1C1815]">Rotation Plan</h2>
-          <p className="text-xs mt-1 leading-relaxed" style={{ color: "#9C8E7A" }}>
+          <h2 className="text-sm font-semibold text-[var(--ft-text)]">Rotation Plan</h2>
+          <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--ft-subtle)" }}>
             Export a rotation plan&apos;s steps with planned dates, mobs, and execution status.
           </p>
           {!loading && plans.length > 0 && (
             <select
               className="mt-2 w-full border rounded-lg px-2 py-1.5 text-xs"
-              style={{ borderColor: "#E0D5C8" }}
+              style={{ borderColor: "var(--ft-border)" }}
               value={selectedPlanId}
               onChange={(e) => setSelectedPlanId(e.target.value)}
             >
@@ -72,7 +72,7 @@ export default function RotationPlanExportCard({ farmSlug }: Props) {
             </select>
           )}
           {!loading && plans.length === 0 && (
-            <p className="mt-2 text-xs" style={{ color: "#9C8E7A" }}>No plans yet.</p>
+            <p className="mt-2 text-xs" style={{ color: "var(--ft-subtle)" }}>No plans yet.</p>
           )}
         </div>
         {plans.length > 0 && (
@@ -80,7 +80,7 @@ export default function RotationPlanExportCard({ farmSlug }: Props) {
             <button
               onClick={() => triggerDownload("csv")}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-              style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+              style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
               title="Download CSV"
             >
               <Download className="w-3.5 h-3.5" />
@@ -89,7 +89,7 @@ export default function RotationPlanExportCard({ farmSlug }: Props) {
             <button
               onClick={() => triggerDownload("pdf")}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-              style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+              style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
               title="Download PDF"
             >
               <Download className="w-3.5 h-3.5" />

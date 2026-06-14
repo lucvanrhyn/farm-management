@@ -92,15 +92,15 @@ export default function RainfallClient({
       {chartData.length > 0 && (
         <div
           className="rounded-xl p-4 md:p-6"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <h3
             className="text-sm font-semibold mb-1"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             Monthly Rainfall
           </h3>
-          <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>
             {records.length} records &middot;{" "}
             {Math.round(totalMm * 10) / 10} mm total
           </p>
@@ -108,12 +108,12 @@ export default function RainfallClient({
             <BarChart data={chartData}>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 11, fill: "#9C8E7A" }}
+                tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: "#9C8E7A" }}
+                tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
                 axisLine={false}
                 tickLine={false}
                 unit=" mm"
@@ -121,8 +121,8 @@ export default function RainfallClient({
               />
               <Tooltip
                 contentStyle={{
-                  background: "#FFFFFF",
-                  border: "1px solid #E0D5C8",
+                  background: "var(--ft-surface)",
+                  border: "1px solid var(--ft-border)",
                   borderRadius: 8,
                   fontSize: 12,
                 }}
@@ -130,7 +130,7 @@ export default function RainfallClient({
               />
               <Bar
                 dataKey="totalMm"
-                fill="#4A90D9"
+                fill="var(--ft-info)"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
               />
@@ -142,12 +142,12 @@ export default function RainfallClient({
       {/* Recent records table */}
       <div
         className="rounded-xl overflow-hidden"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         <div className="p-4 md:px-6 md:pt-5">
           <h3
             className="text-sm font-semibold"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             Recent Records
           </h3>
@@ -156,7 +156,7 @@ export default function RainfallClient({
         {records.length === 0 ? (
           <p
             className="px-4 md:px-6 pb-5 text-sm"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             No rainfall records yet. Click &ldquo;+ Record Rainfall&rdquo; to
             add one.
@@ -165,12 +165,12 @@ export default function RainfallClient({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+                <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
                   {["Date", "Camp", "mm", "Station", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 md:px-6 py-2 text-left font-medium"
-                      style={{ color: "#9C8E7A", fontSize: 11 }}
+                      style={{ color: "var(--ft-subtle)", fontSize: 11 }}
                     >
                       {h}
                     </th>
@@ -182,31 +182,31 @@ export default function RainfallClient({
                   <tr
                     key={r.id}
                     style={{
-                      background: i % 2 === 0 ? "#FAFAF8" : "#FFFFFF",
-                      borderBottom: "1px solid #F0EBE3",
+                      background: i % 2 === 0 ? "var(--ft-bg)" : "#FFFFFF",
+                      borderBottom: "1px solid var(--ft-surface)",
                     }}
                   >
                     <td
                       className="px-4 md:px-6 py-2.5"
-                      style={{ color: "#1C1815" }}
+                      style={{ color: "var(--ft-text)" }}
                     >
                       {formatDate(r.date)}
                     </td>
                     <td
                       className="px-4 md:px-6 py-2.5"
-                      style={{ color: "#6B5C4E" }}
+                      style={{ color: "var(--ft-muted)" }}
                     >
                       {r.campId ? campMap.get(r.campId) ?? r.campId : "Farm-wide"}
                     </td>
                     <td
                       className="px-4 md:px-6 py-2.5 font-medium"
-                      style={{ color: "#4A90D9" }}
+                      style={{ color: "var(--ft-info)" }}
                     >
                       {r.rainfallMm}
                     </td>
                     <td
                       className="px-4 md:px-6 py-2.5"
-                      style={{ color: "#9C8E7A" }}
+                      style={{ color: "var(--ft-subtle)" }}
                     >
                       {r.stationName ?? "\u2014"}
                     </td>
@@ -215,7 +215,7 @@ export default function RainfallClient({
                         onClick={() => handleDelete(r.id)}
                         disabled={deleting === r.id}
                         className="text-xs transition-opacity hover:opacity-70 disabled:opacity-40"
-                        style={{ color: "#C0574C" }}
+                        style={{ color: "var(--ft-poor)" }}
                       >
                         {deleting === r.id ? "\u2026" : "Delete"}
                       </button>

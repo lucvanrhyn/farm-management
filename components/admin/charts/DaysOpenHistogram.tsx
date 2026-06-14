@@ -30,12 +30,12 @@ interface Props {
 }
 
 // Match visual language of PregnancyRateCycleChart (§E consistency).
-const gridStroke = "#E0D5C8";
-const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+const gridStroke = "var(--ft-border)";
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(139,105,20,0.3)",
-  color: "#F5EBD4",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
@@ -94,7 +94,7 @@ export function meanBinLabel(mean: number): string {
 export default function DaysOpenHistogram({ records, avgDaysOpen, targetDays = 95 }: Props) {
   if (records.length === 0) {
     return (
-      <p style={{ color: "#9C8E7A", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
+      <p style={{ color: "var(--ft-subtle)", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
         No calving → conception events recorded yet
       </p>
     );
@@ -117,29 +117,29 @@ export default function DaysOpenHistogram({ records, avgDaysOpen, targetDays = 9
         />
         <ReferenceLine
           x={targetLabel}
-          stroke="#10b981"
+          stroke="var(--ft-good)"
           strokeDasharray="4 3"
           label={{
             value: `Target ≤${targetDays}d`,
             position: "insideTopRight",
-            fill: "#10b981",
+            fill: "var(--ft-good)",
             fontSize: 10,
           }}
         />
         {meanLabel !== null && avgDaysOpen !== null && (
           <ReferenceLine
             x={meanLabel}
-            stroke="#f59e0b"
+            stroke="var(--ft-fair)"
             strokeDasharray="5 3"
             label={{
               value: `Mean ${avgDaysOpen}d`,
               position: "insideTopLeft",
-              fill: "#f59e0b",
+              fill: "var(--ft-fair)",
               fontSize: 10,
             }}
           />
         )}
-        <Bar dataKey="count" name="Animals" radius={[4, 4, 0, 0]} fill="#3b82f6" />
+        <Bar dataKey="count" name="Animals" radius={[4, 4, 0, 0]} fill="var(--ft-info)" />
       </BarChart>
     </ResponsiveContainer>
   );

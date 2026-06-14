@@ -16,29 +16,29 @@ import type { FinansieleData } from "@/components/admin/charts/chart-types";
 // ── Shared styles (dark/amber design language) ────────────────────────────────
 
 const cardStyle = {
-  background: "#241C14",
+  background: "var(--ft-text)",
   border: "1px solid rgba(196,144,48,0.18)",
   borderRadius: "1rem",
   padding: "1.5rem",
 };
-const titleStyle = { fontWeight: 600, color: "#F0DEB8", marginBottom: "0.25rem" };
-const subtitleStyle = { fontSize: "0.75rem", color: "#9C8473", marginBottom: "1rem" };
-const emptyStyle = { fontSize: "0.875rem", color: "#9C8473", padding: "2rem 0", textAlign: "center" as const };
+const titleStyle = { fontWeight: 600, color: "var(--ft-fair-bg)", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "var(--ft-subtle)", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "var(--ft-subtle)", padding: "2rem 0", textAlign: "center" as const };
 const gridStroke = "rgba(196,144,48,0.12)";
-const tickStyle = { fill: "#9C8473", fontSize: 11 };
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(196,144,48,0.3)",
-  color: "#F0DEB8",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
 // ── Category colours for herd composition ────────────────────────────────────
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Cow: "#C49030",
-  Bull: "#3b82f6",
-  Heifer: "#22c55e",
+  Cow: "var(--ft-fair)",
+  Bull: "var(--ft-info)",
+  Heifer: "var(--ft-good)",
   Calf: "#f97316",
   Ox: "#a78bfa",
 };
@@ -133,10 +133,10 @@ function DonutChart({ slices, total }: { slices: DonutSlice[]; total: number }) 
             <title>{`${p.label}: ${p.count}`}</title>
           </path>
         ))}
-        <text x={CENTER} y={CENTER - 7} textAnchor="middle" fill="#F0DEB8" fontSize={20} fontWeight={700}>
+        <text x={CENTER} y={CENTER - 7} textAnchor="middle" fill="var(--ft-fair-bg)" fontSize={20} fontWeight={700}>
           {total}
         </text>
-        <text x={CENTER} y={CENTER + 12} textAnchor="middle" fill="#9C8473" fontSize={10}>
+        <text x={CENTER} y={CENTER + 12} textAnchor="middle" fill="var(--ft-subtle)" fontSize={10}>
           animals
         </text>
       </svg>
@@ -154,8 +154,8 @@ function DonutChart({ slices, total }: { slices: DonutSlice[]; total: number }) 
                 flexShrink: 0,
               }}
             />
-            <span style={{ color: "#F0DEB8", fontWeight: 500 }}>{s.label}</span>
-            <span style={{ color: "#9C8473", marginLeft: "auto", paddingLeft: "0.75rem" }}>
+            <span style={{ color: "var(--ft-fair-bg)", fontWeight: 500 }}>{s.label}</span>
+            <span style={{ color: "var(--ft-subtle)", marginLeft: "auto", paddingLeft: "0.75rem" }}>
               {s.count} ({Math.round((s.count / total) * 100)}%)
             </span>
           </div>
@@ -169,10 +169,10 @@ function DonutChart({ slices, total }: { slices: DonutSlice[]; total: number }) 
 
 function DaysBadge({ days }: { days: number | null }) {
   if (days === null) {
-    return <span style={{ color: "#9C8473", fontSize: "0.8rem" }}>—</span>;
+    return <span style={{ color: "var(--ft-subtle)", fontSize: "0.8rem" }}>—</span>;
   }
 
-  const color = days < 7 ? "#ef4444" : days <= 14 ? "#f97316" : "#22c55e";
+  const color = days < 7 ? "var(--ft-crit)" : days <= 14 ? "#f97316" : "var(--ft-good)";
   return (
     <span
       style={{
@@ -239,13 +239,13 @@ export default function FinansieleTab({ data }: { data: FinansieleData }) {
                   ]}
                 />
                 <Legend
-                  wrapperStyle={{ fontSize: 11, color: "#9C8473", paddingTop: "0.5rem" }}
+                  wrapperStyle={{ fontSize: 11, color: "var(--ft-subtle)", paddingTop: "0.5rem" }}
                   formatter={(value) =>
                     value === "income" ? "Income" : value === "expense" ? "Expenses" : "Net"
                   }
                 />
-                <Bar dataKey="income" fill="#22c55e" name="income" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" fill="#C49030" name="expense" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" fill="var(--ft-good)" name="income" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expense" fill="var(--ft-fair)" name="expense" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -275,7 +275,7 @@ export default function FinansieleTab({ data }: { data: FinansieleData }) {
           <div style={{ overflowY: "auto", maxHeight: "16rem" }}>
             <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ fontSize: "0.75rem", color: "#9C8473", borderBottom: "1px solid rgba(196,144,48,0.18)" }}>
+                <tr style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", borderBottom: "1px solid rgba(196,144,48,0.18)" }}>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Camp</th>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Cover</th>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>kg DM/ha</th>
@@ -289,10 +289,10 @@ export default function FinansieleTab({ data }: { data: FinansieleData }) {
                     key={c.campId}
                     style={{ borderBottom: "1px solid rgba(196,144,48,0.1)" }}
                   >
-                    <td style={{ padding: "0.5rem 0", color: "#F0DEB8", fontWeight: 500 }}>{c.campName}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#9C8473" }}>{c.coverCategory}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#9C8473" }}>{c.kgDmPerHa.toFixed(0)}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#9C8473", fontSize: "0.75rem" }}>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-fair-bg)", fontWeight: 500 }}>{c.campName}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)" }}>{c.coverCategory}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)" }}>{c.kgDmPerHa.toFixed(0)}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)", fontSize: "0.75rem" }}>
                       {c.recordedAt}
                     </td>
                     <td style={{ padding: "0.5rem 0", textAlign: "right" }}>

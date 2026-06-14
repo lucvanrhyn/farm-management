@@ -7,7 +7,7 @@ import type { FinansieleData } from "@/components/admin/charts/chart-types";
 const ChartSkeleton = () => (
   <div className="flex flex-col gap-4">
     {Array.from({ length: 2 }).map((_, i) => (
-      <div key={i} className="rounded-xl animate-pulse" style={{ background: "#241C14", height: 200 }} />
+      <div key={i} className="rounded-xl animate-pulse" style={{ background: "var(--ft-text)", height: 200 }} />
     ))}
   </div>
 );
@@ -30,7 +30,7 @@ export default function FinancialChartsClient({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 text-sm font-semibold mb-4 px-3 py-2 rounded-lg transition-colors"
         style={{
-          color: "#1C1815",
+          color: "var(--ft-text)",
           background: open ? "rgba(139,105,20,0.08)" : "transparent",
           border: "1px solid rgba(139,105,20,0.15)",
         }}
@@ -47,7 +47,7 @@ export default function FinancialChartsClient({
         Financial Charts
       </button>
       {open && (
-        <div className="mt-2 rounded-xl overflow-hidden" style={{ background: "#1A1510", padding: "1.5rem" }}>
+        <div className="mt-2 rounded-xl overflow-hidden" style={{ background: "var(--ft-text)", padding: "1.5rem" }}>
           <FinansieleTab data={data} />
         </div>
       )}

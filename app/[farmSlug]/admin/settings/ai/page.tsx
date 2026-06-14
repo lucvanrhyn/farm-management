@@ -65,12 +65,12 @@ export default async function AiSettingsPage({
   }
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
       <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
+        <h1 className="text-xl font-bold" style={{ color: "var(--ft-text)" }}>
           Einstein AI Settings
         </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5 font-mono" style={{ color: "var(--ft-subtle)" }}>
           Rename your assistant, pick a reply language, and cap the monthly spend.
         </p>
       </div>
@@ -78,17 +78,17 @@ export default async function AiSettingsPage({
       {!canEdit ? (
         <div
           className="mb-4 rounded-xl p-4 max-w-2xl"
-          style={{ background: "#FFFAF0", border: "1px solid #F5DEB3" }}
+          style={{ background: "var(--ft-fair-bg)", border: "1px solid #F5DEB3" }}
           data-testid="ai-settings-basic-banner"
         >
-          <p className="text-sm" style={{ color: "#6B5E50" }}>
+          <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
             Einstein is available on Advanced and Consulting plans. You can
             preview the settings below — upgrade to unlock.
           </p>
           <Link
             href={`/${farmSlug}/admin/settings/subscription?upgrade=einstein`}
             className="mt-3 inline-block rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-            style={{ background: "#8B6914", color: "#F5EBD4" }}
+            style={{ background: "var(--ft-fair)", color: "var(--ft-fair-bg)" }}
           >
             See plans →
           </Link>

@@ -154,7 +154,7 @@ export default function AnimalImporter() {
               style={{
                 fontSize: "0.75rem",
                 fontWeight: 700,
-                color: "#2D6A4F",
+                color: "var(--ft-good)",
                 textTransform: "uppercase",
                 letterSpacing: "0.04em",
                 marginBottom: "0.25rem",
@@ -162,14 +162,14 @@ export default function AnimalImporter() {
             >
               Coming soon — AI assist
             </p>
-            <p style={{ fontSize: "0.8125rem", color: "#1C1815", lineHeight: 1.5 }}>
+            <p style={{ fontSize: "0.8125rem", color: "var(--ft-text)", lineHeight: 1.5 }}>
               If your CSV has rows we can&apos;t auto-match (e.g. a{" "}
               <code
                 style={{
                   background: "rgba(74,124,89,0.12)",
                   padding: "0 0.25rem",
                   borderRadius: "0.25rem",
-                  color: "#2D6A4F",
+                  color: "var(--ft-good)",
                   fontSize: "0.75rem",
                 }}
               >
@@ -187,7 +187,7 @@ export default function AnimalImporter() {
               flexShrink: 0,
               fontSize: "0.75rem",
               fontWeight: 600,
-              color: "#2D6A4F",
+              color: "var(--ft-good)",
               background: "transparent",
               border: "1px solid rgba(74,124,89,0.4)",
               borderRadius: "0.5rem",
@@ -202,8 +202,8 @@ export default function AnimalImporter() {
 
       {/* Template download */}
       <div style={{
-        background: "#F5F2EE",
-        border: "1px solid #E0D5C8",
+        background: "var(--ft-surface)",
+        border: "1px solid var(--ft-border)",
         borderRadius: "0.75rem",
         padding: "1rem",
         display: "flex",
@@ -211,14 +211,14 @@ export default function AnimalImporter() {
         justifyContent: "space-between",
       }}>
         <div>
-          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1C1815" }}>Two-Tab Template</p>
-          <p style={{ fontSize: "0.75rem", color: "#6B5C4E", marginTop: "0.125rem" }}>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ft-text)" }}>Two-Tab Template</p>
+          <p style={{ fontSize: "0.75rem", color: "var(--ft-muted)", marginTop: "0.125rem" }}>
             Sheet 1:{" "}
-            <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "#8B6914" }}>
+            <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "var(--ft-fair)" }}>
               Camps
             </code>
             {" "}— Sheet 2:{" "}
-            <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "#8B6914" }}>
+            <code style={{ background: "rgba(122,92,30,0.12)", padding: "0 0.25rem", borderRadius: "0.25rem", color: "var(--ft-fair)" }}>
               Animals
             </code>
           </p>
@@ -229,8 +229,8 @@ export default function AnimalImporter() {
           style={{
             fontSize: "0.75rem",
             fontWeight: 600,
-            color: "#8B6914",
-            border: "1px solid #E0D5C8",
+            color: "var(--ft-fair)",
+            border: "1px solid var(--ft-border)",
             borderRadius: "0.5rem",
             padding: "0.375rem 0.75rem",
             textDecoration: "none",
@@ -266,16 +266,16 @@ export default function AnimalImporter() {
         {file ? (
           <div>
             <p style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>📄</p>
-            <p style={{ fontWeight: 600, color: "#1C1815" }}>{file.name}</p>
-            <p style={{ fontSize: "0.875rem", color: "#9C8E7A", marginTop: "0.25rem" }}>
+            <p style={{ fontWeight: 600, color: "var(--ft-text)" }}>{file.name}</p>
+            <p style={{ fontSize: "0.875rem", color: "var(--ft-subtle)", marginTop: "0.25rem" }}>
               {(file.size / 1024).toFixed(0)} KB — click to change
             </p>
           </div>
         ) : (
           <div>
             <p style={{ fontSize: "1.875rem", marginBottom: "0.75rem" }}>📂</p>
-            <p style={{ fontWeight: 600, color: "#6B5C4E" }}>Drop a file here or click to select</p>
-            <p style={{ fontSize: "0.875rem", color: "#9C8E7A", marginTop: "0.25rem" }}>.xlsx</p>
+            <p style={{ fontWeight: 600, color: "var(--ft-muted)" }}>Drop a file here or click to select</p>
+            <p style={{ fontSize: "0.875rem", color: "var(--ft-subtle)", marginTop: "0.25rem" }}>.xlsx</p>
           </div>
         )}
       </div>
@@ -287,8 +287,8 @@ export default function AnimalImporter() {
         className="w-full py-3 rounded-xl font-bold transition-colors disabled:cursor-not-allowed"
         style={
           file && !loading
-            ? { backgroundColor: "#8B6914", color: "#F5EBD4" }
-            : { backgroundColor: "rgba(122,92,30,0.08)", color: "#9C8E7A" }
+            ? { backgroundColor: "var(--ft-fair)", color: "var(--ft-fair-bg)" }
+            : { backgroundColor: "rgba(122,92,30,0.08)", color: "var(--ft-subtle)" }
         }
       >
         {loading ? "Importing..." : "Import Animals"}
@@ -297,7 +297,7 @@ export default function AnimalImporter() {
       {/* Progress bar */}
       {loading && (
         <div className="space-y-2">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "#9C8E7A" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--ft-subtle)" }}>
             <span style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <span
                 style={{
@@ -305,16 +305,16 @@ export default function AnimalImporter() {
                   width: "0.75rem",
                   height: "0.75rem",
                   borderRadius: "50%",
-                  border: "2px solid #E0D5C8",
-                  borderTopColor: "#8B6914",
+                  border: "2px solid var(--ft-border)",
+                  borderTopColor: "var(--ft-fair)",
                   animation: "spin 0.8s linear infinite",
                 }}
               />
               {progress ? `${progress.processed} of ${progress.total} animals processed...` : "Loading file..."}
             </span>
-            {progress && <span style={{ fontWeight: 600, color: "#6B5C4E" }}>{progressPct}%</span>}
+            {progress && <span style={{ fontWeight: 600, color: "var(--ft-muted)" }}>{progressPct}%</span>}
           </div>
-          <div style={{ width: "100%", background: "#F5F2EE", borderRadius: "9999px", height: "0.5rem", overflow: "hidden" }}>
+          <div style={{ width: "100%", background: "var(--ft-surface)", borderRadius: "9999px", height: "0.5rem", overflow: "hidden" }}>
             {progress ? (
               <div
                 style={{
@@ -322,7 +322,7 @@ export default function AnimalImporter() {
                   borderRadius: "9999px",
                   transition: "width 0.3s",
                   width: `${progressPct}%`,
-                  backgroundColor: "#8B6914",
+                  backgroundColor: "var(--ft-fair)",
                 }}
               />
             ) : (
@@ -348,7 +348,7 @@ export default function AnimalImporter() {
           borderRadius: "0.75rem",
           padding: "1rem",
         }}>
-          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#C0574C" }}>Error</p>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ft-poor)" }}>Error</p>
           <p style={{ fontSize: "0.875rem", color: "rgba(192,87,76,0.85)", marginTop: "0.25rem" }}>{error}</p>
         </div>
       )}
@@ -358,10 +358,10 @@ export default function AnimalImporter() {
         <div style={{
           borderRadius: "0.75rem",
           padding: "1.25rem",
-          border: `1px solid ${result.skipped === 0 ? "rgba(74,124,89,0.35)" : "#E0D5C8"}`,
-          background: result.skipped === 0 ? "rgba(74,124,89,0.08)" : "#F5F2EE",
+          border: `1px solid ${result.skipped === 0 ? "rgba(74,124,89,0.35)" : "var(--ft-border)"}`,
+          background: result.skipped === 0 ? "rgba(74,124,89,0.08)" : "var(--ft-surface)",
         }}>
-          <p style={{ fontWeight: 700, color: "#1C1815", marginBottom: "0.75rem" }}>Import Results</p>
+          <p style={{ fontWeight: 700, color: "var(--ft-text)", marginBottom: "0.75rem" }}>Import Results</p>
           <div style={{ display: "grid", gridTemplateColumns: result.campsCreated > 0 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
             <div style={{
               background: "rgba(74,124,89,0.12)",
@@ -369,8 +369,8 @@ export default function AnimalImporter() {
               borderRadius: "0.5rem",
               padding: "0.75rem",
             }}>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4A7C59" }}>{result.imported}</p>
-              <p style={{ fontSize: "0.75rem", color: "#9C8E7A", marginTop: "0.125rem" }}>Animals imported</p>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ft-good)" }}>{result.imported}</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", marginTop: "0.125rem" }}>Animals imported</p>
             </div>
             {result.campsCreated > 0 && (
               <div style={{
@@ -379,30 +379,30 @@ export default function AnimalImporter() {
                 borderRadius: "0.5rem",
                 padding: "0.75rem",
               }}>
-                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#4A7C59" }}>{result.campsCreated}</p>
-                <p style={{ fontSize: "0.75rem", color: "#9C8E7A", marginTop: "0.125rem" }}>Camps created</p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ft-good)" }}>{result.campsCreated}</p>
+                <p style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", marginTop: "0.125rem" }}>Camps created</p>
               </div>
             )}
             <div style={{
-              background: "#FFFFFF",
-              border: "1px solid #E0D5C8",
+              background: "var(--ft-surface)",
+              border: "1px solid var(--ft-border)",
               borderRadius: "0.5rem",
               padding: "0.75rem",
             }}>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#8B6914" }}>{result.skipped}</p>
-              <p style={{ fontSize: "0.75rem", color: "#9C8E7A", marginTop: "0.125rem" }}>Skipped</p>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ft-fair)" }}>{result.skipped}</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", marginTop: "0.125rem" }}>Skipped</p>
             </div>
           </div>
           {result.errors.length > 0 && (
             <div>
-              <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#6B5C4E", marginBottom: "0.5rem" }}>
+              <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--ft-muted)", marginBottom: "0.5rem" }}>
                 Errors ({result.errors.length}):
               </p>
               <ul style={{ maxHeight: "10rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                 {result.errors.map((e, i) => (
                   <li key={i} style={{
                     fontSize: "0.75rem",
-                    color: "#C0574C",
+                    color: "var(--ft-poor)",
                     fontFamily: "monospace",
                     background: "rgba(139,20,20,0.08)",
                     borderRadius: "0.25rem",

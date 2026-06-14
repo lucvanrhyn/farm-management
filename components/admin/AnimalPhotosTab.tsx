@@ -113,12 +113,12 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
   return (
     <div
       className="rounded-2xl border p-5"
-      style={{ background: '#FFFFFF', border: '1px solid #E0D5C8' }}
+      style={{ background: 'var(--ft-surface)', border: '1px solid var(--ft-border)' }}
     >
       <div className="flex items-center justify-between mb-4">
         <h2
           className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: '#9C8E7A' }}
+          style={{ color: 'var(--ft-subtle)' }}
         >
           Photos ({photos.length})
         </h2>
@@ -126,8 +126,8 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
           aria-label="Upload photo"
           className="inline-flex items-center gap-1 cursor-pointer text-xs font-semibold px-3 py-1.5 rounded-full"
           style={{
-            background: uploading ? '#E0D5C8' : '#1C1815',
-            color: '#FAFAF8',
+            background: uploading ? 'var(--ft-border)' : 'var(--ft-text)',
+            color: 'var(--ft-bg)',
             opacity: uploading ? 0.7 : 1,
           }}
         >
@@ -149,8 +149,8 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
           className="mb-4 text-xs font-medium px-3 py-2 rounded-lg"
           style={
             toast.kind === 'error'
-              ? { background: 'rgba(192,87,76,0.12)', color: '#8B3A3A' }
-              : { background: 'rgba(34,139,34,0.12)', color: '#1B5E20' }
+              ? { background: 'rgba(192,87,76,0.12)', color: 'var(--ft-crit)' }
+              : { background: 'rgba(34,139,34,0.12)', color: 'var(--ft-good)' }
           }
         >
           {toast.message}
@@ -158,7 +158,7 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
       )}
 
       {photos.length === 0 ? (
-        <p className="text-xs" style={{ color: '#9C8E7A' }}>
+        <p className="text-xs" style={{ color: 'var(--ft-subtle)' }}>
           No photos yet — upload one above or capture a photo when logging
           a Health, Treatment, Calving, or Death observation.
         </p>
@@ -173,8 +173,8 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
                 className="block w-full rounded-xl overflow-hidden"
                 style={{
                   aspectRatio: '1 / 1',
-                  border: '1px solid #E0D5C8',
-                  background: '#FAFAF8',
+                  border: '1px solid var(--ft-border)',
+                  background: 'var(--ft-bg)',
                   cursor: 'pointer',
                   padding: 0,
                 }}
@@ -193,14 +193,14 @@ export function AnimalPhotosTab({ farmSlug, animalId, photos }: Props) {
               </button>
               <span
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block self-start"
-                style={{ background: 'rgba(28,24,21,0.06)', color: '#1C1815' }}
+                style={{ background: 'rgba(28,24,21,0.06)', color: 'var(--ft-text)' }}
               >
                 {labelForType(p.type)}
               </span>
               <Link
                 href={`/${farmSlug}/admin/observations?focus=${p.id}`}
                 className="text-[11px] underline"
-                style={{ color: '#9C8E7A' }}
+                style={{ color: 'var(--ft-subtle)' }}
               >
                 {new Date(p.observedAt).toLocaleDateString('en-ZA')}
               </Link>

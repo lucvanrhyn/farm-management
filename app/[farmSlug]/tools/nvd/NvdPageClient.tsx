@@ -25,14 +25,14 @@ export default function NvdPageClient({ farmSlug, isAdmin }: NvdPageClientProps)
           className="mb-5 flex items-center gap-3 rounded-xl px-4 py-3"
           style={{ background: "rgba(74,124,89,0.08)", border: "1px solid rgba(74,124,89,0.25)" }}
         >
-          <p className="text-sm font-medium" style={{ color: "#2D6A4F" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-good)" }}>
             <strong>{lastNvd}</strong> issued. Download it from the history table below.
           </p>
           <button
             type="button"
             onClick={() => setLastNvd(null)}
             className="ml-auto text-xs"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             Dismiss
           </button>
@@ -48,12 +48,12 @@ export default function NvdPageClient({ farmSlug, isAdmin }: NvdPageClientProps)
         ) : (
           <div
             className="rounded-xl p-6"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+            style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
           >
-            <p className="text-sm font-semibold mb-1" style={{ color: "#1C1815" }}>
+            <p className="text-sm font-semibold mb-1" style={{ color: "var(--ft-text)" }}>
               Admin access required
             </p>
-            <p className="text-xs" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
               Only ADMIN users can issue NVDs. You can still view and download previously issued NVDs below.
             </p>
           </div>

@@ -32,8 +32,8 @@ export default async function BreedingAIPage({
 
   if (!prisma) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-        <p className="text-sm" style={{ color: "#C0574C" }}>Farm not found.</p>
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+        <p className="text-sm" style={{ color: "var(--ft-poor)" }}>Farm not found.</p>
       </div>
     );
   }
@@ -58,10 +58,10 @@ export default async function BreedingAIPage({
   const inbreedingRisks = detectInbreedingRisk(allAnimals);
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>Breeding AI</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>Breeding AI</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           AI-powered breeding analysis and inbreeding-safe pairing suggestions
         </p>
       </div>

@@ -75,13 +75,13 @@ export default async function SubscribeUpgradePage({
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5"
-      style={{ background: '#1A1510' }}
+      style={{ background: 'var(--ft-text)' }}
     >
       <div
         className="w-full max-w-md px-8 py-10 flex flex-col gap-6"
         style={{
           borderRadius: '2rem',
-          background: '#241C14',
+          background: 'var(--ft-text)',
           border: '1px solid rgba(196,144,48,0.18)',
           boxShadow: '0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)',
         }}
@@ -91,7 +91,7 @@ export default async function SubscribeUpgradePage({
           <h1
             style={{
               fontFamily: 'var(--font-display)',
-              color: '#F0DEB8',
+              color: 'var(--ft-fair-bg)',
               fontSize: '1.5rem',
               fontWeight: 700,
               marginBottom: '0.375rem',
@@ -109,7 +109,7 @@ export default async function SubscribeUpgradePage({
                 marginTop: '4px',
                 fontSize: '0.6875rem',
                 background: 'rgba(196,144,48,0.15)',
-                color: '#C49030',
+                color: 'var(--ft-fair)',
                 border: '1px solid rgba(196,144,48,0.25)',
                 borderRadius: '4px',
                 padding: '1px 6px',
@@ -141,7 +141,7 @@ export default async function SubscribeUpgradePage({
                 fontWeight: 600,
                 textDecoration: 'none',
                 background: frequency === f ? 'rgba(196,144,48,0.15)' : 'transparent',
-                color: frequency === f ? '#C49030' : '#6B5E50',
+                color: frequency === f ? 'var(--ft-fair)' : 'var(--ft-muted)',
                 transition: 'background 0.15s',
               }}
             >
@@ -165,7 +165,7 @@ export default async function SubscribeUpgradePage({
           <p
             style={{
               fontFamily: 'var(--font-display)',
-              color: '#C49030',
+              color: 'var(--ft-fair)',
               fontSize: '2rem',
               fontWeight: 700,
               marginTop: '4px',
@@ -186,7 +186,7 @@ export default async function SubscribeUpgradePage({
           <p
             style={{
               fontFamily: 'var(--font-sans)',
-              color: '#6B5E50',
+              color: 'var(--ft-muted)',
               fontSize: '0.75rem',
               marginTop: '4px',
             }}
@@ -209,7 +209,7 @@ export default async function SubscribeUpgradePage({
               border: '1px solid rgba(196,144,48,0.35)',
               borderRadius: '10px',
               padding: '0.875rem',
-              color: '#F0DEB8',
+              color: 'var(--ft-fair-bg)',
               fontFamily: 'var(--font-sans)',
               fontSize: '0.9375rem',
               fontWeight: 600,

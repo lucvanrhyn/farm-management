@@ -90,8 +90,8 @@ export default async function TasksPage({
   return (
     <AdminPage>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Tasks</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Tasks</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
           Showing first {pageTasks.length.toLocaleString()} task{pageTasks.length !== 1 ? "s" : ""}
           {hasMore ? " · scroll or Load more to see the rest" : ""}
         </p>

@@ -103,7 +103,7 @@ function makeNumericFieldComponent(
       (cfg.altKeys ?? []).map((k) => details[k]).find((v) => v !== undefined);
     return (
       <div className="flex flex-col gap-3">
-        <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+        <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
           {cfg.label}
           {cfg.unit ? ` (${cfg.unit})` : ""}
           <input
@@ -121,9 +121,9 @@ function makeNumericFieldComponent(
               )
             }
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E0D5C8",
-              color: "#1C1815",
+              background: "var(--ft-surface)",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-text)",
               borderRadius: "0.75rem",
               padding: "0.5rem 0.75rem",
               fontSize: "0.875rem",
@@ -410,7 +410,7 @@ const ScrotalCircumferenceForm = makeNumericFieldComponent({
 
 const GeneralNoteForm = ({ details, onChange }: FieldProps) => (
   <div className="flex flex-col gap-3">
-    <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+    <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
       Note
       <textarea
         value={
@@ -422,9 +422,9 @@ const GeneralNoteForm = ({ details, onChange }: FieldProps) => (
         onChange={(e) => onChange("note", e.target.value)}
         rows={4}
         style={{
-          background: "#FFFFFF",
-          border: "1px solid #E0D5C8",
-          color: "#1C1815",
+          background: "var(--ft-surface)",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-text)",
           borderRadius: "0.75rem",
           padding: "0.5rem 0.75rem",
           fontSize: "0.875rem",

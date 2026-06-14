@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
     border: "1px solid rgba(140,100,60,0.25)",
     borderRadius: "10px",
     padding: "0.625rem 0.875rem",
-    color: "#F0DEB8",
+    color: "var(--ft-fair-bg)",
     fontFamily: "var(--font-sans)",
     fontSize: "0.9375rem",
     outline: "none",
@@ -70,13 +70,13 @@ export default function ForgotPasswordPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5"
-      style={{ background: "#1A1510" }}
+      style={{ background: "var(--ft-text)" }}
     >
       <div
         className="w-full max-w-sm px-8 py-10 flex flex-col items-center gap-6"
         style={{
           borderRadius: "2rem",
-          background: "#241C14",
+          background: "var(--ft-text)",
           border: "1px solid rgba(196,144,48,0.18)",
           boxShadow:
             "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
@@ -147,7 +147,7 @@ function SentPanel() {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#4A7C59"
+          stroke="var(--ft-good)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -159,7 +159,7 @@ function SentPanel() {
       <h1
         style={{
           fontFamily: "var(--font-display)",
-          color: "#F0DEB8",
+          color: "var(--ft-fair-bg)",
           fontSize: "1.5rem",
           fontWeight: 700,
           textAlign: "center",
@@ -205,7 +205,7 @@ function FormPanel({
       <h1
         style={{
           fontFamily: "var(--font-display)",
-          color: "#F0DEB8",
+          color: "var(--ft-fair-bg)",
           fontSize: "1.5rem",
           fontWeight: 700,
           textAlign: "center",
@@ -288,7 +288,7 @@ function FormPanel({
             borderRadius: "10px",
             padding: "0.625rem 1rem",
             color:
-              state === "sending" ? "rgba(240,222,184,0.5)" : "#F0DEB8",
+              state === "sending" ? "rgba(240,222,184,0.5)" : "var(--ft-fair-bg)",
             fontFamily: "var(--font-sans)",
             fontSize: "0.9rem",
             fontWeight: 500,

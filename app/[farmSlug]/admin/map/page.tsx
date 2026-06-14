@@ -31,7 +31,7 @@ export default async function AdminMapPage({
   const creds = await getFarmCreds(farmSlug);
   if (!creds) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
         <p className="text-sm text-red-600">Farm not found.</p>
       </div>
     );
@@ -40,7 +40,7 @@ export default async function AdminMapPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
         <p className="text-sm text-red-600">Farm not found.</p>
       </div>
     );
@@ -78,11 +78,11 @@ export default async function AdminMapPage({
   }));
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1C1815]">Farm map</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Farm map</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
             {camps.length} camp{camps.length === 1 ? "" : "s"} · long-press to log at a spot
           </p>
         </div>

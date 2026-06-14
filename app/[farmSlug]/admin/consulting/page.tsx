@@ -42,10 +42,10 @@ const STATUS_STYLES: Record<
   ConsultingLead["status"],
   { bg: string; fg: string; label: string }
 > = {
-  new: { bg: "#1E3A5F", fg: "#93C5FD", label: "New" },
+  new: { bg: "var(--ft-info)", fg: "#93C5FD", label: "New" },
   scoped: { bg: "#3B2E14", fg: "#FCD34D", label: "Scoped" },
   quoted: { bg: "#2A1F4C", fg: "#C4B5FD", label: "Quoted" },
-  active: { bg: "#15381F", fg: "#86EFAC", label: "Active" },
+  active: { bg: "var(--ft-good)", fg: "#86EFAC", label: "Active" },
   complete: { bg: "#2A2520", fg: "#A8A29E", label: "Complete" },
 };
 
@@ -117,16 +117,16 @@ export default async function ConsultingAdminPage({
   }, 0);
 
   const cardStyle = {
-    background: "#241C14",
+    background: "var(--ft-text)",
     border: "1px solid rgba(139, 105, 20, 0.15)",
   } as const;
 
-  const subtleText = { color: "#A8977A" } as const;
+  const subtleText = { color: "var(--ft-subtle)" } as const;
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#1A1510] min-h-screen">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-text)] min-h-screen">
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-[#F5EBD4]">Consulting CRM</h1>
+        <h1 className="text-xl font-bold text-[var(--ft-fair-bg)]">Consulting CRM</h1>
         <p className="text-xs mt-0.5 font-mono" style={subtleText}>
           Lead pipeline and engagement tracker
         </p>
@@ -141,7 +141,7 @@ export default async function ConsultingAdminPage({
           >
             Total Leads
           </p>
-          <p className="text-2xl font-bold text-[#F5EBD4]">
+          <p className="text-2xl font-bold text-[var(--ft-fair-bg)]">
             {formatNumber(totalLeads)}
           </p>
           <p className="text-[10px] mt-1 font-mono" style={subtleText}>
@@ -187,7 +187,7 @@ export default async function ConsultingAdminPage({
           >
             Estimated Revenue (approx.)
           </p>
-          <p className="text-2xl font-bold" style={{ color: "#8B6914" }}>
+          <p className="text-2xl font-bold" style={{ color: "var(--ft-fair)" }}>
             {formatZar(estimatedRevenue)}
           </p>
           <p className="text-[10px] mt-1 font-mono" style={subtleText}>
@@ -203,7 +203,7 @@ export default async function ConsultingAdminPage({
           className="px-4 py-3"
           style={{ borderBottom: "1px solid rgba(139, 105, 20, 0.15)" }}
         >
-          <h2 className="text-sm font-semibold text-[#F5EBD4]">Recent Leads</h2>
+          <h2 className="text-sm font-semibold text-[var(--ft-fair-bg)]">Recent Leads</h2>
           <p className="text-[10px] mt-0.5 font-mono" style={subtleText}>
             Showing {leads.length} most recent
           </p>
@@ -211,7 +211,7 @@ export default async function ConsultingAdminPage({
 
         {leads.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-sm text-[#F5EBD4] font-medium">No leads yet</p>
+            <p className="text-sm text-[var(--ft-fair-bg)] font-medium">No leads yet</p>
             <p className="text-xs mt-2 font-mono" style={subtleText}>
               Share /consulting/intake to get started.
             </p>
@@ -223,8 +223,8 @@ export default async function ConsultingAdminPage({
                 <tr
                   className="text-left text-[10px] uppercase tracking-wider font-mono"
                   style={{
-                    color: "#A8977A",
-                    background: "#1A1510",
+                    color: "var(--ft-subtle)",
+                    background: "var(--ft-text)",
                   }}
                 >
                   <th className="px-4 py-2 font-normal">Date</th>
@@ -250,13 +250,13 @@ export default async function ConsultingAdminPage({
                   >
                     <td
                       className="px-4 py-3 font-mono text-xs whitespace-nowrap"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       {formatDate(lead.createdAt)}
                     </td>
                     <td
                       className="px-4 py-3 text-xs"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       <div className="font-medium">{lead.name}</div>
                       <div
@@ -268,25 +268,25 @@ export default async function ConsultingAdminPage({
                     </td>
                     <td
                       className="px-4 py-3 text-xs"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       {lead.farmName ?? "—"}
                     </td>
                     <td
                       className="px-4 py-3 text-xs"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       {lead.province ?? "—"}
                     </td>
                     <td
                       className="px-4 py-3 text-xs font-mono"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       {lead.species.length > 0 ? lead.species.join(", ") : "—"}
                     </td>
                     <td
                       className="px-4 py-3 font-mono text-xs text-right"
-                      style={{ color: "#F5EBD4" }}
+                      style={{ color: "var(--ft-fair-bg)" }}
                     >
                       {lead.herdSize != null ? formatNumber(lead.herdSize) : "—"}
                     </td>
@@ -295,7 +295,7 @@ export default async function ConsultingAdminPage({
                     </td>
                     <td
                       className="px-4 py-3 text-xs max-w-[320px]"
-                      style={{ color: "#A8977A" }}
+                      style={{ color: "var(--ft-subtle)" }}
                       title={lead.dataNotes ?? ""}
                     >
                       {truncate(lead.dataNotes, 80) || "—"}

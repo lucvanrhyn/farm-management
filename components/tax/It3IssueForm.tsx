@@ -107,27 +107,27 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
   return (
     <div
       className="rounded-xl p-5 space-y-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div>
-        <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Issue new snapshot
         </p>
-        <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
           Freezes the current farming schedule for the selected tax year. Edits
           to underlying transactions after issue will not alter the saved PDF.
         </p>
       </div>
 
       <label className="block">
-        <span className="text-xs font-semibold" style={{ color: "#1C1815" }}>
+        <span className="text-xs font-semibold" style={{ color: "var(--ft-text)" }}>
           SA Tax Year
         </span>
         <select
           value={taxYear}
           onChange={(e) => setTaxYear(parseInt(e.target.value, 10))}
           className="mt-1 w-full rounded-lg px-3 py-2 text-sm"
-          style={{ border: "1px solid #E0D5C8", background: "#FAFAF8", color: "#1C1815" }}
+          style={{ border: "1px solid var(--ft-border)", background: "var(--ft-bg)", color: "var(--ft-text)" }}
         >
           {taxYearOptions.map((y) => (
             <option key={y} value={y}>
@@ -135,13 +135,13 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
             </option>
           ))}
         </select>
-        <span className="text-[11px] mt-1 block font-mono" style={{ color: "#9C8E7A" }}>
+        <span className="text-[11px] mt-1 block font-mono" style={{ color: "var(--ft-subtle)" }}>
           Period: {range.start} → {range.end}
         </span>
       </label>
 
       {loading && (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           Loading preview…
         </p>
       )}
@@ -149,7 +149,7 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
       {error && (
         <div
           className="rounded-lg px-3 py-2 text-xs"
-          style={{ background: "rgba(139,58,58,0.08)", border: "1px solid rgba(139,58,58,0.3)", color: "#8B3A3A" }}
+          style={{ background: "rgba(139,58,58,0.08)", border: "1px solid rgba(139,58,58,0.3)", color: "var(--ft-crit)" }}
         >
           {error}
         </div>
@@ -158,24 +158,24 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
       {preview && !loading && (
         <div
           className="rounded-lg p-4 space-y-2"
-          style={{ background: "#F5F0E8", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <div className="flex items-center gap-2 mb-2">
-            <Calculator className="w-4 h-4" style={{ color: "#4A7C59" }} />
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#9C8E7A" }}>
+            <Calculator className="w-4 h-4" style={{ color: "var(--ft-good)" }} />
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ft-subtle)" }}>
               Preview totals
             </p>
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <span style={{ color: "#1C1815" }}>Total farming income</span>
-            <span className="font-semibold" style={{ color: "#1C1815" }}>
+            <span style={{ color: "var(--ft-text)" }}>Total farming income</span>
+            <span className="font-semibold" style={{ color: "var(--ft-text)" }}>
               {formatZar(preview.schedules.totalIncome)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span style={{ color: "#1C1815" }}>Total farming expenses</span>
-            <span className="font-semibold" style={{ color: "#1C1815" }}>
+            <span style={{ color: "var(--ft-text)" }}>Total farming expenses</span>
+            <span className="font-semibold" style={{ color: "var(--ft-text)" }}>
               {formatZar(preview.schedules.totalExpenses)}
             </span>
           </div>
@@ -192,17 +192,17 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
             preview.schedules.stockMovementZar !== 0 && (
               <>
                 <div className="flex items-center justify-between text-sm">
-                  <span style={{ color: "#1C1815" }}>
+                  <span style={{ color: "var(--ft-text)" }}>
                     Net farming income before stock movement
                   </span>
-                  <span className="font-semibold" style={{ color: "#1C1815" }}>
+                  <span className="font-semibold" style={{ color: "var(--ft-text)" }}>
                     {formatZar(
                       preview.schedules.netFarmingIncomeBeforeStockMovement ?? 0,
                     )}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span style={{ color: "#1C1815" }}>
+                  <span style={{ color: "var(--ft-text)" }}>
                     Stock movement (closing − opening, at standard values)
                   </span>
                   <span
@@ -210,8 +210,8 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
                     style={{
                       color:
                         preview.schedules.stockMovementZar >= 0
-                          ? "#2D6A4F"
-                          : "#8B3A3A",
+                          ? "var(--ft-good)"
+                          : "var(--ft-crit)",
                     }}
                   >
                     {formatZar(preview.schedules.stockMovementZar)}
@@ -221,23 +221,23 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
             )}
           <div
             className="flex items-center justify-between text-sm pt-2"
-            style={{ borderTop: "1px solid #E0D5C8" }}
+            style={{ borderTop: "1px solid var(--ft-border)" }}
           >
-            <span className="font-bold" style={{ color: "#1C1815" }}>Net farming income</span>
+            <span className="font-bold" style={{ color: "var(--ft-text)" }}>Net farming income</span>
             <span className="font-bold" style={{
-              color: preview.schedules.netFarmingIncome >= 0 ? "#2D6A4F" : "#8B3A3A",
+              color: preview.schedules.netFarmingIncome >= 0 ? "var(--ft-good)" : "var(--ft-crit)",
             }}>
               {formatZar(preview.schedules.netFarmingIncome)}
             </span>
           </div>
-          <p className="text-[11px] mt-2" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px] mt-2" style={{ color: "var(--ft-subtle)" }}>
             {preview.schedules.transactionCount} transactions in range •{" "}
             {preview.schedules.income.length} income line{preview.schedules.income.length === 1 ? "" : "s"} •{" "}
             {preview.schedules.expense.length} expense line{preview.schedules.expense.length === 1 ? "" : "s"}
           </p>
           {typeof preview.schedules.stockMovementZar === "number" &&
             preview.schedules.stockMovementZar !== 0 && (
-              <p className="text-[11px] mt-1" style={{ color: "#9C8E7A" }}>
+              <p className="text-[11px] mt-1" style={{ color: "var(--ft-subtle)" }}>
                 Stock movement per First Schedule paragraph 5(1), Income Tax Act
                 58/1962 — livestock valued at SARS-gazetted standard values
                 (GN R1814, 1976-10-08).
@@ -251,7 +251,7 @@ export default function It3IssueForm({ farmSlug, onIssued }: It3IssueFormProps) 
         disabled={!preview || issuing || loading}
         onClick={() => void handleIssue()}
         className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-40"
-        style={{ background: "#4A7C59", color: "#FFFFFF" }}
+        style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
       >
         <FileCheck2 className="w-4 h-4" />
         {issuing ? "Issuing…" : `Issue snapshot for ${taxYear}`}

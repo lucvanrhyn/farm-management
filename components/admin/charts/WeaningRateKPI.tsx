@@ -31,10 +31,10 @@ export function weaningBand(rate: number | null, target: number): Band {
 }
 
 const BAND_COLORS: Record<Band, { fg: string; bg: string; border: string }> = {
-  green: { fg: "#166534", bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.25)" },
-  amber: { fg: "#92400E", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)" },
-  red: { fg: "#991B1B", bg: "rgba(220,38,38,0.08)", border: "rgba(220,38,38,0.25)" },
-  gray: { fg: "#6B5C4E", bg: "#FAFAF8", border: "#E0D5C8" },
+  green: { fg: "var(--ft-good)", bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.25)" },
+  amber: { fg: "var(--ft-fair)", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)" },
+  red: { fg: "var(--ft-crit)", bg: "rgba(220,38,38,0.08)", border: "rgba(220,38,38,0.25)" },
+  gray: { fg: "var(--ft-muted)", bg: "var(--ft-bg)", border: "var(--ft-border)" },
 };
 
 export default function WeaningRateKPI({ weaningRate, history, target = 88 }: Props) {
@@ -49,7 +49,7 @@ export default function WeaningRateKPI({ weaningRate, history, target = 88 }: Pr
     >
       <p
         className="text-xs font-semibold uppercase tracking-wide mb-1"
-        style={{ color: "#9C8E7A" }}
+        style={{ color: "var(--ft-subtle)" }}
       >
         Weaning Rate
       </p>
@@ -66,7 +66,7 @@ export default function WeaningRateKPI({ weaningRate, history, target = 88 }: Pr
       </p>
 
       {/* Thresholds legend */}
-      <p className="text-[10px] mt-2" style={{ color: "#9C8E7A" }}>
+      <p className="text-[10px] mt-2" style={{ color: "var(--ft-subtle)" }}>
         ≥{target}% excellent · ≥80% acceptable
       </p>
 
@@ -77,9 +77,9 @@ export default function WeaningRateKPI({ weaningRate, history, target = 88 }: Pr
               <YAxis hide domain={["dataMin - 5", "dataMax + 5"]} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1A1510",
+                  backgroundColor: "var(--ft-text)",
                   border: "1px solid rgba(139,105,20,0.3)",
-                  color: "#F5EBD4",
+                  color: "var(--ft-fair-bg)",
                   fontSize: 11,
                 }}
                 formatter={(value) => {
@@ -101,7 +101,7 @@ export default function WeaningRateKPI({ weaningRate, history, target = 88 }: Pr
       ) : (
         <p
           className="text-[10px] italic mt-3"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           Track weaning across years to see trend
         </p>

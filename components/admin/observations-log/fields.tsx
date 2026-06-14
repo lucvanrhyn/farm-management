@@ -27,7 +27,7 @@ export interface FieldProps {
 export function WeighingFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Weight (kg) *
         <input
           type="number"
@@ -51,7 +51,7 @@ export function WeighingFields({ details, onChange }: FieldProps) {
 export function TreatmentFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Treatment Type *
         <select
           value={(details.treatmentType as string) ?? ""}
@@ -63,7 +63,7 @@ export function TreatmentFields({ details, onChange }: FieldProps) {
           {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Product *
         <input
           type="text"
@@ -73,7 +73,7 @@ export function TreatmentFields({ details, onChange }: FieldProps) {
           className="mt-1 block"
         />
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Dose *
         <input
           type="text"
@@ -83,7 +83,7 @@ export function TreatmentFields({ details, onChange }: FieldProps) {
           className="mt-1 block"
         />
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Withdrawal Days
         <input
           type="number"
@@ -100,7 +100,7 @@ export function TreatmentFields({ details, onChange }: FieldProps) {
 export function HealthIssueFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Symptom *
         <select
           value={(details.symptom as string) ?? (Array.isArray(details.symptoms) ? (details.symptoms as string[])[0] ?? "" : "")}
@@ -112,7 +112,7 @@ export function HealthIssueFields({ details, onChange }: FieldProps) {
           {SYMPTOMS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Severity *
         <select
           value={(details.severity as string) ?? ""}
@@ -131,7 +131,7 @@ export function HealthIssueFields({ details, onChange }: FieldProps) {
 export function CampConditionFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Grazing Quality *
         <select
           value={(details.grazingQuality as string) ?? (details.grazing as string) ?? (details.grazing_quality as string) ?? ""}
@@ -143,7 +143,7 @@ export function CampConditionFields({ details, onChange }: FieldProps) {
           {GRAZING_QUALITY.map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Water Status *
         <select
           value={(details.waterStatus as string) ?? (details.water as string) ?? (details.water_status as string) ?? ""}
@@ -155,7 +155,7 @@ export function CampConditionFields({ details, onChange }: FieldProps) {
           {WATER_STATUS.map((w) => <option key={w} value={w}>{w}</option>)}
         </select>
       </label>
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Fence Status *
         <select
           value={(details.fenceStatus as string) ?? (details.fence as string) ?? ""}
@@ -174,7 +174,7 @@ export function CampConditionFields({ details, onChange }: FieldProps) {
 export function ReproductionFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Event Type *
         <select
           value={(details.eventType as string) ?? ""}
@@ -193,7 +193,7 @@ export function ReproductionFields({ details, onChange }: FieldProps) {
 export function DeathFields({ details, onChange }: FieldProps) {
   return (
     <div className="flex flex-col gap-3">
-      <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+      <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
         Cause *
         <select
           value={(details.cause as string) ?? ""}
@@ -218,28 +218,28 @@ export function ReadOnlyDetails({ details }: { details: Record<string, unknown> 
         <dl className="text-xs grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
           {entries.map(([k, v]) => (
             <React.Fragment key={k}>
-              <dt className="font-semibold capitalize" style={{ color: "#6B5C4E" }}>
+              <dt className="font-semibold capitalize" style={{ color: "var(--ft-muted)" }}>
                 {k.replace(/_/g, " ").replace(/([A-Z])/g, " $1").trim()}
               </dt>
-              <dd style={{ color: "#1C1815" }}>
+              <dd style={{ color: "var(--ft-text)" }}>
                 {Array.isArray(v) ? v.join(", ") : String(v)}
               </dd>
             </React.Fragment>
           ))}
         </dl>
       ) : (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>No additional details.</p>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>No additional details.</p>
       )}
       <details>
         <summary
           className="text-[11px] cursor-pointer select-none"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           View raw details
         </summary>
         <pre
           className="mt-2 text-xs rounded-xl px-3 py-2 font-mono overflow-auto max-h-48"
-          style={{ background: "#F5F2EE", color: "#6B5C4E", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", color: "var(--ft-muted)", border: "1px solid var(--ft-border)" }}
         >
           {JSON.stringify(details, null, 2)}
         </pre>

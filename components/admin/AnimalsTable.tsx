@@ -389,7 +389,7 @@ export default function AnimalsTable({
       {/* Header count line — issue #205 */}
       <p
         className="text-sm"
-        style={{ color: "#9C8E7A" }}
+        style={{ color: "var(--ft-subtle)" }}
         data-testid="animals-header-count"
       >
         {typeof speciesTotal === "number" ? (
@@ -414,7 +414,7 @@ export default function AnimalsTable({
       </p>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "#F0EBE4" }}>
+      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "var(--ft-surface)" }}>
         {(["active", "deceased"] as const).map((t) => {
           // Issue #255 — Deceased badge prefers the SSR-provided
           // `deceasedTotal` (true count from the DB) and falls back to the
@@ -436,8 +436,8 @@ export default function AnimalsTable({
               className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
               style={
                 isActive
-                  ? { background: "#FFFFFF", color: "#1C1815", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-                  : { color: "#9C8E7A" }
+                  ? { background: "var(--ft-surface)", color: "var(--ft-text)", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+                  : { color: "var(--ft-subtle)" }
               }
             >
               {t === "active" ? "Active / Sold" : "Deceased"}
@@ -445,8 +445,8 @@ export default function AnimalsTable({
                 className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
                 style={
                   isActive
-                    ? { background: t === "active" ? "rgba(74,124,89,0.15)" : "rgba(192,87,76,0.12)", color: t === "active" ? "#4A7C59" : "#C0574C" }
-                    : { background: "rgba(156,142,122,0.15)", color: "#9C8E7A" }
+                    ? { background: t === "active" ? "rgba(74,124,89,0.15)" : "rgba(192,87,76,0.12)", color: t === "active" ? "var(--ft-good)" : "var(--ft-poor)" }
+                    : { background: "rgba(156,142,122,0.15)", color: "var(--ft-subtle)" }
                 }
               >
                 {count.toLocaleString()}
@@ -468,9 +468,9 @@ export default function AnimalsTable({
           }}
           className={farmInput}
           style={{
-            background: "#FFFFFF",
-            border: "1px solid #E0D5C8",
-            color: "#1C1815",
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
+            color: "var(--ft-text)",
             width: "14rem",
           }}
         />
@@ -479,9 +479,9 @@ export default function AnimalsTable({
           onChange={(e) => { setCampFilter(e.target.value); setPage(1); }}
           className={farmSelect}
           style={{
-            background: "#FFFFFF",
-            border: "1px solid #E0D5C8",
-            color: "#1C1815",
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
+            color: "var(--ft-text)",
           }}
         >
           <option value="all">All Camps</option>
@@ -496,9 +496,9 @@ export default function AnimalsTable({
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
           className={farmSelect}
           style={{
-            background: "#FFFFFF",
-            border: "1px solid #E0D5C8",
-            color: "#1C1815",
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
+            color: "var(--ft-text)",
           }}
         >
           <option value="all">All Categories</option>
@@ -514,9 +514,9 @@ export default function AnimalsTable({
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             className={farmSelect}
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E0D5C8",
-              color: "#1C1815",
+              background: "var(--ft-surface)",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-text)",
             }}
           >
             <option value="all">All Statuses</option>
@@ -527,7 +527,7 @@ export default function AnimalsTable({
             ))}
           </select>
         )}
-        <span className="ml-auto text-sm self-center" style={{ color: "#9C8E7A" }}>
+        <span className="ml-auto text-sm self-center" style={{ color: "var(--ft-subtle)" }}>
           {filtered.length.toLocaleString()} animals found
         </span>
       </div>
@@ -538,13 +538,13 @@ export default function AnimalsTable({
       {(remoteIsApplicable || (remoteSearching && trimmedSearch)) && (
         <p
           className="text-xs -mt-2 flex items-center gap-1.5"
-          style={{ color: "#8B6914" }}
+          style={{ color: "var(--ft-fair)" }}
           data-testid="animals-remote-search-hint"
         >
           <span
             aria-hidden="true"
             className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ background: "#C49030" }}
+            style={{ background: "var(--ft-fair)" }}
           />
           {remoteSearching && !remoteIsApplicable
             ? "Searching full herd…"
@@ -555,11 +555,11 @@ export default function AnimalsTable({
       {/* Table */}
       <div
         className="overflow-x-auto rounded-2xl"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+            <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
               {(tab === "active"
                 ? [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ...(mobs && mobs.length > 0 ? [["mobId", "Mob"]] : []), ["status", "Status"], ["", ""]] as [string, string][]
                 : [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
@@ -567,7 +567,7 @@ export default function AnimalsTable({
                 <th
                   key={key || "__actions"}
                   className={`text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${key ? "cursor-pointer select-none" : ""}`}
-                  style={{ color: "#9C8E7A", background: "#F5F2EE" }}
+                  style={{ color: "var(--ft-subtle)", background: "var(--ft-surface)" }}
                   onClick={() => key && toggleSort(key)}
                 >
                   {label}
@@ -582,7 +582,7 @@ export default function AnimalsTable({
                 <td
                   colSpan={6}
                   className="px-4 py-10 text-center text-sm"
-                  style={{ color: "#9C8E7A" }}
+                  style={{ color: "var(--ft-subtle)" }}
                 >
                   No animals found.
                 </td>
@@ -592,7 +592,7 @@ export default function AnimalsTable({
               <tr
                 key={animal.animalId}
                 className="transition-colors"
-                style={{ borderBottom: "1px solid #E0D5C8" }}
+                style={{ borderBottom: "1px solid var(--ft-border)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
@@ -601,9 +601,9 @@ export default function AnimalsTable({
                     <Link
                       href={`/${farmSlug}/admin/animals/${animal.animalId}`}
                       className="font-mono text-sm font-semibold transition-colors"
-                      style={{ color: "#1C1815" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#1C1815")}
+                      style={{ color: "var(--ft-text)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-fair)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-text)")}
                     >
                       {animal.animalId}
                     </Link>
@@ -612,7 +612,7 @@ export default function AnimalsTable({
                         className="text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0"
                         style={{
                           background: "rgba(196,144,48,0.15)",
-                          color: "#C49030",
+                          color: "var(--ft-fair)",
                           border: "1px solid rgba(196,144,48,0.3)",
                         }}
                       >
@@ -626,19 +626,19 @@ export default function AnimalsTable({
                     {getCategoryLabel(animal.category)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-sm" style={{ color: "#6B5C4E" }}>
+                <td className="px-3 py-2 text-sm" style={{ color: "var(--ft-muted)" }}>
                   {animal.sex === "Male" ? "Male" : "Female"}
                 </td>
-                <td className="px-3 py-2 text-sm font-mono" style={{ color: "#9C8E7A" }}>
+                <td className="px-3 py-2 text-sm font-mono" style={{ color: "var(--ft-subtle)" }}>
                   {getAnimalAge(animal.dateOfBirth ?? undefined)}
                 </td>
                 <td className="px-3 py-2">
                   <Link
                     href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
                     className="text-sm font-medium font-mono transition-colors"
-                    style={{ color: "#6B5C4E" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#8B6914")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#6B5C4E")}
+                    style={{ color: "var(--ft-muted)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-fair)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-muted)")}
                   >
                     {animal.currentCamp}
                   </Link>
@@ -646,7 +646,7 @@ export default function AnimalsTable({
                 {tab === "active" ? (
                   <>
                     {mobs && mobs.length > 0 && (
-                      <td className="px-3 py-2 text-sm" style={{ color: "#6B5C4E" }}>
+                      <td className="px-3 py-2 text-sm" style={{ color: "var(--ft-muted)" }}>
                         {animal.mobId ? (mobMap.get(animal.mobId) ?? "—") : "—"}
                       </td>
                     )}
@@ -654,9 +654,9 @@ export default function AnimalsTable({
                       <span className="flex items-center gap-1.5">
                         <span
                           className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: animal.status === "Active" ? "#4A7C59" : "#9C8E7A" }}
+                          style={{ background: animal.status === "Active" ? "var(--ft-good)" : "var(--ft-subtle)" }}
                         />
-                        <span className="text-xs" style={{ color: animal.status === "Active" ? "#4A7C59" : "#9C8E7A" }}>
+                        <span className="text-xs" style={{ color: animal.status === "Active" ? "var(--ft-good)" : "var(--ft-subtle)" }}>
                           {animal.status}
                         </span>
                       </span>
@@ -668,7 +668,7 @@ export default function AnimalsTable({
                     </td>
                   </>
                 ) : (
-                  <td className="px-3 py-2 text-sm font-mono" style={{ color: "#8B3A3A" }}>
+                  <td className="px-3 py-2 text-sm font-mono" style={{ color: "var(--ft-crit)" }}>
                     {animal.deceasedAt ? new Date(animal.deceasedAt).toLocaleDateString("en-ZA") : "—"}
                   </td>
                 )}
@@ -687,14 +687,14 @@ export default function AnimalsTable({
             disabled={page === 1}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid #E0D5C8",
-              color: "#6B5C4E",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-muted)",
               background: "transparent",
             }}
           >
             ← Previous
           </button>
-          <span className="text-sm font-mono" style={{ color: "#9C8E7A" }}>
+          <span className="text-sm font-mono" style={{ color: "var(--ft-subtle)" }}>
             Page {page} of {totalPages}
           </span>
           <button
@@ -702,8 +702,8 @@ export default function AnimalsTable({
             disabled={page === totalPages}
             className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
             style={{
-              border: "1px solid #E0D5C8",
-              color: "#6B5C4E",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-muted)",
               background: "transparent",
             }}
           >
@@ -722,9 +722,9 @@ export default function AnimalsTable({
             disabled={loadingMore}
             className="px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
             style={{
-              border: "1px solid #E0D5C8",
-              color: "#6B5C4E",
-              background: "#FFFFFF",
+              border: "1px solid var(--ft-border)",
+              color: "var(--ft-muted)",
+              background: "var(--ft-surface)",
             }}
           >
             {loadingMore ? "Loading…" : `Load more (${animals.length.toLocaleString()} loaded)`}

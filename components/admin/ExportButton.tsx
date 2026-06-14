@@ -52,17 +52,17 @@ export default function ExportButton({
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
         style={{
-          border: "1px solid #E0D5C8",
-          color: "#9C8E7A",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-subtle)",
           background: "transparent",
         }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#6B5E50";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "#C8BCAE";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--ft-muted)";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--ft-border)";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#9C8E7A";
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "#E0D5C8";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--ft-subtle)";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--ft-border)";
         }}
         title={label}
       >
@@ -73,13 +73,13 @@ export default function ExportButton({
       {open && (
         <div
           className="absolute right-0 mt-1 w-40 rounded-lg shadow-lg z-50 overflow-hidden"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <button
             onClick={() => triggerDownload("csv")}
             className="w-full px-3 py-2 text-left text-xs transition-colors"
-            style={{ color: "#1C1815" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "#FAF7F2")}
+            style={{ color: "var(--ft-text)" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--ft-bg)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
           >
             Download CSV
@@ -87,8 +87,8 @@ export default function ExportButton({
           <button
             onClick={() => triggerDownload("pdf")}
             className="w-full px-3 py-2 text-left text-xs transition-colors border-t"
-            style={{ color: "#1C1815", borderColor: "#F0EAE0" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "#FAF7F2")}
+            style={{ color: "var(--ft-text)", borderColor: "var(--ft-surface2)" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--ft-bg)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
           >
             Download PDF

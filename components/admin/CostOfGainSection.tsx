@@ -54,17 +54,17 @@ export default async function CostOfGainSection({
   return (
     <div
       className="mt-6 rounded-xl p-4 md:p-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h2
             className="text-sm font-semibold"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             Cost of Gain ({periodLabel})
           </h2>
-          <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
             Rand per kg of live-weight gained. Camp rows attribute gain to each
             animal&apos;s current camp — mid-period moves land in the ending camp.
           </p>
@@ -74,56 +74,56 @@ export default async function CostOfGainSection({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div
           className="rounded-lg p-3"
-          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
         >
-          <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
             Farm COG
           </p>
           <p
             className="text-base font-bold font-mono"
-            style={{ color: "#8B6914" }}
+            style={{ color: "var(--ft-fair)" }}
           >
             {fmtCog(summary.costOfGain)}
           </p>
         </div>
         <div
           className="rounded-lg p-3"
-          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
         >
-          <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
             Total Cost
           </p>
           <p
             className="text-base font-bold font-mono"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             {fmtR(summary.totalCost)}
           </p>
         </div>
         <div
           className="rounded-lg p-3"
-          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
         >
-          <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
             Total Gain
           </p>
           <p
             className="text-base font-bold font-mono"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             {summary.kgGained > 0 ? fmtKg(summary.kgGained) : "—"}
           </p>
         </div>
         <div
           className="rounded-lg p-3"
-          style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
         >
-          <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>
             Active Animals
           </p>
           <p
             className="text-base font-bold font-mono"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             {summary.activeAnimals}
           </p>
@@ -131,7 +131,7 @@ export default async function CostOfGainSection({
       </div>
 
       {summary.kgGained === 0 ? (
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           Not enough weight history in this date range to compute Cost of Gain.
           Record at least two weighings per animal spanning the period.
         </p>

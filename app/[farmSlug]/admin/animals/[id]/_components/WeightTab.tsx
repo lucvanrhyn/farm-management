@@ -16,9 +16,9 @@ const WeightTrendChart = nextDynamic(
 const TARGET_MARKET_WEIGHT = 450;
 
 const ADG_BADGE: Record<"good" | "ok" | "poor", { bg: string; text: string; label: string }> = {
-  good: { bg: "rgba(74,124,89,0.12)",   text: "#2D6A4F", label: "Good (>0.9 kg/day)"  },
-  ok:   { bg: "rgba(180,110,20,0.12)",  text: "#8B6914", label: "OK (0.7–0.9 kg/day)" },
-  poor: { bg: "rgba(192,87,76,0.12)",   text: "#8B3A3A", label: "Poor (<0.7 kg/day)"  },
+  good: { bg: "rgba(74,124,89,0.12)",   text: "var(--ft-good)", label: "Good (>0.9 kg/day)"  },
+  ok:   { bg: "rgba(180,110,20,0.12)",  text: "var(--ft-fair)", label: "OK (0.7–0.9 kg/day)" },
+  poor: { bg: "rgba(192,87,76,0.12)",   text: "var(--ft-crit)", label: "Poor (<0.7 kg/day)"  },
 };
 
 function adgBadge(trend: "good" | "ok" | "poor" | null, value: number | null) {
@@ -85,17 +85,17 @@ export function WeightTab({ weightData }: WeightTabProps) {
   return (
     <div
       className="rounded-2xl border p-5 space-y-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       {/* Header with poor doer flag */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
           Weight & ADG
         </h2>
         {isPoorDoer && (
           <span
             className="text-[11px] font-bold px-3 py-1 rounded-full"
-            style={{ background: "rgba(192,87,76,0.15)", color: "#8B3A3A", border: "1px solid rgba(192,87,76,0.3)" }}
+            style={{ background: "rgba(192,87,76,0.15)", color: "var(--ft-crit)", border: "1px solid rgba(192,87,76,0.3)" }}
           >
             Poor Doer (&lt;0.7 kg/day)
           </span>
@@ -104,46 +104,46 @@ export function WeightTab({ weightData }: WeightTabProps) {
 
       {/* Summary row: Latest weight + ADG cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div className="rounded-xl p-4" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-          <p className="text-xs mb-1" style={{ color: "#9C8E7A" }}>Latest Weight</p>
-          <p className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>
+        <div className="rounded-xl p-4" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+          <p className="text-xs mb-1" style={{ color: "var(--ft-subtle)" }}>Latest Weight</p>
+          <p className="text-2xl font-bold font-mono" style={{ color: "var(--ft-text)" }}>
             {latestWeight !== null ? `${latestWeight.toFixed(1)} kg` : "—"}
           </p>
         </div>
-        <div className="rounded-xl p-4" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-          <p className="text-xs mb-1" style={{ color: "#9C8E7A" }}>Long-run ADG</p>
+        <div className="rounded-xl p-4" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+          <p className="text-xs mb-1" style={{ color: "var(--ft-subtle)" }}>Long-run ADG</p>
           {longRunAdg !== null ? (
             <div className="space-y-1">
-              <p className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>
+              <p className="text-2xl font-bold font-mono" style={{ color: "var(--ft-text)" }}>
                 {longRunAdg >= 0 ? "+" : ""}{longRunAdg.toFixed(2)} kg/d
               </p>
               {adgBadge(longRunAdgTrend, longRunAdg)}
             </div>
           ) : (
-            <p className="text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
               {records.length === 0 ? "No data" : "Need 2+ readings"}
             </p>
           )}
         </div>
-        <div className="rounded-xl p-4" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-          <p className="text-xs mb-1" style={{ color: "#9C8E7A" }}>90-day ADG</p>
+        <div className="rounded-xl p-4" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+          <p className="text-xs mb-1" style={{ color: "var(--ft-subtle)" }}>90-day ADG</p>
           {rolling90Adg !== null ? (
             <div className="space-y-1">
-              <p className="text-2xl font-bold font-mono" style={{ color: "#1C1815" }}>
+              <p className="text-2xl font-bold font-mono" style={{ color: "var(--ft-text)" }}>
                 {rolling90Adg >= 0 ? "+" : ""}{rolling90Adg.toFixed(2)} kg/d
               </p>
               {adgBadge(rolling90AdgTrend, rolling90Adg)}
             </div>
           ) : adg !== null ? (
             <div className="space-y-1">
-              <p className="text-sm font-mono font-semibold" style={{ color: "#1C1815" }}>
+              <p className="text-sm font-mono font-semibold" style={{ color: "var(--ft-text)" }}>
                 {adg >= 0 ? "+" : ""}{adg.toFixed(2)} kg/d
               </p>
-              <p className="text-[10px]" style={{ color: "#9C8E7A" }}>last interval</p>
+              <p className="text-[10px]" style={{ color: "var(--ft-subtle)" }}>last interval</p>
               {adgBadge(adgTrend, adg)}
             </div>
           ) : (
-            <p className="text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
               {records.length === 0 ? "No data" : "Need 2+ readings"}
             </p>
           )}
@@ -153,15 +153,15 @@ export function WeightTab({ weightData }: WeightTabProps) {
       {/* Weight trend chart */}
       {records.length >= 2 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ft-subtle)" }}>
             Weight Trend
             {projected && (
-              <span className="ml-2 normal-case font-normal" style={{ color: "#8B6914" }}>
+              <span className="ml-2 normal-case font-normal" style={{ color: "var(--ft-fair)" }}>
                 · Projected market date: {projected}
               </span>
             )}
           </p>
-          <div className="rounded-xl overflow-hidden p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
+          <div className="rounded-xl overflow-hidden p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
             <WeightTrendChart
               points={weightPoints}
               targetWeight={TARGET_MARKET_WEIGHT}
@@ -175,25 +175,25 @@ export function WeightTab({ weightData }: WeightTabProps) {
       {records.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl"
-          style={{ background: "#FAFAF8", border: "1px dashed #E0D5C8" }}
+          style={{ background: "var(--ft-bg)", border: "1px dashed var(--ft-border)" }}
         >
-          <p className="text-sm font-medium" style={{ color: "#9C8E7A" }}>No weight recordings yet.</p>
-          <p className="text-xs text-center max-w-xs" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-subtle)" }}>No weight recordings yet.</p>
+          <p className="text-xs text-center max-w-xs" style={{ color: "var(--ft-subtle)" }}>
             Weighing sessions are recorded in the Logger. Once recorded they will appear here.
           </p>
         </div>
       ) : (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ft-subtle)" }}>
             History ({records.length} sessions)
           </p>
-          <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
+          <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid var(--ft-border)" }}>
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
-                  <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Date</th>
-                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Weight (kg)</th>
-                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>ADG vs prev</th>
+                <tr style={{ background: "var(--ft-surface)", borderBottom: "1px solid var(--ft-border)" }}>
+                  <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Date</th>
+                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Weight (kg)</th>
+                  <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>ADG vs prev</th>
                 </tr>
               </thead>
               <tbody>
@@ -209,25 +209,25 @@ export function WeightTab({ weightData }: WeightTabProps) {
                   }
                   const adgColor =
                     rowAdg === null
-                      ? "#9C8E7A"
+                      ? "var(--ft-subtle)"
                       : rowAdg > 0.9
-                      ? "#2D6A4F"
+                      ? "var(--ft-good)"
                       : rowAdg >= 0.7
-                      ? "#8B6914"
-                      : "#8B3A3A";
+                      ? "var(--ft-fair)"
+                      : "var(--ft-crit)";
 
                   return (
                     <tr
                       key={rec.id}
                       style={{
-                        borderBottom: idx < reversedRecords.length - 1 ? "1px solid #E0D5C8" : "none",
-                        background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
+                        borderBottom: idx < reversedRecords.length - 1 ? "1px solid var(--ft-border)" : "none",
+                        background: idx % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
                       }}
                     >
-                      <td className="px-3 py-2.5 font-mono" style={{ color: "#1C1815" }}>
+                      <td className="px-3 py-2.5 font-mono" style={{ color: "var(--ft-text)" }}>
                         {new Date(rec.observedAt).toLocaleDateString("en-ZA")}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-semibold font-mono" style={{ color: "#1C1815" }}>
+                      <td className="px-3 py-2.5 text-right font-semibold font-mono" style={{ color: "var(--ft-text)" }}>
                         {rec.weightKg.toFixed(1)}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: adgColor }}>

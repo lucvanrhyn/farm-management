@@ -18,21 +18,21 @@ export function Pagination({ page, hasMore, loading, onPageChange }: PaginationP
         disabled={page === 1 || loading}
         className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
         style={{
-          border: "1px solid #E0D5C8",
-          color: "#6B5C4E",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-muted)",
           background: "transparent",
         }}
       >
         ← Previous
       </button>
-      <span className="text-sm font-mono" style={{ color: "#9C8E7A" }}>Page {page}</span>
+      <span className="text-sm font-mono" style={{ color: "var(--ft-subtle)" }}>Page {page}</span>
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={!hasMore || loading}
         className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
         style={{
-          border: "1px solid #E0D5C8",
-          color: "#6B5C4E",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-muted)",
           background: "transparent",
         }}
       >
