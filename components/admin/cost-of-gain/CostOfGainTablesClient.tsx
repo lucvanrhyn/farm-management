@@ -24,10 +24,10 @@ function fmtKg(n: number): string {
 
 function deltaBadge(value: number | null, baseline: number | null) {
   if (value === null || baseline === null || baseline === 0) {
-    return <span style={{ color: "#9C8E7A" }}>—</span>;
+    return <span style={{ color: "var(--ft-subtle)" }}>—</span>;
   }
   const delta = ((value - baseline) / baseline) * 100;
-  const color = delta < 0 ? "#4A7C59" : delta > 10 ? "#C0574C" : "#C98A2B";
+  const color = delta < 0 ? "var(--ft-good)" : delta > 10 ? "var(--ft-poor)" : "var(--ft-fair)";
   const sign = delta > 0 ? "+" : "";
   return (
     <span className="font-mono text-xs" style={{ color }}>
@@ -67,9 +67,9 @@ export default function CostOfGainTablesClient({
   const tabStyle = (active: boolean) => ({
     padding: "6px 12px",
     borderRadius: "6px",
-    border: active ? "1px solid #8B6914" : "1px solid #E0D5C8",
+    border: active ? "1px solid var(--ft-fair)" : "1px solid var(--ft-border)",
     background: active ? "rgba(139,105,20,0.08)" : "#FFFFFF",
-    color: active ? "#8B6914" : "#1C1815",
+    color: active ? "var(--ft-fair)" : "var(--ft-text)",
     fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
@@ -95,7 +95,7 @@ export default function CostOfGainTablesClient({
           </button>
         </div>
         <div className="flex gap-2 items-center">
-          <span className="text-xs" style={{ color: "#9C8E7A" }}>
+          <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             Scope:
           </span>
           <button
@@ -119,7 +119,7 @@ export default function CostOfGainTablesClient({
 
       {view === "camp" ? (
         byCamp.length === 0 ? (
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             No camps with recorded costs or weight gain in this period.
           </p>
         ) : (
@@ -128,8 +128,8 @@ export default function CostOfGainTablesClient({
               <thead>
                 <tr
                   style={{
-                    color: "#9C8E7A",
-                    borderBottom: "1px solid #E0D5C8",
+                    color: "var(--ft-subtle)",
+                    borderBottom: "1px solid var(--ft-border)",
                   }}
                 >
                   <th className="text-left py-2 pr-3 font-medium">Camp</th>
@@ -145,38 +145,38 @@ export default function CostOfGainTablesClient({
                 {byCamp.map((row) => (
                   <tr
                     key={row.campId}
-                    style={{ borderBottom: "1px solid #F0EAE1" }}
+                    style={{ borderBottom: "1px solid var(--ft-surface2)" }}
                   >
-                    <td className="py-2 pr-3" style={{ color: "#1C1815" }}>
+                    <td className="py-2 pr-3" style={{ color: "var(--ft-text)" }}>
                       {row.campName}
                     </td>
                     <td
                       className="py-2 px-3 text-right font-mono"
-                      style={{ color: "#1C1815" }}
+                      style={{ color: "var(--ft-text)" }}
                     >
                       {row.hectares !== null ? row.hectares.toFixed(1) : "—"}
                     </td>
                     <td
                       className="py-2 px-3 text-right font-mono"
-                      style={{ color: "#1C1815" }}
+                      style={{ color: "var(--ft-text)" }}
                     >
                       {row.activeAnimalCount}
                     </td>
                     <td
                       className="py-2 px-3 text-right font-mono"
-                      style={{ color: "#1C1815" }}
+                      style={{ color: "var(--ft-text)" }}
                     >
                       {fmtR(row.totalCost)}
                     </td>
                     <td
                       className="py-2 px-3 text-right font-mono"
-                      style={{ color: "#1C1815" }}
+                      style={{ color: "var(--ft-text)" }}
                     >
                       {row.kgGained > 0 ? fmtKg(row.kgGained) : "—"}
                     </td>
                     <td
                       className="py-2 px-3 text-right font-mono font-bold"
-                      style={{ color: "#8B6914" }}
+                      style={{ color: "var(--ft-fair)" }}
                     >
                       {fmtCog(row.costOfGain)}
                     </td>
@@ -190,7 +190,7 @@ export default function CostOfGainTablesClient({
           </div>
         )
       ) : byAnimal.length === 0 ? (
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           No animals with both direct costs and weight gain in this period.
           Expenses logged at camp level (most feed bills) won&apos;t appear here
           — use the By Camp view.
@@ -201,8 +201,8 @@ export default function CostOfGainTablesClient({
             <thead>
               <tr
                 style={{
-                  color: "#9C8E7A",
-                  borderBottom: "1px solid #E0D5C8",
+                  color: "var(--ft-subtle)",
+                  borderBottom: "1px solid var(--ft-border)",
                 }}
               >
                 <th className="text-left py-2 pr-3 font-medium">Tag</th>
@@ -217,40 +217,40 @@ export default function CostOfGainTablesClient({
               {byAnimal.map((row) => (
                 <tr
                   key={row.animalId}
-                  style={{ borderBottom: "1px solid #F0EAE1" }}
+                  style={{ borderBottom: "1px solid var(--ft-surface2)" }}
                 >
-                  <td className="py-2 pr-3" style={{ color: "#1C1815" }}>
+                  <td className="py-2 pr-3" style={{ color: "var(--ft-text)" }}>
                     {row.animalId}
                     {row.name ? (
                       <span
                         className="ml-1 text-xs"
-                        style={{ color: "#9C8E7A" }}
+                        style={{ color: "var(--ft-subtle)" }}
                       >
                         {row.name}
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2 px-3" style={{ color: "#1C1815" }}>
+                  <td className="py-2 px-3" style={{ color: "var(--ft-text)" }}>
                     {row.category}
                   </td>
-                  <td className="py-2 px-3" style={{ color: "#1C1815" }}>
+                  <td className="py-2 px-3" style={{ color: "var(--ft-text)" }}>
                     {row.currentCamp}
                   </td>
                   <td
                     className="py-2 px-3 text-right font-mono"
-                    style={{ color: "#1C1815" }}
+                    style={{ color: "var(--ft-text)" }}
                   >
                     {fmtR(row.totalCost)}
                   </td>
                   <td
                     className="py-2 px-3 text-right font-mono"
-                    style={{ color: "#1C1815" }}
+                    style={{ color: "var(--ft-text)" }}
                   >
                     {row.kgGained > 0 ? fmtKg(row.kgGained) : "—"}
                   </td>
                   <td
                     className="py-2 px-3 text-right font-mono font-bold"
-                    style={{ color: "#8B6914" }}
+                    style={{ color: "var(--ft-fair)" }}
                   >
                     {fmtCog(row.costOfGain)}
                   </td>

@@ -26,7 +26,6 @@ vi.mock('@/lib/auth', () => ({
 }));
 vi.mock('@/lib/meta-db', () => ({ getFarmCreds: getFarmCredsMock }));
 
-vi.mock('@/components/admin/AdminNav', () => ({ default: () => null }));
 vi.mock('@/components/sheep/SheepSubNav', () => ({ default: () => null }));
 vi.mock('@/components/tier-provider', () => ({
   TierProvider: ({ children }: { children: React.ReactNode }) => children,

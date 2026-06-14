@@ -45,22 +45,21 @@ export function OfflineBanner() {
       aria-label="You are offline. Changes will sync when connection returns."
       className="w-full sticky top-0 z-40 px-4 py-2 flex items-center justify-center gap-2 text-xs font-medium"
       style={{
-        // Deep-amber tone consistent with the warning palette used by
-        // the failed-sync pill — distinctive against the cream/brown
-        // chrome so the banner is impossible to miss.
-        backgroundColor: '#7A3E1A',
-        color: '#F5F0E8',
-        borderBottom: '1px solid rgba(245, 240, 232, 0.18)',
+        // Rust accent — distinctive against the warm dark chrome so the
+        // banner is impossible to miss. Token-driven so it tracks theme.
+        backgroundColor: 'var(--ft-accent)',
+        color: '#FFF6EE',
+        borderBottom: '1px solid color-mix(in oklab, #FFF6EE 18%, transparent)',
       }}
     >
       <span aria-hidden>⚠</span>
       <span>You&apos;re offline.</span>
       {pendingCount > 0 ? (
-        <span style={{ color: 'rgba(245, 240, 232, 0.85)' }}>
+        <span style={{ color: 'color-mix(in oklab, #FFF6EE 85%, transparent)' }}>
           {pendingCount} change{pendingCount === 1 ? '' : 's'} queued — will sync when you reconnect.
         </span>
       ) : (
-        <span style={{ color: 'rgba(245, 240, 232, 0.85)' }}>
+        <span style={{ color: 'color-mix(in oklab, #FFF6EE 85%, transparent)' }}>
           Changes will be queued and synced when you reconnect.
         </span>
       )}

@@ -34,7 +34,7 @@ export default function CampsTabBar({
             className="px-5 py-2 text-sm font-medium rounded-lg transition-colors"
             style={{
               background: isActive ? "#FFFFFF" : "transparent",
-              color: isActive ? "#1C1815" : "#9C8E7A",
+              color: isActive ? "var(--ft-text)" : "var(--ft-subtle)",
               boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.1)" : undefined,
               textDecoration: "none",
             }}

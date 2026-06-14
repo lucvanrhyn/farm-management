@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { PageHeader } from "@/components/ds";
 import AlertSettingsForm, {
   type AlertPreferenceRow,
   type FarmAlertSettings,
@@ -33,8 +34,8 @@ export default async function AlertsSettingsPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="p-8 bg-[#FAFAF8] min-h-screen">
-        <p className="text-red-500">Farm not found.</p>
+      <div className="p-8 bg-[var(--ft-bg)] min-h-screen">
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -73,15 +74,12 @@ export default async function AlertsSettingsPage({
   };
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
-          Alert Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Channels, quiet hours, digest frequency, and per-species overrides
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Alert Settings"
+        subtitle="Channels, quiet hours, digest frequency, and per-species overrides"
+      />
 
       <div className="max-w-4xl">
         <AlertSettingsForm

@@ -33,6 +33,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useAssistantName } from "@/hooks/useAssistantName";
+import { Icon } from "@/components/ds";
 import CitationChip from "./CitationChip";
 import type { Citation } from "@/lib/einstein/retriever";
 import type { EinsteinAnswer } from "@/lib/einstein/answer";
@@ -301,23 +302,75 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
   // Render
   // ------------------------------------------------------------------
 
+  const canSend = !streaming && input.trim().length > 0;
+
   return (
     <div
-      className={`flex flex-col h-full bg-stone-950 text-stone-100 ${className ?? ""}`}
+      className={`dark-surface ft-scope flex flex-col h-full ${className ?? ""}`}
       data-testid="einstein-chat"
+      style={{ background: "var(--ft-bg)", color: "var(--ft-text)" }}
     >
-      <header className="border-b border-stone-800 px-4 py-3">
-        <h2
-          className="font-mono text-lg font-semibold tracking-tight text-amber-200"
-          data-testid="assistant-wordmark"
+      <EinsteinChatStyles />
+
+      {/* Header — assistant wordmark (Fraunces) + mono online status */}
+      <header
+        className="flex items-center gap-3 px-5 py-4"
+        style={{ borderBottom: "1px solid var(--ft-border)" }}
+      >
+        <span
+          className="flex shrink-0 items-center justify-center"
+          aria-hidden="true"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: "var(--ft-r-sm)",
+            background: "var(--ft-accent)",
+            color: "#FFF6EE",
+          }}
         >
-          {assistantName}
-        </h2>
+          <Icon.einstein size={21} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2
+            className="ft-serif"
+            data-testid="assistant-wordmark"
+            style={{
+              fontSize: 19,
+              fontWeight: 500,
+              lineHeight: 1.05,
+              letterSpacing: "-0.01em",
+              margin: 0,
+              color: "var(--ft-text)",
+            }}
+          >
+            {assistantName}
+          </h2>
+          <div
+            className="ft-mono mt-1.5 flex items-center gap-1.5"
+            style={{
+              fontSize: 10.5,
+              letterSpacing: ".06em",
+              color: "var(--ft-subtle)",
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: "#5DBB6B",
+                boxShadow: "0 0 8px #5DBB6B",
+              }}
+            />
+            AI ADVISOR · ONLINE
+          </div>
+        </div>
       </header>
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+        className="ft-scrollbar flex-1 overflow-y-auto px-5 py-5 space-y-3"
         data-testid="einstein-transcript"
       >
         {messages.length === 0 && !streaming ? (
@@ -339,46 +392,83 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
 
         {error ? (
           <div
-            className="rounded-md border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+            className="ft-card px-3 py-2 text-sm"
             role="alert"
+            style={{
+              background: "var(--ft-crit-bg)",
+              borderColor: "color-mix(in oklab, var(--ft-crit) 40%, var(--ft-border))",
+              color: "var(--ft-crit)",
+            }}
           >
-            <span className="block font-mono text-[0.65rem] uppercase tracking-wider text-red-300">
+            <span className="ft-mono block text-[0.65rem] uppercase tracking-wider opacity-80">
               {error.code}
             </span>
-            <span className="block mt-1">{error.message}</span>
+            <span className="mt-1 block">{error.message}</span>
           </div>
         ) : null}
       </div>
 
       <form
-        className="border-t border-stone-800 p-3 flex gap-2"
+        className="p-4"
         onSubmit={(e) => {
           e.preventDefault();
           void handleSend();
         }}
+        style={{ borderTop: "1px solid var(--ft-border)" }}
       >
         <label className="sr-only" htmlFor="einstein-input">
           Ask {assistantName}
         </label>
-        <textarea
-          id="einstein-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={`Ask ${assistantName}…`}
-          rows={1}
-          className="flex-1 resize-none rounded-md border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-400 focus:outline-none"
-          disabled={streaming}
-          data-testid="einstein-input"
-        />
-        <button
-          type="submit"
-          disabled={streaming || input.trim().length === 0}
-          className="rounded-md bg-amber-600 px-4 text-sm font-medium text-stone-950 transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
-          data-testid="einstein-send"
+        <div
+          className="flex items-center gap-2 py-1 pl-4 pr-1"
+          style={{
+            borderRadius: 999,
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
+          }}
         >
-          Send
-        </button>
+          <textarea
+            id="einstein-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={`Ask ${assistantName}…`}
+            rows={1}
+            className="flex-1 min-w-0 resize-none border-0 bg-transparent text-sm focus:outline-none"
+            style={{ color: "var(--ft-text)" }}
+            disabled={streaming}
+            data-testid="einstein-input"
+          />
+          <button
+            type="submit"
+            disabled={!canSend}
+            aria-label={`Ask ${assistantName}`}
+            className="flex shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed"
+            data-testid="einstein-send"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 999,
+              background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
+              color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
+            }}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -390,9 +480,28 @@ export default EinsteinChat;
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/**
+ * Component-scoped keyframes for the typing-dot animation. globals.css /
+ * design-system.css are owned elsewhere, so the chat ships its one bespoke
+ * animation inline (visual-only, no behavior).
+ */
+function EinsteinChatStyles() {
+  return (
+    <style>{`
+@keyframes einsteinType {
+  0%, 60%, 100% { opacity: .25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+`}</style>
+  );
+}
+
 function EmptyState({ assistantName }: { assistantName: string }) {
   return (
-    <div className="text-center text-sm text-stone-400 py-8">
+    <div
+      className="py-8 text-center text-sm"
+      style={{ color: "var(--ft-muted)" }}
+    >
       Ask {assistantName} a question about your farm. Answers cite the
       underlying records so you can verify every claim.
     </div>
@@ -406,9 +515,31 @@ function StreamingBubble({
 }) {
   return (
     <div className="flex justify-start" data-testid="streaming-bubble">
-      <div className="max-w-[85%] rounded-lg bg-stone-900 border border-stone-800 px-3 py-2 text-sm text-stone-100">
+      <div
+        className="ft-card max-w-[85%] px-3.5 py-2.5 text-sm"
+        style={{
+          background: "var(--ft-surface)",
+          borderBottomLeftRadius: 5,
+          color: "var(--ft-text)",
+        }}
+      >
         {currentStreamText.length === 0 ? (
-          <span className="text-stone-400 italic">thinking…</span>
+          <span className="inline-flex items-center gap-1.5 align-middle">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                aria-hidden="true"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: "var(--ft-muted)",
+                  animation: `einsteinType 1.2s ${i * 0.18}s infinite ease-in-out`,
+                }}
+              />
+            ))}
+            <span className="sr-only">thinking…</span>
+          </span>
         ) : (
           <span className="whitespace-pre-wrap">{currentStreamText}</span>
         )}
@@ -427,7 +558,15 @@ function MessageBubble({ message, farmSlug, onFeedback }: MessageBubbleProps) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-lg bg-amber-600/20 border border-amber-800 px-3 py-2 text-sm text-stone-100 whitespace-pre-wrap">
+        <div
+          className="max-w-[85%] px-3.5 py-2.5 text-sm whitespace-pre-wrap"
+          style={{
+            background: "var(--ft-accent)",
+            color: "#FFF6EE",
+            borderRadius: "var(--ft-r-lg)",
+            borderBottomRightRadius: 5,
+          }}
+        >
           {message.content}
         </div>
       </div>
@@ -447,8 +586,13 @@ function MessageBubble({ message, farmSlug, onFeedback }: MessageBubbleProps) {
   return (
     <div className="flex flex-col items-start">
       <div
-        className="max-w-[85%] rounded-lg bg-stone-900 border border-stone-800 px-3 py-2 text-sm text-stone-100"
+        className="ft-card max-w-[85%] px-3.5 py-2.5 text-sm"
         data-testid="assistant-bubble"
+        style={{
+          background: "var(--ft-surface)",
+          borderBottomLeftRadius: 5,
+          color: "var(--ft-text)",
+        }}
       >
         <AnswerWithCitations
           text={message.content}
@@ -548,7 +692,7 @@ function FeedbackControls({
   const disabled = value !== undefined;
   return (
     <div
-      className="mt-1 flex gap-1"
+      className="mt-1.5 flex gap-1.5"
       data-testid="feedback-controls"
       aria-label="Rate this answer"
     >
@@ -558,11 +702,13 @@ function FeedbackControls({
         disabled={disabled}
         aria-pressed={value === "up"}
         data-testid="feedback-up"
-        className={`rounded px-2 py-0.5 text-xs transition-colors ${
-          value === "up"
-            ? "bg-emerald-700 text-white"
-            : "bg-stone-800 text-stone-400 hover:bg-stone-700 disabled:opacity-40"
-        }`}
+        className="rounded px-2 py-0.5 text-xs transition-colors disabled:cursor-not-allowed"
+        style={{
+          background:
+            value === "up" ? "var(--ft-good-bg)" : "var(--ft-surface2)",
+          color: value === "up" ? "var(--ft-good)" : "var(--ft-muted)",
+          opacity: disabled && value !== "up" ? 0.4 : 1,
+        }}
       >
         👍
       </button>
@@ -572,11 +718,13 @@ function FeedbackControls({
         disabled={disabled}
         aria-pressed={value === "down"}
         data-testid="feedback-down"
-        className={`rounded px-2 py-0.5 text-xs transition-colors ${
-          value === "down"
-            ? "bg-red-700 text-white"
-            : "bg-stone-800 text-stone-400 hover:bg-stone-700 disabled:opacity-40"
-        }`}
+        className="rounded px-2 py-0.5 text-xs transition-colors disabled:cursor-not-allowed"
+        style={{
+          background:
+            value === "down" ? "var(--ft-crit-bg)" : "var(--ft-surface2)",
+          color: value === "down" ? "var(--ft-crit)" : "var(--ft-muted)",
+          opacity: disabled && value !== "down" ? 0.4 : 1,
+        }}
       >
         👎
       </button>
@@ -594,66 +742,87 @@ function ErrorBubble({ code, message, resetLabel }: ErrorBubbleProps) {
   const copy = errorCopy(code, message, resetLabel);
   return (
     <div
-      className={`rounded-md border px-3 py-2 text-sm ${copy.tone}`}
+      className="ft-card px-3 py-2 text-sm"
       role="alert"
       data-testid={`error-bubble-${code}`}
+      style={copy.tone}
     >
-      <span className="block font-mono text-[0.65rem] uppercase tracking-wider opacity-70">
+      <span className="ft-mono block text-[0.65rem] uppercase tracking-wider opacity-70">
         {code}
       </span>
-      <span className="block mt-1">{copy.body}</span>
+      <span className="mt-1 block">{copy.body}</span>
       {copy.cta ? <div className="mt-2">{copy.cta}</div> : null}
     </div>
   );
 }
+
+/** Inline token style for the warning (amber/rust) error tone. */
+const TONE_WARN: React.CSSProperties = {
+  background: "var(--ft-fair-bg)",
+  borderColor: "color-mix(in oklab, var(--ft-fair) 40%, var(--ft-border))",
+  color: "var(--ft-fair)",
+};
+/** Inline token style for a neutral, non-alarming error tone. */
+const TONE_NEUTRAL: React.CSSProperties = {
+  background: "var(--ft-surface)",
+  borderColor: "var(--ft-border)",
+  color: "var(--ft-muted)",
+};
+/** Inline token style for a critical error tone. */
+const TONE_CRIT: React.CSSProperties = {
+  background: "var(--ft-crit-bg)",
+  borderColor: "color-mix(in oklab, var(--ft-crit) 40%, var(--ft-border))",
+  color: "var(--ft-crit)",
+};
 
 function errorCopy(
   code: EinsteinErrorCode,
   serverMessage: string,
   resetLabel?: string,
 ): {
-  readonly tone: string;
+  readonly tone: React.CSSProperties;
   readonly body: string;
   readonly cta?: React.ReactNode;
 } {
   switch (code) {
     case "EINSTEIN_TIER_LOCKED":
       return {
-        tone: "border-amber-700 bg-amber-950/40 text-amber-100",
+        tone: TONE_WARN,
         body: "This feature is available on the Advanced plan.",
         cta: (
           <Link
             href="/subscription"
-            className="inline-block rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-stone-950 hover:bg-amber-500"
+            className="ft-btn ft-btn-primary"
+            style={{ padding: "6px 12px", fontSize: 12 }}
             data-testid="upgrade-cta"
           >
-            Upgrade plan
+            <span>Upgrade plan</span>
           </Link>
         ),
       };
     case "EINSTEIN_BUDGET_EXHAUSTED":
       return {
-        tone: "border-stone-700 bg-stone-900/60 text-stone-200",
+        tone: TONE_NEUTRAL,
         body: resetLabel
           ? `You've reached this month's usage cap. It resets on ${resetLabel}.`
           : "You've reached this month's usage cap. It resets at the start of next month.",
       };
     case "EINSTEIN_CITATION_FABRICATION":
       return {
-        tone: "border-red-800 bg-red-950/40 text-red-100",
+        tone: TONE_CRIT,
         body:
           "The assistant produced an answer that couldn't be verified against your farm records. Try rephrasing, or ask about a specific camp, animal, or date range.",
       };
     case "EINSTEIN_RATE_LIMITED":
       return {
-        tone: "border-stone-700 bg-stone-900/60 text-stone-200",
+        tone: TONE_NEUTRAL,
         body:
           "Too many requests in the last few minutes — please wait and try again.",
       };
     case "EINSTEIN_INTERNAL_ERROR":
     default:
       return {
-        tone: "border-red-800 bg-red-950/40 text-red-100",
+        tone: TONE_CRIT,
         body: serverMessage || "Something went wrong — please try again.",
       };
   }

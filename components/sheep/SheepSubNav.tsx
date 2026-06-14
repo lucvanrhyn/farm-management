@@ -29,11 +29,11 @@ export default function SheepSubNav({ farmSlug }: { farmSlug: string }) {
   return (
     <div
       className="px-4 md:px-8 pt-5 pb-0"
-      style={{ background: "#FAFAF8" }}
+      style={{ background: "var(--ft-bg)" }}
     >
       <div
         className="inline-flex gap-0.5 p-1 rounded-lg border"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
         {TABS.map((tab) => {
           const href = `/${farmSlug}${tab.href}`;
@@ -60,8 +60,8 @@ export default function SheepSubNav({ farmSlug }: { farmSlug: string }) {
               className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
               style={
                 isActive
-                  ? { background: "rgba(74,124,89,0.12)", color: "#3A6B49" }
-                  : { color: "#9C8E7A" }
+                  ? { background: "var(--ft-accent-faint)", color: "var(--ft-accent)", fontWeight: 600 }
+                  : { color: "var(--ft-subtle)" }
               }
             >
               {tab.label}

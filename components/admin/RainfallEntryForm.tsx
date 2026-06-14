@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const FIELD_STYLE = {
-  background: "#FAFAF8",
-  border: "1px solid #D8CFC4",
+  background: "var(--ft-bg)",
+  border: "1px solid var(--ft-border)",
   borderRadius: 8,
-  color: "#1C1815",
+  color: "var(--ft-text)",
   fontSize: 14,
   padding: "8px 12px",
   width: "100%",
@@ -18,7 +18,7 @@ const LABEL_STYLE = {
   display: "block" as const,
   fontSize: 12,
   fontWeight: 600,
-  color: "#6B5C4E",
+  color: "var(--ft-muted)",
   marginBottom: 4,
   textTransform: "uppercase" as const,
   letterSpacing: "0.05em",
@@ -91,7 +91,7 @@ export default function RainfallEntryForm({ farmSlug, camps }: Props) {
           setError(null);
         }}
         className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80"
-        style={{ background: "#4A90D9", color: "#FFFFFF", border: "none" }}
+        style={{ background: "var(--ft-info)", color: "#FFFFFF", border: "none" }}
       >
         {open ? "Cancel" : "+ Record Rainfall"}
       </button>
@@ -100,11 +100,11 @@ export default function RainfallEntryForm({ farmSlug, camps }: Props) {
         <form
           onSubmit={handleSubmit}
           className="mt-4 p-5 rounded-2xl"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           <h3
             className="text-sm font-semibold mb-4"
-            style={{ color: "#1C1815" }}
+            style={{ color: "var(--ft-text)" }}
           >
             New Rainfall Record
           </h3>
@@ -156,7 +156,7 @@ export default function RainfallEntryForm({ farmSlug, camps }: Props) {
           </div>
 
           {error && (
-            <p className="mt-3 text-xs" style={{ color: "#C0574C" }}>
+            <p className="mt-3 text-xs" style={{ color: "var(--ft-poor)" }}>
               {error}
             </p>
           )}
@@ -166,7 +166,7 @@ export default function RainfallEntryForm({ farmSlug, camps }: Props) {
               type="submit"
               disabled={saving}
               className="text-sm px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-              style={{ background: "#4A90D9", color: "#FFFFFF" }}
+              style={{ background: "var(--ft-info)", color: "#FFFFFF" }}
             >
               {saving ? "Saving\u2026" : "Save Record"}
             </button>
@@ -174,7 +174,7 @@ export default function RainfallEntryForm({ farmSlug, camps }: Props) {
               type="button"
               onClick={() => setOpen(false)}
               className="text-sm px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
-              style={{ background: "#F0EBE3", color: "#6B5C4E" }}
+              style={{ background: "var(--ft-surface)", color: "var(--ft-muted)" }}
             >
               Cancel
             </button>

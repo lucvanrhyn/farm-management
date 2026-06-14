@@ -18,7 +18,7 @@ export default async function PerformanceSection({
   to?: string;
 }) {
   const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
+  if (!prisma) return <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>;
 
   const LSU_VALUES = getMergedLsuValues();
 
@@ -134,7 +134,7 @@ export default async function PerformanceSection({
   return (
     <div>
       <div className="mb-4 flex items-start justify-between gap-4">
-        <p className="text-xs font-mono mt-1" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs font-mono mt-1" style={{ color: "var(--ft-subtle)" }}>
           {camps.length} camps · stocking density, grazing, pasture cover
         </p>
         <ExportButton farmSlug={farmSlug} exportType="camps" label="Export" />

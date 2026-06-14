@@ -8,7 +8,7 @@ export function FeedOnOfferTab({ farmSlug, payload }: { farmSlug: string; payloa
       <div className="flex items-baseline justify-between">
         <div>
           <h2 className="text-lg font-semibold">Feed on Offer</h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-[var(--ft-muted)]">
             Latest Feed on Offer per camp. Record new cover readings in{' '}
             <Link href={`/${farmSlug}/tools/feed-on-offer`} className="underline">
               Tools &rarr; Feed on Offer

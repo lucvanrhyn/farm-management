@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import { TierProvider } from "@/components/tier-provider";
 import { AssistantNameProvider } from "@/hooks/useAssistantName";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -118,9 +118,6 @@ export default async function AdminLayout({
   // to load — a DB blip must never spam a farmer with the nudge.
   let einsteinEnabled = false;
   let methodologyScore: MethodologyCompleteness = methodologyCompleteness(undefined);
-  // Number of farms the authenticated user has access to — used by AdminNav to
-  // conditionally render the "← Switch farm" link (only shown when N ≥ 2).
-  const farmCount = (session.user.farms ?? []).length;
 
   const [credsResult, prismaResult] = await Promise.allSettled([
     getFarmCreds(farmSlug),
@@ -130,12 +127,12 @@ export default async function AdminLayout({
   if (credsResult.status === "rejected") {
     logger.error('[AdminLayout] getFarmCreds failed', { farmSlug, reason: credsResult.reason });
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-lg font-bold mb-2" style={{ color: "#1C1815" }}>
+          <h1 className="text-lg font-bold mb-2" style={{ color: "var(--ft-text)" }}>
             Connection Error
           </h1>
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             Could not connect to the database. Please try refreshing the page or contact support if the issue persists.
           </p>
         </div>
@@ -189,7 +186,7 @@ export default async function AdminLayout({
       // assistantName stays null → provider normalises to "Einstein".
     }
   }
-  // fail-open: if prisma unavailable, enabledSpecies stays undefined → AdminNav shows all,
+  // fail-open: if prisma unavailable, enabledSpecies stays undefined → StudioShell shows all,
   // and onboardingComplete stays `true` so we don't bounce on a DB blip.
 
   // Onboarding gate: fresh farms are redirected to the wizard, except for
@@ -204,17 +201,14 @@ export default async function AdminLayout({
   return (
     <AssistantNameProvider name={assistantName}>
       <TierProvider tier={tier}>
-        <div className="flex min-h-screen">
-          <AdminNav tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount} />
-          <main className="flex-1">
-            <MethodologyNudgeBanner
-              farmSlug={farmSlug}
-              einsteinEnabled={einsteinEnabled}
-              completeness={methodologyScore}
-            />
-            {children}
-          </main>
-        </div>
+        <StudioShell tier={tier} enabledSpecies={enabledSpecies}>
+          <MethodologyNudgeBanner
+            farmSlug={farmSlug}
+            einsteinEnabled={einsteinEnabled}
+            completeness={methodologyScore}
+          />
+          {children}
+        </StudioShell>
       </TierProvider>
     </AssistantNameProvider>
   );

@@ -321,18 +321,18 @@ export default function AlertSettingsForm({
       {/* Global farm-scoped controls */}
       <section
         className="rounded-xl p-4"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mb-3" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--ft-text)" }}>
           Timezone & quiet hours
         </h2>
-        <p className="text-xs mb-4" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mb-4" style={{ color: "var(--ft-subtle)" }}>
           Non-critical push notifications are suppressed between these times in the farm&apos;s timezone.
           {!isAdmin && " Only admins can change these."}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="block">
-            <span className="block text-xs font-medium mb-1" style={{ color: "#1C1815" }}>
+            <span className="block text-xs font-medium mb-1" style={{ color: "var(--ft-text)" }}>
               Timezone
             </span>
             <select
@@ -341,7 +341,7 @@ export default function AlertSettingsForm({
               value={farmSettings.timezone}
               onChange={(e) => updateFarmSetting("timezone", e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm disabled:opacity-60"
-              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#1C1815" }}
+              style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
             >
               {TIMEZONE_OPTIONS.includes(farmSettings.timezone) ? null : (
                 <option value={farmSettings.timezone}>{farmSettings.timezone}</option>
@@ -354,7 +354,7 @@ export default function AlertSettingsForm({
             </select>
           </label>
           <label className="block">
-            <span className="block text-xs font-medium mb-1" style={{ color: "#1C1815" }}>
+            <span className="block text-xs font-medium mb-1" style={{ color: "var(--ft-text)" }}>
               Quiet hours start
             </span>
             <input
@@ -364,11 +364,11 @@ export default function AlertSettingsForm({
               value={farmSettings.quietHoursStart}
               onChange={(e) => updateFarmSetting("quietHoursStart", e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm disabled:opacity-60"
-              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#1C1815" }}
+              style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
             />
           </label>
           <label className="block">
-            <span className="block text-xs font-medium mb-1" style={{ color: "#1C1815" }}>
+            <span className="block text-xs font-medium mb-1" style={{ color: "var(--ft-text)" }}>
               Quiet hours end
             </span>
             <input
@@ -378,7 +378,7 @@ export default function AlertSettingsForm({
               value={farmSettings.quietHoursEnd}
               onChange={(e) => updateFarmSetting("quietHoursEnd", e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm disabled:opacity-60"
-              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#1C1815" }}
+              style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
             />
           </label>
         </div>
@@ -387,13 +387,13 @@ export default function AlertSettingsForm({
       {/* Category × channel grid */}
       <section
         className="rounded-xl overflow-hidden"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <div className="p-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <div className="p-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Alert categories
           </h2>
-          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
             Per-category × per-channel toggles. Digest mode controls whether you get each alert in real-time
             or batched.
           </p>
@@ -401,28 +401,28 @@ export default function AlertSettingsForm({
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b" style={{ borderColor: "#E0D5C8", background: "#FAFAF8" }}>
-                <th className="text-left px-4 py-2 font-semibold" style={{ color: "#1C1815" }}>
+              <tr className="border-b" style={{ borderColor: "var(--ft-border)", background: "var(--ft-bg)" }}>
+                <th className="text-left px-4 py-2 font-semibold" style={{ color: "var(--ft-text)" }}>
                   Category
                 </th>
                 {CHANNELS.map((ch) => (
                   <th
                     key={ch.key}
                     className="text-center px-2 py-2 font-semibold"
-                    style={{ color: "#1C1815" }}
+                    style={{ color: "var(--ft-text)" }}
                   >
                     <div className="flex flex-col items-center gap-0.5">
                       <ch.icon className="w-3.5 h-3.5" />
                       <span>{ch.label}</span>
                       {ch.advancedOnly && (
-                        <span className="text-[9px] font-normal" style={{ color: "#9C8E7A" }}>
+                        <span className="text-[9px] font-normal" style={{ color: "var(--ft-subtle)" }}>
                           Advanced
                         </span>
                       )}
                     </div>
                   </th>
                 ))}
-                <th className="text-center px-2 py-2 font-semibold" style={{ color: "#1C1815" }}>
+                <th className="text-center px-2 py-2 font-semibold" style={{ color: "var(--ft-text)" }}>
                   Digest
                 </th>
               </tr>
@@ -431,12 +431,12 @@ export default function AlertSettingsForm({
               {CATEGORIES.map((cat) => {
                 const isPredator = cat.key === "predator";
                 return (
-                  <tr key={cat.key} className="border-b" style={{ borderColor: "#F0E8DC" }}>
+                  <tr key={cat.key} className="border-b" style={{ borderColor: "var(--ft-border)" }}>
                     <td className="px-4 py-3">
-                      <div className="font-medium" style={{ color: "#1C1815" }}>
+                      <div className="font-medium" style={{ color: "var(--ft-text)" }}>
                         {cat.label}
                       </div>
-                      <div className="text-[11px]" style={{ color: "#9C8E7A" }}>
+                      <div className="text-[11px]" style={{ color: "var(--ft-subtle)" }}>
                         {cat.hint}
                       </div>
                     </td>
@@ -457,7 +457,7 @@ export default function AlertSettingsForm({
                                 : `${cat.label} via ${ch.label}`
                             }
                             className="w-4 h-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                            style={{ accentColor: "#4A7C59" }}
+                            style={{ accentColor: "var(--ft-good)" }}
                           />
                         </td>
                       );
@@ -477,9 +477,9 @@ export default function AlertSettingsForm({
                         }
                         className="rounded px-2 py-1 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                         style={{
-                          background: "#FAFAF8",
-                          border: "1px solid #E0D5C8",
-                          color: "#1C1815",
+                          background: "var(--ft-bg)",
+                          border: "1px solid var(--ft-border)",
+                          color: "var(--ft-text)",
                         }}
                       >
                         {DIGEST_MODES.map((m) => (
@@ -495,7 +495,7 @@ export default function AlertSettingsForm({
             </tbody>
           </table>
         </div>
-        <div className="p-3 text-[11px]" style={{ background: "#FAFAF8", color: "#9C8E7A" }}>
+        <div className="p-3 text-[11px]" style={{ background: "var(--ft-bg)", color: "var(--ft-subtle)" }}>
           WhatsApp is an Advanced tier feature. Predator alerts are always sent in real-time.
         </div>
       </section>
@@ -503,17 +503,17 @@ export default function AlertSettingsForm({
       {/* Per-species override */}
       <section
         className="rounded-xl p-4"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mb-1" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--ft-text)" }}>
           Per-species overrides
         </h2>
-        <p className="text-xs mb-3" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mb-3" style={{ color: "var(--ft-subtle)" }}>
           Scope a category-level rule to one species only (e.g. disable lambing on cattle farms).
           Overrides are added on top of the grid above. Leave empty to apply to all species.
         </p>
         <div className="flex items-center gap-3">
-          <label className="text-xs" style={{ color: "#1C1815" }}>
+          <label className="text-xs" style={{ color: "var(--ft-text)" }}>
             Species:
           </label>
           <select
@@ -523,7 +523,7 @@ export default function AlertSettingsForm({
               setOverrideSpecies(e.target.value as "cattle" | "sheep" | "game" | "")
             }
             className="rounded px-2 py-1 text-xs"
-            style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#1C1815" }}
+            style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
           >
             <option value="">None — applies to all species</option>
             <option value="cattle">Cattle</option>
@@ -532,7 +532,7 @@ export default function AlertSettingsForm({
           </select>
         </div>
         {overrideSpecies && (
-          <div className="mt-3 text-xs" style={{ color: "#9C8E7A" }}>
+          <div className="mt-3 text-xs" style={{ color: "var(--ft-subtle)" }}>
             Species-scoped preference editing is coming soon — for now, category-level toggles above
             apply to this species.
           </div>
@@ -541,10 +541,10 @@ export default function AlertSettingsForm({
 
       {/* Status strip */}
       <div className="text-xs" aria-live="polite">
-        {status === "saving" && <span style={{ color: "#9C8E7A" }}>Saving…</span>}
-        {status === "saved" && <span style={{ color: "#2D6A4F" }}>Saved</span>}
+        {status === "saving" && <span style={{ color: "var(--ft-subtle)" }}>Saving…</span>}
+        {status === "saved" && <span style={{ color: "var(--ft-good)" }}>Saved</span>}
         {status === "error" && (
-          <span style={{ color: "#B23A48" }}>Error: {errorMsg ?? "unknown"}</span>
+          <span style={{ color: "var(--ft-crit)" }}>Error: {errorMsg ?? "unknown"}</span>
         )}
       </div>
     </div>

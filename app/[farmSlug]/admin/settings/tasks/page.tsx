@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 import { requireSession, requireFarmAdmin } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { PageHeader } from "@/components/ds";
 import TaskSettingsClient, {
   type TaskTemplateRow,
 } from "@/components/admin/tasks/TaskSettingsClient";
@@ -54,8 +55,8 @@ export default async function TasksSettingsPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="p-8 bg-[#FAFAF8] min-h-screen">
-        <p className="text-red-500">Farm not found.</p>
+      <div className="p-8 bg-[var(--ft-bg)] min-h-screen">
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -85,15 +86,12 @@ export default async function TasksSettingsPage({
   const settings = parseTaskSettings(rawSettings?.taskSettings);
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
-          Task Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Templates, reminder defaults, and auto-observation behaviour
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Task Settings"
+        subtitle="Templates, reminder defaults, and auto-observation behaviour"
+      />
 
       <div className="max-w-4xl">
         <TaskSettingsClient

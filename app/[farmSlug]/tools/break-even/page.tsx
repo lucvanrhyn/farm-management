@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { requireSession } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
+import { PageHeader } from "@/components/ds";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import BreakEvenCalculator from "@/components/tools/BreakEvenCalculator";
 
@@ -20,15 +21,12 @@ export default async function BreakEvenPage({
   }
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
-          Break-even Calculator
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          Calculate the sell price needed to cover feeding costs and hit your target margin.
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Break-even Calculator"
+        subtitle="Calculate the sell price needed to cover feeding costs and hit your target margin."
+      />
       <BreakEvenCalculator />
     </div>
   );

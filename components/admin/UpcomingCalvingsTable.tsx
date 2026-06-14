@@ -29,7 +29,7 @@ function UrgencyBadge({ daysAway }: { daysAway: number }) {
     overdue: {
       label: "OVERDUE",
       bg: "rgba(192,87,76,0.12)",
-      color: "#C0574C",
+      color: "var(--ft-poor)",
     },
     "7days": {
       label: "7 days",
@@ -39,12 +39,12 @@ function UrgencyBadge({ daysAway }: { daysAway: number }) {
     "14days": {
       label: "14 days",
       bg: "rgba(139,105,20,0.12)",
-      color: "#8B6914",
+      color: "var(--ft-fair)",
     },
     upcoming: {
       label: "Upcoming",
       bg: "rgba(156,142,122,0.12)",
-      color: "#9C8E7A",
+      color: "var(--ft-subtle)",
     },
   };
   const s = styles[level];
@@ -63,7 +63,7 @@ function SourceBadge({ source }: { source: "scan" | "insemination" }) {
     return (
       <span
         className="text-xs font-medium px-2 py-0.5 rounded-full"
-        style={{ background: "rgba(74,124,89,0.10)", color: "#3A6B49" }}
+        style={{ background: "rgba(74,124,89,0.10)", color: "var(--ft-good)" }}
       >
         Scan
       </span>
@@ -72,7 +72,7 @@ function SourceBadge({ source }: { source: "scan" | "insemination" }) {
   return (
     <span
       className="text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{ background: "rgba(156,142,122,0.12)", color: "#6B5E50" }}
+      style={{ background: "rgba(156,142,122,0.12)", color: "var(--ft-muted)" }}
     >
       AI
     </span>
@@ -94,17 +94,17 @@ export default function UpcomingCalvingsTable({ calvings }: Props) {
   return (
     <div
       className="rounded-2xl border mb-6"
-      style={{ background: "#FFFFFF", borderColor: overdueCount > 0 ? "#C0574C" : urgentCount > 0 ? "#C49030" : "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: overdueCount > 0 ? "var(--ft-poor)" : urgentCount > 0 ? "var(--ft-fair)" : "var(--ft-border)" }}
     >
-      <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
+      <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Upcoming Calvings
           </h2>
           {overdueCount > 0 && (
             <span
               className="text-xs font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(192,87,76,0.12)", color: "#C0574C" }}
+              style={{ background: "rgba(192,87,76,0.12)", color: "var(--ft-poor)" }}
             >
               {overdueCount} overdue
             </span>
@@ -118,13 +118,13 @@ export default function UpcomingCalvingsTable({ calvings }: Props) {
             </span>
           )}
         </div>
-        <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
           Based on scan (preferred) or insemination date + 285-day gestation · next 90 days
         </p>
       </div>
 
       {sorted.length === 0 ? (
-        <p className="px-6 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="px-6 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
           No calvings expected in the next 90 days.
         </p>
       ) : (
@@ -133,7 +133,7 @@ export default function UpcomingCalvingsTable({ calvings }: Props) {
             <thead>
               <tr
                 className="text-xs font-semibold uppercase tracking-wide"
-                style={{ color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}
+                style={{ color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}
               >
                 <th className="px-6 py-3 text-left">Animal ID</th>
                 <th className="px-4 py-3 text-left">Camp</th>
@@ -148,20 +148,20 @@ export default function UpcomingCalvingsTable({ calvings }: Props) {
                 <tr
                   key={c.animalId}
                   className="border-b last:border-0"
-                  style={{ borderColor: "#F0EAE0" }}
+                  style={{ borderColor: "var(--ft-surface2)" }}
                 >
-                  <td className="px-6 py-3 font-mono font-semibold" style={{ color: "#1C1815" }}>
+                  <td className="px-6 py-3 font-mono font-semibold" style={{ color: "var(--ft-text)" }}>
                     {c.animalId}
                   </td>
-                  <td className="px-4 py-3" style={{ color: "#6B5E50" }}>
+                  <td className="px-4 py-3" style={{ color: "var(--ft-muted)" }}>
                     {c.campName}
                   </td>
-                  <td className="px-4 py-3 tabular-nums" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-3 tabular-nums" style={{ color: "var(--ft-text)" }}>
                     {formatDate(c.expectedCalving)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-mono" style={{ color: "#1C1815" }}>
+                  <td className="px-4 py-3 text-right tabular-nums font-mono" style={{ color: "var(--ft-text)" }}>
                     {c.daysAway < 0
-                      ? <span style={{ color: "#C0574C" }}>{Math.abs(c.daysAway)}d ago</span>
+                      ? <span style={{ color: "var(--ft-poor)" }}>{Math.abs(c.daysAway)}d ago</span>
                       : `${c.daysAway}d`
                     }
                   </td>

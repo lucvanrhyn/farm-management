@@ -119,6 +119,7 @@ async function renderDashboard(lowGrazingCount: number) {
     prisma: {} as any,
     tier: "advanced",
     mode: "cattle",
+    assistantName: "Einstein",
   });
   return render(element as React.ReactElement);
 }

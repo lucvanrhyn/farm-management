@@ -94,29 +94,29 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
         className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold" style={{ color: "#1C1815" }}>Edit Observation</h3>
+          <h3 className="text-base font-bold" style={{ color: "var(--ft-text)" }}>Edit Observation</h3>
           <button
             onClick={onClose}
             className="text-xl leading-none transition-opacity hover:opacity-70"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             ×
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "#9C8E7A" }}>
-          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Type:</span> {getObservationTypeLabel(obs.type)}</span>
-          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Camp:</span> {obs.campId}</span>
-          <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
-          {obs.animalId && <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Animal:</span> {obs.animalId}</span>}
-          {obs.loggedBy && <span><span className="font-semibold" style={{ color: "#6B5C4E" }}>Logged by:</span> {obs.loggedBy}</span>}
+        <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "var(--ft-subtle)" }}>
+          <span><span className="font-semibold" style={{ color: "var(--ft-muted)" }}>Type:</span> {getObservationTypeLabel(obs.type)}</span>
+          <span><span className="font-semibold" style={{ color: "var(--ft-muted)" }}>Camp:</span> {obs.campId}</span>
+          <span><span className="font-semibold" style={{ color: "var(--ft-muted)" }}>Date:</span> {obs.observedAt.split("T")[0]}</span>
+          {obs.animalId && <span><span className="font-semibold" style={{ color: "var(--ft-muted)" }}>Animal:</span> {obs.animalId}</span>}
+          {obs.loggedBy && <span><span className="font-semibold" style={{ color: "var(--ft-muted)" }}>Logged by:</span> {obs.loggedBy}</span>}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: "#9C8E7A" }}>
+          <label className="block text-xs font-semibold mb-2" style={{ color: "var(--ft-subtle)" }}>
             {isEditable ? "Details" : "Details (read-only)"}
           </label>
           <DetailsForm details={details} onChange={handleFieldChange} />
@@ -129,7 +129,7 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
           <label
             htmlFor="observation-notes"
             className="block text-xs font-semibold mb-2"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             Notes (optional)
           </label>
@@ -141,11 +141,11 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
             maxLength={2000}
             placeholder="Free-text note — e.g. “coughing in camp 3”"
             className="w-full rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", color: "#1C1815" }}
+            style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
           />
         </div>
 
-        {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: "var(--ft-poor)" }}>{error}</p>}
 
         <div className="flex items-center justify-between gap-2">
           <button
@@ -153,9 +153,9 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
             disabled={deleting}
             className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
             style={{
-              color: confirmDelete ? "#FFFFFF" : "#C0574C",
-              border: "1px solid #C0574C",
-              background: confirmDelete ? "#C0574C" : "transparent",
+              color: confirmDelete ? "#FFFFFF" : "var(--ft-poor)",
+              border: "1px solid var(--ft-poor)",
+              background: confirmDelete ? "var(--ft-poor)" : "transparent",
             }}
           >
             {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
@@ -165,8 +165,8 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
               onClick={onClose}
               className="px-4 py-2 text-sm rounded-xl transition-colors"
               style={{
-                color: "#6B5C4E",
-                border: "1px solid #E0D5C8",
+                color: "var(--ft-muted)",
+                border: "1px solid var(--ft-border)",
                 background: "transparent",
               }}
             >
@@ -181,7 +181,7 @@ export function EditModal({ obs, onClose, onSaved, onDeleted }: EditModalProps) 
               onClick={save}
               disabled={saving}
               className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
-              style={{ background: "#4A7C59", color: "#F5EBD4" }}
+              style={{ background: "var(--ft-good)", color: "var(--ft-fair-bg)" }}
             >
               {saving ? "Saving..." : "Save"}
             </button>

@@ -42,6 +42,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
 import type { Camp } from "@/lib/types";
+import { Icon } from "@/components/ds";
 import DrawCampModal from "./DrawCampModal";
 import DrawControl from "./DrawControl";
 import MoveModePanel from "./MoveModePanel";
@@ -102,6 +103,16 @@ interface Props {
 }
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+
+// Dark-glass chrome surface for controls floating over the (dark) satellite
+// map. Mirrors the overhaul design's dark `glassStyle()` — these float outside
+// any .dark-surface scope so they carry literal glass values, not light tokens.
+const DARK_GLASS: React.CSSProperties = {
+  background: "rgba(26,21,16,0.85)",
+  border: "1px solid rgba(255,235,210,0.13)",
+  backdropFilter: "blur(8px) saturate(140%)",
+  boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
+};
 
 const OVERLAY_OPTIONS: { value: OverlayMode; label: string }[] = [
   { value: "grazing",        label: "Grazing" },
@@ -357,32 +368,36 @@ export default function FarmMap({
         />
       )}
 
-      {/* Overlay selector toolbar (camp overlay color ramp) */}
+      {/* Overlay selector toolbar (camp overlay color ramp) — dark-glass pills,
+          accent active state. Engine/handler logic unchanged; visual only. */}
       <div
         style={{
           position: "absolute", top: 12, left: 12, zIndex: 10,
-          display: "flex", flexWrap: "wrap", gap: 4, padding: "4px 6px",
+          display: "flex", flexWrap: "wrap", gap: 4, padding: 4,
           // Leave a right gutter so the wrapped row never slides under the
           // top-right Mapbox nav/geolocate control column on narrow screens.
           maxWidth: "calc(100% - 78px)",
-          borderRadius: 10, background: "rgba(26,21,16,0.85)",
-          backdropFilter: "blur(8px)", border: "1px solid rgba(140,100,60,0.25)",
+          borderRadius: 12, ...DARK_GLASS,
         }}
       >
-        {OVERLAY_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setOverlay(opt.value)}
-            style={{
-              padding: "5px 10px", borderRadius: 7, fontSize: 11, fontWeight: 600,
-              cursor: "pointer", border: "none", transition: "all 0.15s",
-              background: activeOverlay === opt.value ? "rgba(139,105,20,0.3)" : "transparent",
-              color: activeOverlay === opt.value ? "#F5EBD4" : "rgba(210,180,140,0.6)",
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
+        {OVERLAY_OPTIONS.map((opt) => {
+          const on = activeOverlay === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => setOverlay(opt.value)}
+              style={{
+                padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 500,
+                cursor: "pointer", border: "none", whiteSpace: "nowrap", transition: "all 0.15s",
+                fontFamily: "var(--ft-font-sans, inherit)",
+                background: on ? "var(--ft-accent)" : "transparent",
+                color: on ? "#fff" : "rgba(255,235,210,0.72)",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       <LayerToggle value={layerState} onChange={updateLayers} />
@@ -390,17 +405,16 @@ export default function FarmMap({
       {isDrawing && (
         <div
           style={{
-            position: "absolute", top: 56, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", top: 60, left: "50%", transform: "translateX(-50%)",
             zIndex: 10, display: "flex", alignItems: "center", gap: 8,
-            padding: "10px 20px", borderRadius: 12,
-            background: "rgba(26,21,16,0.92)", backdropFilter: "blur(8px)",
-            border: "1px solid rgba(34,197,94,0.4)", color: "#F5EBD4",
-            fontSize: 13, fontFamily: "var(--font-sans)", fontWeight: 500,
-            boxShadow: "0 4px 24px rgba(0,0,0,0.4)", whiteSpace: "nowrap",
+            padding: "10px 18px", borderRadius: 999,
+            ...DARK_GLASS,
+            border: "1px solid var(--ft-good)", color: "#EFE7D8",
+            fontSize: 13, fontWeight: 500, whiteSpace: "nowrap",
           }}
         >
-          <span style={{ color: "#22c55e", fontSize: 16 }}>&#9678;</span>
-          <span>Click to place points. <strong style={{ color: "#22c55e" }}>Double-click</strong> the last point to finish.</span>
+          <Icon.edit size={15} style={{ color: "var(--ft-good)" }} />
+          <span>Click to place points. <strong style={{ color: "var(--ft-good)" }}>Double-click</strong> the last point to finish.</span>
         </div>
       )}
 
@@ -412,34 +426,34 @@ export default function FarmMap({
         <button
           onClick={() => dispatch({ type: "startMobMove" })}
           style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 8, fontSize: 11,
-            whiteSpace: "nowrap",
-            fontFamily: "var(--font-sans)", fontWeight: 500,
-            background: isMovingMob ? "rgba(196,144,48,0.2)" : "rgba(36,28,20,0.88)",
-            border: isMovingMob ? "1px solid rgba(196,144,48,0.5)" : "1px solid rgba(140,100,60,0.35)",
-            color: isMovingMob ? "#C49030" : "#D2B48C",
-            cursor: "pointer", backdropFilter: "blur(6px)", transition: "all 0.2s",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "9px 14px", borderRadius: 10, fontSize: 13,
+            whiteSpace: "nowrap", fontWeight: 500,
+            ...DARK_GLASS,
+            background: isMovingMob ? "var(--ft-accent)" : DARK_GLASS.background,
+            border: isMovingMob ? "1px solid transparent" : DARK_GLASS.border,
+            color: isMovingMob ? "#fff" : "#EFE7D8",
+            cursor: "pointer", transition: "all 0.2s",
           }}
         >
-          <span style={{ fontSize: 14 }}>⇄</span>
+          <Icon.move size={15} />
           {isMovingMob ? "Exit Move" : "Move Mob"}
         </button>
 
         <button
           onClick={() => dispatch({ type: "startDrawing" })}
           style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 8, fontSize: 11,
-            whiteSpace: "nowrap",
-            fontFamily: "var(--font-sans)", fontWeight: 500,
-            background: isDrawing ? "rgba(34,197,94,0.2)" : "rgba(36,28,20,0.88)",
-            border: isDrawing ? "1px solid rgba(34,197,94,0.5)" : "1px solid rgba(140,100,60,0.35)",
-            color: isDrawing ? "#22c55e" : "#D2B48C",
-            cursor: "pointer", backdropFilter: "blur(6px)", transition: "all 0.2s",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "9px 14px", borderRadius: 10, fontSize: 13,
+            whiteSpace: "nowrap", fontWeight: 500,
+            ...DARK_GLASS,
+            background: isDrawing ? "var(--ft-good)" : DARK_GLASS.background,
+            border: isDrawing ? "1px solid transparent" : DARK_GLASS.border,
+            color: isDrawing ? "#fff" : "#EFE7D8",
+            cursor: "pointer", transition: "all 0.2s",
           }}
         >
-          <span style={{ fontSize: 14 }}>✦</span>
+          {isDrawing ? <Icon.close size={15} /> : <Icon.plus size={15} />}
           {isDrawing ? "Cancel Drawing" : "Draw Camp Boundary"}
         </button>
       </div>

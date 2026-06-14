@@ -83,21 +83,21 @@ export default function FinansiesClient({
       label: "Income (this month)",
       value: formatRand(monthIncome),
       icon: "💰",
-      color: "#4A7C59",
+      color: "var(--ft-good)",
       bg: "rgba(74,124,89,0.12)",
     },
     {
       label: "Expenses (this month)",
       value: formatRand(monthExpense),
       icon: "📤",
-      color: "#A0522D",
+      color: "var(--ft-poor)",
       bg: "rgba(160,82,45,0.12)",
     },
     {
       label: "Net (this month)",
       value: (net >= 0 ? "+" : "−") + formatRand(net),
       icon: net >= 0 ? "📈" : "📉",
-      color: net >= 0 ? "#4A7C59" : "#A0522D",
+      color: net >= 0 ? "var(--ft-good)" : "var(--ft-poor)",
       bg: net >= 0 ? "rgba(74,124,89,0.12)" : "rgba(160,82,45,0.12)",
     },
   ];
@@ -107,7 +107,7 @@ export default function FinansiesClient({
       {/* Summary stats bar */}
       <div
         className="rounded-2xl overflow-hidden"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         <div className="grid grid-cols-1 sm:grid-cols-3">
           {statsItems.map((item, i) => (
@@ -115,8 +115,8 @@ export default function FinansiesClient({
               key={item.label}
               className="px-6 py-5"
               style={{
-                borderRight: i < 2 ? "1px solid #E0D5C8" : undefined,
-                borderBottom: "1px solid #E0D5C8",
+                borderRight: i < 2 ? "1px solid var(--ft-border)" : undefined,
+                borderBottom: "1px solid var(--ft-border)",
               }}
             >
               <div className="flex items-center gap-2 mb-3">
@@ -133,7 +133,7 @@ export default function FinansiesClient({
               >
                 {item.value}
               </div>
-              <div className="text-xs" style={{ color: "#9C8E7A" }}>
+              <div className="text-xs" style={{ color: "var(--ft-subtle)" }}>
                 {item.label}
               </div>
             </div>

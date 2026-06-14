@@ -24,9 +24,9 @@ export default async function RotationSection({ farmSlug, camps }: Props) {
     return (
       <div
         className="rounded-2xl border p-8 text-center"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
-        <p className="text-sm font-medium" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm font-medium" style={{ color: "var(--ft-subtle)" }}>
           No camps found. Add camps to start tracking rotation.
         </p>
       </div>

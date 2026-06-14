@@ -103,7 +103,7 @@ export default function CategoryProfitability({
     return (
       <div
         className="rounded-xl p-6 text-center text-sm"
-        style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+        style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
       >
         No transactions linked to animals with categories yet.
       </div>
@@ -113,15 +113,15 @@ export default function CategoryProfitability({
   return (
     <div className="space-y-4">
       {/* Grouped bar chart */}
-      <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}>
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "#9C8E7A" }}>
+      <div className="rounded-xl p-4" style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--ft-subtle)" }}>
           Income vs Expense by Category
         </p>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <XAxis dataKey="category" tick={{ fontSize: 11, fill: "#9C8E7A" }} />
+            <XAxis dataKey="category" tick={{ fontSize: 11, fill: "var(--ft-subtle)" }} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#9C8E7A" }}
+              tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
               width={70}
               tickFormatter={(v: number) =>
                 v >= 1000 ? `R${(v / 1000).toFixed(0)}k` : `R${v}`
@@ -133,16 +133,16 @@ export default function CategoryProfitability({
                 typeof name === "string" ? name.charAt(0).toUpperCase() + name.slice(1) : String(name),
               ]}
               contentStyle={{
-                background: "#1A1510",
+                background: "var(--ft-text)",
                 border: "1px solid rgba(139,105,20,0.3)",
                 borderRadius: "8px",
-                color: "#F5EBD4",
+                color: "var(--ft-fair-bg)",
                 fontSize: "12px",
               }}
             />
             <Legend wrapperStyle={{ fontSize: "11px" }} />
-            <Bar dataKey="income" fill="#4A7C59" radius={[4, 4, 0, 0] as [number, number, number, number]} name="Income" />
-            <Bar dataKey="expense" fill="#C0574C" radius={[4, 4, 0, 0] as [number, number, number, number]} name="Expense" />
+            <Bar dataKey="income" fill="var(--ft-good)" radius={[4, 4, 0, 0] as [number, number, number, number]} name="Income" />
+            <Bar dataKey="expense" fill="var(--ft-poor)" radius={[4, 4, 0, 0] as [number, number, number, number]} name="Expense" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -164,27 +164,27 @@ export default function CategoryProfitability({
             width: "100%",
             maxWidth: 280,
             borderRadius: 6,
-            border: "1px solid #D4C9B8",
-            background: "#F9F5EF",
+            border: "1px solid var(--ft-border)",
+            background: "var(--ft-bg)",
             padding: "6px 12px",
             fontSize: 13,
-            color: "#1C1815",
+            color: "var(--ft-text)",
             outline: "none",
           }}
         />
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
+      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid var(--ft-border)" }}>
         <table className="w-full text-xs">
           <thead>
-            <tr style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
-              <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Category</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Income (R)</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Expense (R)</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Margin (R)</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Head Count</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Margin / Head</th>
+            <tr style={{ background: "var(--ft-surface)", borderBottom: "1px solid var(--ft-border)" }}>
+              <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Category</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Income (R)</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Expense (R)</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Margin (R)</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Head Count</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Margin / Head</th>
             </tr>
           </thead>
           <tbody>
@@ -204,16 +204,16 @@ export default function CategoryProfitability({
                 <React.Fragment key={row.category}>
                   <tr
                     style={{
-                      borderBottom: "1px solid #E0D5C8",
-                      background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
+                      borderBottom: "1px solid var(--ft-border)",
+                      background: idx % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
                     }}
                   >
-                    <td className="px-3 py-2.5 font-medium" style={{ color: "#1C1815" }}>
+                    <td className="px-3 py-2.5 font-medium" style={{ color: "var(--ft-text)" }}>
                       <span className="flex items-center gap-1.5">
                         <button
                           onClick={() => toggleCategory(row.category)}
                           className="shrink-0 transition-colors"
-                          style={{ color: "#9C8E7A" }}
+                          style={{ color: "var(--ft-subtle)" }}
                           aria-label={isExpanded ? `Collapse ${row.category}` : `Expand ${row.category}`}
                         >
                           <svg
@@ -233,24 +233,24 @@ export default function CategoryProfitability({
                         {row.category}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#4A7C59" }}>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-good)" }}>
                       {fmt(row.income)}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#C0574C" }}>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-poor)" }}>
                       {fmt(row.expense)}
                     </td>
                     <td
                       className="px-3 py-2.5 text-right font-mono font-semibold"
-                      style={{ color: row.margin >= 0 ? "#4A7C59" : "#C0574C" }}
+                      style={{ color: row.margin >= 0 ? "var(--ft-good)" : "var(--ft-poor)" }}
                     >
                       {row.margin >= 0 ? "" : "-"}{fmt(row.margin)}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#1C1815" }}>
+                    <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-text)" }}>
                       {row.headCount}
                     </td>
                     <td
                       className="px-3 py-2.5 text-right font-mono"
-                      style={{ color: row.marginPerHead >= 0 ? "#4A7C59" : "#C0574C" }}
+                      style={{ color: row.marginPerHead >= 0 ? "var(--ft-good)" : "var(--ft-poor)" }}
                     >
                       {row.marginPerHead >= 0 ? "" : "-"}{fmt(row.marginPerHead)}
                     </td>
@@ -258,10 +258,10 @@ export default function CategoryProfitability({
 
                   {isExpanded && (
                     <tr key={`${row.category}-expand`}>
-                      <td colSpan={6} style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
+                      <td colSpan={6} style={{ background: "var(--ft-surface)", borderBottom: "1px solid var(--ft-border)" }}>
                         <div className="px-6 py-3">
                           {fetchError && !animalData ? (
-                            <p style={{ fontSize: 13, color: "#C0574C", padding: "8px 0" }}>
+                            <p style={{ fontSize: 13, color: "var(--ft-poor)", padding: "8px 0" }}>
                               {fetchError}
                             </p>
                           ) : loading && !animalData ? (
@@ -270,33 +270,33 @@ export default function CategoryProfitability({
                                 <div
                                   key={i}
                                   className="h-5 animate-pulse rounded"
-                                  style={{ background: "#E0D5C8" }}
+                                  style={{ background: "var(--ft-border)" }}
                                 />
                               ))}
                             </div>
                           ) : categoryAnimals.length === 0 ? (
-                            <p className="text-xs py-1" style={{ color: "#9C8E7A" }}>
+                            <p className="text-xs py-1" style={{ color: "var(--ft-subtle)" }}>
                               No animals with transactions in this period.
                             </p>
                           ) : (
                             <>
                             <table className="w-full text-xs">
                               <thead>
-                                <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
-                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Tag</th>
-                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Name</th>
-                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>Income</th>
-                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "#9C8E7A" }}>
+                                <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
+                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "var(--ft-subtle)" }}>Tag</th>
+                                  <th className="text-left py-1 pr-3 font-semibold" style={{ color: "var(--ft-subtle)" }}>Name</th>
+                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "var(--ft-subtle)" }}>Income</th>
+                                  <th className="text-right py-1 pr-3 font-semibold" style={{ color: "var(--ft-subtle)" }}>
                                     Expenses{" "}
                                     <span
                                       title="Camp-level expenses (feed, dip, vet) are split equally across animals present in that camp."
                                       className="cursor-help"
-                                      style={{ color: "#B0A090" }}
+                                      style={{ color: "var(--ft-subtle)" }}
                                     >
                                       ⓘ
                                     </span>
                                   </th>
-                                  <th className="text-right py-1 font-semibold" style={{ color: "#9C8E7A" }}>Margin</th>
+                                  <th className="text-right py-1 font-semibold" style={{ color: "var(--ft-subtle)" }}>Margin</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -305,16 +305,16 @@ export default function CategoryProfitability({
                                     key={animal.animalId}
                                     style={{ borderBottom: "1px solid rgba(224,213,200,0.4)" }}
                                   >
-                                    <td className="py-1 pr-3 font-mono" style={{ color: "#1C1815" }}>
+                                    <td className="py-1 pr-3 font-mono" style={{ color: "var(--ft-text)" }}>
                                       {animal.tagNumber}
                                     </td>
-                                    <td className="py-1 pr-3" style={{ color: "#9C8E7A" }}>
+                                    <td className="py-1 pr-3" style={{ color: "var(--ft-subtle)" }}>
                                       {animal.name ?? "—"}
                                     </td>
-                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "#4A7C59" }}>
+                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "var(--ft-good)" }}>
                                       {animal.income === 0 ? "—" : fmt(animal.income)}
                                     </td>
-                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "#C0574C" }}>
+                                    <td className="py-1 pr-3 text-right font-mono" style={{ color: "var(--ft-poor)" }}>
                                       {animal.expenses === 0 ? "—" : fmt(animal.expenses)}
                                     </td>
                                     <td
@@ -322,10 +322,10 @@ export default function CategoryProfitability({
                                       style={{
                                         color:
                                           animal.income === 0 && animal.expenses === 0
-                                            ? "#9C8E7A"
+                                            ? "var(--ft-subtle)"
                                             : animal.margin >= 0
-                                            ? "#4A7C59"
-                                            : "#C0574C",
+                                            ? "var(--ft-good)"
+                                            : "var(--ft-poor)",
                                       }}
                                     >
                                       {animal.income === 0 && animal.expenses === 0
@@ -336,7 +336,7 @@ export default function CategoryProfitability({
                                 ))}
                               </tbody>
                             </table>
-                            <p style={{ fontSize: 11, color: "#9C8E7A", marginTop: 6 }}>
+                            <p style={{ fontSize: 11, color: "var(--ft-subtle)", marginTop: 6 }}>
                               * Per-animal margins include pro-rata camp expenses. Category totals show direct animal transactions only.
                             </p>
                             </>

@@ -12,6 +12,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { PageHeader } from "@/components/ds";
 
 export default async function BreedingAIPage({
   params,
@@ -32,8 +33,8 @@ export default async function BreedingAIPage({
 
   if (!prisma) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-        <p className="text-sm" style={{ color: "#C0574C" }}>Farm not found.</p>
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+        <p className="text-sm" style={{ color: "var(--ft-poor)" }}>Farm not found.</p>
       </div>
     );
   }
@@ -58,13 +59,12 @@ export default async function BreedingAIPage({
   const inbreedingRisks = detectInbreedingRisk(allAnimals);
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>Breeding AI</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          AI-powered breeding analysis and inbreeding-safe pairing suggestions
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Breeding AI"
+        subtitle="breeding intelligence · inbreeding-safe pairing suggestions"
+      />
       {pairingResult.reason === "NO_PEDIGREE_SEED" ? (
         <NoPedigreeEmptyState farmSlug={farmSlug} />
       ) : (

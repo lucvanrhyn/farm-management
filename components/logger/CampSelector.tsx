@@ -2,10 +2,17 @@
 
 import { useRouter, useParams } from "next/navigation";
 import { useOffline } from "./OfflineProvider";
-import { getGrazingDot, relativeTime } from "@/lib/utils";
+import { relativeTime } from "@/lib/utils";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { getSpeciesModule } from "@/lib/species/registry";
 import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
+import { Card, StatusDot, Icon } from "@/components/ds";
+import {
+  grazingToStatus,
+  waterToStatus,
+  fenceToStatus,
+  statusVar,
+} from "./grazing-status";
 
 // CampSelector sits on the logger's critical path. Previously it imported
 // framer-motion (~90KB gzipped) for a stagger-in entrance + tap-scale
@@ -16,15 +23,11 @@ import { ModeSwitcher } from "@/components/ui/ModeSwitcher";
 function CampSkeleton() {
   return (
     <div
-      className="relative rounded-2xl p-4 flex flex-col gap-2 min-h-[96px] animate-pulse"
-      style={{
-        backgroundColor: 'rgba(250, 240, 220, 0.08)',
-        border: '1px solid rgba(210, 180, 140, 0.2)',
-      }}
+      className="ft-card relative p-4 flex flex-col gap-2 min-h-[112px] animate-pulse"
     >
-      <div className="h-4 w-3/4 rounded-md" style={{ backgroundColor: 'rgba(255,248,235,0.12)' }} />
-      <div className="h-3 w-1/2 rounded-md" style={{ backgroundColor: 'rgba(255,248,235,0.08)' }} />
-      <div className="h-5 w-1/3 rounded-full mt-auto" style={{ backgroundColor: 'rgba(255,248,235,0.08)' }} />
+      <div className="h-4 w-3/4 rounded-md" style={{ backgroundColor: 'var(--ft-surface2)' }} />
+      <div className="h-3 w-1/2 rounded-md" style={{ backgroundColor: 'var(--ft-surface2)' }} />
+      <div className="h-5 w-1/3 rounded-full mt-auto" style={{ backgroundColor: 'var(--ft-surface2)' }} />
     </div>
   );
 }
@@ -48,20 +51,15 @@ function CampEmptyState({ speciesLabel }: { speciesLabel: string }) {
     <div className="flex justify-center p-4">
       <div
         data-testid="camp-selector-empty-state"
-        className="flex flex-col items-center gap-3 rounded-2xl px-8 py-12 text-center w-full max-w-sm"
-        style={{
-          backgroundColor: 'rgba(250, 240, 220, 0.10)',
-          border: '1px solid rgba(210, 180, 140, 0.28)',
-          boxShadow: 'inset 0 1px 0 rgba(255,248,235,0.10)',
-        }}
+        className="ft-card flex flex-col items-center gap-3 px-8 py-12 text-center w-full max-w-sm"
       >
         <div
           aria-hidden="true"
           className="flex size-14 items-center justify-center rounded-full"
           style={{
-            backgroundColor: 'rgba(255, 248, 235, 0.10)',
-            border: '1px solid rgba(210, 180, 140, 0.35)',
-            color: '#F5E6C8',
+            backgroundColor: 'var(--ft-surface2)',
+            border: '1px solid var(--ft-border2)',
+            color: 'var(--ft-accent)',
           }}
         >
           {/* Inline paddock / fenced-area glyph, pure CSS — no new asset.
@@ -83,14 +81,14 @@ function CampEmptyState({ speciesLabel }: { speciesLabel: string }) {
           </svg>
         </div>
         <h2
-          className="text-lg font-bold"
-          style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+          className="ft-serif text-lg font-semibold"
+          style={{ color: 'var(--ft-text)' }}
         >
           {/* #382: pin the space with {" "} — a bare literal space after an
               {expression} is stripped by the build-time SWC transform. */}
           No {speciesLabel}{" "}camps yet
         </h2>
-        <p className="text-sm" style={{ color: 'rgba(245, 230, 200, 0.75)', lineHeight: 1.5 }}>
+        <p className="text-sm" style={{ color: 'var(--ft-muted)', lineHeight: 1.5 }}>
           {/* #382: same {" "} pin — this is the line that glued in prod
               ("Add a sheepcamp to start logging."). */}
           Add a {speciesLabel}{" "}camp to start logging. Camps for other species
@@ -177,54 +175,84 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
       {visibleCamps.length === 0 ? (
         <CampEmptyState speciesLabel={speciesLabel} />
       ) : (
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
+      <div className="grid grid-cols-2 gap-3 p-4">
       {visibleCamps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
-        // Use grey dot when no condition has ever been recorded; do not default to "Fair"
-        const dotColor = camp.grazing_quality ? getGrazingDot(camp.grazing_quality) : "bg-gray-500";
         const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Never";
+        // Status dot maps the recorded grazing quality onto the warm token
+        // scale. No condition recorded yet → neutral subtle dot (no default
+        // to "Fair", matching the prior grey-dot behaviour).
+        const grazingStatus = camp.grazing_quality ? grazingToStatus(camp.grazing_quality) : null;
+
+        // Condition-icon row (grass/water/fence) tinted by recorded status.
+        const conditionIcons: Array<{ key: string; Ico: typeof Icon.grass; color: string }> = [
+          {
+            key: "grass",
+            Ico: Icon.grass,
+            color: camp.grazing_quality ? statusVar(grazingToStatus(camp.grazing_quality)) : "var(--ft-subtle)",
+          },
+          {
+            key: "water",
+            Ico: Icon.water,
+            color: camp.water_status ? statusVar(waterToStatus(camp.water_status)) : "var(--ft-subtle)",
+          },
+          {
+            key: "fence",
+            Ico: Icon.fence,
+            color: camp.fence_status ? statusVar(fenceToStatus(camp.fence_status)) : "var(--ft-subtle)",
+          },
+        ];
 
         return (
-          <button
+          <Card
             key={camp.camp_id}
+            as="button"
+            interactive
+            lift
             onClick={() => router.push(`/${params.farmSlug}/logger/${encodeURIComponent(camp.camp_id)}`)}
-            className="relative rounded-2xl p-4 text-left flex flex-col gap-2 min-h-[96px] transition-transform duration-150 ease-out active:scale-95"
-            style={{
-              backgroundColor: 'rgba(250, 240, 220, 0.18)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(210, 180, 140, 0.5)',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,248,235,0.15)',
-            }}
+            className="relative p-4 text-left flex flex-col gap-2 min-h-[112px] active:scale-95 transition-transform duration-150 ease-out"
           >
             {/* Grazing status dot */}
-            <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${dotColor}`} />
+            <div className="absolute top-3.5 right-3.5">
+              {grazingStatus ? (
+                <StatusDot status={grazingStatus} size={9} />
+              ) : (
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full"
+                  style={{ background: "var(--ft-subtle)" }}
+                />
+              )}
+            </div>
 
             <div>
               <p
-                className="font-bold text-base leading-tight pr-5"
-                style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+                className="ft-serif text-xl leading-none pr-6"
+                style={{ fontWeight: 500, color: "var(--ft-text)" }}
               >
                 {camp.camp_name}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(245, 230, 200, 0.75)' }}>
+              <p className="ft-mono text-[10px] mt-2" style={{ color: "var(--ft-subtle)" }}>
                 {lastTime}
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="mt-auto flex items-center justify-between gap-2">
               <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                className="ft-mono text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap"
                 style={{
-                  backgroundColor: 'rgba(255, 248, 235, 0.15)',
-                  color: 'rgba(245, 230, 200, 0.9)',
-                  border: '1px solid rgba(210, 180, 140, 0.35)',
+                  backgroundColor: "var(--ft-surface2)",
+                  color: "var(--ft-muted)",
                 }}
               >
-                {animalCount} animals
+                {animalCount} head
               </span>
+              <div className="flex items-center gap-1.5">
+                {conditionIcons.map(({ key, Ico, color }) => (
+                  <Ico key={key} size={13} style={{ color }} />
+                ))}
+              </div>
             </div>
-          </button>
+          </Card>
         );
       })}
       </div>

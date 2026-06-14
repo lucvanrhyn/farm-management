@@ -150,7 +150,7 @@ function LoginForm() {
     border: "1px solid rgba(140,100,60,0.25)",
     borderRadius: "10px",
     padding: "0.625rem 0.875rem",
-    color: "#F0DEB8",
+    color: "var(--ft-fair-bg)",
     fontFamily: "var(--font-sans)",
     fontSize: "0.9375rem",
     outline: "none",
@@ -168,7 +168,7 @@ function LoginForm() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
-      style={{ background: "#1A1510" }}
+      style={{ background: "var(--ft-text)" }}
     >
       {/* Radial amber glow */}
       <div
@@ -188,7 +188,7 @@ function LoginForm() {
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
+            color: "var(--ft-fair-bg)",
             fontSize: "2.5rem",
             fontWeight: 700,
             letterSpacing: "0.01em",
@@ -222,7 +222,7 @@ function LoginForm() {
           zIndex: 10,
           animationDelay: "0.12s",
           borderRadius: "2rem",
-          background: "#241C14",
+          background: "var(--ft-text)",
           border: "1px solid rgba(196,144,48,0.18)",
           boxShadow: "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
         }}
@@ -337,7 +337,7 @@ function LoginForm() {
               border: "1px solid rgba(196,144,48,0.35)",
               borderRadius: "10px",
               padding: "0.75rem 1rem",
-              color: loading ? "rgba(240,222,184,0.50)" : "#F0DEB8",
+              color: loading ? "rgba(240,222,184,0.50)" : "var(--ft-fair-bg)",
               fontFamily: "var(--font-sans)",
               fontSize: "0.9375rem",
               fontWeight: 500,

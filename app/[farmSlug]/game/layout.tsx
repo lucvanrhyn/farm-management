@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import AdminNav from "@/components/admin/AdminNav";
+import StudioShell from "@/components/ds/StudioShell";
 import GameSubNav from "@/components/game/GameSubNav";
 import { TierProvider } from "@/components/tier-provider";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -33,12 +33,12 @@ export default async function GameLayout({
   } catch (err) {
     logger.error('[GameLayout] getFarmCreds failed', { farmSlug, err });
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-lg font-bold mb-2" style={{ color: "#1C1815" }}>
+          <h1 className="text-lg font-bold mb-2" style={{ color: "var(--ft-text)" }}>
             Connection Error
           </h1>
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             Could not connect to the database. Please try refreshing the page or contact support if the issue persists.
           </p>
         </div>
@@ -48,13 +48,10 @@ export default async function GameLayout({
 
   return (
     <TierProvider tier={tier}>
-      <div className="flex min-h-screen">
-        <AdminNav tier={tier} />
-        <main className="flex-1">
-          <GameSubNav farmSlug={farmSlug} />
-          {children}
-        </main>
-      </div>
+      <StudioShell tier={tier}>
+        <GameSubNav farmSlug={farmSlug} />
+        {children}
+      </StudioShell>
     </TierProvider>
   );
 }

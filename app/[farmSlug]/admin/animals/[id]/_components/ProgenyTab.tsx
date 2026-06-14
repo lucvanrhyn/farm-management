@@ -58,9 +58,9 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
   return (
     <div
       className="rounded-2xl border p-5 space-y-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
-      <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         Progeny ({totalOffspring})
       </h2>
 
@@ -72,9 +72,9 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
           { label: "Active / Deceased", value: `${alive} / ${deceased}` },
           { label: "Avg Birth Weight", value: avgBirthWeight ? `${avgBirthWeight.toFixed(1)} kg` : "No data" },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-            <p className="text-xs" style={{ color: "#9C8E7A" }}>{label}</p>
-            <p className="text-lg font-bold font-mono" style={{ color: "#1C1815" }}>{value}</p>
+          <div key={label} className="rounded-xl p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+            <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>{label}</p>
+            <p className="text-lg font-bold font-mono" style={{ color: "var(--ft-text)" }}>{value}</p>
           </div>
         ))}
       </div>
@@ -83,17 +83,17 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
       {(avgDifficulty !== null || survivalRate !== null) && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {avgDifficulty !== null && (
-            <div className="rounded-xl p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-xs" style={{ color: "#9C8E7A" }}>Avg Calving Difficulty</p>
-              <p className="text-lg font-bold font-mono" style={{ color: avgDifficulty <= 2 ? "#4A7C59" : avgDifficulty <= 3 ? "#8B6914" : "#C0574C" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>Avg Calving Difficulty</p>
+              <p className="text-lg font-bold font-mono" style={{ color: avgDifficulty <= 2 ? "var(--ft-good)" : avgDifficulty <= 3 ? "var(--ft-fair)" : "var(--ft-poor)" }}>
                 {avgDifficulty.toFixed(1)} / 5
               </p>
             </div>
           )}
           {survivalRate !== null && (
-            <div className="rounded-xl p-3" style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}>
-              <p className="text-xs" style={{ color: "#9C8E7A" }}>Calf Survival Rate</p>
-              <p className="text-lg font-bold font-mono" style={{ color: survivalRate >= 95 ? "#4A7C59" : survivalRate >= 85 ? "#8B6914" : "#C0574C" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}>
+              <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>Calf Survival Rate</p>
+              <p className="text-lg font-bold font-mono" style={{ color: survivalRate >= 95 ? "var(--ft-good)" : survivalRate >= 85 ? "var(--ft-fair)" : "var(--ft-poor)" }}>
                 {survivalRate.toFixed(0)}%
               </p>
             </div>
@@ -103,14 +103,14 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
 
       {/* Offspring table */}
       {totalOffspring === 0 ? (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>No offspring recorded.</p>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>No offspring recorded.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
+        <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid var(--ft-border)" }}>
           <table className="w-full text-sm">
             <thead>
               <tr
                 className="text-xs uppercase tracking-wide"
-                style={{ borderBottom: "1px solid #E0D5C8", background: "#F5F2EE", color: "#9C8E7A" }}
+                style={{ borderBottom: "1px solid var(--ft-border)", background: "var(--ft-surface)", color: "var(--ft-subtle)" }}
               >
                 <th className="text-left px-3 py-2 font-semibold">Tag</th>
                 <th className="text-left px-3 py-2 font-semibold">Name</th>
@@ -124,33 +124,33 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
             </thead>
             <tbody>
               {offspring.map((calf) => (
-                <tr key={calf.id} style={{ borderBottom: "1px solid #E0D5C8" }}>
+                <tr key={calf.id} style={{ borderBottom: "1px solid var(--ft-border)" }}>
                   <td className="px-3 py-2">
                     <Link
                       href={`/${farmSlug}/admin/animals/${calf.animalId}`}
                       className="font-mono font-semibold hover:underline"
-                      style={{ color: "#4A7C59" }}
+                      style={{ color: "var(--ft-good)" }}
                     >
                       {calf.animalId}
                     </Link>
                   </td>
-                  <td className="px-3 py-2" style={{ color: "#1C1815" }}>{calf.name ?? "—"}</td>
-                  <td className="px-3 py-2" style={{ color: "#6B5C4E" }}>{calf.sex}</td>
+                  <td className="px-3 py-2" style={{ color: "var(--ft-text)" }}>{calf.name ?? "—"}</td>
+                  <td className="px-3 py-2" style={{ color: "var(--ft-muted)" }}>{calf.sex}</td>
                   <td className="px-3 py-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getCategoryChipColor(calf.category as AnimalCategory)}`}>
                       {getCategoryLabel(calf.category as AnimalCategory)}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "#6B5C4E" }}>
+                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "var(--ft-muted)" }}>
                     {calf.dateOfBirth ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-xs" style={{ color: "#6B5C4E" }}>{calf.currentCamp}</td>
+                  <td className="px-3 py-2 text-xs" style={{ color: "var(--ft-muted)" }}>{calf.currentCamp}</td>
                   <td className="px-3 py-2">
                     <span
                       className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
                       style={{
                         background: calf.status === "Active" ? "rgba(74,124,89,0.12)" : calf.status === "Deceased" ? "rgba(192,87,76,0.12)" : "rgba(156,142,122,0.12)",
-                        color: calf.status === "Active" ? "#4A7C59" : calf.status === "Deceased" ? "#C0574C" : "#9C8E7A",
+                        color: calf.status === "Active" ? "var(--ft-good)" : calf.status === "Deceased" ? "var(--ft-poor)" : "var(--ft-subtle)",
                       }}
                     >
                       {calf.status}
@@ -161,7 +161,7 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
                       <Link
                         href={`/${farmSlug}/admin/animals/${calf.motherId}`}
                         className="font-mono text-xs hover:underline"
-                        style={{ color: "#4A7C59" }}
+                        style={{ color: "var(--ft-good)" }}
                       >
                         {calf.motherId}
                       </Link>

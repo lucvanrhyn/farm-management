@@ -4,6 +4,7 @@ import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { getFarmMode } from '@/lib/server/get-farm-mode';
 import { scoped } from '@/lib/server/species-scoped-prisma';
 import { getFarmSummary } from '@/lib/server/veld-score';
+import { PageHeader } from '@/components/ds';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { VeldAssessmentForm } from '@/components/veld/VeldAssessmentForm';
 import { VeldCampSummaryCards } from '@/components/veld/VeldCampSummaryCards';
@@ -13,7 +14,7 @@ import nextDynamic from 'next/dynamic';
 
 const VeldTrendChart = nextDynamic(
   () => import('@/components/veld/VeldTrendChart').then((m) => ({ default: m.VeldTrendChart })),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 export const dynamic = 'force-dynamic';
@@ -49,18 +50,20 @@ export default async function VeldToolPage({
 
   return (
     <div className="space-y-6 p-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-emerald-900">Veld Condition Scoring</h1>
-        <p className="text-sm text-gray-600">
-          DFFE-aligned rangeland assessment. Biome:{' '}
-          <strong>{settings?.biomeType ?? 'not set'}</strong>.{' '}
-          {!settings?.biomeType && (
-            <a href={`/${farmSlug}/admin/settings`} className="underline">
-              Set biome in Settings
-            </a>
-          )}
-        </p>
-      </header>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Veld Condition Scoring"
+        subtitle="veld condition"
+      />
+      <p className="text-sm text-[var(--ft-muted)]">
+        DFFE-aligned rangeland assessment. Biome:{' '}
+        <strong>{settings?.biomeType ?? 'not set'}</strong>.{' '}
+        {!settings?.biomeType && (
+          <a href={`/${farmSlug}/admin/settings`} className="underline">
+            Set biome in Settings
+          </a>
+        )}
+      </p>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Kpi label="Avg score" value={summary.averageScore?.toFixed(1) ?? '—'} tone="neutral" />
@@ -99,13 +102,13 @@ function Kpi({
 }) {
   const bg =
     tone === 'red'
-      ? 'bg-red-50 border-red-200'
+      ? 'bg-[var(--ft-crit-bg)] border-[var(--ft-crit)]'
       : tone === 'amber'
-      ? 'bg-amber-50 border-amber-200'
-      : 'bg-white';
+      ? 'bg-[var(--ft-fair-bg)] border-[var(--ft-fair)]'
+      : 'bg-[var(--ft-surface)]';
   return (
     <div className={`rounded-lg border p-4 ${bg}`}>
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-[var(--ft-subtle)]">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
     </div>
   );

@@ -1,8 +1,11 @@
 @import "tailwindcss";
+@import "./design-system.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Warm "Operations" surface is the app-wide default (FarmTrack Overhaul reskin).
+     Dark Home/Logger/Map surfaces opt in via the .dark-surface class. */
+  --background: var(--ft-bg);
+  --foreground: var(--ft-text);
 }
 
 @theme inline {
@@ -10,14 +13,28 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+
+  /* Warm palette as Tailwind utilities (bg-surface, text-muted, border-line, …) */
+  --color-bg: var(--ft-bg);
+  --color-surface: var(--ft-surface);
+  --color-surface2: var(--ft-surface2);
+  --color-line: var(--ft-border);
+  --color-line2: var(--ft-border2);
+  --color-ink: var(--ft-text);
+  --color-muted: var(--ft-muted);
+  --color-subtle: var(--ft-subtle);
+  --color-accent: var(--ft-accent);
+  --color-good: var(--ft-good);
+  --color-fair: var(--ft-fair);
+  --color-poor: var(--ft-poor);
+  --color-crit: var(--ft-crit);
+  --color-info: var(--ft-info);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* The reskin is surface-driven (light Operations / dark Home·Logger·Map),
+   not OS-driven — so we deliberately do NOT flip to dark on
+   prefers-color-scheme. Dark surfaces are scoped via .dark-surface. */
 
 body {
   background: var(--background);

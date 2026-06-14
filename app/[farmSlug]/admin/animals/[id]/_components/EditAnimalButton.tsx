@@ -23,9 +23,9 @@ export default function EditAnimalButton({
         onClick={() => setOpen(true)}
         className="px-4 py-2 rounded-xl text-sm font-medium border transition-colors"
         style={{
-          borderColor: "#E0D5C8",
-          background: "#FFFFFF",
-          color: "#1C1815",
+          borderColor: "var(--ft-border)",
+          background: "var(--ft-surface)",
+          color: "var(--ft-text)",
         }}
       >
         Edit

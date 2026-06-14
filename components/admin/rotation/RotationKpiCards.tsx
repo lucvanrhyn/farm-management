@@ -25,9 +25,9 @@ function KpiCard({
   return (
     <div
       className="rounded-2xl border p-5 flex flex-col gap-1"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {label}
       </p>
       <div className="flex items-baseline gap-2">
@@ -49,7 +49,7 @@ function KpiCard({
 }
 
 export default function RotationKpiCards({ counts }: { counts: Counts }) {
-  const overstayedColor = counts.overstayed > 0 ? "#dc2626" : "#166534";
+  const overstayedColor = counts.overstayed > 0 ? "var(--ft-crit)" : "var(--ft-good)";
   const overstayedBg    = counts.overstayed > 0 ? "rgba(220,38,38,0.1)" : "rgba(22,163,74,0.1)";
 
   return (
@@ -57,7 +57,7 @@ export default function RotationKpiCards({ counts }: { counts: Counts }) {
       <KpiCard
         label="Grazing"
         value={counts.grazing}
-        color="#3b82f6"
+        color="var(--ft-info)"
         bg="rgba(59,130,246,0.1)"
       />
       <KpiCard
@@ -70,13 +70,13 @@ export default function RotationKpiCards({ counts }: { counts: Counts }) {
       <KpiCard
         label="Ready to Graze"
         value={counts.restingReady + counts.overdueRest}
-        color="#16a34a"
+        color="var(--ft-good)"
         bg="rgba(22,163,74,0.1)"
       />
       <KpiCard
         label="Resting"
         value={counts.resting}
-        color="#9C8E7A"
+        color="var(--ft-subtle)"
         bg="rgba(156,142,122,0.1)"
       />
     </div>

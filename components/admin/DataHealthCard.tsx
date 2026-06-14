@@ -1,10 +1,10 @@
 import type { DataHealthScore } from "@/lib/server/data-health";
 
 const GRADE_COLORS: Record<string, string> = {
-  A: "#4A7C59",
-  B: "#8B6914",
-  C: "#A0522D",
-  D: "#C0574C",
+  A: "var(--ft-good)",
+  B: "var(--ft-fair)",
+  C: "var(--ft-poor)",
+  D: "var(--ft-poor)",
 };
 
 // Completion thresholds (tuneable grade boundaries, not scoring formula).
@@ -28,7 +28,7 @@ interface QuickWin {
 }
 
 export default function DataHealthCard({ score }: { score: DataHealthScore }) {
-  const gradeColor = GRADE_COLORS[score.grade] ?? "#9C8E7A";
+  const gradeColor = GRADE_COLORS[score.grade] ?? "var(--ft-subtle)";
   const celebrating = score.overall >= CELEBRATE_SCORE;
 
   const { breakdown } = score;
@@ -88,13 +88,13 @@ export default function DataHealthCard({ score }: { score: DataHealthScore }) {
   return (
     <div
       className="rounded-xl p-4 flex flex-col"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <h2
           className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           {celebrating ? "Data health" : "Quick wins to boost your data"}
         </h2>
@@ -104,8 +104,8 @@ export default function DataHealthCard({ score }: { score: DataHealthScore }) {
           aria-label={`Data health score ${score.overall} out of 100, grade ${score.grade}`}
           style={{
             color: gradeColor,
-            background: "#F5F2EE",
-            border: "1px solid #E0D5C8",
+            background: "var(--ft-surface)",
+            border: "1px solid var(--ft-border)",
           }}
         >
           Score: {score.overall}/100 · {score.grade}
@@ -113,7 +113,7 @@ export default function DataHealthCard({ score }: { score: DataHealthScore }) {
       </div>
 
       {celebrating ? (
-        <p className="text-sm" style={{ color: "#1C1815" }}>
+        <p className="text-sm" style={{ color: "var(--ft-text)" }}>
           Data health looking good! Keep logging and you&rsquo;ll stay ahead of the curve.
         </p>
       ) : (
@@ -122,7 +122,7 @@ export default function DataHealthCard({ score }: { score: DataHealthScore }) {
             <li
               key={win.key}
               className="flex items-start gap-2.5 text-sm"
-              style={{ color: win.done ? "#6B5E50" : "#1C1815" }}
+              style={{ color: win.done ? "var(--ft-muted)" : "var(--ft-text)" }}
             >
               {/* Faux-checkbox visual. aria-hidden because the label already
                   conveys state via prefix text below. */}
@@ -130,8 +130,8 @@ export default function DataHealthCard({ score }: { score: DataHealthScore }) {
                 aria-hidden="true"
                 className="mt-0.5 shrink-0 w-4 h-4 rounded flex items-center justify-center"
                 style={{
-                  border: win.done ? "none" : "1.5px solid #C4B8AA",
-                  background: win.done ? "#4A7C59" : "transparent",
+                  border: win.done ? "none" : "1.5px solid var(--ft-border)",
+                  background: win.done ? "var(--ft-good)" : "transparent",
                   color: "#FFFFFF",
                   fontSize: "10px",
                   lineHeight: 1,

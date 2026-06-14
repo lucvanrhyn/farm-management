@@ -173,16 +173,16 @@ export function LoggerStatusBar() {
           status row" → "the rest of the logger". */}
       <OfflineBanner />
       <div
-        className="px-4 py-1.5 flex items-center justify-between text-xs"
+        className="ft-mono px-4 py-1.5 flex items-center justify-between text-xs"
         style={{
-          backgroundColor: 'rgba(26, 13, 5, 0.55)',
-          borderTop: '1px solid rgba(92, 61, 46, 0.35)',
+          backgroundColor: 'var(--ft-surface)',
+          borderTop: '1px solid var(--ft-border)',
         }}
       >
         {/* Left: status + pending badge */}
         <div className="flex items-center gap-2">
           <span>{statusIcon}</span>
-          <span style={{ color: '#D2B48C' }}>{statusText}</span>
+          <span style={{ color: 'var(--ft-muted)' }}>{statusText}</span>
           {/* Issue #252 — extracted to <SyncBadge /> so the same pill can
               be slotted into the offline banner / admin debug surface
               without copying the markup. Renders nothing when count === 0. */}
@@ -201,8 +201,8 @@ export function LoggerStatusBar() {
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-              style={{ backgroundColor: '#B33A3A' }}
+              className="ft-mono text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: 'var(--ft-crit)', color: '#FFF6EE' }}
               aria-label={`${failedCount} failed rows pending retry`}
             >
               Failed: {failedCount}
@@ -219,7 +219,7 @@ export function LoggerStatusBar() {
           <span
             data-testid="logger-status-copy"
             data-status-kind={descriptor.kind}
-            style={{ color: 'rgba(210, 180, 140, 0.7)' }}
+            style={{ color: 'var(--ft-subtle)' }}
           >
             {copy}
           </span>
@@ -227,7 +227,7 @@ export function LoggerStatusBar() {
             <button
               onClick={syncNow}
               className="underline text-[11px] font-medium"
-              style={{ color: '#B87333' }}
+              style={{ color: 'var(--ft-accent)' }}
             >
               Upload
             </button>
@@ -241,7 +241,7 @@ export function LoggerStatusBar() {
       {syncResult && syncResult.synced > 0 && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
-          style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+          style={{ backgroundColor: 'var(--ft-accent)', color: '#FFF6EE' }}
         >
           ✓ {syncResult.synced} observation{syncResult.synced !== 1 ? 's' : ''} synced
         </div>
@@ -249,7 +249,7 @@ export function LoggerStatusBar() {
       {syncResult && syncResult.failed > 0 && (
         <div
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
-          style={{ backgroundColor: '#B33A3A', color: '#F5F0E8' }}
+          style={{ backgroundColor: 'var(--ft-crit)', color: '#FFF6EE' }}
           role="alert"
         >
           ✗ {syncResult.failed} observation{syncResult.failed !== 1 ? 's' : ''} failed to sync — open the offline log to retry
@@ -273,9 +273,9 @@ export function LoggerStatusBar() {
               role="status"
               className="text-xs font-medium px-4 py-2 rounded-xl shadow-lg"
               style={{
-                backgroundColor: '#3A6B3F',
-                color: '#F5F0E8',
-                borderLeft: '3px solid #5FBF6A',
+                backgroundColor: 'var(--ft-good-bg)',
+                color: 'var(--ft-good)',
+                borderLeft: '3px solid var(--ft-good)',
               }}
             >
               ✓ {toast.label}

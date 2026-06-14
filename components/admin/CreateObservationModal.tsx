@@ -54,9 +54,9 @@ const DEATH_CAUSES = ["Unknown", "Redwater", "Heartwater", "Snake", "Old_age", "
 // ─── Styles ─────────────────────────────────────────────────────
 
 const fieldInput: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
-  color: "#1C1815",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
+  color: "var(--ft-text)",
   borderRadius: "0.75rem",
   padding: "0.5rem 0.75rem",
   fontSize: "0.875rem",
@@ -185,17 +185,17 @@ export default function CreateObservationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
         className="rounded-2xl w-full max-w-lg mx-4 p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold" style={{ color: "#1C1815" }}>
+          <h3 className="text-base font-bold" style={{ color: "var(--ft-text)" }}>
             {step === "type" ? "New Observation" : `New ${OBSERVATION_TYPES.find((t) => t.value === selectedType)?.label ?? ""}`}
           </h3>
           <button
             onClick={onCancel}
             className="text-xl leading-none transition-opacity hover:opacity-70"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             ×
           </button>
@@ -210,9 +210,9 @@ export default function CreateObservationModal({
                 onClick={() => handleTypeSelect(t.value)}
                 className="px-4 py-3 rounded-xl text-sm font-medium text-left transition-colors hover:opacity-80"
                 style={{
-                  border: "1px solid #E0D5C8",
-                  background: "#F5F2EE",
-                  color: "#1C1815",
+                  border: "1px solid var(--ft-border)",
+                  background: "var(--ft-surface)",
+                  color: "var(--ft-text)",
                 }}
               >
                 {t.label}
@@ -225,7 +225,7 @@ export default function CreateObservationModal({
         {step === "form" && selectedType && (
           <div className="flex flex-col gap-4">
             {/* Common fields: camp + animal */}
-            <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+            <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
               Camp *
               <select
                 value={campId}
@@ -241,7 +241,7 @@ export default function CreateObservationModal({
             </label>
 
             {ANIMAL_LINKED_TYPES.has(selectedType) && (
-              <div className="text-xs font-semibold flex flex-col gap-1" style={{ color: "#6B5C4E" }}>
+              <div className="text-xs font-semibold flex flex-col gap-1" style={{ color: "var(--ft-muted)" }}>
                 <span>Animal (optional)</span>
                 {/*
                   Prefetched quick-pick: the parent page hydrates the first 50
@@ -274,13 +274,13 @@ export default function CreateObservationModal({
                   onChange={setAnimalId}
                 />
                 {animalId && (
-                  <span className="text-[11px] font-normal" style={{ color: "#9C8E7A" }}>
+                  <span className="text-[11px] font-normal" style={{ color: "var(--ft-subtle)" }}>
                     Selected: <span className="font-mono">{animalId}</span>
                     <button
                       type="button"
                       onClick={() => setAnimalId("")}
                       className="ml-2 underline"
-                      style={{ color: "#6B5C4E" }}
+                      style={{ color: "var(--ft-muted)" }}
                     >
                       Clear
                     </button>
@@ -292,7 +292,7 @@ export default function CreateObservationModal({
             {/* Type-specific fields */}
             {selectedType === "weighing" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Weight (kg) *
                   <input
                     type="number"
@@ -314,22 +314,22 @@ export default function CreateObservationModal({
 
             {selectedType === "treatment" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Treatment Type *
                   <select value={(details.treatmentType as string) ?? ""} onChange={(e) => handleFieldChange("treatmentType", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
                     {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Product *
                   <input type="text" value={(details.product as string) ?? ""} onChange={(e) => handleFieldChange("product", e.target.value)} style={fieldInput} className="mt-1 block" />
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Dose *
                   <input type="text" value={(details.dose as string) ?? ""} onChange={(e) => handleFieldChange("dose", e.target.value)} style={fieldInput} className="mt-1 block" />
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Withdrawal Days
                   <input type="number" value={(details.withdrawalDays as number) ?? ""} onChange={(e) => handleFieldChange("withdrawalDays", e.target.value ? parseInt(e.target.value) : "")} style={fieldInput} className="mt-1 block" />
                 </label>
@@ -338,14 +338,14 @@ export default function CreateObservationModal({
 
             {selectedType === "health_issue" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Symptom *
                   <select value={(details.symptom as string) ?? ""} onChange={(e) => handleFieldChange("symptom", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
                     {SYMPTOMS.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Severity *
                   <select value={(details.severity as string) ?? ""} onChange={(e) => handleFieldChange("severity", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
@@ -357,21 +357,21 @@ export default function CreateObservationModal({
 
             {selectedType === "camp_condition" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Grazing Quality *
                   <select value={(details.grazingQuality as string) ?? ""} onChange={(e) => handleFieldChange("grazingQuality", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
                     {GRAZING_QUALITY.map((g) => <option key={g} value={g}>{g}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Water Status *
                   <select value={(details.waterStatus as string) ?? ""} onChange={(e) => handleFieldChange("waterStatus", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
                     {WATER_STATUS.map((w) => <option key={w} value={w}>{w}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Fence Status *
                   <select value={(details.fenceStatus as string) ?? ""} onChange={(e) => handleFieldChange("fenceStatus", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
@@ -383,7 +383,7 @@ export default function CreateObservationModal({
 
             {selectedType === "reproduction" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Event Type *
                   <select value={(details.eventType as string) ?? ""} onChange={(e) => handleFieldChange("eventType", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
@@ -395,7 +395,7 @@ export default function CreateObservationModal({
 
             {selectedType === "death" && (
               <div className="flex flex-col gap-3">
-                <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+                <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
                   Cause *
                   <select value={(details.cause as string) ?? ""} onChange={(e) => handleFieldChange("cause", e.target.value)} style={fieldInput} className="mt-1 block">
                     <option value="">Select...</option>
@@ -408,7 +408,7 @@ export default function CreateObservationModal({
             {/* Issue #492 — free-text note. Cross-cutting + available for every
                 observation type (rendered after the per-type fields, before the
                 actions). */}
-            <label className="text-xs font-semibold" style={{ color: "#6B5C4E" }}>
+            <label className="text-xs font-semibold" style={{ color: "var(--ft-muted)" }}>
               Notes (optional)
               <textarea
                 value={notes}
@@ -421,14 +421,14 @@ export default function CreateObservationModal({
               />
             </label>
 
-            {error && <p className="text-xs" style={{ color: "#C0574C" }}>{error}</p>}
+            {error && <p className="text-xs" style={{ color: "var(--ft-poor)" }}>{error}</p>}
 
             {/* Actions */}
             <div className="flex items-center justify-between gap-2">
               <button
                 onClick={() => { setStep("type"); setSelectedType(null); setDetails({}); setNotes(""); }}
                 className="px-4 py-2 text-sm rounded-xl transition-colors"
-                style={{ color: "#6B5C4E", border: "1px solid #E0D5C8", background: "transparent" }}
+                style={{ color: "var(--ft-muted)", border: "1px solid var(--ft-border)", background: "transparent" }}
               >
                 ← Back
               </button>
@@ -436,7 +436,7 @@ export default function CreateObservationModal({
                 <button
                   onClick={onCancel}
                   className="px-4 py-2 text-sm rounded-xl transition-colors"
-                  style={{ color: "#6B5C4E", border: "1px solid #E0D5C8", background: "transparent" }}
+                  style={{ color: "var(--ft-muted)", border: "1px solid var(--ft-border)", background: "transparent" }}
                 >
                   Cancel
                 </button>
@@ -444,7 +444,7 @@ export default function CreateObservationModal({
                   onClick={handleSubmit}
                   disabled={saving || !campId}
                   className="px-4 py-2 text-sm rounded-xl transition-colors disabled:opacity-50"
-                  style={{ background: "#4A7C59", color: "#F5EBD4" }}
+                  style={{ background: "var(--ft-good)", color: "var(--ft-fair-bg)" }}
                 >
                   {saving ? "Saving..." : "Create"}
                 </button>

@@ -25,9 +25,9 @@ interface Props {
 }
 
 const fieldStyle: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
-  color: "#1C1815",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
+  color: "var(--ft-text)",
   borderRadius: "0.75rem",
   padding: "0.5rem 0.75rem",
   fontSize: "0.875rem",
@@ -151,16 +151,16 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
 
   const renderColumn = (title: string, cats: Category[]) => (
     <div>
-      <h4 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <h4 className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {title}
       </h4>
       <div className="space-y-2">
         {cats.length === 0 && (
-          <p className="text-xs" style={{ color: "#9C8E7A" }}>No categories.</p>
+          <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>No categories.</p>
         )}
         {cats.map((cat) => (
           <div key={cat.id} className="flex items-center gap-2">
-            <label className="flex-1 text-sm" style={{ color: "#1C1815" }}>{cat.name}</label>
+            <label className="flex-1 text-sm" style={{ color: "var(--ft-text)" }}>{cat.name}</label>
             <input
               type="number"
               inputMode="decimal"
@@ -183,7 +183,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
         type="button"
         onClick={() => setOpen(true)}
         className="text-xs font-medium rounded-lg px-3 py-1.5"
-        style={{ background: "#3A6B49", color: "#FFFFFF" }}
+        style={{ background: "var(--ft-good)", color: "#FFFFFF" }}
       >
         Set Budgets
       </button>
@@ -192,17 +192,17 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div
             className="rounded-2xl w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-            style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+            style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold" style={{ color: "#1C1815" }}>
+              <h2 className="text-lg font-bold" style={{ color: "var(--ft-text)" }}>
                 Monthly Budget
               </h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="text-sm"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
                 aria-label="Close"
               >
                 ✕
@@ -211,7 +211,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
 
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex-1 min-w-[8rem]">
-                <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Month</label>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Month</label>
                 <select
                   value={month}
                   onChange={(e) => setMonth(Number.parseInt(e.target.value, 10))}
@@ -223,7 +223,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
                 </select>
               </div>
               <div className="flex-1 min-w-[6rem]">
-                <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Year</label>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Year</label>
                 <input
                   type="number"
                   value={year}
@@ -239,9 +239,9 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
                 disabled={loading || saving}
                 className="text-xs font-medium rounded-lg px-3 py-2"
                 style={{
-                  background: "#FFFFFF",
-                  border: "1px solid #E0D5C8",
-                  color: "#1C1815",
+                  background: "var(--ft-surface)",
+                  border: "1px solid var(--ft-border)",
+                  color: "var(--ft-text)",
                   opacity: loading || saving ? 0.5 : 1,
                 }}
               >
@@ -250,7 +250,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
             </div>
 
             {loading ? (
-              <p className="text-sm" style={{ color: "#9C8E7A" }}>Loading…</p>
+              <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>Loading…</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {renderColumn("Expenses", expenseCategories)}
@@ -259,7 +259,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
             )}
 
             {error && (
-              <p className="text-sm" style={{ color: "#C0574C" }}>{error}</p>
+              <p className="text-sm" style={{ color: "var(--ft-poor)" }}>{error}</p>
             )}
 
             <div className="flex justify-end gap-2 pt-2">
@@ -268,7 +268,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
                 onClick={() => setOpen(false)}
                 disabled={saving}
                 className="text-sm rounded-lg px-4 py-2"
-                style={{ background: "#FFFFFF", border: "1px solid #E0D5C8", color: "#1C1815" }}
+                style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)", color: "var(--ft-text)" }}
               >
                 Cancel
               </button>
@@ -277,7 +277,7 @@ export default function BudgetEditor({ farmSlug, categories }: Props) {
                 onClick={handleSave}
                 disabled={saving || loading}
                 className="text-sm font-medium rounded-lg px-4 py-2"
-                style={{ background: "#3A6B49", color: "#FFFFFF", opacity: saving || loading ? 0.5 : 1 }}
+                style={{ background: "var(--ft-good)", color: "#FFFFFF", opacity: saving || loading ? 0.5 : 1 }}
               >
                 {saving ? "Saving…" : "Save"}
               </button>

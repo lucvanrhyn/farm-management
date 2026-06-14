@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getSession, getUserRoleForFarm } from "@/lib/auth";
+import { PageHeader } from "@/components/ds";
 
 
 const zarFormatter = new Intl.NumberFormat("en-US", {
@@ -40,7 +41,7 @@ export default async function TelemetryPage({
   if (!prisma) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -84,23 +85,22 @@ export default async function TelemetryPage({
     totalInputWithCache > 0 ? (totalCachedTokens / totalInputWithCache) * 100 : 0;
 
   const cardStyle = {
-    background: "#FFFFFF",
-    border: "1px solid #E0D5C8",
+    background: "var(--ft-surface)",
+    border: "1px solid var(--ft-border)",
   } as const;
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-[#1C1815]">AI Import Telemetry</h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Cost & usage dashboard for AI-powered data imports
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+      <PageHeader
+        className="px-0 py-0 mb-5"
+        title="AI Import Telemetry"
+        subtitle="diagnostics · cost & usage for AI-powered data imports"
+      />
 
       {totalImports === 0 ? (
         <div className="rounded-2xl p-8 text-center" style={cardStyle}>
-          <p className="text-sm text-[#1C1815] font-medium">No imports yet</p>
-          <p className="text-xs mt-2 font-mono" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm text-[var(--ft-text)] font-medium">No imports yet</p>
+          <p className="text-xs mt-2 font-mono" style={{ color: "var(--ft-subtle)" }}>
             Data will appear here after your first AI import.
           </p>
         </div>
@@ -111,14 +111,14 @@ export default async function TelemetryPage({
             <div className="rounded-2xl p-4" style={cardStyle}>
               <p
                 className="text-[10px] uppercase tracking-wider font-mono mb-2"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Total Imports
               </p>
-              <p className="text-2xl font-bold text-[#1C1815]">
+              <p className="text-2xl font-bold text-[var(--ft-text)]">
                 {formatNumber(totalImports)}
               </p>
-              <p className="text-[10px] mt-1 font-mono" style={{ color: "#9C8E7A" }}>
+              <p className="text-[10px] mt-1 font-mono" style={{ color: "var(--ft-subtle)" }}>
                 {formatNumber(aggregates._sum.rowsImported)} rows imported
               </p>
             </div>
@@ -126,14 +126,14 @@ export default async function TelemetryPage({
             <div className="rounded-2xl p-4" style={cardStyle}>
               <p
                 className="text-[10px] uppercase tracking-wider font-mono mb-2"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Total Cost
               </p>
-              <p className="text-2xl font-bold" style={{ color: "#8B6914" }}>
+              <p className="text-2xl font-bold" style={{ color: "var(--ft-fair)" }}>
                 {formatZar(totalCost)}
               </p>
-              <p className="text-[10px] mt-1 font-mono" style={{ color: "#9C8E7A" }}>
+              <p className="text-[10px] mt-1 font-mono" style={{ color: "var(--ft-subtle)" }}>
                 lifetime
               </p>
             </div>
@@ -141,14 +141,14 @@ export default async function TelemetryPage({
             <div className="rounded-2xl p-4" style={cardStyle}>
               <p
                 className="text-[10px] uppercase tracking-wider font-mono mb-2"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Avg Cost / Import
               </p>
-              <p className="text-2xl font-bold text-[#1C1815]">
+              <p className="text-2xl font-bold text-[var(--ft-text)]">
                 {formatZar(avgCost)}
               </p>
-              <p className="text-[10px] mt-1 font-mono" style={{ color: "#9C8E7A" }}>
+              <p className="text-[10px] mt-1 font-mono" style={{ color: "var(--ft-subtle)" }}>
                 per job
               </p>
             </div>
@@ -156,14 +156,14 @@ export default async function TelemetryPage({
             <div className="rounded-2xl p-4" style={cardStyle}>
               <p
                 className="text-[10px] uppercase tracking-wider font-mono mb-2"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Cache Hit Rate
               </p>
-              <p className="text-2xl font-bold" style={{ color: "#8B6914" }}>
+              <p className="text-2xl font-bold" style={{ color: "var(--ft-fair)" }}>
                 {hitRate.toFixed(1)}%
               </p>
-              <p className="text-[10px] mt-1 font-mono" style={{ color: "#9C8E7A" }}>
+              <p className="text-[10px] mt-1 font-mono" style={{ color: "var(--ft-subtle)" }}>
                 {formatNumber(totalCachedTokens)} / {formatNumber(totalInputWithCache)} tokens
               </p>
             </div>
@@ -173,12 +173,12 @@ export default async function TelemetryPage({
           <div className="rounded-2xl overflow-hidden" style={cardStyle}>
             <div
               className="px-4 py-3"
-              style={{ borderBottom: "1px solid #E0D5C8" }}
+              style={{ borderBottom: "1px solid var(--ft-border)" }}
             >
-              <h2 className="text-sm font-semibold text-[#1C1815]">Recent Imports</h2>
+              <h2 className="text-sm font-semibold text-[var(--ft-text)]">Recent Imports</h2>
               <p
                 className="text-[10px] mt-0.5 font-mono"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Last {jobs.length} of {formatNumber(totalImports)}
               </p>
@@ -188,7 +188,7 @@ export default async function TelemetryPage({
                 <thead>
                   <tr
                     className="text-left text-[10px] uppercase tracking-wider font-mono"
-                    style={{ color: "#9C8E7A", background: "#FAFAF8" }}
+                    style={{ color: "var(--ft-subtle)", background: "var(--ft-bg)" }}
                   >
                     <th className="px-4 py-2 font-normal">Date</th>
                     <th className="px-4 py-2 font-normal">Filename</th>
@@ -208,42 +208,42 @@ export default async function TelemetryPage({
                         key={job.id}
                         style={{
                           borderTop:
-                            idx === 0 ? undefined : "1px solid #F0E8DC",
+                            idx === 0 ? undefined : "1px solid var(--ft-surface)",
                         }}
                       >
                         <td
                           className="px-4 py-3 font-mono text-xs"
-                          style={{ color: "#1C1815" }}
+                          style={{ color: "var(--ft-text)" }}
                         >
                           {formatDate(job.createdAt)}
                         </td>
                         <td
                           className="px-4 py-3 text-xs truncate max-w-[240px]"
-                          style={{ color: "#1C1815" }}
+                          style={{ color: "var(--ft-text)" }}
                           title={job.sourceFilename}
                         >
                           {job.sourceFilename}
                         </td>
                         <td
                           className="px-4 py-3 font-mono text-xs text-right"
-                          style={{ color: "#1C1815" }}
+                          style={{ color: "var(--ft-text)" }}
                         >
                           {formatNumber(job.rowsImported)}
                           {job.rowsFailed > 0 && (
-                            <span className="ml-1 text-red-500">
+                            <span className="ml-1 text-[var(--ft-crit)]">
                               (−{formatNumber(job.rowsFailed)})
                             </span>
                           )}
                         </td>
                         <td
                           className="px-4 py-3 font-mono text-xs text-right"
-                          style={{ color: "#1C1815" }}
+                          style={{ color: "var(--ft-text)" }}
                         >
                           {formatNumber(totalTokens)}
                         </td>
                         <td
                           className="px-4 py-3 font-mono text-xs text-right font-semibold"
-                          style={{ color: "#8B6914" }}
+                          style={{ color: "var(--ft-fair)" }}
                         >
                           {formatZar(job.costZar)}
                         </td>

@@ -73,7 +73,7 @@ export default function RegisterPage() {
     border: "1px solid rgba(140,100,60,0.25)",
     borderRadius: "10px",
     padding: "0.625rem 0.875rem",
-    color: "#F0DEB8",
+    color: "var(--ft-fair-bg)",
     fontFamily: "var(--font-sans)",
     fontSize: "0.9375rem",
     outline: "none",
@@ -92,13 +92,13 @@ export default function RegisterPage() {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center px-5"
-        style={{ background: "#1A1510" }}
+        style={{ background: "var(--ft-text)" }}
       >
         <div
           className="w-full max-w-sm px-8 py-10 flex flex-col items-center gap-6 auth-pop-in"
           style={{
             borderRadius: "2rem",
-            background: "#241C14",
+            background: "var(--ft-text)",
             border: "1px solid rgba(196,144,48,0.18)",
             boxShadow: "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
           }}
@@ -114,7 +114,7 @@ export default function RegisterPage() {
               justifyContent: "center",
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4A7C59" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--ft-good)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
@@ -122,7 +122,7 @@ export default function RegisterPage() {
           <h1
             style={{
               fontFamily: "var(--font-display)",
-              color: "#F0DEB8",
+              color: "var(--ft-fair-bg)",
               fontSize: "1.5rem",
               fontWeight: 700,
             }}
@@ -138,7 +138,7 @@ export default function RegisterPage() {
               lineHeight: 1.5,
             }}
           >
-            We sent a verification link to <strong style={{ color: "#F0DEB8" }}>{form.email}</strong>.
+            We sent a verification link to <strong style={{ color: "var(--ft-fair-bg)" }}>{form.email}</strong>.
             Click the link to activate your account.
           </p>
           <Link
@@ -161,7 +161,7 @@ export default function RegisterPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-5 relative overflow-hidden"
-      style={{ background: "#1A1510" }}
+      style={{ background: "var(--ft-text)" }}
     >
       {/* Radial amber glow */}
       <div
@@ -181,7 +181,7 @@ export default function RegisterPage() {
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            color: "#F0DEB8",
+            color: "var(--ft-fair-bg)",
             fontSize: "2.5rem",
             fontWeight: 700,
             letterSpacing: "0.01em",
@@ -215,7 +215,7 @@ export default function RegisterPage() {
           zIndex: 10,
           animationDelay: "0.12s",
           borderRadius: "2rem",
-          background: "#241C14",
+          background: "var(--ft-text)",
           border: "1px solid rgba(196,144,48,0.18)",
           boxShadow: "0 0 48px rgba(196,144,48,0.06), 0 8px 40px rgba(0,0,0,0.55)",
         }}
@@ -403,7 +403,7 @@ export default function RegisterPage() {
               border: "1px solid rgba(196,144,48,0.35)",
               borderRadius: "10px",
               padding: "0.75rem 1rem",
-              color: loading ? "rgba(240,222,184,0.50)" : "#F0DEB8",
+              color: loading ? "rgba(240,222,184,0.50)" : "var(--ft-fair-bg)",
               fontFamily: "var(--font-sans)",
               fontSize: "0.9375rem",
               fontWeight: 500,

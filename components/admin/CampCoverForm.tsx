@@ -23,8 +23,8 @@ const CATEGORIES = [
     label: "Goed / Good",
     desc: "Thick grass, minimal bare ground",
     range: "≈ 1,500–2,500 kg DM/ha",
-    color: "#2A7D4F",
-    bg: "#F0FBF5",
+    color: "var(--ft-good)",
+    bg: "var(--ft-good-bg)",
     border: "#A8D5BB",
   },
   {
@@ -32,8 +32,8 @@ const CATEGORIES = [
     label: "Matig / Fair",
     desc: "Moderate grass, some bare patches",
     range: "≈ 700–1,500 kg DM/ha",
-    color: "#B45309",
-    bg: "#FFFBEB",
+    color: "var(--ft-fair)",
+    bg: "var(--ft-fair-bg)",
     border: "#FCD34D",
   },
   {
@@ -41,8 +41,8 @@ const CATEGORIES = [
     label: "Swak / Poor",
     desc: "Sparse grass, significant bare ground",
     range: "≈ 200–700 kg DM/ha",
-    color: "#B91C1C",
-    bg: "#FFF5F5",
+    color: "var(--ft-crit)",
+    bg: "var(--ft-crit-bg)",
     border: "#FCA5A5",
   },
 ] as const;
@@ -102,11 +102,11 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
 
   if (saved) {
     return (
-      <div className="rounded-2xl border p-5 text-center" style={{ background: "#F0FBF5", borderColor: "#A8D5BB" }}>
-        <p className="text-sm font-semibold" style={{ color: "#2A7D4F" }}>
+      <div className="rounded-2xl border p-5 text-center" style={{ background: "var(--ft-good-bg)", borderColor: "#A8D5BB" }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--ft-good)" }}>
           ✓ Cover recorded
           {daysPreview !== null && (
-            <span style={{ color: "#1C1815" }}> — est. {daysPreview} days grazing remaining</span>
+            <span style={{ color: "var(--ft-text)" }}> — est. {daysPreview} days grazing remaining</span>
           )}
         </p>
       </div>
@@ -126,17 +126,17 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
               className="rounded-xl border-2 p-4 text-left transition-all"
               style={{
                 background: isSelected ? cat.bg : "#FFFFFF",
-                borderColor: isSelected ? cat.color : "#E0D5C8",
+                borderColor: isSelected ? cat.color : "var(--ft-border)",
                 boxShadow: isSelected ? `0 0 0 2px ${cat.color}22` : undefined,
               }}
             >
               <p className="font-semibold text-sm" style={{ color: cat.color }}>
                 {cat.label}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: "#6B5E50" }}>
+              <p className="text-xs mt-0.5" style={{ color: "var(--ft-muted)" }}>
                 {cat.desc}
               </p>
-              <p className="text-xs mt-1 font-mono" style={{ color: "#9C8E7A" }}>
+              <p className="text-xs mt-1 font-mono" style={{ color: "var(--ft-subtle)" }}>
                 {cat.range}
               </p>
             </button>
@@ -148,15 +148,15 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
       {selected && (
         <div
           className="rounded-xl border px-4 py-3 text-sm"
-          style={{ background: "#F7F4F0", borderColor: "#E0D5C8" }}
+          style={{ background: "var(--ft-bg)", borderColor: "var(--ft-border)" }}
         >
           {daysPreview !== null ? (
-            <span style={{ color: "#1C1815" }}>
+            <span style={{ color: "var(--ft-text)" }}>
               Est.{" "}
               <strong
                 style={{
                   color:
-                    daysPreview <= 3 ? "#B91C1C" : daysPreview <= 7 ? "#B45309" : "#2A7D4F",
+                    daysPreview <= 3 ? "var(--ft-crit)" : daysPreview <= 7 ? "var(--ft-fair)" : "var(--ft-good)",
                 }}
               >
                 {daysPreview} days
@@ -166,7 +166,7 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
               {daysPreview > 3 && daysPreview <= 7 && " — plan your move"}
             </span>
           ) : (
-            <span style={{ color: "#9C8E7A" }}>
+            <span style={{ color: "var(--ft-subtle)" }}>
               {!sizeHectares
                 ? "Add camp size (ha) to see days remaining estimate"
                 : animalCount === 0
@@ -174,19 +174,19 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
                 : "Cannot calculate days remaining"}
             </span>
           )}
-          <p className="text-xs mt-1" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-1" style={{ color: "var(--ft-subtle)" }}>
             Formula: cover × {sizeHectares ?? "?"} ha × 35% ÷ ({animalCount} head × 10 kg/day)
           </p>
         </div>
       )}
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-[var(--ft-crit)]">{error}</p>}
 
       <button
         onClick={handleSubmit}
         disabled={!selected || saving}
         className="rounded-xl px-5 py-2 text-sm font-semibold transition-opacity disabled:opacity-40"
-        style={{ background: "#1C1815", color: "#FAFAF8" }}
+        style={{ background: "var(--ft-text)", color: "var(--ft-bg)" }}
       >
         {saving ? "Saving…" : "Record Cover"}
       </button>

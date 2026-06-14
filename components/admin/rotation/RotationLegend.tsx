@@ -1,11 +1,11 @@
 // Rotation status color legend — shown at the bottom of the Rotation tab.
 
 const LEGEND_ITEMS = [
-  { color: "#3b82f6", label: "Grazing" },
-  { color: "#dc2626", label: "Overstayed" },
-  { color: "#16a34a", label: "Ready to Graze" },
+  { color: "var(--ft-info)", label: "Grazing" },
+  { color: "var(--ft-crit)", label: "Overstayed" },
+  { color: "var(--ft-good)", label: "Ready to Graze" },
   { color: "#86efac", label: "Resting" },
-  { color: "#f59e0b", label: "Overdue Rest" },
+  { color: "var(--ft-fair)", label: "Overdue Rest" },
   { color: "#9ca3af", label: "Unknown" },
 ];
 
@@ -13,9 +13,9 @@ export default function RotationLegend() {
   return (
     <div
       className="mt-6 rounded-2xl border p-4 flex flex-wrap items-center gap-4"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide mr-2" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold uppercase tracking-wide mr-2" style={{ color: "var(--ft-subtle)" }}>
         Status key
       </p>
       {LEGEND_ITEMS.map(({ color, label }) => (
@@ -29,9 +29,9 @@ export default function RotationLegend() {
           </span>
         </div>
       ))}
-      <p className="text-xs ml-auto" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs ml-auto" style={{ color: "var(--ft-subtle)" }}>
         Rotation defaults in{" "}
-        <a href="settings" className="underline" style={{ color: "#8B6914" }}>
+        <a href="settings" className="underline" style={{ color: "var(--ft-fair)" }}>
           Settings
         </a>
       </p>

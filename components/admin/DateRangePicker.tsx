@@ -57,8 +57,8 @@ export default function DateRangePicker({ defaultDays = 90 }: Props) {
             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             style={{
               background: isActive ? "rgba(139,105,20,0.15)" : "transparent",
-              color: isActive ? "#8B6914" : "#9C8E7A",
-              border: `1px solid ${isActive ? "rgba(139,105,20,0.35)" : "#E0D5C8"}`,
+              color: isActive ? "var(--ft-fair)" : "var(--ft-subtle)",
+              border: `1px solid ${isActive ? "rgba(139,105,20,0.35)" : "var(--ft-border)"}`,
             }}
           >
             {label}
@@ -73,9 +73,9 @@ export default function DateRangePicker({ defaultDays = 90 }: Props) {
             setRange(e.target.value, currentTo || toYMD(new Date()))
           }
           className="text-xs rounded-lg px-2 py-1.5 outline-none"
-          style={{ background: "#F5F2EE", color: "#1C1815", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", color: "var(--ft-text)", border: "1px solid var(--ft-border)" }}
         />
-        <span className="text-xs" style={{ color: "#9C8E7A" }}>→</span>
+        <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>→</span>
         <input
           type="date"
           value={currentTo}
@@ -86,7 +86,7 @@ export default function DateRangePicker({ defaultDays = 90 }: Props) {
             )
           }
           className="text-xs rounded-lg px-2 py-1.5 outline-none"
-          style={{ background: "#F5F2EE", color: "#1C1815", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", color: "var(--ft-text)", border: "1px solid var(--ft-border)" }}
         />
       </div>
     </div>

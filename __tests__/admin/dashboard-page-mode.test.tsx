@@ -175,6 +175,7 @@ describe("DashboardContent — calls getCachedDashboardOverviewByMode with mode 
       prisma: {} as any,
       tier: "advanced",
       mode: "cattle",
+      assistantName: "Einstein",
     });
     render(element as React.ReactElement);
 
@@ -202,6 +203,7 @@ describe("DashboardContent — calls getCachedDashboardOverviewByMode with mode 
       prisma: {} as any,
       tier: "advanced",
       mode: "sheep",
+      assistantName: "Einstein",
     });
     render(element as React.ReactElement);
 

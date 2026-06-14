@@ -51,52 +51,54 @@ export default function DrawCampModal({
       }}
       onClick={onCancel}
     >
-      {/* Modal card */}
+      {/* Modal card — dark-glass surface */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#1E1710",
-          border: "1px solid rgba(139,105,20,0.3)",
+          background: "rgba(26,21,16,0.96)",
+          border: "1px solid rgba(255,235,210,0.13)",
+          backdropFilter: "blur(14px) saturate(140%)",
           borderRadius: 16,
           padding: "24px 28px",
           minWidth: 320,
           maxWidth: 400,
-          color: "#F5EBD4",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
+          color: "#EFE7D8",
+          boxShadow: "0 24px 80px -20px rgba(0,0,0,0.7)",
         }}
       >
         {/* Header */}
         <p
+          className="ft-serif"
           style={{
-            fontFamily: "var(--font-dm-serif, serif)",
-            fontSize: 18,
-            fontWeight: 700,
-            marginBottom: 4,
-            color: "#F5EBD4",
+            fontSize: 22,
+            fontWeight: 500,
+            letterSpacing: "-0.01em",
+            marginBottom: 6,
+            color: "#EFE7D8",
           }}
         >
-          Camp Boundary Drawn
+          Camp boundary drawn
         </p>
         <p
+          className="ft-mono"
           style={{
             fontSize: 12,
-            color: "rgba(210,180,140,0.6)",
+            color: "rgba(255,235,210,0.6)",
             marginBottom: 20,
-            fontFamily: "var(--font-sans)",
           }}
         >
-          Area: <strong style={{ color: "#D2B48C" }}>{hectares} ha</strong>
+          Area: <strong style={{ color: "var(--ft-accent)" }}>{hectares} ha</strong>
         </p>
 
-        {/* Mode toggle */}
+        {/* Mode toggle — segmented look */}
         <div
           style={{
             display: "flex",
-            borderRadius: 8,
-            border: "1px solid rgba(139,105,20,0.2)",
-            background: "rgba(139,105,20,0.05)",
-            padding: 2,
-            gap: 2,
+            borderRadius: 10,
+            border: "1px solid rgba(255,235,210,0.12)",
+            background: "rgba(42,35,28,0.6)",
+            padding: 3,
+            gap: 3,
             marginBottom: 20,
           }}
         >
@@ -106,16 +108,15 @@ export default function DrawCampModal({
               onClick={() => setMode(m)}
               style={{
                 flex: 1,
-                padding: "6px 12px",
-                borderRadius: 6,
+                padding: "7px 12px",
+                borderRadius: 8,
                 fontSize: 12,
-                fontFamily: "var(--font-sans)",
                 fontWeight: 500,
                 cursor: "pointer",
                 border: "none",
                 transition: "background 0.15s, color 0.15s",
-                background: mode === m ? "rgba(139,105,20,0.25)" : "transparent",
-                color: mode === m ? "#D2B48C" : "rgba(210,180,140,0.45)",
+                background: mode === m ? "var(--ft-accent)" : "transparent",
+                color: mode === m ? "#fff" : "rgba(255,235,210,0.5)",
               }}
             >
               {m === "new" ? "Create New Camp" : "Assign to Existing"}
@@ -127,14 +128,12 @@ export default function DrawCampModal({
         {mode === "new" ? (
           <div style={{ marginBottom: 20 }}>
             <label
+              className="ft-label"
               style={{
                 display: "block",
                 fontSize: 11,
-                color: "rgba(210,180,140,0.6)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
+                color: "rgba(255,235,210,0.55)",
                 marginBottom: 6,
-                fontFamily: "var(--font-sans)",
               }}
             >
               Camp Name
@@ -147,13 +146,12 @@ export default function DrawCampModal({
               placeholder="e.g. Rivier, Koppie…"
               style={{
                 width: "100%",
-                padding: "8px 12px",
-                borderRadius: 8,
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(139,105,20,0.3)",
-                color: "#F5EBD4",
+                padding: "9px 12px",
+                borderRadius: 10,
+                background: "rgba(42,35,28,0.7)",
+                border: "1px solid rgba(255,235,210,0.13)",
+                color: "#EFE7D8",
                 fontSize: 14,
-                fontFamily: "var(--font-sans)",
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -162,20 +160,18 @@ export default function DrawCampModal({
         ) : (
           <div style={{ marginBottom: 20 }}>
             <label
+              className="ft-label"
               style={{
                 display: "block",
                 fontSize: 11,
-                color: "rgba(210,180,140,0.6)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
+                color: "rgba(255,235,210,0.55)",
                 marginBottom: 6,
-                fontFamily: "var(--font-sans)",
               }}
             >
               Select Camp
             </label>
             {campsWithoutBoundary.length === 0 ? (
-              <p style={{ fontSize: 12, color: "rgba(210,180,140,0.5)" }}>
+              <p style={{ fontSize: 12, color: "rgba(255,235,210,0.5)" }}>
                 All camps already have boundaries.
               </p>
             ) : (
@@ -184,13 +180,12 @@ export default function DrawCampModal({
                 onChange={(e) => setSelectedId(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "rgba(36,28,20,0.9)",
-                  border: "1px solid rgba(139,105,20,0.3)",
-                  color: "#F5EBD4",
+                  padding: "9px 12px",
+                  borderRadius: 10,
+                  background: "rgba(42,35,28,0.9)",
+                  border: "1px solid rgba(255,235,210,0.13)",
+                  color: "#EFE7D8",
                   fontSize: 14,
-                  fontFamily: "var(--font-sans)",
                   outline: "none",
                   cursor: "pointer",
                 }}
@@ -210,14 +205,13 @@ export default function DrawCampModal({
           <button
             onClick={onCancel}
             style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontFamily: "var(--font-sans)",
+              padding: "9px 16px",
+              borderRadius: 10,
+              fontSize: 12.5,
               fontWeight: 500,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(139,105,20,0.2)",
-              color: "rgba(210,180,140,0.6)",
+              background: "rgba(42,35,28,0.7)",
+              border: "1px solid rgba(255,235,210,0.12)",
+              color: "rgba(255,235,210,0.7)",
               cursor: "pointer",
             }}
           >
@@ -227,14 +221,13 @@ export default function DrawCampModal({
             onClick={handleConfirm}
             disabled={!canConfirm}
             style={{
-              padding: "8px 20px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontFamily: "var(--font-sans)",
+              padding: "9px 20px",
+              borderRadius: 10,
+              fontSize: 12.5,
               fontWeight: 600,
-              background: canConfirm ? "rgba(139,105,20,0.85)" : "rgba(139,105,20,0.2)",
-              border: "1px solid rgba(139,105,20,0.4)",
-              color: canConfirm ? "#F5EBD4" : "rgba(210,180,140,0.35)",
+              background: canConfirm ? "var(--ft-accent)" : "rgba(42,35,28,0.7)",
+              border: canConfirm ? "1px solid transparent" : "1px solid rgba(255,235,210,0.12)",
+              color: canConfirm ? "#FFF6EE" : "rgba(255,235,210,0.35)",
               cursor: canConfirm ? "pointer" : "not-allowed",
               transition: "all 0.2s",
             }}

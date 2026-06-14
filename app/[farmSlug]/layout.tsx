@@ -5,6 +5,9 @@ import {
 } from "@/lib/server/cached";
 import AppShell from "@/components/AppShell";
 import { OfflineProvider } from "@/components/logger/OfflineProvider";
+import { FxRuntime } from "@/components/ds/FxRuntime";
+import { AreaDock } from "@/components/ds/AreaDock";
+import { CommandPalette } from "@/components/ds/CommandPalette";
 
 export default async function FarmSlugLayout({
   children,
@@ -53,7 +56,15 @@ export default async function FarmSlugLayout({
         enabledSpecies={enabledSpecies}
         hasMultipleSpecies={hasMultipleSpecies}
       >
-        <OfflineProvider>{children}</OfflineProvider>
+        <OfflineProvider>
+          {/* FarmTrack Overhaul reskin — global chrome on every authenticated
+              farm surface: cursor/count-up FX runtime, the floating area
+              switcher, and the ⌘K command palette. */}
+          <FxRuntime />
+          {children}
+          <AreaDock />
+          <CommandPalette />
+        </OfflineProvider>
       </FarmModeProvider>
     </AppShell>
   );

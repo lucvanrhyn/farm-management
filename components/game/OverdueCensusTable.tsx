@@ -9,8 +9,8 @@ function StatusBadge({ row }: { row: OverdueCensusRow }) {
     : `${row.daysSinceLastCensus} days ago`;
 
   const style = isRed
-    ? { background: "rgba(220,38,38,0.1)", color: "#991B1B" }
-    : { background: "rgba(245,158,11,0.12)", color: "#92400E" };
+    ? { background: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }
+    : { background: "rgba(245,158,11,0.12)", color: "var(--ft-fair)" };
 
   return (
     <span
@@ -31,14 +31,14 @@ export default function OverdueCensusTable({
     return (
       <div
         className="rounded-2xl border"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
-        <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Overdue Census
           </h2>
         </div>
-        <p className="px-5 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="px-5 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
           All species are up to date.
         </p>
       </div>
@@ -48,13 +48,13 @@ export default function OverdueCensusTable({
   return (
     <div
       className="rounded-2xl border overflow-hidden"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-        <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Overdue Census
         </h2>
-        <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
           Species needing a new count
         </p>
       </div>
@@ -62,12 +62,12 @@ export default function OverdueCensusTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+            <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
               {["Species", "Status"].map((h) => (
                 <th
                   key={h}
                   className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: "#9C8E7A" }}
+                  style={{ color: "var(--ft-subtle)" }}
                 >
                   {h}
                 </th>
@@ -80,7 +80,7 @@ export default function OverdueCensusTable({
                 key={s.speciesId}
                 style={{ borderBottom: "1px solid rgba(224,213,200,0.5)" }}
               >
-                <td className="px-5 py-2.5 font-medium" style={{ color: "#1C1815" }}>
+                <td className="px-5 py-2.5 font-medium" style={{ color: "var(--ft-text)" }}>
                   {s.commonName}
                 </td>
                 <td className="px-5 py-2.5">

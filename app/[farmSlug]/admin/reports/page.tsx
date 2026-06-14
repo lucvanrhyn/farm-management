@@ -8,6 +8,7 @@ import DroughtExportCard from "@/components/admin/DroughtExportCard";
 import It3ExportCard from "@/components/admin/It3ExportCard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { getFarmCreds } from "@/lib/meta-db";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 
 
@@ -74,24 +75,23 @@ export default async function ReportsPage({
 
   return (
     <AdminPage>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Reports</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          Export farm data as CSV or PDF for offline analysis and record keeping.
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-8"
+        title="Reports"
+        subtitle="exports & summaries · CSV or PDF for offline analysis"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {REPORTS.map((report) => (
           <div
             key={report.exportType}
             className="rounded-xl p-5"
-            style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+            style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-[#1C1815]">{report.title}</h2>
-                <p className="text-xs mt-1 leading-relaxed" style={{ color: "#9C8E7A" }}>
+                <h2 className="text-sm font-semibold text-[var(--ft-text)]">{report.title}</h2>
+                <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--ft-subtle)" }}>
                   {report.description}
                 </p>
               </div>

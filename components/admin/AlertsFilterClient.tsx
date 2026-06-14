@@ -53,9 +53,9 @@ export default function AlertsFilterClient({ alerts }: Props) {
         className="rounded-xl px-5 py-4 flex items-center gap-3"
         style={{ background: "rgba(74,124,89,0.08)", border: "1px solid rgba(74,124,89,0.2)" }}
       >
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#4A7C59" }} />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--ft-good)" }} />
         <div>
-          <p className="text-sm font-semibold" style={{ color: "#4A7C59" }}>All clear</p>
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-good)" }}>All clear</p>
           <p className="text-xs mt-0.5" style={{ color: "#6B8F72" }}>No alerts across any species.</p>
         </div>
       </div>
@@ -68,37 +68,37 @@ export default function AlertsFilterClient({ alerts }: Props) {
       <div className="flex flex-wrap gap-3">
         <div
           className="flex items-center gap-2 rounded-lg px-3.5 py-2"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
-          <span className="text-lg font-bold font-mono" style={{ color: "#1C1815" }}>
+          <span className="text-lg font-bold font-mono" style={{ color: "var(--ft-text)" }}>
             {alerts.length}
           </span>
-          <span className="text-xs" style={{ color: "#9C8E7A" }}>Total Alerts</span>
+          <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>Total Alerts</span>
         </div>
         <div
           className="flex items-center gap-2 rounded-lg px-3.5 py-2"
           style={{ background: "rgba(192,87,76,0.06)", border: "1px solid rgba(192,87,76,0.2)" }}
         >
-          <span className="text-lg font-bold font-mono" style={{ color: "#C0574C" }}>
+          <span className="text-lg font-bold font-mono" style={{ color: "var(--ft-poor)" }}>
             {redCount}
           </span>
-          <span className="text-xs" style={{ color: "#C0574C" }}>Critical</span>
+          <span className="text-xs" style={{ color: "var(--ft-poor)" }}>Critical</span>
         </div>
         <div
           className="flex items-center gap-2 rounded-lg px-3.5 py-2"
           style={{ background: "rgba(139,105,20,0.06)", border: "1px solid rgba(139,105,20,0.2)" }}
         >
-          <span className="text-lg font-bold font-mono" style={{ color: "#8B6914" }}>
+          <span className="text-lg font-bold font-mono" style={{ color: "var(--ft-fair)" }}>
             {amberCount}
           </span>
-          <span className="text-xs" style={{ color: "#8B6914" }}>Caution</span>
+          <span className="text-xs" style={{ color: "var(--ft-fair)" }}>Caution</span>
         </div>
       </div>
 
       {/* Filter controls */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
             Severity
           </span>
           <div className="flex gap-1">
@@ -110,8 +110,8 @@ export default function AlertsFilterClient({ alerts }: Props) {
                 className="text-xs font-medium px-2.5 py-1 rounded-full transition-colors"
                 style={{
                   background: severityFilter === opt.value ? "rgba(139,105,20,0.12)" : "transparent",
-                  color: severityFilter === opt.value ? "#8B6914" : "#9C8E7A",
-                  border: `1px solid ${severityFilter === opt.value ? "rgba(139,105,20,0.25)" : "#E0D5C8"}`,
+                  color: severityFilter === opt.value ? "var(--ft-fair)" : "var(--ft-subtle)",
+                  border: `1px solid ${severityFilter === opt.value ? "rgba(139,105,20,0.25)" : "var(--ft-border)"}`,
                 }}
               >
                 {opt.label}
@@ -120,7 +120,7 @@ export default function AlertsFilterClient({ alerts }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
             Source
           </span>
           <div className="flex gap-1">
@@ -132,8 +132,8 @@ export default function AlertsFilterClient({ alerts }: Props) {
                 className="text-xs font-medium px-2.5 py-1 rounded-full transition-colors"
                 style={{
                   background: speciesFilter === opt.value ? "rgba(139,105,20,0.12)" : "transparent",
-                  color: speciesFilter === opt.value ? "#8B6914" : "#9C8E7A",
-                  border: `1px solid ${speciesFilter === opt.value ? "rgba(139,105,20,0.25)" : "#E0D5C8"}`,
+                  color: speciesFilter === opt.value ? "var(--ft-fair)" : "var(--ft-subtle)",
+                  border: `1px solid ${speciesFilter === opt.value ? "rgba(139,105,20,0.25)" : "var(--ft-border)"}`,
                 }}
               >
                 {opt.label}
@@ -147,9 +147,9 @@ export default function AlertsFilterClient({ alerts }: Props) {
       {filtered.length === 0 ? (
         <div
           className="rounded-xl px-5 py-4 text-center"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
-          <p className="text-sm" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
             No alerts match the selected filters.
           </p>
         </div>

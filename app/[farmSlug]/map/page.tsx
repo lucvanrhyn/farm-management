@@ -92,17 +92,23 @@ export default async function TenantMapPage({
     grazing: "Good",
   }));
 
-  const campsWithoutBoundary = campData.filter((d) => !d.camp.geojson).length;
+  const campsWithBoundary = campData.filter((d) => !!d.camp.geojson).length;
+  const totalHead = campData.reduce((sum, d) => sum + (d.stats?.total ?? 0), 0);
 
   return (
-    <div className="min-w-0 p-3 md:p-6 bg-[#FAFAF8]">
+    <div className="ft-scope min-w-0 p-3 md:p-6" style={{ background: "var(--ft-bg)" }}>
       <div className="mb-3 md:mb-4">
-        <h1 className="text-xl md:text-2xl font-bold text-[#1C1815]">Farm map</h1>
-        <p className="text-xs md:text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          {camps.length} camp{camps.length === 1 ? "" : "s"}
-          {campsWithoutBoundary > 0
-            ? ` · ${campsWithoutBoundary} without boundary geometry yet`
-            : ""}
+        <h1
+          className="ft-serif"
+          style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, margin: 0, color: "var(--ft-text)" }}
+        >
+          Farm Map
+        </h1>
+        <p
+          className="ft-mono"
+          style={{ fontSize: 12, color: "var(--ft-muted)", marginTop: 6, letterSpacing: ".02em" }}
+        >
+          {camps.length} camp{camps.length === 1 ? "" : "s"} · {campsWithBoundary} with boundary geometry · {totalHead} head
         </p>
       </div>
 

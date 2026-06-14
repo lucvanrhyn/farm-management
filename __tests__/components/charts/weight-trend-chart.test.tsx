@@ -18,13 +18,13 @@ vi.mock("recharts", async () => {
 
 describe("WeightTrendChart — helpers", () => {
   it("adgColor returns green for ADG at/above target, amber for ≥0.7, red below", () => {
-    expect(adgColor(1.0, 0.9)).toBe("#10b981"); // good
-    expect(adgColor(0.9, 0.9)).toBe("#10b981"); // boundary → good
-    expect(adgColor(0.8, 0.9)).toBe("#f59e0b"); // ok
-    expect(adgColor(0.7, 0.9)).toBe("#f59e0b"); // boundary → ok
-    expect(adgColor(0.5, 0.9)).toBe("#ef4444"); // poor
-    // Null ADG falls back to the legacy default colour so existing callers are unaffected.
-    expect(adgColor(null, 0.9)).toBe("#4A7C59");
+    expect(adgColor(1.0, 0.9)).toBe("var(--ft-good)"); // good
+    expect(adgColor(0.9, 0.9)).toBe("var(--ft-good)"); // boundary → good
+    expect(adgColor(0.8, 0.9)).toBe("var(--ft-fair)"); // ok
+    expect(adgColor(0.7, 0.9)).toBe("var(--ft-fair)"); // boundary → ok
+    expect(adgColor(0.5, 0.9)).toBe("var(--ft-crit)"); // poor
+    // Null ADG falls back to the default status colour (reskin: unified onto --ft-good).
+    expect(adgColor(null, 0.9)).toBe("var(--ft-good)");
   });
 
   it("fitLinear recovers the slope and intercept of a clean line", () => {

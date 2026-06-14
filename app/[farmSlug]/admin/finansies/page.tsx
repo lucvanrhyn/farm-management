@@ -15,6 +15,7 @@ import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import AdminPage from "@/app/_components/AdminPage";
+import { PageHeader } from "@/components/ds";
 
 // Finance transactions page size. 50 keeps the initial HTML payload bounded
 // while the visible ledger (TransactionLedger) is ordered newest-first, so
@@ -75,12 +76,16 @@ export default async function FinansiesPage({
 
   return (
     <AdminPage className="space-y-2">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[#1C1815]">Finance</h1>
-          <div className="flex items-center gap-2">
-            <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
-          </div>
-        </div>
+        <PageHeader
+          className="px-0 py-0 mb-6"
+          title="Finance"
+          subtitle="finance ledger"
+          right={
+            <div className="flex items-center gap-2">
+              <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
+            </div>
+          }
+        />
         <FinansiesClient
           farmSlug={farmSlug}
           initialTransactions={transactions.map((t) => ({
@@ -95,17 +100,17 @@ export default async function FinansiesPage({
             <DateRangePicker defaultDays={365} />
           </Suspense>
         </div>
-        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <FinancialKPISection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
-        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <BudgetVsActualSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
-        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <CostOfGainSection farmSlug={farmSlug} from={from} to={to} cogScope={cogScope} />
         </Suspense>
         <FinancialAnalyticsPanelLazy farmSlug={farmSlug} />
-        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <FinancialChartsSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
         {/*
@@ -115,11 +120,11 @@ export default async function FinansiesPage({
         */}
         <div
           data-testid="danger-zone"
-          className="mt-12 pt-6 border-t border-[#E8DFD2]"
+          className="mt-12 pt-6 border-t border-[var(--ft-surface2)]"
         >
           <p
             className="text-xs uppercase tracking-wider mb-3"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             Danger zone
           </p>

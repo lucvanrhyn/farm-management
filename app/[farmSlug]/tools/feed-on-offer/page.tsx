@@ -4,6 +4,7 @@ import { getPrismaForFarm } from '@/lib/farm-prisma';
 import { getFarmMode } from '@/lib/server/get-farm-mode';
 import { scoped } from '@/lib/server/species-scoped-prisma';
 import { getFarmFeedOnOfferPayload } from '@/lib/server/feed-on-offer';
+import { PageHeader } from '@/components/ds';
 import UpgradePrompt from '@/components/admin/UpgradePrompt';
 import { FeedOnOfferSummaryCards } from '@/components/feed-on-offer/FeedOnOfferSummaryCards';
 import { FeedOnOfferCampTable } from '@/components/feed-on-offer/FeedOnOfferCampTable';
@@ -12,7 +13,7 @@ import nextDynamic from 'next/dynamic';
 
 const FeedOnOfferTrendChart = nextDynamic(
   () => import('@/components/feed-on-offer/FeedOnOfferTrendChart').then((m) => ({ default: m.FeedOnOfferTrendChart })),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 export const dynamic = 'force-dynamic';
@@ -43,12 +44,11 @@ export default async function FeedOnOfferToolPage({
 
   return (
     <div className="space-y-6 p-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-emerald-900">Feed on Offer</h1>
-        <p className="text-sm text-gray-600">
-          Farm pasture inventory and grazing capacity. Record cover readings to track Feed on Offer per camp.
-        </p>
-      </header>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Feed on Offer"
+        subtitle="Farm pasture inventory and grazing capacity. Record cover readings to track Feed on Offer per camp."
+      />
 
       <FeedOnOfferSummaryCards summary={payload.summary} />
 

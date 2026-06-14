@@ -18,30 +18,30 @@ import type { Camp } from "@/lib/types";
 import type { GrafiekeData } from "@/components/admin/charts/chart-types";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Cow: "#C4A030",
-  Bull: "#3b82f6",
-  Heifer: "#22c55e",
+  Cow: "var(--ft-fair)",
+  Bull: "var(--ft-info)",
+  Heifer: "var(--ft-good)",
   Calf: "#f97316",
   Ox: "#a78bfa",
 };
 
 const cardStyle = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
   borderRadius: "1rem",
   padding: "1.5rem",
 };
-const titleStyle = { fontWeight: 600, color: "#1C1815", marginBottom: "0.25rem" };
-const subtitleStyle = { fontSize: "0.75rem", color: "#9C8E7A", marginBottom: "1rem" };
-const emptyStyle = { fontSize: "0.875rem", color: "#9C8E7A", padding: "2rem 0", textAlign: "center" as const };
-const gridStroke = "#E0D5C8";
-const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+const titleStyle = { fontWeight: 600, color: "var(--ft-text)", marginBottom: "0.25rem" };
+const subtitleStyle = { fontSize: "0.75rem", color: "var(--ft-subtle)", marginBottom: "1rem" };
+const emptyStyle = { fontSize: "0.875rem", color: "var(--ft-subtle)", padding: "2rem 0", textAlign: "center" as const };
+const gridStroke = "var(--ft-border)";
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 
 // Tooltips stay dark for contrast on light background
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(139,105,20,0.3)",
-  color: "#F5EBD4",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
@@ -109,8 +109,8 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
                 formatter={(v) => [["", "Overgrazed", "Poor", "Fair", "Good"][Math.round(Number(v))] ?? v, "Quality"]}
                 labelFormatter={(l) => `Date: ${String(l)}`}
               />
-              <ReferenceLine y={3} stroke="#22c55e" strokeDasharray="4 2" label={{ value: "Fair", fontSize: 10, fill: "#22c55e" }} />
-              <Line type="monotone" dataKey="avgScore" stroke="#C4A030" strokeWidth={2} dot={false} name="Avg. quality" />
+              <ReferenceLine y={3} stroke="var(--ft-good)" strokeDasharray="4 2" label={{ value: "Fair", fontSize: 10, fill: "var(--ft-good)" }} />
+              <Line type="monotone" dataKey="avgScore" stroke="var(--ft-fair)" strokeWidth={2} dot={false} name="Avg. quality" />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -127,7 +127,7 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
               <XAxis type="number" tick={tickStyle} allowDecimals={false} />
               <YAxis type="category" dataKey="campId" tick={tickStyle} width={80} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, "Incidents"]} />
-              <Bar dataKey="count" fill="#ef4444" name="Incidents" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="count" fill="var(--ft-crit)" name="Incidents" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -144,7 +144,7 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
               <XAxis dataKey="campId" tick={{ ...tickStyle, fontSize: 10 }} />
               <YAxis tick={tickStyle} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#6B5C4E" }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "var(--ft-muted)" }} />
               {allCategories.map((cat) => (
                 <Bar key={cat} dataKey={cat} stackId="a" fill={CATEGORY_COLORS[cat] ?? "#94a3b8"} name={cat} />
               ))}
@@ -164,8 +164,8 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
               <XAxis dataKey="campId" tick={{ ...tickStyle, fontSize: 10 }} />
               <YAxis tick={tickStyle} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} LSU/ha`, "Grazing pressure"]} />
-              <ReferenceLine y={1} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "Max", fontSize: 10, fill: "#ef4444" }} />
-              <Bar dataKey="lsu" name="LSU/ha" fill="#C4A030" radius={[4, 4, 0, 0]} />
+              <ReferenceLine y={1} stroke="var(--ft-crit)" strokeDasharray="4 2" label={{ value: "Max", fontSize: 10, fill: "var(--ft-crit)" }} />
+              <Bar dataKey="lsu" name="LSU/ha" fill="var(--ft-fair)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -180,9 +180,9 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
             <table style={{ fontSize: "0.75rem", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", padding: "0.25rem", color: "#9C8E7A", fontWeight: 400, width: "6rem" }}>Camp</th>
+                  <th style={{ textAlign: "left", padding: "0.25rem", color: "var(--ft-subtle)", fontWeight: 400, width: "6rem" }}>Camp</th>
                   {heatmapDates.map((d) => (
-                    <th key={d} style={{ padding: "0.25rem", color: "#9C8E7A", fontWeight: 400, textAlign: "center", width: "1.75rem" }}>
+                    <th key={d} style={{ padding: "0.25rem", color: "var(--ft-subtle)", fontWeight: 400, textAlign: "center", width: "1.75rem" }}>
                       {d.slice(8)}
                     </th>
                   ))}
@@ -191,7 +191,7 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
               <tbody>
                 {heatmapCamps.map((campId) => (
                   <tr key={campId}>
-                    <td style={{ padding: "0.25rem", color: "#6B5C4E", fontWeight: 500, paddingRight: "0.75rem" }}>{campId}</td>
+                    <td style={{ padding: "0.25rem", color: "var(--ft-muted)", fontWeight: 500, paddingRight: "0.75rem" }}>{campId}</td>
                     {heatmapDates.map((date) => {
                       const count = heatmapLookup.get(`${campId}__${date}`) ?? 0;
                       const opacity = count === 0 ? 0.05 : 0.2 + (count / maxCount) * 0.8;
@@ -225,7 +225,7 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
           <div style={{ overflowY: "auto", maxHeight: "14rem" }}>
             <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ fontSize: "0.75rem", color: "#9C8E7A", borderBottom: "1px solid #E0D5C8" }}>
+                <tr style={{ fontSize: "0.75rem", color: "var(--ft-subtle)", borderBottom: "1px solid var(--ft-border)" }}>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Date</th>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>Animal</th>
                   <th style={{ textAlign: "left", paddingBottom: "0.5rem", fontWeight: 500 }}>From</th>
@@ -235,12 +235,12 @@ export default function KampeTab({ data, camps }: { data: GrafiekeData; camps: C
               </thead>
               <tbody>
                 {movements.map((m) => (
-                  <tr key={m.id} style={{ borderBottom: "1px solid #E0D5C8" }}>
-                    <td style={{ padding: "0.5rem 0", color: "#9C8E7A", fontSize: "0.75rem" }}>{m.date}</td>
-                    <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "#1C1815" }}>{m.animalId ?? "—"}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#6B5C4E" }}>{m.fromCamp}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#6B5C4E" }}>→ {m.toCamp}</td>
-                    <td style={{ padding: "0.5rem 0", color: "#9C8E7A", fontSize: "0.75rem" }}>{m.loggedBy ?? "—"}</td>
+                  <tr key={m.id} style={{ borderBottom: "1px solid var(--ft-border)" }}>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)", fontSize: "0.75rem" }}>{m.date}</td>
+                    <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontSize: "0.75rem", color: "var(--ft-text)" }}>{m.animalId ?? "—"}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-muted)" }}>{m.fromCamp}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-muted)" }}>→ {m.toCamp}</td>
+                    <td style={{ padding: "0.5rem 0", color: "var(--ft-subtle)", fontSize: "0.75rem" }}>{m.loggedBy ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

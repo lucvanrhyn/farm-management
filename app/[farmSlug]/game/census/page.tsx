@@ -15,6 +15,7 @@ import {
   getSpeciesWithOverdueCensus,
 } from "@/lib/species/game/analytics";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import SpeciesPopulationTable from "@/components/game/SpeciesPopulationTable";
 import OverdueCensusTable from "@/components/game/OverdueCensusTable";
 import type { SpeciesAlert } from "@/lib/species/types";
@@ -41,10 +42,10 @@ function censusFreshness(dateStr: string | null): "good" | "warning" | "alert" |
 }
 
 const STATUS_COLORS = {
-  good:    { color: "#166534", bg: "rgba(34,197,94,0.1)" },
-  warning: { color: "#92400E", bg: "rgba(245,158,11,0.12)" },
-  alert:   { color: "#991B1B", bg: "rgba(220,38,38,0.1)" },
-  neutral: { color: "#9C8E7A", bg: "rgba(156,142,122,0.1)" },
+  good:    { color: "var(--ft-good)", bg: "rgba(34,197,94,0.1)" },
+  warning: { color: "var(--ft-fair)", bg: "rgba(245,158,11,0.12)" },
+  alert:   { color: "var(--ft-crit)", bg: "rgba(220,38,38,0.1)" },
+  neutral: { color: "var(--ft-subtle)", bg: "rgba(156,142,122,0.1)" },
 };
 
 const ALERT_ICONS: Record<string, React.ElementType> = {
@@ -72,9 +73,9 @@ function KpiCard({
   return (
     <div
       className="rounded-2xl border p-5 flex flex-col gap-1"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
         {label}
       </p>
       <p className="text-3xl font-bold tabular-nums" style={{ color }}>
@@ -96,8 +97,8 @@ function AlertCard({ alert }: { alert: SpeciesAlert }) {
   const Icon = ALERT_ICONS[alert.icon] ?? AlertTriangle;
   const isRed = alert.severity === "red";
   const style = isRed
-    ? { background: "rgba(220,38,38,0.06)", borderColor: "rgba(220,38,38,0.25)", color: "#991B1B" }
-    : { background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)", color: "#92400E" };
+    ? { background: "rgba(220,38,38,0.06)", borderColor: "rgba(220,38,38,0.25)", color: "var(--ft-crit)" }
+    : { background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)", color: "var(--ft-fair)" };
 
   return (
     <Link
@@ -129,8 +130,8 @@ export default async function GameCensusPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-sm" style={{ color: "#C0574C" }}>Farm not found.</p>
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
+        <p className="text-sm" style={{ color: "var(--ft-poor)" }}>Farm not found.</p>
       </div>
     );
   }
@@ -150,17 +151,14 @@ export default async function GameCensusPage({
   const freshness = censusFreshness(censusData.latestCensusDate);
 
   return (
-    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 max-w-5xl bg-[var(--ft-bg)]">
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#1C1815" }}>
-          Game Census
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          Population overview and census status
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Game Census"
+        subtitle="Population overview and census status"
+      />
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

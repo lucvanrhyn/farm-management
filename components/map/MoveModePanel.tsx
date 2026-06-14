@@ -55,34 +55,36 @@ function useMobsForCamp(campId: string | null): { mobs: MobInfo[]; loading: bool
 
 function Heading({ text }: { text: string }) {
   return (
-    <p style={{ color: "#F0DEB8", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+    <p className="ft-serif" style={{ color: "#EFE7D8", fontSize: 18, fontWeight: 500, letterSpacing: "-0.01em", margin: 0 }}>
       {text}
     </p>
   );
 }
 
+// Dark-glass panel — floats over the satellite map (outside any .dark-surface
+// scope), so it carries literal glass values.
 const PANEL_STYLE: React.CSSProperties = {
   position: "absolute",
   top: 60,
   left: 12,
   zIndex: 20,
-  width: 240,
+  width: 244,
   borderRadius: 16,
-  background: "rgba(26,21,16,0.96)",
-  border: "1px solid rgba(196,144,48,0.3)",
-  backdropFilter: "blur(10px)",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-  fontFamily: "var(--font-sans)",
+  background: "rgba(26,21,16,0.92)",
+  border: "1px solid rgba(255,235,210,0.13)",
+  backdropFilter: "blur(14px) saturate(140%)",
+  boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
+  color: "#EFE7D8",
   overflow: "hidden",
 };
 
 const HEADER_STYLE: React.CSSProperties = {
-  padding: "12px 14px 8px",
-  borderBottom: "1px solid rgba(196,144,48,0.15)",
+  padding: "13px 15px 9px",
+  borderBottom: "1px solid rgba(255,235,210,0.1)",
 };
 
 const BODY_STYLE: React.CSSProperties = {
-  padding: "10px 14px 14px",
+  padding: "11px 15px 15px",
 };
 
 export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone }: Props) {
@@ -130,7 +132,7 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
       <div style={HEADER_STYLE}>
         <Heading text="Move Mob" />
         {sourceCampId && (
-          <p style={{ color: "#C49030", fontSize: 11, marginTop: 2 }}>
+          <p className="ft-mono" style={{ color: "var(--ft-accent)", fontSize: 11, marginTop: 4 }}>
             From: <strong>{campNameMap[sourceCampId] ?? sourceCampId}</strong>
           </p>
         )}
@@ -140,7 +142,7 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
         {/* Phase: idle — next-step instruction (#289). Superseded by the
             source-selected / mob-selected guidance below as the flow advances. */}
         {phase.tag === "idle" && (
-          <p style={{ color: "rgba(210,180,140,0.6)", fontSize: 11, lineHeight: 1.5 }}>
+          <p style={{ color: "rgba(255,235,210,0.6)", fontSize: 11, lineHeight: 1.5 }}>
             Tap a camp on the map to pick the mob&rsquo;s source.
           </p>
         )}
@@ -148,7 +150,7 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
         {/* Phase: source selected — pick a mob */}
         {phase.tag === "source_selected" && (
           <>
-            <p style={{ color: "rgba(210,180,140,0.6)", fontSize: 11, marginBottom: 8 }}>
+            <p style={{ color: "rgba(255,235,210,0.6)", fontSize: 11, marginBottom: 8 }}>
               {loading ? "Loading mobs..." : mobs.length === 0 ? "No mobs in this camp." : "Select a mob to move:"}
             </p>
             {mobs.map((mob) => (
@@ -158,27 +160,27 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
                 style={{
                   width: "100%",
                   textAlign: "left",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  background: "rgba(196,144,48,0.08)",
-                  border: "1px solid rgba(196,144,48,0.2)",
-                  color: "#F0DEB8",
-                  fontSize: 12,
+                  padding: "9px 11px",
+                  borderRadius: 10,
+                  background: "rgba(42,35,28,0.7)",
+                  border: "1px solid rgba(255,235,210,0.12)",
+                  color: "#EFE7D8",
+                  fontSize: 12.5,
                   fontWeight: 500,
                   cursor: "pointer",
-                  marginBottom: 4,
+                  marginBottom: 5,
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                 }}
               >
                 <span>{mob.name}</span>
-                <span style={{ color: "#C49030", fontSize: 11 }}>{mob.animal_count} animals</span>
+                <span className="ft-mono ft-tabnums" style={{ color: "var(--ft-accent)", fontSize: 11 }}>{mob.animal_count} animals</span>
               </button>
             ))}
             <button
               onClick={actions.cancelMove}
-              style={{ marginTop: 8, fontSize: 11, color: "rgba(210,180,140,0.4)", background: "none", border: "none", cursor: "pointer" }}
+              style={{ marginTop: 8, fontSize: 11, color: "rgba(255,235,210,0.45)", background: "none", border: "none", cursor: "pointer" }}
             >
               Cancel
             </button>
@@ -188,15 +190,15 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
         {/* Phase: mob selected — pick destination */}
         {phase.tag === "mob_selected" && (
           <>
-            <p style={{ color: "#F0DEB8", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+            <p className="ft-serif" style={{ color: "#EFE7D8", fontSize: 15, fontWeight: 500, marginBottom: 4 }}>
               {phase.mob.name}
             </p>
-            <p style={{ color: "rgba(210,180,140,0.6)", fontSize: 11, marginBottom: 8 }}>
+            <p style={{ color: "rgba(255,235,210,0.6)", fontSize: 11, marginBottom: 8 }}>
               Tap a destination camp on the map.
             </p>
             <button
               onClick={actions.cancelMove}
-              style={{ fontSize: 11, color: "rgba(210,180,140,0.4)", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: 11, color: "rgba(255,235,210,0.45)", background: "none", border: "none", cursor: "pointer" }}
             >
               Cancel
             </button>
@@ -206,13 +208,13 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
         {/* Phase: destination selected — confirm */}
         {phase.tag === "dest_selected" && (
           <>
-            <p style={{ color: "#F0DEB8", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+            <p style={{ color: "#EFE7D8", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
               Confirm move?
             </p>
-            <p style={{ color: "rgba(210,180,140,0.7)", fontSize: 11, marginBottom: 12, lineHeight: 1.5 }}>
-              <strong style={{ color: "#C49030" }}>{phase.mob.name}</strong>{" "}
+            <p style={{ color: "rgba(255,235,210,0.7)", fontSize: 11, marginBottom: 12, lineHeight: 1.5 }}>
+              <strong style={{ color: "var(--ft-accent)" }}>{phase.mob.name}</strong>{" "}
               ({phase.mob.animal_count} animals){" → "}
-              <strong style={{ color: "#C49030" }}>{campNameMap[phase.destCampId] ?? phase.destCampId}</strong>
+              <strong style={{ color: "var(--ft-accent)" }}>{campNameMap[phase.destCampId] ?? phase.destCampId}</strong>
             </p>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -220,13 +222,13 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
                 disabled={moving}
                 style={{
                   flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 8,
-                  background: "#B87333",
+                  padding: "9px 0",
+                  borderRadius: 10,
+                  background: "var(--ft-accent)",
                   border: "none",
-                  color: "#F5F0E8",
-                  fontSize: 12,
-                  fontWeight: 700,
+                  color: "#FFF6EE",
+                  fontSize: 12.5,
+                  fontWeight: 600,
                   cursor: moving ? "default" : "pointer",
                   opacity: moving ? 0.6 : 1,
                 }}
@@ -236,12 +238,12 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
               <button
                 onClick={actions.cancelMove}
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "rgba(210,180,140,0.08)",
-                  border: "1px solid rgba(210,180,140,0.2)",
-                  color: "rgba(210,180,140,0.7)",
-                  fontSize: 12,
+                  padding: "9px 13px",
+                  borderRadius: 10,
+                  background: "rgba(42,35,28,0.7)",
+                  border: "1px solid rgba(255,235,210,0.12)",
+                  color: "rgba(255,235,210,0.7)",
+                  fontSize: 12.5,
                   cursor: "pointer",
                 }}
               >
@@ -261,11 +263,13 @@ export default function MoveModePanel({ phase, campNameMap, actions, onMoveDone 
             left: 0,
             right: 0,
             textAlign: "center",
-            padding: "8px 12px",
-            borderRadius: 8,
-            background: "rgba(26,21,16,0.96)",
-            border: "1px solid rgba(196,144,48,0.3)",
-            color: "#F0DEB8",
+            padding: "9px 13px",
+            borderRadius: 10,
+            background: "rgba(26,21,16,0.92)",
+            border: "1px solid rgba(255,235,210,0.13)",
+            backdropFilter: "blur(14px) saturate(140%)",
+            boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
+            color: "#EFE7D8",
             fontSize: 11,
           }}
         >

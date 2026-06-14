@@ -7,7 +7,7 @@ import type { GrafiekeData } from "@/components/admin/charts/chart-types";
 const ChartSkeleton = () => (
   <div className="flex flex-col gap-4">
     {Array.from({ length: 2 }).map((_, i) => (
-      <div key={i} className="rounded-xl animate-pulse" style={{ background: "#F5F2EE", height: 200 }} />
+      <div key={i} className="rounded-xl animate-pulse" style={{ background: "var(--ft-surface)", height: 200 }} />
     ))}
   </div>
 );
@@ -30,7 +30,7 @@ export default function AnimalAnalyticsClient({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 text-sm font-semibold mb-4 px-3 py-2 rounded-lg transition-colors"
         style={{
-          color: "#1C1815",
+          color: "var(--ft-text)",
           background: open ? "rgba(139,105,20,0.08)" : "transparent",
           border: "1px solid rgba(139,105,20,0.15)",
         }}

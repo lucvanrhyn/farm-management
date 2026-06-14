@@ -4,6 +4,7 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import AdminPage from "@/app/_components/AdminPage";
 import SheepObservationsPageClient from "./SheepObservationsPageClient";
 
@@ -70,7 +71,7 @@ export default async function SheepObservationsPage({
     return (
       <AdminPage>
         <div className="flex-1 min-w-0">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );
@@ -105,12 +106,11 @@ export default async function SheepObservationsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Observations</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          Recent entries · sheep flock only
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Sheep Observations"
+        subtitle="Recent entries · sheep flock only"
+      />
 
       {/*
         #496 — the visible timeline is owned by the page client now: it
@@ -129,8 +129,8 @@ export default async function SheepObservationsPage({
         button is intentionally kept so a Basson-equivalent sheep tenant
         has feature parity in the UX.
       */}
-      <div data-testid="danger-zone" className="mt-12 pt-6 border-t border-[#E8DFD2]">
-        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#9C8E7A" }}>
+      <div data-testid="danger-zone" className="mt-12 pt-6 border-t border-[var(--ft-surface2)]">
+        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "var(--ft-subtle)" }}>
           Danger zone
         </p>
         <ClearSectionButton endpoint="/api/observations/reset" label="Clear All Observations" />

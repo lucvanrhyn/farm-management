@@ -39,7 +39,7 @@ export default async function RouteTodayPage({
   const creds = await getFarmCreds(farmSlug);
   if (!creds || creds.tier === "basic") {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
         <UpgradePrompt
           feature="Route Today"
           description="Optimised field-day routing through your camps' pending tasks."
@@ -52,8 +52,8 @@ export default async function RouteTodayPage({
   const prisma = await getPrismaForFarm(farmSlug);
   if (!prisma) {
     return (
-      <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
-        <p className="text-sm text-red-600">Farm not found.</p>
+      <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
+        <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -109,11 +109,11 @@ export default async function RouteTodayPage({
   }));
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8]">
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1C1815]">Route today</h1>
-          <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
+          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Route today</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
             {pins.length === 0
               ? "Nothing scheduled for today."
               : `${pins.length} stop${pins.length === 1 ? "" : "s"} · shortest-first tour`}
@@ -131,18 +131,18 @@ export default async function RouteTodayPage({
       {pins.length === 0 ? (
         <div
           className="rounded-2xl p-10 text-center max-w-md mx-auto mt-8"
-          style={{ background: "#F5F2EE", border: "1px solid rgba(0,0,0,0.06)" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid rgba(0,0,0,0.06)" }}
         >
-          <p className="text-lg font-semibold" style={{ color: "#1C1815" }}>
+          <p className="text-lg font-semibold" style={{ color: "var(--ft-text)" }}>
             No tasks due today
           </p>
-          <p className="text-sm mt-2" style={{ color: "#9C8E7A" }}>
+          <p className="text-sm mt-2" style={{ color: "var(--ft-subtle)" }}>
             Install a template pack to auto-generate recurring occurrences.
           </p>
           <Link
             href={`/${farmSlug}/admin/settings/tasks`}
             className="mt-6 inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-medium"
-            style={{ background: "#1C1815", color: "#F5EBD4" }}
+            style={{ background: "var(--ft-text)", color: "var(--ft-fair-bg)" }}
           >
             Install a template pack
           </Link>

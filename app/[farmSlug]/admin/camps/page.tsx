@@ -17,6 +17,7 @@ import { VeldTab } from "@/components/admin/camps/VeldTab";
 import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { FeedOnOfferTab } from "@/components/admin/camps/FeedOnOfferTab";
 import AdminPage from "@/app/_components/AdminPage";
+import { PageHeader } from "@/components/ds";
 
 
 // Advanced-tier only tabs. The `camps` overview and `rainfall` tab stay
@@ -47,7 +48,7 @@ export default async function AdminCampsPage({
     return (
       <AdminPage>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );
@@ -87,12 +88,11 @@ export default async function AdminCampsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Camps</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          {camps.length} camps · management and performance
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Camps"
+        subtitle={`${camps.length} grazing camps · management & performance`}
+      />
 
       <CampsTabBar activeTab={activeTab} farmSlug={farmSlug} />
 
@@ -100,7 +100,7 @@ export default async function AdminCampsPage({
         <>
           <AddCampForm />
           <CampsTable camps={camps} farmSlug={farmSlug} />
-          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
             <CampAnalyticsSection farmSlug={farmSlug} />
           </Suspense>
         </>
@@ -111,19 +111,19 @@ export default async function AdminCampsPage({
       )}
 
       {!gatedFeature && activeTab === "performance" && (
-        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <PerformanceSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
       )}
 
       {activeTab === "rainfall" && (
-        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <RainfallSection farmSlug={farmSlug} camps={camps} />
         </Suspense>
       )}
 
       {!gatedFeature && activeTab === "rotation" && (
-        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+        <Suspense fallback={<div className="mt-4 h-64 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <RotationSection farmSlug={farmSlug} camps={camps} />
         </Suspense>
       )}

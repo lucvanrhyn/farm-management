@@ -87,9 +87,9 @@ export default function TransactionLedger({
   }
 
   const lightSelect = {
-    background: "#FFFFFF",
-    border: "1px solid #E0D5C8",
-    color: "#1C1815",
+    background: "var(--ft-surface)",
+    border: "1px solid var(--ft-border)",
+    color: "var(--ft-text)",
     borderRadius: "0.75rem",
     padding: "0.375rem 0.75rem",
     fontSize: "0.875rem",
@@ -99,14 +99,14 @@ export default function TransactionLedger({
   return (
     <div
       className="rounded-2xl overflow-hidden"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       {/* Toolbar */}
       <div
         className="p-4 flex flex-wrap gap-3 items-center"
-        style={{ borderBottom: "1px solid #E0D5C8" }}
+        style={{ borderBottom: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mr-2" style={{ color: "#6B5C4E" }}>
+        <h2 className="text-sm font-semibold mr-2" style={{ color: "var(--ft-muted)" }}>
           Transactions
         </h2>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={lightSelect}>
@@ -126,7 +126,7 @@ export default function TransactionLedger({
           onChange={(e) => setFromDate(e.target.value)}
           style={{ ...lightSelect, colorScheme: "light" }}
         />
-        <span className="text-sm" style={{ color: "#9C8E7A" }}>–</span>
+        <span className="text-sm" style={{ color: "var(--ft-subtle)" }}>–</span>
         <input
           type="date"
           value={toDate}
@@ -136,7 +136,7 @@ export default function TransactionLedger({
         <button
           onClick={() => setModal("add")}
           className="ml-auto px-4 py-1.5 rounded-xl text-sm font-medium transition-colors"
-          style={{ background: "#4A7C59", color: "#F5EBD4" }}
+          style={{ background: "var(--ft-good)", color: "var(--ft-fair-bg)" }}
         >
           ＋ Add
         </button>
@@ -144,7 +144,7 @@ export default function TransactionLedger({
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-center py-12" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm text-center py-12" style={{ color: "var(--ft-subtle)" }}>
           No transactions found.
         </p>
       ) : (
@@ -154,9 +154,9 @@ export default function TransactionLedger({
               <tr
                 className="text-xs uppercase tracking-wide"
                 style={{
-                  borderBottom: "1px solid #E0D5C8",
-                  background: "#F5F2EE",
-                  color: "#9C8E7A",
+                  borderBottom: "1px solid var(--ft-border)",
+                  background: "var(--ft-surface)",
+                  color: "var(--ft-subtle)",
                 }}
               >
                 <th className="text-left px-4 py-3">Date</th>
@@ -173,11 +173,11 @@ export default function TransactionLedger({
                 <tr
                   key={tx.id}
                   className="transition-colors"
-                  style={{ borderBottom: "1px solid #E0D5C8" }}
+                  style={{ borderBottom: "1px solid var(--ft-border)" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs" style={{ color: "#9C8E7A" }}>
+                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs" style={{ color: "var(--ft-subtle)" }}>
                     {new Date(tx.date).toLocaleDateString("en-ZA")}
                   </td>
                   <td className="px-4 py-3">
@@ -185,20 +185,20 @@ export default function TransactionLedger({
                       className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
                       style={
                         tx.type === "income"
-                          ? { background: "rgba(74,124,89,0.2)", color: "#4A7C59" }
-                          : { background: "rgba(160,82,45,0.2)", color: "#A0522D" }
+                          ? { background: "rgba(74,124,89,0.2)", color: "var(--ft-good)" }
+                          : { background: "rgba(160,82,45,0.2)", color: "var(--ft-poor)" }
                       }
                     >
                       {tx.type === "income" ? "Income" : "Expense"}
                     </span>
                   </td>
-                  <td className="px-4 py-3" style={{ color: "#6B5C4E" }}>{tx.category}</td>
-                  <td className="px-4 py-3 max-w-xs" style={{ color: "#9C8E7A" }}>
+                  <td className="px-4 py-3" style={{ color: "var(--ft-muted)" }}>{tx.category}</td>
+                  <td className="px-4 py-3 max-w-xs" style={{ color: "var(--ft-subtle)" }}>
                     <span className="truncate block">{tx.description}</span>
                     {LIVESTOCK_CATEGORIES.includes(tx.category) && (
                       (tx.saleType || tx.quantity != null || tx.avgMassKg != null || tx.counterparty)
                     ) && (
-                      <span className="text-xs mt-0.5 block" style={{ color: "#9C8E7A" }}>
+                      <span className="text-xs mt-0.5 block" style={{ color: "var(--ft-subtle)" }}>
                         {[
                           tx.saleType ? (tx.saleType === "auction" ? "Auction" : "Private") : null,
                           tx.quantity != null ? `${tx.quantity} animals` : null,
@@ -217,7 +217,7 @@ export default function TransactionLedger({
                             : `/admin/animals/${tx.animalId}`
                         }
                         className="font-mono text-xs hover:underline"
-                        style={{ color: "#8B6914" }}
+                        style={{ color: "var(--ft-fair)" }}
                       >
                         {tx.animalId}
                       </Link>
@@ -225,7 +225,7 @@ export default function TransactionLedger({
                   </td>
                   <td
                     className="px-4 py-3 text-right font-semibold tabular-nums"
-                    style={{ color: tx.type === "income" ? "#4A7C59" : "#A0522D" }}
+                    style={{ color: tx.type === "income" ? "var(--ft-good)" : "var(--ft-poor)" }}
                   >
                     {tx.type === "expense" ? "−" : "+"}{formatRand(tx.amount)}
                   </td>
@@ -234,7 +234,7 @@ export default function TransactionLedger({
                       <button
                         onClick={() => setModal(tx)}
                         className="text-xs transition-opacity hover:opacity-70"
-                        style={{ color: "#9C8E7A" }}
+                        style={{ color: "var(--ft-subtle)" }}
                         title="Edit"
                       >
                         ✏️
@@ -245,14 +245,14 @@ export default function TransactionLedger({
                             onClick={() => deleteTransaction(tx.id)}
                             disabled={deleting === tx.id}
                             className="text-xs font-medium"
-                            style={{ color: "#8B3A3A" }}
+                            style={{ color: "var(--ft-crit)" }}
                           >
                             {deleting === tx.id ? "..." : "Yes"}
                           </button>
                           <button
                             onClick={() => setConfirmDelete(null)}
                             className="text-xs"
-                            style={{ color: "#9C8E7A" }}
+                            style={{ color: "var(--ft-subtle)" }}
                           >
                             No
                           </button>
@@ -261,7 +261,7 @@ export default function TransactionLedger({
                         <button
                           onClick={() => setConfirmDelete(tx.id)}
                           className="text-xs transition-opacity hover:opacity-70"
-                          style={{ color: "#9C8E7A" }}
+                          style={{ color: "var(--ft-subtle)" }}
                           title="Delete"
                         >
                           🗑️

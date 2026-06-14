@@ -40,12 +40,9 @@ vi.mock('@/lib/auth', () => ({
   getUserRoleForFarm: getUserRoleForFarmMock,
 }));
 
-// Silence the AdminNav + TierProvider subtree — we only care about the
-// redirect logic. These modules pull in client components that jsdom can't
-// fully render, so stub them to no-op elements.
-vi.mock('@/components/admin/AdminNav', () => ({
-  default: () => null,
-}));
+// Silence the TierProvider subtree — we only care about the redirect logic.
+// These modules pull in client components that jsdom can't fully render, so
+// stub them to no-op elements.
 vi.mock('@/components/tier-provider', () => ({
   TierProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

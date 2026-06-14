@@ -63,14 +63,14 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
   return (
     <div
       className="mt-8 rounded-xl p-4 md:p-6"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Financial Analytics
           </h2>
-          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
             {effectiveFrom} → {effectiveTo}
           </p>
         </div>
@@ -79,7 +79,7 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
       {loading && (
         <div
           className="h-32 flex items-center justify-center text-xs"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           Loading…
         </div>
@@ -92,7 +92,7 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
               {
                 label: "Gross Margin",
                 value: fmt(data.grossMargin),
-                color: data.grossMargin >= 0 ? "#4A7C59" : "#C0574C",
+                color: data.grossMargin >= 0 ? "var(--ft-good)" : "var(--ft-poor)",
               },
               {
                 label: "Gross Margin / Head",
@@ -102,8 +102,8 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
                     : "—",
                 color:
                   data.grossMarginPerHead !== null && data.grossMarginPerHead >= 0
-                    ? "#4A7C59"
-                    : "#C0574C",
+                    ? "var(--ft-good)"
+                    : "var(--ft-poor)",
               },
               {
                 label: "Cost of Gain",
@@ -111,15 +111,15 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
                   data.costOfGain !== null
                     ? `R ${data.costOfGain.toFixed(2)}/kg`
                     : "—",
-                color: "#8B6914",
+                color: "var(--ft-fair)",
               },
             ].map(({ label, value, color }) => (
               <div
                 key={label}
                 className="rounded-lg p-4"
-                style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+                style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
               >
-                <p className="text-xs mb-1.5" style={{ color: "#9C8E7A" }}>
+                <p className="text-xs mb-1.5" style={{ color: "var(--ft-subtle)" }}>
                   {label}
                 </p>
                 <p className="text-xl font-bold font-mono" style={{ color }}>
@@ -133,7 +133,7 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
             <div>
               <p
                 className="text-xs font-semibold mb-3 uppercase tracking-wide"
-                style={{ color: "#9C8E7A" }}
+                style={{ color: "var(--ft-subtle)" }}
               >
                 Expenses by Category
               </p>
@@ -144,10 +144,10 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
                 >
                   <XAxis
                     dataKey="category"
-                    tick={{ fontSize: 11, fill: "#9C8E7A" }}
+                    tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "#9C8E7A" }}
+                    tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
                     width={65}
                     tickFormatter={(v: number) =>
                       v >= 1000 ? `R${(v / 1000).toFixed(0)}k` : `R${v}`
@@ -159,23 +159,23 @@ export default function FinancialAnalyticsPanel({ farmSlug }: { farmSlug: string
                       "Amount",
                     ]}
                     contentStyle={{
-                      background: "#1A1510",
+                      background: "var(--ft-text)",
                       border: "1px solid rgba(139,105,20,0.3)",
                       borderRadius: "8px",
-                      color: "#F5EBD4",
+                      color: "var(--ft-fair-bg)",
                       fontSize: "12px",
                     }}
                   />
                   <Bar
                     dataKey="amount"
-                    fill="#8B6914"
+                    fill="var(--ft-fair)"
                     radius={[4, 4, 0, 0] as [number, number, number, number]}
                   />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-xs" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>
               No expense transactions in this period.
             </p>
           )}

@@ -123,8 +123,8 @@ function TabButton({
       onClick={() => onSelect(tab)}
       className="px-4 py-2 text-sm font-medium transition-colors"
       style={{
-        color: isActive ? "#1C1815" : "#9C8E7A",
-        borderBottom: isActive ? "2px solid #8B6914" : "2px solid transparent",
+        color: isActive ? "var(--ft-text)" : "var(--ft-subtle)",
+        borderBottom: isActive ? "2px solid var(--ft-fair)" : "2px solid transparent",
         marginBottom: -1,
       }}
     >
@@ -213,7 +213,7 @@ function TemplatesTab({
   return (
     <div id="tab-panel-templates" role="tabpanel" aria-labelledby="tab-templates">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm" style={{ color: "#6B5E48" }}>
+        <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
           {rows.length === 0
             ? "No templates yet. Install the SA template pack to get started."
             : `${rows.length} template${rows.length === 1 ? "" : "s"} installed.`}
@@ -223,7 +223,7 @@ function TemplatesTab({
           onClick={runInstall}
           disabled={installing}
           className="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-          style={{ background: "#8B6914", color: "#F5EBD4" }}
+          style={{ background: "var(--ft-fair)", color: "var(--ft-fair-bg)" }}
         >
           {installing ? "Installing…" : "Install template pack"}
         </button>
@@ -236,7 +236,7 @@ function TemplatesTab({
           style={{
             background: "rgba(139,105,20,0.08)",
             borderColor: "rgba(139,105,20,0.3)",
-            color: "#1C1815",
+            color: "var(--ft-text)",
           }}
         >
           {installMessage}
@@ -250,7 +250,7 @@ function TemplatesTab({
           style={{
             background: "rgba(220,38,38,0.08)",
             borderColor: "rgba(220,38,38,0.4)",
-            color: "#b91c1c",
+            color: "var(--ft-crit)",
           }}
         >
           {errorMessage}
@@ -278,23 +278,23 @@ function TemplatesTab({
                   style={{ borderColor: "rgba(156,142,122,0.15)" }}
                 >
                   <td className="px-3 py-2">
-                    <div style={{ color: "#1C1815", fontWeight: 500 }}>{t.name}</div>
+                    <div style={{ color: "var(--ft-text)", fontWeight: 500 }}>{t.name}</div>
                     {t.name_af && (
-                      <div className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+                      <div className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                         {t.name_af}
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "#6B5E48" }}>
+                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "var(--ft-muted)" }}>
                     {t.taskType}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "#6B5E48" }}>
+                  <td className="px-3 py-2 font-mono text-xs" style={{ color: "var(--ft-muted)" }}>
                     {humaniseRecurrence(t.recurrenceRule)}
                   </td>
-                  <td className="px-3 py-2" style={{ color: "#6B5E48" }}>
+                  <td className="px-3 py-2" style={{ color: "var(--ft-muted)" }}>
                     {humaniseMinutes(t.reminderOffset)}
                   </td>
-                  <td className="px-3 py-2" style={{ color: "#6B5E48" }}>
+                  <td className="px-3 py-2" style={{ color: "var(--ft-muted)" }}>
                     {t.species ?? "any"}
                   </td>
                   <td className="px-3 py-2">
@@ -305,7 +305,7 @@ function TemplatesTab({
                         className="text-xs px-2 py-1 rounded border"
                         style={{
                           borderColor: "rgba(139,105,20,0.4)",
-                          color: "#8B6914",
+                          color: "var(--ft-fair)",
                         }}
                       >
                         Edit
@@ -316,7 +316,7 @@ function TemplatesTab({
                         className="text-xs px-2 py-1 rounded border"
                         style={{
                           borderColor: "rgba(220,38,38,0.4)",
-                          color: "#b91c1c",
+                          color: "var(--ft-crit)",
                         }}
                       >
                         Delete
@@ -345,7 +345,7 @@ function Th({ children }: { children: React.ReactNode }) {
   return (
     <th
       className="text-left px-3 py-2 text-xs font-semibold uppercase tracking-wider"
-      style={{ color: "#6B5E48" }}
+      style={{ color: "var(--ft-muted)" }}
     >
       {children}
     </th>
@@ -444,13 +444,13 @@ function EditTemplateDialog({
       }}
     >
       <div
-        className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-xl bg-[var(--ft-surface)] p-6 shadow-2xl"
         style={{ border: "1px solid rgba(156,142,122,0.2)" }}
       >
         <h2
           id="edit-template-title"
           className="text-lg font-semibold mb-4"
-          style={{ color: "#1C1815" }}
+          style={{ color: "var(--ft-text)" }}
         >
           Edit template
         </h2>
@@ -515,7 +515,7 @@ function EditTemplateDialog({
               style={{
                 background: "rgba(220,38,38,0.08)",
                 borderColor: "rgba(220,38,38,0.4)",
-                color: "#b91c1c",
+                color: "var(--ft-crit)",
               }}
             >
               {error}
@@ -527,7 +527,7 @@ function EditTemplateDialog({
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-sm rounded border"
-              style={{ borderColor: "rgba(156,142,122,0.4)", color: "#6B5E48" }}
+              style={{ borderColor: "rgba(156,142,122,0.4)", color: "var(--ft-muted)" }}
             >
               Cancel
             </button>
@@ -535,7 +535,7 @@ function EditTemplateDialog({
               type="submit"
               disabled={saving}
               className="px-4 py-2 text-sm rounded font-medium disabled:opacity-50"
-              style={{ background: "#8B6914", color: "#F5EBD4" }}
+              style={{ background: "var(--ft-fair)", color: "var(--ft-fair-bg)" }}
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -555,7 +555,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium" style={{ color: "#6B5E48" }}>
+      <span className="text-xs font-medium" style={{ color: "var(--ft-muted)" }}>
         {label}
       </span>
       {children}
@@ -638,7 +638,7 @@ function DefaultsTab({ initialSettings }: { initialSettings: FarmTaskSettings })
           className="w-full rounded border px-3 py-2 text-sm"
           style={{ borderColor: "rgba(156,142,122,0.4)" }}
         />
-        <span className="text-xs" style={{ color: "#9C8E7A" }}>
+        <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
           {humaniseMinutes(settings.defaultReminderOffset)}
         </span>
       </Field>
@@ -650,10 +650,10 @@ function DefaultsTab({ initialSettings }: { initialSettings: FarmTaskSettings })
           onChange={(e) => update("autoObservation", e.target.checked)}
         />
         <span className="flex flex-col">
-          <span className="text-sm font-medium" style={{ color: "#1C1815" }}>
+          <span className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>
             Auto-observation on completion
           </span>
-          <span className="text-xs" style={{ color: "#9C8E7A" }}>
+          <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
             When enabled, completing a task with a valid payload auto-creates the matching observation.
           </span>
         </span>
@@ -681,7 +681,7 @@ function DefaultsTab({ initialSettings }: { initialSettings: FarmTaskSettings })
           style={{
             background: "rgba(220,38,38,0.08)",
             borderColor: "rgba(220,38,38,0.4)",
-            color: "#b91c1c",
+            color: "var(--ft-crit)",
           }}
         >
           {errorMessage}
@@ -693,7 +693,7 @@ function DefaultsTab({ initialSettings }: { initialSettings: FarmTaskSettings })
           type="submit"
           disabled={saving}
           className="px-4 py-2 text-sm rounded font-medium disabled:opacity-50"
-          style={{ background: "#8B6914", color: "#F5EBD4" }}
+          style={{ background: "var(--ft-fair)", color: "var(--ft-fair-bg)" }}
         >
           {saving ? "Saving…" : "Save"}
         </button>

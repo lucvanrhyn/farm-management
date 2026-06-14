@@ -97,13 +97,13 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
   return (
     <div
       className="rounded-2xl border"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <div className="px-6 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-        <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+      <div className="px-6 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Gestation Calculator
         </h2>
-        <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
           Pick a mating or confirmed conception date and the dam&apos;s breed — we&apos;ll compute the
           expected {copy.birthEventLower} window (±{WINDOW_DAYS}d).
         </p>
@@ -115,7 +115,7 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
             <label
               htmlFor="gc-mating-date"
               className="text-xs font-medium"
-              style={{ color: "#6B5C4E" }}
+              style={{ color: "var(--ft-muted)" }}
             >
               Mating / conception date
             </label>
@@ -124,8 +124,8 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
               type="date"
               value={matingDate}
               onChange={(e) => setMatingDate(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
-              style={{ borderColor: "#E0D5C8", color: "#1C1815" }}
+              className="border rounded-lg px-3 py-2 text-sm bg-[var(--ft-surface)]"
+              style={{ borderColor: "var(--ft-border)", color: "var(--ft-text)" }}
             />
           </div>
 
@@ -133,7 +133,7 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
             <label
               htmlFor="gc-breed"
               className="text-xs font-medium"
-              style={{ color: "#6B5C4E" }}
+              style={{ color: "var(--ft-muted)" }}
             >
               Breed
             </label>
@@ -141,8 +141,8 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
               id="gc-breed"
               value={breed}
               onChange={(e) => setBreed(e.target.value as GestationBreed)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
-              style={{ borderColor: "#E0D5C8", color: "#1C1815" }}
+              className="border rounded-lg px-3 py-2 text-sm bg-[var(--ft-surface)]"
+              style={{ borderColor: "var(--ft-border)", color: "var(--ft-text)" }}
             >
               {groups.map(({ species, entries }) => (
                 <optgroup key={species} label={SPECIES_LABELS[species]}>
@@ -162,21 +162,21 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
             className="rounded-xl p-4"
             style={{ background: "rgba(74,124,89,0.06)", border: "1px solid rgba(74,124,89,0.2)" }}
           >
-            <p className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
               Expected {copy.birthEvent}: {formatDate(result.earliest)} – {formatDate(result.latest)}
             </p>
-            <p className="text-xs mt-1" style={{ color: "#6B5C4E" }}>
+            <p className="text-xs mt-1" style={{ color: "var(--ft-muted)" }}>
               {selectedEntry.label} · {result.gestationDays} day gestation · ±{WINDOW_DAYS}d window
             </p>
             {selectedEntry.source && (
-              <p className="text-[10px] mt-1" style={{ color: "#9C8E7A" }}>
+              <p className="text-[10px] mt-1" style={{ color: "var(--ft-subtle)" }}>
                 Source:{" "}
                 <a
                   href={selectedEntry.source}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline"
-                  style={{ color: "#8B6914" }}
+                  style={{ color: "var(--ft-fair)" }}
                 >
                   citation
                 </a>
@@ -186,12 +186,12 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
         ) : (
           <div
             className="rounded-xl p-4"
-            style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+            style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
           >
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#9C8E7A" }}>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ft-subtle)" }}>
               Breed reference
             </p>
-            <p className="text-xs mb-3" style={{ color: "#6B5C4E" }}>
+            <p className="text-xs mb-3" style={{ color: "var(--ft-muted)" }}>
               Enter a date above to compute the window. Gestation days per breed (hover a row for source):
             </p>
             <div className="space-y-3">
@@ -199,7 +199,7 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
                 <div key={species}>
                   <p
                     className="text-[11px] font-semibold uppercase tracking-wide mb-1"
-                    style={{ color: "#9C8E7A" }}
+                    style={{ color: "var(--ft-subtle)" }}
                   >
                     {SPECIES_LABELS[species]}
                   </p>
@@ -210,8 +210,8 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
                         className="flex justify-between text-xs"
                         title={entry.source}
                       >
-                        <span style={{ color: "#1C1815" }}>{entry.label}</span>
-                        <span className="font-mono tabular-nums" style={{ color: "#6B5C4E" }}>
+                        <span style={{ color: "var(--ft-text)" }}>{entry.label}</span>
+                        <span className="font-mono tabular-nums" style={{ color: "var(--ft-muted)" }}>
                           {entry.days}d
                         </span>
                       </li>

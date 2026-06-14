@@ -16,12 +16,12 @@ interface Props {
   cycles: PregnancyRateCycle[];
 }
 
-const gridStroke = "#E0D5C8";
-const tickStyle = { fill: "#9C8E7A", fontSize: 11 };
+const gridStroke = "var(--ft-border)";
+const tickStyle = { fill: "var(--ft-subtle)", fontSize: 11 };
 const tooltipStyle = {
-  backgroundColor: "#1A1510",
+  backgroundColor: "var(--ft-text)",
   border: "1px solid rgba(139,105,20,0.3)",
-  color: "#F5EBD4",
+  color: "var(--ft-fair-bg)",
   fontSize: 12,
 };
 
@@ -31,7 +31,7 @@ const SA_BENCHMARK = 22;
 export default function PregnancyRateCycleChart({ cycles }: Props) {
   if (cycles.length === 0) {
     return (
-      <p style={{ color: "#9C8E7A", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
+      <p style={{ color: "var(--ft-subtle)", fontSize: "0.875rem", textAlign: "center", padding: "1.5rem 0" }}>
         No breeding season data. Log insemination events via the Logger.
       </p>
     );
@@ -65,12 +65,12 @@ export default function PregnancyRateCycleChart({ cycles }: Props) {
         />
         <ReferenceLine
           y={SA_BENCHMARK}
-          stroke="#8B6914"
+          stroke="var(--ft-fair)"
           strokeDasharray="5 3"
           label={{
             value: `SA target ${SA_BENCHMARK}%`,
             position: "insideTopRight",
-            fill: "#8B6914",
+            fill: "var(--ft-fair)",
             fontSize: 10,
           }}
         />
@@ -78,7 +78,7 @@ export default function PregnancyRateCycleChart({ cycles }: Props) {
           dataKey="rate"
           name="Rate"
           radius={[4, 4, 0, 0]}
-          fill="#4A7C59"
+          fill="var(--ft-good)"
         />
       </BarChart>
     </ResponsiveContainer>

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { PageHeader } from "@/components/ds";
 import SettingsForm, { type FarmSettingsData } from "@/components/admin/SettingsForm";
 
 
@@ -13,8 +14,8 @@ export default async function SettingsPage({
 
   if (!prisma) {
     return (
-      <div className="flex min-h-screen bg-[#FAFAF8] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
+      <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -54,15 +55,12 @@ export default async function SettingsPage({
   };
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
-          Farm Settings
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Thresholds, location, breeding calendar, and integrations
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Farm Settings"
+        subtitle="Thresholds, location, breeding calendar, and integrations"
+      />
 
       <div className="max-w-2xl">
         <SettingsForm farmSlug={farmSlug} initial={settings} />

@@ -44,8 +44,8 @@ export default function DangerZone() {
         onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,20,20,0.08)")}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
-        <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "#C0574C" }} />
-        <span className="text-sm font-semibold flex-1" style={{ color: "#C0574C" }}>Danger Zone</span>
+        <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "var(--ft-poor)" }} />
+        <span className="text-sm font-semibold flex-1" style={{ color: "var(--ft-poor)" }}>Danger Zone</span>
         {isOpen ? (
           <ChevronDown className="w-4 h-4" style={{ color: "rgba(192,87,76,0.6)" }} />
         ) : (
@@ -59,8 +59,8 @@ export default function DangerZone() {
           style={{ borderTop: "1px solid rgba(160,50,50,0.2)" }}
         >
           <div>
-            <p className="text-sm font-medium" style={{ color: "#1C1815" }}>Remove All Farm Data</p>
-            <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+            <p className="text-sm font-medium" style={{ color: "var(--ft-text)" }}>Remove All Farm Data</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
               Permanently deletes all animals, observations, transactions and categories. Users and settings are preserved.
             </p>
           </div>

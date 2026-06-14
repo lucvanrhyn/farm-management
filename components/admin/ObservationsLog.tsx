@@ -137,14 +137,14 @@ export default function ObservationsLog({ onDeleted, species }: ObservationsLogP
         {/* Timeline list */}
         <div
           className="rounded-2xl px-6 py-4"
-          style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+          style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
         >
           {!loading && observations.length === 0 && (
-            <p className="text-center py-10 text-sm" style={{ color: "#9C8E7A" }}>
+            <p className="text-center py-10 text-sm" style={{ color: "var(--ft-subtle)" }}>
               No observations found.
             </p>
           )}
-          <div className="flex flex-col" style={{ borderLeft: "2px solid #E0D5C8", marginLeft: "5px" }}>
+          <div className="flex flex-col" style={{ borderLeft: "2px solid var(--ft-border)", marginLeft: "5px" }}>
             {observations.map((obs) => (
               <ObservationRow key={obs.id} obs={obs} onEdit={setEditTarget} />
             ))}

@@ -7,9 +7,9 @@ import type { Observation } from "@prisma/client";
 import { parseDetails } from "./tabs";
 
 const REPRO_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  heat_detection:    { bg: "rgba(180,110,20,0.12)",  text: "#8B6914", label: "In Heat"   },
-  insemination:      { bg: "rgba(59,130,246,0.12)",  text: "#1D4ED8", label: "AI"        },
-  pregnancy_scan:    { bg: "rgba(74,124,89,0.12)",   text: "#2D6A4F", label: "Scan"      },
+  heat_detection:    { bg: "rgba(180,110,20,0.12)",  text: "var(--ft-fair)", label: "In Heat"   },
+  insemination:      { bg: "rgba(59,130,246,0.12)",  text: "var(--ft-info)", label: "AI"        },
+  pregnancy_scan:    { bg: "rgba(74,124,89,0.12)",   text: "var(--ft-good)", label: "Scan"      },
   calving:           { bg: "rgba(13,148,136,0.12)",  text: "#0F766E", label: "Calving"   },
 };
 
@@ -31,17 +31,17 @@ function reproBadgeLabel(type: string, details: Record<string, unknown>): string
 function reproBadgeStyle(type: string, details: Record<string, unknown>): { bg: string; text: string } {
   if (type === "pregnancy_scan") {
     const r = details.result as string | undefined;
-    if (r === "pregnant") return { bg: "rgba(74,124,89,0.12)",   text: "#2D6A4F" };
-    if (r === "empty")    return { bg: "rgba(192,87,76,0.12)",   text: "#8B3A3A" };
-    return { bg: "rgba(180,110,20,0.12)", text: "#8B6914" };
+    if (r === "pregnant") return { bg: "rgba(74,124,89,0.12)",   text: "var(--ft-good)" };
+    if (r === "empty")    return { bg: "rgba(192,87,76,0.12)",   text: "var(--ft-crit)" };
+    return { bg: "rgba(180,110,20,0.12)", text: "var(--ft-fair)" };
   }
   if (type === "calving") {
     const s = details.calf_status as string | undefined;
     return s === "stillborn"
-      ? { bg: "rgba(192,87,76,0.12)", text: "#8B3A3A" }
+      ? { bg: "rgba(192,87,76,0.12)", text: "var(--ft-crit)" }
       : { bg: "rgba(13,148,136,0.12)", text: "#0F766E" };
   }
-  return REPRO_BADGE[type] ?? { bg: "rgba(156,142,122,0.12)", text: "#9C8E7A" };
+  return REPRO_BADGE[type] ?? { bg: "rgba(156,142,122,0.12)", text: "var(--ft-subtle)" };
 }
 
 interface ReproductionTabProps {
@@ -53,22 +53,22 @@ export function ReproductionTab({ reproObs, farmSlug }: ReproductionTabProps) {
   return (
     <div
       className="rounded-2xl border p-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>
+        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>
           Reproductive History ({reproObs.length})
         </h2>
         <Link
           href={`/${farmSlug}/admin/reproduction`}
           className="text-xs font-medium transition-opacity hover:opacity-70"
-          style={{ color: "#8B6914" }}
+          style={{ color: "var(--ft-fair)" }}
         >
           View Repro Dashboard →
         </Link>
       </div>
       {reproObs.length === 0 ? (
-        <p className="text-xs" style={{ color: "#9C8E7A" }}>No reproductive events recorded.</p>
+        <p className="text-xs" style={{ color: "var(--ft-subtle)" }}>No reproductive events recorded.</p>
       ) : (
         <ol className="space-y-3">
           {reproObs.map((obs) => {
@@ -80,7 +80,7 @@ export function ReproductionTab({ reproObs, farmSlug }: ReproductionTabProps) {
               <li
                 key={obs.id}
                 className="flex items-start gap-3 py-2.5"
-                style={{ borderBottom: "1px solid #E0D5C8" }}
+                style={{ borderBottom: "1px solid var(--ft-border)" }}
               >
                 <span
                   className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 mt-0.5"
@@ -90,22 +90,22 @@ export function ReproductionTab({ reproObs, farmSlug }: ReproductionTabProps) {
                 </span>
                 <div className="flex-1 min-w-0">
                   {obs.type === "insemination" && (
-                    <p className="text-xs" style={{ color: "#1C1815" }}>
+                    <p className="text-xs" style={{ color: "var(--ft-text)" }}>
                       {d.bull_id ? `Bull: ${d.bull_id}` : d.semen_batch ? `Batch: ${d.semen_batch}` : ""}
                     </p>
                   )}
                   {obs.type === "pregnancy_scan" && d.expected_calving && (
-                    <p className="text-xs" style={{ color: "#1C1815" }}>
+                    <p className="text-xs" style={{ color: "var(--ft-text)" }}>
                       Expected: {String(d.expected_calving).split("T")[0]}
                     </p>
                   )}
                   {obs.type === "calving" && d.calf_tag && (
-                    <p className="text-xs" style={{ color: "#1C1815" }}>
+                    <p className="text-xs" style={{ color: "var(--ft-text)" }}>
                       Calf tag: <span className="font-mono">{String(d.calf_tag)}</span>
                     </p>
                   )}
 
-                  <p className="text-[11px] mt-0.5" style={{ color: "#9C8E7A" }}>
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--ft-subtle)" }}>
                     {date} · Camp: {obs.campId}
                   </p>
                 </div>

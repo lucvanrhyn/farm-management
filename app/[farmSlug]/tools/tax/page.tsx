@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { requireSession } from "@/lib/auth";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getUserRoleForFarm } from "@/lib/auth";
+import { PageHeader } from "@/components/ds";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import It3PageClient from "./It3PageClient";
 
@@ -23,15 +24,12 @@ export default async function TaxPage({
   const isAdmin = getUserRoleForFarm(session, farmSlug) === "ADMIN";
 
   return (
-    <div className="min-w-0 p-4 md:p-8 bg-[#FAFAF8] min-h-screen">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "#1C1815" }}>
-          SARS ITR12 Farming Schedule Export
-        </h1>
-        <p className="text-xs mt-0.5 font-mono" style={{ color: "#9C8E7A" }}>
-          Preview and freeze year-end farming income &amp; expense schedules for your ITR12 return. Snapshots are immutable once issued.
-        </p>
-      </div>
+    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)] min-h-screen">
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="SARS ITR12 Farming Schedule Export"
+        subtitle="Preview and freeze year-end farming income & expense schedules for your ITR12 return. Snapshots are immutable once issued."
+      />
       <It3PageClient farmSlug={farmSlug} isAdmin={isAdmin} />
     </div>
   );

@@ -8,16 +8,16 @@ import dynamic from "next/dynamic";
 
 const CampCostAnalysis = dynamic(
   () => import("@/components/admin/CampCostAnalysis"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 const CategoryProfitability = dynamic(
   () => import("@/components/admin/CategoryProfitability"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 function kpiColor(value: number, positiveGood = true): string {
-  if (value === 0) return "#9C8E7A";
-  return (positiveGood ? value > 0 : value < 0) ? "#4A7C59" : "#C0574C";
+  if (value === 0) return "var(--ft-subtle)";
+  return (positiveGood ? value > 0 : value < 0) ? "var(--ft-good)" : "var(--ft-poor)";
 }
 
 export default async function FinancialKPISection({
@@ -48,9 +48,9 @@ export default async function FinancialKPISection({
       {/* KPI cards */}
       <div
         className="rounded-xl p-4 md:p-6"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
           Financial KPIs {dateRange ? `(${from} – ${to})` : "(All Time)"}
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
@@ -73,20 +73,20 @@ export default async function FinancialKPISection({
             {
               label: "Total Income",
               value: fmt(kpis.totalIncome),
-              color: "#4A7C59",
+              color: "var(--ft-good)",
             },
             {
               label: "Total Expense",
               value: fmt(kpis.totalExpense),
-              color: "#C0574C",
+              color: "var(--ft-poor)",
             },
           ].map(({ label, value, color }) => (
             <div
               key={label}
               className="rounded-lg p-3"
-              style={{ background: "#FAFAF8", border: "1px solid #E0D5C8" }}
+              style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)" }}
             >
-              <p className="text-[11px] mb-1" style={{ color: "#9C8E7A" }}>{label}</p>
+              <p className="text-[11px] mb-1" style={{ color: "var(--ft-subtle)" }}>{label}</p>
               <p className="text-lg font-bold font-mono" style={{ color }}>{value}</p>
             </div>
           ))}
@@ -96,9 +96,9 @@ export default async function FinancialKPISection({
       {/* Camp Costs section */}
       <div
         className="rounded-xl p-4 md:p-6"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
           Camp Costs
         </h2>
         <CampCostAnalysis data={campCosts} />
@@ -107,9 +107,9 @@ export default async function FinancialKPISection({
       {/* Category Profitability section */}
       <div
         className="rounded-xl p-4 md:p-6"
-        style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
       >
-        <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
           Profitability by Animal Category
         </h2>
         <CategoryProfitability data={categoryProfit} farmSlug={farmSlug} from={from} to={to} />

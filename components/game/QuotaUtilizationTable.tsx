@@ -5,10 +5,10 @@ function UtilizationBadge({ pct }: { pct: number }) {
 
   const style =
     pct > 0.8
-      ? { background: "rgba(220,38,38,0.1)", color: "#991B1B" }
+      ? { background: "rgba(220,38,38,0.1)", color: "var(--ft-crit)" }
       : pct > 0.6
-        ? { background: "rgba(245,158,11,0.12)", color: "#92400E" }
-        : { background: "rgba(34,197,94,0.1)", color: "#166534" };
+        ? { background: "rgba(245,158,11,0.12)", color: "var(--ft-fair)" }
+        : { background: "rgba(34,197,94,0.1)", color: "var(--ft-good)" };
 
   return (
     <span
@@ -29,14 +29,14 @@ export default function QuotaUtilizationTable({
     return (
       <div
         className="rounded-2xl border"
-        style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+        style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
       >
-        <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Quota Utilisation
           </h2>
         </div>
-        <p className="px-5 py-5 text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="px-5 py-5 text-sm" style={{ color: "var(--ft-subtle)" }}>
           No offtake quotas configured for this season.
         </p>
       </div>
@@ -46,13 +46,13 @@ export default function QuotaUtilizationTable({
   return (
     <div
       className="rounded-2xl border overflow-hidden"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <div className="px-5 py-4 border-b" style={{ borderColor: "#E0D5C8" }}>
-        <h2 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "var(--ft-border)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
           Quota Utilisation
         </h2>
-        <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
           Current season offtake quotas
         </p>
       </div>
@@ -60,13 +60,13 @@ export default function QuotaUtilizationTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: "1px solid #E0D5C8" }}>
+            <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
               {["Species", "Quota", "Used", "Remaining", "Utilisation"].map(
                 (h) => (
                   <th
                     key={h}
                     className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: "#9C8E7A" }}
+                    style={{ color: "var(--ft-subtle)" }}
                   >
                     {h}
                   </th>
@@ -80,16 +80,16 @@ export default function QuotaUtilizationTable({
                 key={q.speciesId}
                 style={{ borderBottom: "1px solid rgba(224,213,200,0.5)" }}
               >
-                <td className="px-5 py-2.5 font-medium" style={{ color: "#1C1815" }}>
+                <td className="px-5 py-2.5 font-medium" style={{ color: "var(--ft-text)" }}>
                   {q.speciesId}
                 </td>
-                <td className="px-5 py-2.5 tabular-nums" style={{ color: "#6B5E50" }}>
+                <td className="px-5 py-2.5 tabular-nums" style={{ color: "var(--ft-muted)" }}>
                   {q.totalQuota}
                 </td>
-                <td className="px-5 py-2.5 tabular-nums" style={{ color: "#6B5E50" }}>
+                <td className="px-5 py-2.5 tabular-nums" style={{ color: "var(--ft-muted)" }}>
                   {q.usedTotal}
                 </td>
-                <td className="px-5 py-2.5 tabular-nums" style={{ color: "#6B5E50" }}>
+                <td className="px-5 py-2.5 tabular-nums" style={{ color: "var(--ft-muted)" }}>
                   {q.totalQuota - q.usedTotal}
                 </td>
                 <td className="px-5 py-2.5">

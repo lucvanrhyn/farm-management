@@ -21,20 +21,20 @@ export default function CostOfGainExportCard({ farmSlug }: { farmSlug: string })
   }
 
   const selectStyle = {
-    borderColor: "#E0D5C8",
+    borderColor: "var(--ft-border)",
   } as const;
 
   return (
     <div
       className="rounded-xl p-5"
-      style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}
+      style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-[#1C1815]">Cost of Gain</h2>
+          <h2 className="text-sm font-semibold text-[var(--ft-text)]">Cost of Gain</h2>
           <p
             className="text-xs mt-1 leading-relaxed"
-            style={{ color: "#9C8E7A" }}
+            style={{ color: "var(--ft-subtle)" }}
           >
             Rand per kilogram gained, broken down by camp or individual animal
             over the last 365 days.
@@ -65,7 +65,7 @@ export default function CostOfGainExportCard({ farmSlug }: { farmSlug: string })
             type="button"
             onClick={() => triggerDownload("csv")}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-            style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+            style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
             title="Download CSV"
           >
             <Download className="w-3.5 h-3.5" />
@@ -75,7 +75,7 @@ export default function CostOfGainExportCard({ farmSlug }: { farmSlug: string })
             type="button"
             onClick={() => triggerDownload("pdf")}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-            style={{ border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+            style={{ border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
             title="Download PDF"
           >
             <Download className="w-3.5 h-3.5" />

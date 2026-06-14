@@ -8,7 +8,7 @@ import CostOfGainCard from "@/components/admin/CostOfGainCard";
 
 const AnimalInvestment = nextDynamic(
   () => import("@/components/admin/AnimalInvestment"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 interface InvestmentTabProps {

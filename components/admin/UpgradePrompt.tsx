@@ -24,35 +24,35 @@ export default async function UpgradePrompt({ feature, description, farmSlug }: 
   }
 
   return (
-    <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
-      <h2 className="text-2xl font-semibold text-amber-900">{feature} is on Advanced</h2>
+    <div className="mx-auto max-w-2xl rounded-2xl border border-[var(--ft-fair)] bg-[var(--ft-fair-bg)] p-8 text-center">
+      <h2 className="text-2xl font-semibold text-[var(--ft-fair)]">{feature} is on Advanced</h2>
 
       {description && (
-        <p className="mt-2 text-sm text-amber-700">{description}</p>
+        <p className="mt-2 text-sm text-[var(--ft-fair)]">{description}</p>
       )}
 
       {quote ? (
-        <div className="mt-6 rounded-xl bg-white p-5 text-left border border-amber-100">
-          <p className="text-sm text-neutral-500">
+        <div className="mt-6 rounded-xl bg-[var(--ft-surface)] p-5 text-left border border-[var(--ft-fair-bg)]">
+          <p className="text-sm text-[var(--ft-subtle)]">
             Your farm ({quote.lsu} LSU) on Advanced:
           </p>
-          <p className="mt-1 text-3xl font-semibold text-neutral-900">
+          <p className="mt-1 text-3xl font-semibold text-[var(--ft-text)]">
             {quote.annualFormatted}
-            <span className="ml-2 text-base font-normal text-neutral-500">/year</span>
+            <span className="ml-2 text-base font-normal text-[var(--ft-subtle)]">/year</span>
           </p>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-[var(--ft-subtle)]">
             or {quote.monthlyFormatted}/month
           </p>
         </div>
       ) : (
-        <p className="mt-6 text-sm text-amber-700">
+        <p className="mt-6 text-sm text-[var(--ft-fair)]">
           Upgrade to Advanced to unlock the full intelligence stack.
         </p>
       )}
 
       <Link
         href={`/${farmSlug}/subscribe/upgrade`}
-        className="mt-6 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-6 py-3 text-white font-medium hover:bg-emerald-700 transition-colors"
+        className="mt-6 inline-flex items-center justify-center rounded-lg bg-[var(--ft-good)] px-6 py-3 text-white font-medium hover:bg-[var(--ft-good)] transition-colors"
       >
         Upgrade to Advanced
       </Link>

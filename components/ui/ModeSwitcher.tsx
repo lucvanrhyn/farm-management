@@ -10,8 +10,9 @@ const MODE_CONFIG: Record<FarmMode, { label: string; emoji: string }> = {
 };
 
 interface ModeSwitcherProps {
-  /** "glass" for home page overlay, "solid" for admin sidebar */
-  readonly variant?: "glass" | "solid";
+  /** "glass" for home overlay, "solid" for the old dark sidebar,
+   *  "header" for the light Studio header (token-driven). */
+  readonly variant?: "glass" | "solid" | "header";
   /**
    * Issue #235 added a `showUpsell` prop that toggled a dimmed
    * "+ Add species" pill on single-species tenants. Issue #263
@@ -41,6 +42,7 @@ export function ModeSwitcher({
   if (enabledModes.length <= 1) return null;
 
   const isGlass = variant === "glass";
+  const isHeader = variant === "header";
 
   const containerStyle = isGlass
     ? {
@@ -49,10 +51,15 @@ export function ModeSwitcher({
         WebkitBackdropFilter: "blur(10px)",
         border: "1px solid rgba(255,255,255,0.07)",
       }
-    : {
-        background: "rgba(139,105,20,0.08)",
-        border: "1px solid rgba(139,105,20,0.15)",
-      };
+    : isHeader
+      ? {
+          background: "var(--ft-surface)",
+          border: "1px solid var(--ft-border)",
+        }
+      : {
+          background: "rgba(139,105,20,0.08)",
+          border: "1px solid rgba(139,105,20,0.15)",
+        };
 
   return (
     <div
@@ -70,8 +77,8 @@ export function ModeSwitcher({
             className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors"
             style={{
               color: isActive
-                ? isGlass ? "#F5EBD4" : "#F5EBD4"
-                : isGlass ? "rgba(210,180,140,0.6)" : "rgba(210,180,140,0.65)",
+                ? isHeader ? "var(--ft-text)" : "#F5EBD4"
+                : isHeader ? "var(--ft-muted)" : isGlass ? "rgba(210,180,140,0.6)" : "rgba(210,180,140,0.65)",
             }}
           >
             {isActive && (
@@ -84,10 +91,15 @@ export function ModeSwitcher({
                         background: "rgba(196,144,48,0.25)",
                         border: "1px solid rgba(196,144,48,0.3)",
                       }
-                    : {
-                        background: "rgba(139,105,20,0.2)",
-                        border: "1px solid rgba(139,105,20,0.3)",
-                      }
+                    : isHeader
+                      ? {
+                          background: "var(--ft-accent-faint)",
+                          border: "1px solid color-mix(in oklab, var(--ft-accent) 30%, var(--ft-border))",
+                        }
+                      : {
+                          background: "rgba(139,105,20,0.2)",
+                          border: "1px solid rgba(139,105,20,0.3)",
+                        }
                 }
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
               />

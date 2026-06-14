@@ -23,9 +23,9 @@ interface Props {
 }
 
 const fieldStyle: React.CSSProperties = {
-  background: "#FFFFFF",
-  border: "1px solid #E0D5C8",
-  color: "#1C1815",
+  background: "var(--ft-surface)",
+  border: "1px solid var(--ft-border)",
+  color: "var(--ft-text)",
   borderRadius: "0.75rem",
   padding: "0.5rem 1rem",
   fontSize: "0.875rem",
@@ -100,8 +100,8 @@ export default function TransactionForm({
           className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
           style={
             type === "income"
-              ? { background: "rgba(74,124,89,0.2)", border: "1px solid rgba(74,124,89,0.5)", color: "#4A7C59" }
-              : { background: "transparent", border: "1px solid #E0D5C8", color: "#9C8E7A" }
+              ? { background: "rgba(74,124,89,0.2)", border: "1px solid rgba(74,124,89,0.5)", color: "var(--ft-good)" }
+              : { background: "transparent", border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }
           }
         >
           + Income
@@ -112,8 +112,8 @@ export default function TransactionForm({
           className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
           style={
             type === "expense"
-              ? { background: "rgba(160,82,45,0.2)", border: "1px solid rgba(160,82,45,0.5)", color: "#A0522D" }
-              : { background: "transparent", border: "1px solid #E0D5C8", color: "#9C8E7A" }
+              ? { background: "rgba(160,82,45,0.2)", border: "1px solid rgba(160,82,45,0.5)", color: "var(--ft-poor)" }
+              : { background: "transparent", border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }
           }
         >
           - Expense
@@ -121,7 +121,7 @@ export default function TransactionForm({
       </div>
 
       <div>
-        <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Category *</label>
+        <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Category *</label>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -136,7 +136,7 @@ export default function TransactionForm({
       </div>
 
       <div>
-        <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Amount (R) *</label>
+        <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Amount (R) *</label>
         <input
           type="number"
           min="0"
@@ -150,7 +150,7 @@ export default function TransactionForm({
       </div>
 
       <div>
-        <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Date *</label>
+        <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Date *</label>
         <input
           type="date"
           value={date}
@@ -161,7 +161,7 @@ export default function TransactionForm({
       </div>
 
       <div>
-        <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Description</label>
+        <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Description</label>
         <input
           type="text"
           placeholder="Short description..."
@@ -173,7 +173,7 @@ export default function TransactionForm({
 
       {camps && camps.length > 0 && (
         <div>
-          <label className="text-xs mb-1 block" style={{ color: "#9C8E7A" }}>Camp (optional)</label>
+          <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>Camp (optional)</label>
           <select
             value={campId}
             onChange={(e) => setCampId(e.target.value)}
@@ -187,7 +187,7 @@ export default function TransactionForm({
         </div>
       )}
 
-      {error && <p className="text-sm" style={{ color: "#C0574C" }}>{error}</p>}
+      {error && <p className="text-sm" style={{ color: "var(--ft-poor)" }}>{error}</p>}
 
       <div className="flex gap-2 pt-2">
         {onCancel && (
@@ -195,7 +195,7 @@ export default function TransactionForm({
             type="button"
             onClick={onCancel}
             className="flex-1 py-2 rounded-xl text-sm transition-colors"
-            style={{ border: "1px solid #E0D5C8", color: "#6B5C4E", background: "transparent" }}
+            style={{ border: "1px solid var(--ft-border)", color: "var(--ft-muted)", background: "transparent" }}
           >
             Cancel
           </button>
@@ -204,7 +204,7 @@ export default function TransactionForm({
           type="submit"
           disabled={loading}
           className="flex-1 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors"
-          style={{ background: "#4A7C59", color: "#F5EBD4" }}
+          style={{ background: "var(--ft-good)", color: "var(--ft-fair-bg)" }}
         >
           {loading ? "Saving..." : "Add Transaction"}
         </button>

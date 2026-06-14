@@ -4,6 +4,7 @@ import AddCampForm from "@/components/admin/AddCampForm";
 import CampsTable from "@/components/admin/CampsTable";
 import CampAnalyticsSection from "@/components/admin/CampAnalyticsSection";
 import CampsEmptyState from "@/components/camps/CampsEmptyState";
+import { PageHeader } from "@/components/ds";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import type { Camp } from "@/lib/types";
@@ -39,7 +40,7 @@ export default async function SheepCampsPage({
     return (
       <AdminPage>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );
@@ -62,12 +63,11 @@ export default async function SheepCampsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Sheep Camps</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>
-          {camps.length} camps · sheep grazing surface
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Sheep Camps"
+        subtitle={`${camps.length} camps · grazing camps`}
+      />
 
       <AddCampForm />
 
@@ -80,7 +80,7 @@ export default async function SheepCampsPage({
         <>
           <CampsTable camps={camps} farmSlug={farmSlug} />
 
-          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "#F5F2EE" }} />}>
+          <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
             <CampAnalyticsSection farmSlug={farmSlug} />
           </Suspense>
         </>

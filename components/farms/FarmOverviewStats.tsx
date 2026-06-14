@@ -39,7 +39,7 @@ function TierBadge({
   const label = isActive || hasRecentActivity ? tier : "inactive";
   const style =
     tier === "advanced" && isActive
-      ? { background: "rgba(139,105,20,0.18)", color: "#8B6914", border: "1px solid rgba(139,105,20,0.3)" }
+      ? { background: "rgba(139,105,20,0.18)", color: "var(--ft-fair)", border: "1px solid rgba(139,105,20,0.3)" }
       : { background: "rgba(210,180,140,0.12)", color: "rgba(210,180,140,0.6)", border: "1px solid rgba(210,180,140,0.2)" };
 
   return (
@@ -90,13 +90,13 @@ export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
         <span className="text-[10px]" style={{ color: "#6A4E30" }}>
-          <span className="font-semibold" style={{ color: "#C49030" }}>0</span>{" "}
+          <span className="font-semibold" style={{ color: "var(--ft-fair)" }}>0</span>{" "}
           animals (new farm)
         </span>
         <Divider />
         <span
           className="text-[10px] font-medium"
-          style={{ color: "#C49030" }}
+          style={{ color: "var(--ft-fair)" }}
           title="Click card to set up and add your first animal"
         >
           Add your first animal →
@@ -139,7 +139,7 @@ export function FarmOverviewStats({ overview }: { overview: FarmOverview }) {
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <span className="text-[10px]" style={{ color: "#6A4E30" }}>
-      <span className="font-semibold" style={{ color: "#C49030" }}>{value}</span>
+      <span className="font-semibold" style={{ color: "var(--ft-fair)" }}>{value}</span>
       {" "}{label}
     </span>
   );

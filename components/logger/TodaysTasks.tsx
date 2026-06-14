@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Check, CheckSquare } from "lucide-react";
+import { Icon } from "@/components/ds";
 
 interface Task {
   id: string;
@@ -13,10 +13,11 @@ interface Task {
   assignedTo: string;
 }
 
+// Map task priority onto the warm token status scale (var(--ft-crit/info/subtle)).
 const PRIORITY_DOT: Record<string, string> = {
-  high:   "#DC2626",
-  normal: "#3B82F6",
-  low:    "#9C8E7A",
+  high:   "var(--ft-crit)",
+  normal: "var(--ft-info)",
+  low:    "var(--ft-subtle)",
 };
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -84,22 +85,19 @@ export function TodaysTasks() {
   if (tasks.length === 0) {
     return (
       <div
-        className="mx-4 mb-4 rounded-xl px-4 py-3 flex items-center gap-2"
-        style={{ background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.15)" }}
+        className="ft-card mx-4 mb-4 px-4 py-3 flex items-center gap-2"
       >
-        <CheckSquare className="w-4 h-4 shrink-0" style={{ color: "#16A34A" }} />
-        <p className="text-sm font-medium" style={{ color: "#16A34A" }}>
-          No tasks for today ✓
+        <Icon.check size={16} className="shrink-0" style={{ color: "var(--ft-good)" }} />
+        <p className="text-sm font-medium" style={{ color: "var(--ft-good)" }}>
+          No tasks for today
         </p>
       </div>
     );
   }
 
   return (
-    <div className="mx-4 mb-4">
-      <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "#5C3D2E" }}>
-        Today&apos;s Tasks
-      </p>
+    <div className="ft-card mx-4 mb-4 p-3">
+      <p className="ft-label mb-2 px-1">Today&apos;s Tasks</p>
       <div className="flex flex-col gap-2">
         {tasks.map((task) => {
           const dotColor = PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal;
@@ -110,8 +108,8 @@ export function TodaysTasks() {
               key={task.id}
               className="rounded-xl px-3 py-2.5 flex items-center gap-3"
               style={{
-                background: "#fff",
-                border: `1px solid ${overdue ? "rgba(220,38,38,0.2)" : "rgba(0,0,0,0.06)"}`,
+                background: "var(--ft-surface2)",
+                border: `1px solid ${overdue ? "var(--ft-crit)" : "var(--ft-border)"}`,
               }}
             >
               {/* Priority dot */}
@@ -121,21 +119,22 @@ export function TodaysTasks() {
               />
 
               {/* Title */}
-              <span className="flex-1 text-sm" style={{ color: "#1C1815" }}>
+              <span className="flex-1 text-sm" style={{ color: "var(--ft-text)" }}>
                 {task.title}
                 {overdue && (
-                  <span className="ml-2 text-[10px] font-semibold text-red-500">Overdue</span>
+                  <span className="ft-mono ml-2 text-[10px] font-semibold" style={{ color: "var(--ft-crit)" }}>Overdue</span>
                 )}
               </span>
 
               {/* Complete button */}
               <button
                 onClick={() => handleComplete(task.id)}
-                className="w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-colors"
-                style={{ borderColor: "rgba(0,0,0,0.2)", background: "transparent" }}
+                className="ft-action-btn w-6 h-6 shrink-0"
+                style={{ borderRadius: 999, border: "1px solid var(--ft-border2)" }}
                 title="Mark complete"
+                aria-label="Mark complete"
               >
-                <Check className="w-3.5 h-3.5" style={{ color: "#9C8E7A" }} />
+                <Icon.check size={14} />
               </button>
             </div>
           );

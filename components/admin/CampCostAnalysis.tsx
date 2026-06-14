@@ -33,7 +33,7 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
     return (
       <div
         className="rounded-xl p-6 text-center text-sm"
-        style={{ background: "#FAFAF8", border: "1px solid #E0D5C8", color: "#9C8E7A" }}
+        style={{ background: "var(--ft-bg)", border: "1px solid var(--ft-border)", color: "var(--ft-subtle)" }}
       >
         No expense transactions linked to camps yet.
       </div>
@@ -43,15 +43,15 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
   return (
     <div className="space-y-4">
       {/* Bar chart */}
-      <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E0D5C8" }}>
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "#9C8E7A" }}>
+      <div className="rounded-xl p-4" style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--ft-subtle)" }}>
           Total Cost by Camp
         </p>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={sorted} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <XAxis dataKey="campName" tick={{ fontSize: 11, fill: "#9C8E7A" }} />
+            <XAxis dataKey="campName" tick={{ fontSize: 11, fill: "var(--ft-subtle)" }} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#9C8E7A" }}
+              tick={{ fontSize: 11, fill: "var(--ft-subtle)" }}
               width={70}
               tickFormatter={(v: number) =>
                 v >= 1000 ? `R${(v / 1000).toFixed(0)}k` : `R${v}`
@@ -63,16 +63,16 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
                 "Total Cost",
               ]}
               contentStyle={{
-                background: "#1A1510",
+                background: "var(--ft-text)",
                 border: "1px solid rgba(139,105,20,0.3)",
                 borderRadius: "8px",
-                color: "#F5EBD4",
+                color: "var(--ft-fair-bg)",
                 fontSize: "12px",
               }}
             />
             <Bar
               dataKey="totalCost"
-              fill="#C0574C"
+              fill="var(--ft-poor)"
               radius={[4, 4, 0, 0] as [number, number, number, number]}
             />
           </BarChart>
@@ -81,16 +81,16 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
 
       {/* Sort controls */}
       <div className="flex gap-2 text-xs">
-        <span style={{ color: "#9C8E7A" }}>Sort by:</span>
+        <span style={{ color: "var(--ft-subtle)" }}>Sort by:</span>
         {(["totalCost", "costPerHa"] as const).map((key) => (
           <button
             key={key}
             onClick={() => setSortKey(key)}
             className="px-2 py-0.5 rounded font-medium transition-colors"
             style={{
-              background: sortKey === key ? "#1C1815" : "transparent",
-              color: sortKey === key ? "#FAFAF8" : "#9C8E7A",
-              border: "1px solid #E0D5C8",
+              background: sortKey === key ? "var(--ft-text)" : "transparent",
+              color: sortKey === key ? "var(--ft-bg)" : "var(--ft-subtle)",
+              border: "1px solid var(--ft-border)",
             }}
           >
             {key === "totalCost" ? "Total Cost" : "Cost / Ha"}
@@ -99,14 +99,14 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E0D5C8" }}>
+      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid var(--ft-border)" }}>
         <table className="w-full text-xs">
           <thead>
-            <tr style={{ background: "#F5F0EA", borderBottom: "1px solid #E0D5C8" }}>
-              <th className="text-left px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Camp</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Total Cost (R)</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Hectares</th>
-              <th className="text-right px-3 py-2 font-semibold" style={{ color: "#9C8E7A" }}>Cost / Ha (R)</th>
+            <tr style={{ background: "var(--ft-surface)", borderBottom: "1px solid var(--ft-border)" }}>
+              <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Camp</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Total Cost (R)</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Hectares</th>
+              <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--ft-subtle)" }}>Cost / Ha (R)</th>
             </tr>
           </thead>
           <tbody>
@@ -114,18 +114,18 @@ export default function CampCostAnalysis({ data }: { data: CampCostRow[] }) {
               <tr
                 key={row.campId}
                 style={{
-                  borderBottom: idx < sorted.length - 1 ? "1px solid #E0D5C8" : "none",
-                  background: idx % 2 === 0 ? "#FFFFFF" : "#FAFAF8",
+                  borderBottom: idx < sorted.length - 1 ? "1px solid var(--ft-border)" : "none",
+                  background: idx % 2 === 0 ? "#FFFFFF" : "var(--ft-bg)",
                 }}
               >
-                <td className="px-3 py-2.5 font-medium" style={{ color: "#1C1815" }}>{row.campName}</td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#C0574C" }}>
+                <td className="px-3 py-2.5 font-medium" style={{ color: "var(--ft-text)" }}>{row.campName}</td>
+                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-poor)" }}>
                   {fmt(row.totalCost)}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#1C1815" }}>
+                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-text)" }}>
                   {row.hectares !== null ? row.hectares.toFixed(1) : "—"}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "#8B6914" }}>
+                <td className="px-3 py-2.5 text-right font-mono" style={{ color: "var(--ft-fair)" }}>
                   {row.costPerHa !== null ? fmt(row.costPerHa) : "—"}
                 </td>
               </tr>

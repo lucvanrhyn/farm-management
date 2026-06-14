@@ -127,8 +127,8 @@ export default function EditAnimalModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4">
-        <h2 className="text-lg font-bold text-stone-900">
+      <div className="bg-[var(--ft-surface)] rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4">
+        <h2 className="text-lg font-bold text-[var(--ft-text)]">
           Edit animal — <span className="font-mono">{animal.animalId}</span>
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -155,7 +155,7 @@ export default function EditAnimalModal({
           <div>
             <label
               htmlFor="edit-animal-camp"
-              className="text-xs text-stone-500 mb-1 block"
+              className="text-xs text-[var(--ft-subtle)] mb-1 block"
             >
               Current camp
             </label>
@@ -163,7 +163,7 @@ export default function EditAnimalModal({
               id="edit-animal-camp"
               value={form.currentCamp}
               onChange={(e) => setField("currentCamp", e.target.value)}
-              className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full border border-[var(--ft-border)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-fair)]"
             >
               {camps.map((c) => (
                 <option key={c.campId} value={c.campId}>
@@ -207,7 +207,7 @@ export default function EditAnimalModal({
             />
           </div>
           {error && (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="text-sm text-[var(--ft-crit)]" role="alert">
               {error}
             </p>
           )}
@@ -215,14 +215,14 @@ export default function EditAnimalModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 rounded-xl border border-stone-300 text-sm text-stone-600 hover:bg-stone-50"
+              className="flex-1 py-2 rounded-xl border border-[var(--ft-border)] text-sm text-[var(--ft-muted)] hover:bg-[var(--ft-surface)]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+              className="flex-1 py-2 rounded-xl bg-[var(--ft-fair)] text-white text-sm font-medium hover:bg-[var(--ft-fair)] disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save changes"}
             </button>
@@ -250,7 +250,7 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="text-xs text-stone-500 mb-1 block">
+      <label htmlFor={id} className="text-xs text-[var(--ft-subtle)] mb-1 block">
         {label}
       </label>
       <input
@@ -259,7 +259,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-stone-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+        className="w-full border border-[var(--ft-border)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-fair)]"
       />
     </div>
   );

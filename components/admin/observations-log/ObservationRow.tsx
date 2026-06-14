@@ -17,7 +17,7 @@ interface ObservationRowProps {
 }
 
 export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
-  const badge = TYPE_BADGE[obs.type] ?? { color: "#9C8E7A", bg: "rgba(156,142,122,0.12)" };
+  const badge = TYPE_BADGE[obs.type] ?? { color: "var(--ft-subtle)", bg: "rgba(156,142,122,0.12)" };
   return (
     <div
       className="relative flex items-start gap-4 pl-6 py-2.5 transition-colors group rounded-lg -ml-px"
@@ -37,19 +37,19 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
           >
             {getObservationTypeLabel(obs.type)}
           </span>
-          <span className="text-xs font-semibold font-mono" style={{ color: "#1C1815" }}>
+          <span className="text-xs font-semibold font-mono" style={{ color: "var(--ft-text)" }}>
             {obs.campId}
           </span>
           {obs.animalId && (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: "#F5F2EE", color: "#6B5C4E" }}>
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--ft-surface)", color: "var(--ft-muted)" }}>
               {obs.animalId}
             </span>
           )}
         </div>
-        <p className="text-xs mt-1 truncate" style={{ color: "#9C8E7A" }}>
+        <p className="text-xs mt-1 truncate" style={{ color: "var(--ft-subtle)" }}>
           {parseObservationDetails(obs.type, obs.details)}
           {obs.editedAt && (
-            <span className="ml-1" style={{ color: "#8B6914" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
+            <span className="ml-1" style={{ color: "var(--ft-fair)" }} title={`Edited by ${obs.editedBy ?? "?"}`}>✎</span>
           )}
         </p>
         {/* Issue #492 — free-text note, surfaced unobtrusively below the
@@ -60,13 +60,13 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
           <p
             className="text-xs mt-0.5 italic truncate"
             data-testid="observation-note"
-            style={{ color: "#6B5C4E" }}
+            style={{ color: "var(--ft-muted)" }}
             title={obs.notes}
           >
             “{obs.notes}”
           </p>
         )}
-        <p className="text-[10px] mt-0.5 font-mono" style={{ color: "#C4B8AA" }}>
+        <p className="text-[10px] mt-0.5 font-mono" style={{ color: "var(--ft-border)" }}>
           {obs.observedAt.split("T")[0]}{obs.loggedBy ? ` · ${obs.loggedBy}` : ""}
         </p>
       </div>
@@ -74,8 +74,8 @@ export function ObservationRow({ obs, onEdit }: ObservationRowProps) {
         onClick={() => onEdit(obs)}
         className="shrink-0 px-2.5 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
         style={{
-          border: "1px solid #E0D5C8",
-          color: "#9C8E7A",
+          border: "1px solid var(--ft-border)",
+          color: "var(--ft-subtle)",
           background: "transparent",
         }}
       >

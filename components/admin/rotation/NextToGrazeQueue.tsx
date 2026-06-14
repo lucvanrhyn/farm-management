@@ -107,40 +107,40 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
 
   return (
     <>
-      <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "#E0D5C8" }}>
-        <div className="px-5 py-3 border-b" style={{ background: "#FAFAF8", borderColor: "#E0D5C8" }}>
-          <h3 className="text-sm font-semibold" style={{ color: "#1C1815" }}>
+      <div className="rounded-2xl border overflow-hidden mb-6" style={{ borderColor: "var(--ft-border)" }}>
+        <div className="px-5 py-3 border-b" style={{ background: "var(--ft-bg)", borderColor: "var(--ft-border)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             Next to Graze
           </h3>
-          <p className="text-xs mt-0.5" style={{ color: "#9C8E7A" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ft-subtle)" }}>
             Ranked by days rested — longest first.
           </p>
         </div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b" style={{ borderColor: "#F0EAE0" }}>
-              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Camp</th>
-              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9C8E7A" }}>Days Rested</th>
-              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "#9C8E7A" }}>Capacity</th>
-              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "#9C8E7A" }}>Veld Type</th>
+            <tr className="border-b" style={{ borderColor: "var(--ft-surface2)" }}>
+              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Camp</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ft-subtle)" }}>Days Rested</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>Capacity</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>Veld Type</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
           <tbody>
             {queuedCamps.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-6 text-center text-sm" style={{ color: "#9C8E7A" }}>
+                <td colSpan={5} className="px-5 py-6 text-center text-sm" style={{ color: "var(--ft-subtle)" }}>
                   No resting-ready camps at the moment.
                 </td>
               </tr>
             )}
             {queuedCamps.map((camp, i) => (
-              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "#F0EAE0" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: "#1C1815" }}>
+              <tr key={camp.campId} className="border-b last:border-0" style={{ borderColor: "var(--ft-surface2)" }}>
+                <td className="px-5 py-3 font-medium" style={{ color: "var(--ft-text)" }}>
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
-                      style={{ background: "rgba(22,163,74,0.12)", color: "#16a34a" }}
+                      style={{ background: "rgba(22,163,74,0.12)", color: "var(--ft-good)" }}
                     >
                       {i + 1}
                     </span>
@@ -150,10 +150,10 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
                 <td className="px-5 py-3 tabular-nums" style={{ color: "#4B3D2E" }}>
                   {camp.daysRested != null ? `${camp.daysRested}d` : "—"}
                 </td>
-                <td className="px-5 py-3 hidden md:table-cell" style={{ color: "#9C8E7A" }}>
+                <td className="px-5 py-3 hidden md:table-cell" style={{ color: "var(--ft-subtle)" }}>
                   {camp.capacityLsuDays != null ? `${camp.capacityLsuDays.toFixed(0)} LSU-days` : "—"}
                 </td>
-                <td className="px-5 py-3 hidden md:table-cell capitalize" style={{ color: "#9C8E7A" }}>
+                <td className="px-5 py-3 hidden md:table-cell capitalize" style={{ color: "var(--ft-subtle)" }}>
                   {camp.veldType ?? "—"}
                 </td>
                 <td className="px-5 py-3 text-right">
@@ -162,7 +162,7 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
                     className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
                     style={{
                       background: "rgba(22,163,74,0.1)",
-                      color: "#16a34a",
+                      color: "var(--ft-good)",
                       border: "1px solid rgba(22,163,74,0.25)",
                     }}
                   >
@@ -181,12 +181,12 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
           <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
           <div
             className="relative rounded-t-3xl p-6 flex flex-col gap-4 max-h-[70vh] overflow-y-auto"
-            style={{ backgroundColor: "#1E0F07", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)" }}
+            style={{ backgroundColor: "var(--ft-text)", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)" }}
           >
             <div className="flex justify-center mb-1">
               <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: "rgba(139,105,20,0.4)" }} />
             </div>
-            <h2 className="font-bold text-lg" style={{ fontFamily: "var(--font-display)", color: "#F5F0E8" }}>
+            <h2 className="font-bold text-lg" style={{ fontFamily: "var(--font-display)", color: "var(--ft-surface)" }}>
               Move mob to{" "}
               {allCamps.find((c) => c.camp_id === destCampId)?.camp_name ?? destCampId}
             </h2>
@@ -212,8 +212,8 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
                   color: "#D2B48C",
                 }}
               >
-                <span className="font-medium" style={{ color: "#F5F0E8" }}>{mob.name}</span>
-                <span className="text-xs" style={{ color: "#C49030" }}>
+                <span className="font-medium" style={{ color: "var(--ft-surface)" }}>{mob.name}</span>
+                <span className="text-xs" style={{ color: "var(--ft-fair)" }}>
                   {mob.animal_count} animal{mob.animal_count !== 1 ? "s" : ""}
                 </span>
               </button>
@@ -243,7 +243,7 @@ export default function NextToGrazeQueue({ queuedCamps, allCamps }: Props) {
       />
 
       {error && (
-        <p className="text-sm mt-2 text-center" style={{ color: "#dc2626" }}>
+        <p className="text-sm mt-2 text-center" style={{ color: "var(--ft-crit)" }}>
           {error}
         </p>
       )}

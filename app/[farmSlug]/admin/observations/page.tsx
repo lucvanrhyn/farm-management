@@ -5,6 +5,7 @@ import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
+import { PageHeader } from "@/components/ds";
 import ObservationsPageClient from "./ObservationsPageClient";
 import AdminPage from "@/app/_components/AdminPage";
 
@@ -39,7 +40,7 @@ export default async function AdminObservationsPage({
     return (
       <AdminPage>
         <div className="flex-1 min-w-0">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );
@@ -66,10 +67,11 @@ export default async function AdminObservationsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1C1815]">Observations</h1>
-        <p className="text-sm mt-1" style={{ color: "#9C8E7A" }}>All field observations — filter and edit</p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Observations"
+        subtitle="activity log · all field observations — filter and edit"
+      />
       <ObservationsPageClient camps={camps} animals={animals} species={mode} />
       {/*
         Wave C / U4 — see animals/page.tsx for full rationale. Danger zone
@@ -78,11 +80,11 @@ export default async function AdminObservationsPage({
       */}
       <div
         data-testid="danger-zone"
-        className="mt-12 pt-6 border-t border-[#E8DFD2]"
+        className="mt-12 pt-6 border-t border-[var(--ft-surface2)]"
       >
         <p
           className="text-xs uppercase tracking-wider mb-3"
-          style={{ color: "#9C8E7A" }}
+          style={{ color: "var(--ft-subtle)" }}
         >
           Danger zone
         </p>

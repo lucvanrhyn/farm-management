@@ -3,39 +3,57 @@
 /**
  * CampPopupContent — rendered inside a Mapbox `<Popup>` when the user clicks a
  * camp polygon. Extracted from FarmMap to keep the shell ≤ 400 LOC.
+ *
+ * Reskin (satellite / immersive): dark-glass card, Fraunces camp name,
+ * token-driven status pills. The popup floats over the dark satellite map
+ * (outside any .dark-surface scope) so it carries literal dark-glass values.
+ * Props / contract / links unchanged — visual only.
  */
 
 import { useParams } from "next/navigation";
 
-const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
-  Good:       { color: "#4ade80", bg: "rgba(74,222,128,0.1)" },
-  Intact:     { color: "#4ade80", bg: "rgba(74,222,128,0.1)" },
-  Adequate:   { color: "#fbbf24", bg: "rgba(251,191,36,0.1)" },
-  Fair:       { color: "#fbbf24", bg: "rgba(251,191,36,0.1)" },
-  Damaged:    { color: "#fb923c", bg: "rgba(251,146,60,0.1)" },
-  Poor:       { color: "#fb923c", bg: "rgba(251,146,60,0.1)" },
-  Overgrazed: { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
-  Critical:   { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
+// Map a status word to the design status scale (good / fair / poor / critical).
+const STATUS_TONE: Record<string, "good" | "fair" | "poor" | "critical"> = {
+  Good:       "good",
+  Intact:     "good",
+  Adequate:   "fair",
+  Fair:       "fair",
+  Damaged:    "poor",
+  Poor:       "poor",
+  Overgrazed: "critical",
+  Critical:   "critical",
 };
 
-const DEFAULT_STATUS = { color: "#94a3b8", bg: "rgba(148,163,184,0.1)" };
+const TONE_COLOR: Record<"good" | "fair" | "poor" | "critical", string> = {
+  good:     "var(--ft-good)",
+  fair:     "var(--ft-fair)",
+  poor:     "var(--ft-poor)",
+  critical: "var(--ft-crit)",
+};
+
+const DEFAULT_COLOR = "#B6A993";
 
 function StatusBadge({ label, value }: { label: string; value: string }) {
-  const s = STATUS_COLORS[value] ?? DEFAULT_STATUS;
+  const tone = STATUS_TONE[value];
+  const color = tone ? TONE_COLOR[tone] : DEFAULT_COLOR;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontSize: 8, color: "rgba(210,180,140,0.5)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        className="ft-mono"
+        style={{ fontSize: 8, color: "rgba(255,235,210,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}
+      >
         {label}
       </span>
       <div
         style={{
-          display: "inline-flex", alignItems: "center", gap: 3,
-          background: s.bg, color: s.color,
-          border: `1px solid ${s.color}44`,
-          borderRadius: 6, fontSize: 10, padding: "2px 7px", fontWeight: 600,
+          display: "inline-flex", alignItems: "center", gap: 6,
+          background: "rgba(255,235,210,0.06)", color,
+          border: `1px solid ${color}55`,
+          borderRadius: 999, fontSize: 10.5, padding: "3px 9px", fontWeight: 500,
+          whiteSpace: "nowrap",
         }}
       >
-        <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.color }} />
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, boxShadow: `0 0 0 3px ${color}26` }} />
         {value}
       </div>
     </div>
@@ -65,75 +83,94 @@ export default function CampPopupContent({
 }: Props) {
   const params = useParams();
   const farmSlug = params?.farmSlug as string | undefined;
+
+  const lastCheckColor =
+    daysSinceInspection == null
+      ? DEFAULT_COLOR
+      : daysSinceInspection <= 7
+        ? "var(--ft-good)"
+        : daysSinceInspection <= 14
+          ? "var(--ft-fair)"
+          : "var(--ft-poor)";
+
   return (
     <div
       style={{
-        background: "#1E1710",
-        border: "1px solid rgba(139,105,20,0.3)",
-        borderRadius: "14px",
-        padding: "14px 16px",
-        color: "#F5EBD4",
-        minWidth: "220px",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        background: "rgba(26,21,16,0.92)",
+        border: "1px solid rgba(255,235,210,0.13)",
+        backdropFilter: "blur(14px) saturate(140%)",
+        borderRadius: 16,
+        padding: "16px 18px",
+        color: "#EFE7D8",
+        minWidth: 220,
+        boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
-        <p style={{ fontWeight: 700, fontSize: 15, fontFamily: "var(--font-display, serif)", color: "#F5EBD4", margin: 0 }}>
+      <div className="ft-mono" style={{ fontSize: 10, letterSpacing: "0.16em", color: "rgba(255,235,210,0.5)", textTransform: "uppercase" }}>
+        Camp
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 3, marginBottom: 12 }}>
+        <p className="ft-serif" style={{ fontWeight: 500, fontSize: 22, color: "#EFE7D8", margin: 0, lineHeight: 1.05 }}>
           {campName}
         </p>
         {sizeHectares != null && (
-          <span style={{ fontSize: 10, color: "rgba(210,180,140,0.5)" }}>
+          <span className="ft-mono" style={{ fontSize: 10.5, color: "rgba(255,235,210,0.5)" }}>
             {sizeHectares} ha
           </span>
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div
           style={{
             display: "flex", flexDirection: "column",
-            padding: "4px 10px", borderRadius: 8,
-            background: "rgba(255,248,235,0.06)",
-            border: "1px solid rgba(210,180,140,0.15)",
+            padding: "6px 12px", borderRadius: 10,
+            background: "rgba(42,35,28,0.9)",
+            border: "1px solid rgba(255,235,210,0.1)",
             minWidth: 56, alignItems: "center",
           }}
         >
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#F5EBD4", lineHeight: 1.2 }}>
+          <span className="ft-mono ft-tabnums" style={{ fontSize: 17, fontWeight: 500, color: "#EFE7D8", lineHeight: 1.2 }}>
             {animalCount}
           </span>
-          <span style={{ fontSize: 9, color: "rgba(210,180,140,0.6)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <span className="ft-mono" style={{ fontSize: 9, color: "rgba(255,235,210,0.6)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             animals
           </span>
         </div>
         <StatusBadge label="Grazing" value={grazing} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         {waterStatus !== "Unknown" && <StatusBadge label="Water" value={waterStatus} />}
         {fenceStatus !== "Unknown" && <StatusBadge label="Fence" value={fenceStatus} />}
         {daysSinceInspection != null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 8, color: "rgba(210,180,140,0.5)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="ft-mono" style={{ fontSize: 8, color: "rgba(255,235,210,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Last check
             </span>
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 6,
-              background: daysSinceInspection <= 7 ? "rgba(74,222,128,0.1)" : daysSinceInspection <= 14 ? "rgba(251,191,36,0.1)" : "rgba(251,146,60,0.1)",
-              color: daysSinceInspection <= 7 ? "#4ade80" : daysSinceInspection <= 14 ? "#fbbf24" : "#fb923c",
-            }}>
+            <span
+              className="ft-mono"
+              style={{
+                fontSize: 10.5, fontWeight: 500, padding: "3px 9px", borderRadius: 999,
+                background: "rgba(255,235,210,0.06)",
+                border: `1px solid ${lastCheckColor}55`,
+                color: lastCheckColor,
+                whiteSpace: "nowrap",
+              }}
+            >
               {daysSinceInspection === 0 ? "Today" : `${daysSinceInspection}d ago`}
             </span>
           </div>
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 16 }}>
+      <div style={{ display: "flex", gap: 18 }}>
         {farmSlug && (
           <a
             href={`/${encodeURIComponent(farmSlug)}/dashboard/camp/${encodeURIComponent(campId)}`}
             style={{
               display: "inline-flex", alignItems: "center", gap: 4,
-              fontSize: 11, color: "#D2B48C", fontWeight: 600,
+              fontSize: 11.5, color: "var(--ft-accent)", fontWeight: 500,
               textDecoration: "none", letterSpacing: "0.02em",
             }}
           >
@@ -145,7 +182,7 @@ export default function CampPopupContent({
             href={`/${encodeURIComponent(farmSlug)}/logger/${encodeURIComponent(campId)}`}
             style={{
               display: "inline-flex", alignItems: "center", gap: 4,
-              fontSize: 11, color: "#8B6914", fontWeight: 600,
+              fontSize: 11.5, color: "rgba(255,235,210,0.7)", fontWeight: 500,
               textDecoration: "none", letterSpacing: "0.02em",
             }}
           >

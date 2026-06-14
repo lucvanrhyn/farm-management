@@ -17,11 +17,11 @@ interface MovementDetails {
 }
 
 const STATUS_META: Record<RotationStatus, { color: string; label: string }> = {
-  grazing: { color: "#3b82f6", label: "Grazing" },
-  overstayed: { color: "#dc2626", label: "Overstayed" },
-  resting_ready: { color: "#16a34a", label: "Ready to Graze" },
+  grazing: { color: "var(--ft-info)", label: "Grazing" },
+  overstayed: { color: "var(--ft-crit)", label: "Overstayed" },
+  resting_ready: { color: "var(--ft-good)", label: "Ready to Graze" },
   resting: { color: "#86efac", label: "Resting" },
-  overdue_rest: { color: "#f59e0b", label: "Overdue Rest" },
+  overdue_rest: { color: "var(--ft-fair)", label: "Overdue Rest" },
   unknown: { color: "#9ca3af", label: "Unknown" },
 };
 
@@ -47,15 +47,15 @@ export default function CampRotationHistoryPanel({
   return (
     <div
       className="rounded-2xl border p-6 mb-6"
-      style={{ background: "#FFFFFF", borderColor: "#E0D5C8" }}
+      style={{ background: "var(--ft-surface)", borderColor: "var(--ft-border)" }}
     >
-      <h2 className="text-sm font-semibold mb-4" style={{ color: "#1C1815" }}>
+      <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ft-text)" }}>
         Rotation History
       </h2>
 
       {/* Current status strip */}
       {status && (
-        <div className="flex flex-wrap items-center gap-4 mb-5 pb-4" style={{ borderBottom: "1px solid #F0E8DE" }}>
+        <div className="flex flex-wrap items-center gap-4 mb-5 pb-4" style={{ borderBottom: "1px solid var(--ft-border)" }}>
           <span
             className="inline-flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full"
             style={{ background: `${meta.color}22`, color: meta.color }}
@@ -67,19 +67,19 @@ export default function CampRotationHistoryPanel({
             {meta.label}
           </span>
           {status.daysGrazed !== null && (
-            <span className="text-xs" style={{ color: "#6B5C4E" }}>
+            <span className="text-xs" style={{ color: "var(--ft-muted)" }}>
               <span className="font-mono font-semibold">{status.daysGrazed}d</span> grazed (max{" "}
               <span className="font-mono">{status.effectiveMaxGrazingDays}d</span>)
             </span>
           )}
           {status.daysRested !== null && (
-            <span className="text-xs" style={{ color: "#6B5C4E" }}>
+            <span className="text-xs" style={{ color: "var(--ft-muted)" }}>
               <span className="font-mono font-semibold">{status.daysRested}d</span> rested (target{" "}
               <span className="font-mono">{status.effectiveRestDays}d</span>)
             </span>
           )}
           {status.nextEligibleDate && (
-            <span className="text-xs" style={{ color: "#9C8E7A" }}>
+            <span className="text-xs" style={{ color: "var(--ft-subtle)" }}>
               Eligible from <span className="font-mono">{formatDate(status.nextEligibleDate)}</span>
             </span>
           )}
@@ -88,7 +88,7 @@ export default function CampRotationHistoryPanel({
 
       {/* Movement list */}
       {movements.length === 0 ? (
-        <p className="text-sm" style={{ color: "#9C8E7A" }}>
+        <p className="text-sm" style={{ color: "var(--ft-subtle)" }}>
           No mob movements recorded for this camp.
         </p>
       ) : (
@@ -103,14 +103,14 @@ export default function CampRotationHistoryPanel({
             const isArrival = details.destCamp === campId;
             const isDeparture = details.sourceCamp === campId;
             const arrow = isArrival ? "←" : isDeparture ? "→" : "·";
-            const arrowColor = isArrival ? "#16a34a" : isDeparture ? "#8B6914" : "#9C8E7A";
+            const arrowColor = isArrival ? "var(--ft-good)" : isDeparture ? "var(--ft-fair)" : "var(--ft-subtle)";
             const otherCamp = isArrival ? details.sourceCamp : details.destCamp;
 
             return (
               <li
                 key={m.id}
                 className="flex items-center gap-3 text-sm py-1.5"
-                style={{ borderBottom: "1px solid #F0E8DE" }}
+                style={{ borderBottom: "1px solid var(--ft-border)" }}
               >
                 <span
                   className="font-mono text-base shrink-0"
@@ -119,16 +119,16 @@ export default function CampRotationHistoryPanel({
                 >
                   {arrow}
                 </span>
-                <span className="font-mono text-xs shrink-0" style={{ color: "#9C8E7A", width: 80 }}>
+                <span className="font-mono text-xs shrink-0" style={{ color: "var(--ft-subtle)", width: 80 }}>
                   {formatDate(m.observedAt)}
                 </span>
-                <span className="flex-1 min-w-0 truncate" style={{ color: "#1C1815" }}>
+                <span className="flex-1 min-w-0 truncate" style={{ color: "var(--ft-text)" }}>
                   {details.mobName ?? "Unknown mob"}
                   {typeof details.animalCount === "number" && (
-                    <span style={{ color: "#9C8E7A" }}> · {details.animalCount} animals</span>
+                    <span style={{ color: "var(--ft-subtle)" }}> · {details.animalCount} animals</span>
                   )}
                   {otherCamp && (
-                    <span style={{ color: "#9C8E7A" }}>
+                    <span style={{ color: "var(--ft-subtle)" }}>
                       {" "}
                       · {isArrival ? "from" : "to"} <span className="font-mono">{otherCamp}</span>
                     </span>
