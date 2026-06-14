@@ -202,6 +202,108 @@ describe("toEmbeddingText — date formatting", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 4b. observedAt — the EVENT axis (#516), distinct from sourceUpdatedAt
+// ---------------------------------------------------------------------------
+//
+// sourceUpdatedAt is the record-MUTATION axis (drives stale detection).
+// observedAt is the EVENT axis used for date-windowed semantic retrieval —
+// it mirrors the structured retriever's per-entity event dates
+// (observation→observedAt, task→dueDate, notification→createdAt). Entities
+// with no natural event axis (camp, animal, task_template, it3_snapshot)
+// resolve to null; the retriever COALESCEs null back to sourceUpdatedAt so
+// their behaviour is unchanged from before this column existed.
+
+describe("toEmbeddingText — observedAt event axis (#516)", () => {
+  it("observation observedAt = the row's observedAt (independent of the mutation date)", () => {
+    const input: ChunkInput = {
+      entityType: "observation",
+      entityId: "obs-evt-1",
+      row: {
+        type: "weight",
+        observedAt: "2026-03-15", // event date INSIDE a hypothetical window
+        animalId: "an-1",
+        campId: "camp-1",
+        details: "350kg",
+        // logged/edited much later — the mutation axis diverges from the event
+        updatedAt: new Date("2026-05-30T00:00:00.000Z"),
+      },
+    };
+    const [chunk] = toEmbeddingText(input);
+    expect(chunk.observedAt).toBeInstanceOf(Date);
+    expect(chunk.observedAt!.toISOString().slice(0, 10)).toBe("2026-03-15");
+    // and the mutation axis is still the later date — the two are decoupled
+    expect(chunk.sourceUpdatedAt.toISOString().slice(0, 10)).toBe("2026-05-30");
+  });
+
+  it("task observedAt = dueDate (the YYYY-MM-DD string axis), parsed to a Date", () => {
+    const input: ChunkInput = {
+      entityType: "task",
+      entityId: "task-evt-1",
+      row: {
+        taskType: "vaccination",
+        title: "Vaccinate herd",
+        dueDate: "2026-04-01",
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    };
+    const [chunk] = toEmbeddingText(input);
+    expect(chunk.observedAt).toBeInstanceOf(Date);
+    expect(chunk.observedAt!.toISOString().slice(0, 10)).toBe("2026-04-01");
+  });
+
+  it("notification observedAt = createdAt (when the alert was raised)", () => {
+    const input: ChunkInput = {
+      entityType: "notification",
+      entityId: "notif-evt-1",
+      row: {
+        type: "ALERT",
+        message: "Low water",
+        createdAt: "2026-05-01",
+        updatedAt: new Date("2026-05-02T00:00:00.000Z"),
+      },
+    };
+    const [chunk] = toEmbeddingText(input);
+    expect(chunk.observedAt).toBeInstanceOf(Date);
+    expect(chunk.observedAt!.toISOString().slice(0, 10)).toBe("2026-05-01");
+  });
+
+  it.each(["camp", "animal", "task_template", "it3_snapshot"] as const)(
+    "%s has no event axis → observedAt is null (retriever COALESCEs to sourceUpdatedAt)",
+    (entityType) => {
+      const fixture = ALL_FIXTURES.find((f) => f.input.entityType === entityType);
+      expect(fixture).toBeDefined();
+      const result = toEmbeddingText(fixture!.input);
+      for (const chunk of result) {
+        expect(chunk.observedAt).toBeNull();
+      }
+    },
+  );
+
+  it("observation with an unparseable/absent observedAt → null (graceful)", () => {
+    const input: ChunkInput = {
+      entityType: "observation",
+      entityId: "obs-no-date",
+      row: {
+        type: "note",
+        animalId: "an-2",
+        campId: "camp-2",
+        details: "no observedAt present",
+        updatedAt: new Date("2026-02-01T00:00:00.000Z"),
+      },
+    };
+    const [chunk] = toEmbeddingText(input);
+    expect(chunk.observedAt).toBeNull();
+  });
+
+  it("dual-langTag chunks share the same observedAt", () => {
+    const result = toEmbeddingText(task_template_dual.input);
+    expect(result.length).toBe(2);
+    // task_template has no event axis → both null, and equal
+    expect(result[0].observedAt).toBe(result[1].observedAt);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 5. sourceUpdatedAt fallback chain (updatedAt → editedAt → createdAt)
 // ---------------------------------------------------------------------------
 

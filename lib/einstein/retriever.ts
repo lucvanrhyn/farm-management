@@ -14,13 +14,19 @@
  * Multi-tenancy: farmSlug → getPrismaForFarm (per-tenant client cache).
  *
  * Vector SQL shape (Wave 4 DDL declares embedding as F32_BLOB(1536)):
- *   SELECT id, entityType, entityId, text, sourceUpdatedAt,
+ *   SELECT id, entityType, entityId, text,
+ *          COALESCE(observedAt, sourceUpdatedAt) AS sourceUpdatedAt,
  *          vector_distance_cos(embedding, vector32(?)) AS distance
  *   FROM EinsteinChunk
  *   [WHERE entityType IN (...)]
- *   [AND sourceUpdatedAt BETWEEN ? AND ?]
+ *   [AND COALESCE(observedAt, sourceUpdatedAt) BETWEEN ? AND ?]
  *   ORDER BY distance ASC
  *   LIMIT ?
+ *
+ * The date window keys on the EVENT axis (#516): observedAt when the chunk
+ * carries one, else the record-mutation sourceUpdatedAt (NULL-safe via
+ * COALESCE → zero regression on chunks predating the column). See
+ * docs/adr/0009-einstein-observedat-event-axis.md.
  */
 
 import { getPrismaForFarm } from '@/lib/farm-prisma';
@@ -177,20 +183,33 @@ async function semantic(
     whereParts.push(`entityType IN (${placeholders})`);
     args.push(...entityFilter);
   }
+  // Date window keys on the EVENT axis (#516): COALESCE(observedAt,
+  // sourceUpdatedAt). A chunk that carries an observedAt (populated going
+  // forward by the chunker — observation/task/notification) is matched by when
+  // its event actually happened, not when the row was last edited. A chunk with
+  // a NULL observedAt (older chunks, or entities with no event axis) falls back
+  // to sourceUpdatedAt — identical to the pre-column behaviour, so there is no
+  // regression while the column back-fills naturally on re-embed. See
+  // docs/adr/0009-einstein-observedat-event-axis.md.
   if (dateStart) {
-    whereParts.push(`sourceUpdatedAt >= ?`);
+    whereParts.push(`COALESCE(observedAt, sourceUpdatedAt) >= ?`);
     args.push(dateStart.toISOString());
   }
   if (dateEnd) {
-    whereParts.push(`sourceUpdatedAt <= ?`);
+    whereParts.push(`COALESCE(observedAt, sourceUpdatedAt) <= ?`);
     args.push(dateEnd.toISOString());
   }
   const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   args.push(topK);
 
+  // Surface the same event axis as `sourceUpdatedAt` on the returned row so the
+  // chunk's date matches the axis it was filtered on (event date when known,
+  // else mutation date). The RetrievalChunk contract is unchanged — still a
+  // single date field.
   const sql = `
-    SELECT id, entityType, entityId, text, sourceUpdatedAt,
+    SELECT id, entityType, entityId, text,
+           COALESCE(observedAt, sourceUpdatedAt) AS sourceUpdatedAt,
            vector_distance_cos(embedding, vector32(?)) AS distance
     FROM EinsteinChunk
     ${whereClause}

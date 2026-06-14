@@ -104,8 +104,9 @@ function makeRenderedChunk(
   text: string,
   sourceUpdatedAt: Date = new Date("2026-04-01T00:00:00Z"),
   langTag = "en",
+  observedAt: Date | null = null,
 ): RenderedChunk {
-  return { entityType, entityId, langTag, text, sourceUpdatedAt } as RenderedChunk;
+  return { entityType, entityId, langTag, text, sourceUpdatedAt, observedAt } as RenderedChunk;
 }
 
 /**
@@ -414,9 +415,18 @@ describe("reindexForTenant", () => {
     }).einsteinChunk.upsert;
     expect(upsertFn).toHaveBeenCalledTimes(7);
     for (const call of upsertFn.mock.calls) {
-      const { create } = call[0] as { create: { langTag: string; embedding: unknown } };
+      const { create } = call[0] as {
+        create: { langTag: string; embedding: unknown; observedAt?: unknown };
+      };
       expect(create.langTag).toBe("en");
       expect(create.embedding).toBeInstanceOf(Buffer);
+      // The event-axis date is persisted alongside the chunk (#516). It is a
+      // Date for event-bearing entities (observation/task/notification) and
+      // null for the rest — but the column is always written through.
+      expect(create).toHaveProperty("observedAt");
+      expect(
+        create.observedAt === null || create.observedAt instanceof Date,
+      ).toBe(true);
     }
     // embeddingToBytes was called once per vector.
     expect(embeddingToBytes).toHaveBeenCalledTimes(7);

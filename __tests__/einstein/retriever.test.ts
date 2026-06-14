@@ -157,15 +157,22 @@ describe('retrieve.semantic', () => {
     expect(sql).toMatch(/entityType IN \(\?\)/); // only one placeholder survived
   });
 
-  it('applies dateRangeFilter as >= / <= clauses', async () => {
+  it('applies dateRangeFilter on the COALESCE(observedAt, sourceUpdatedAt) event axis (#516)', async () => {
     const fake = makeFakePrisma([]);
     getPrismaForFarmMock.mockResolvedValue(fake);
     const start = new Date('2026-01-01');
     const end = new Date('2026-04-01');
     await retrieve.semantic('delta-livestock', 'q', { dateRangeFilter: { start, end } });
     const [sql, ...args] = fake.__queryRawUnsafe.mock.calls[0];
-    expect(sql).toMatch(/sourceUpdatedAt >= \?/);
-    expect(sql).toMatch(/sourceUpdatedAt <= \?/);
+    // The date window keys on the EVENT axis: observedAt when the chunk carries
+    // one (populated going forward by the chunker), else the record-mutation
+    // sourceUpdatedAt — so old chunks (observedAt NULL) keep their pre-column
+    // behaviour with zero regression, while event-dated chunks match the window
+    // they actually fall inside.
+    expect(sql).toMatch(/COALESCE\(observedAt, sourceUpdatedAt\) >= \?/);
+    expect(sql).toMatch(/COALESCE\(observedAt, sourceUpdatedAt\) <= \?/);
+    // and the returned chunk date is surfaced on the same event axis
+    expect(sql).toMatch(/COALESCE\(observedAt, sourceUpdatedAt\) AS sourceUpdatedAt/);
     expect(args).toContain(start.toISOString());
     expect(args).toContain(end.toISOString());
   });

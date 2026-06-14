@@ -11,6 +11,11 @@
  * `message` not `body`/`title`, `payload` JSON for it3_snapshot). See
  * prisma/schema.prisma as the source of truth. Keeping fixtures in sync
  * with Prisma prevents the Wave 2A drift that shipped empty-ish chunks.
+ *
+ * observedAt (#516) is the EVENT axis — observation→observedAt, task→dueDate,
+ * notification→createdAt; null for camp/animal/task_template/it3_snapshot
+ * (no natural event axis → retriever COALESCEs to sourceUpdatedAt). It is
+ * decoupled from sourceUpdatedAt (the record-mutation axis).
  */
 
 import type { ChunkInput, RenderedChunk } from "@/lib/einstein/chunker";
@@ -64,6 +69,7 @@ export const obs_weighing_full = fixture(
       langTag: "en",
       text: "observation:WEIGHING @ 2026-01-15 — animal 'Bella' (Cattle, Angus, camp 'North Pasture'): weight: 320kg — by Jan Botha",
       sourceUpdatedAt: DATE_A,
+      observedAt: new Date("2026-01-15"),
     },
   ],
 );
@@ -92,6 +98,7 @@ export const obs_treatment_no_operator = fixture(
       langTag: "en",
       text: "observation:TREATMENT @ 2026-02-20 — animal 'Rooibos' (Sheep, Merino, camp camp-south): ivermectin 1ml/10kg",
       sourceUpdatedAt: DATE_B,
+      observedAt: new Date("2026-02-20"),
     },
   ],
 );
@@ -122,6 +129,7 @@ export const obs_pregnancy_scan = fixture(
       langTag: "en",
       text: "observation:PREGNANCY_SCAN @ 2026-03-10 — animal 'Lena' (Cattle, Hereford, camp 'East Paddock'): in-calf confirmed, 90 days — by Dr Smith",
       sourceUpdatedAt: DATE_C,
+      observedAt: new Date("2026-03-10"),
     },
   ],
 );
@@ -151,6 +159,7 @@ export const camp_full = fixture(
       langTag: "en",
       text: "camp — 'North Pasture' (45.5ha, sweetveld veld, borehole water): rotation notes: \"Good grazing after rain\"",
       sourceUpdatedAt: DATE_A,
+      observedAt: null,
     },
   ],
 );
@@ -176,6 +185,7 @@ export const camp_minimal = fixture(
       langTag: "en",
       text: "camp — 'South Paddock' (12ha, sourveld veld, dam water)",
       sourceUpdatedAt: DATE_B,
+      observedAt: null,
     },
   ],
 );
@@ -210,6 +220,7 @@ export const animal_with_mother = fixture(
       langTag: "en",
       text: "animal — 'Bella' REG-2023-001 (Cattle, Angus, born 2023-05-10): mother animal-099, currently camp 'North Pasture', status 'active'",
       sourceUpdatedAt: DATE_A,
+      observedAt: null,
     },
   ],
 );
@@ -239,6 +250,7 @@ export const animal_orphan = fixture(
       langTag: "en",
       text: "animal — 'Storm' REG-2024-007 (Sheep, Dorper, born 2024-01-20): currently camp camp-south, status 'active'",
       sourceUpdatedAt: DATE_B,
+      observedAt: null,
     },
   ],
 );
@@ -269,6 +281,7 @@ export const task_cattle_treatment = fixture(
       langTag: "en",
       text: "task:treatment — 'Dip all cattle' (due 2026-04-01, camp camp-north, status pending): Use Triatix at 2ml/L",
       sourceUpdatedAt: DATE_A,
+      observedAt: new Date("2026-04-01"),
     },
   ],
 );
@@ -295,6 +308,7 @@ export const task_camp_inspection = fixture(
       langTag: "en",
       text: "task:camp_inspection — 'Check north fence line' (due 2026-03-25, camp camp-north, status pending)",
       sourceUpdatedAt: DATE_B,
+      observedAt: new Date("2026-03-25"),
     },
   ],
 );
@@ -324,6 +338,7 @@ export const task_template_en_only = fixture(
       langTag: "en",
       text: "task_template — 'Annual vaccination' (vaccination, FREQ=YEARLY, species cattle)",
       sourceUpdatedAt: DATE_A,
+      observedAt: null,
     },
   ],
 );
@@ -349,6 +364,7 @@ export const task_template_dual = fixture(
       langTag: "en",
       text: "task_template — 'Dipping day' (dipping, FREQ=WEEKLY;INTERVAL=2, species sheep)",
       sourceUpdatedAt: DATE_B,
+      observedAt: null,
     },
     {
       entityType: "task_template",
@@ -356,6 +372,7 @@ export const task_template_dual = fixture(
       langTag: "af",
       text: "task_template — 'Dompeldag' (dipping, FREQ=WEEKLY;INTERVAL=2, spesie sheep)",
       sourceUpdatedAt: DATE_B,
+      observedAt: null,
     },
   ],
 );
@@ -381,6 +398,7 @@ export const task_template_dual_anthrax = fixture(
       langTag: "en",
       text: "task_template — 'Anthrax vaccination' (vaccination, FREQ=YEARLY, species cattle)",
       sourceUpdatedAt: DATE_C,
+      observedAt: null,
     },
     {
       entityType: "task_template",
@@ -388,6 +406,7 @@ export const task_template_dual_anthrax = fixture(
       langTag: "af",
       text: "task_template — 'Miltsiekte-entstof' (vaccination, FREQ=YEARLY, spesie cattle)",
       sourceUpdatedAt: DATE_C,
+      observedAt: null,
     },
   ],
 );
@@ -417,6 +436,7 @@ export const notification_spi_drought = fixture(
       langTag: "en",
       text: 'notification:SPI_DROUGHT [red] @ 2026-02-20 (scope: farm:trio-b): "SPI below -1.5 at farm location — severe drought conditions detected."',
       sourceUpdatedAt: DATE_B,
+      observedAt: new Date("2026-02-20"),
     },
   ],
 );
@@ -440,6 +460,7 @@ export const notification_sars_it3 = fixture(
       langTag: "en",
       text: 'notification:SARS_IT3_DEADLINE @ 2026-03-10: "IT3 submission due 31 March"',
       sourceUpdatedAt: DATE_C,
+      observedAt: new Date("2026-03-10"),
     },
   ],
 );
@@ -473,6 +494,7 @@ export const it3_snapshot = fixture(
       langTag: "en",
       text: "it3_snapshot tax year 2025 (2024-03-01..2025-02-28) — gross income 850000, deductions 320000, net 530000 (per SARS schedule)",
       sourceUpdatedAt: DATE_A,
+      observedAt: null,
     },
   ],
 );
@@ -505,6 +527,7 @@ export const edge_obs_missing_optional = fixture(
       langTag: "en",
       text: "observation:GENERAL @ 2026-01-01 — animal 'Unknown' (Cattle, camp camp-a): general check",
       sourceUpdatedAt: DATE_A,
+      observedAt: new Date("2026-01-01"),
     },
   ],
 );
@@ -530,6 +553,7 @@ export const edge_camp_null_notes = fixture(
       langTag: "en",
       text: "camp — 'Bare Paddock' (5ha, mixedveld veld, river water)",
       sourceUpdatedAt: DATE_B,
+      observedAt: null,
     },
   ],
 );
@@ -555,6 +579,7 @@ export const edge_template_empty_af = fixture(
       langTag: "en",
       text: "task_template — 'Fire break inspection' (fire_break_maintenance, FREQ=YEARLY;BYMONTH=4)",
       sourceUpdatedAt: DATE_C,
+      observedAt: null,
     },
   ],
 );
@@ -584,6 +609,7 @@ export const edge_obs_very_long_text = fixture(
       langTag: "en",
       text: `observation:TREATMENT @ 2026-01-10 — animal 'BigText' (Cattle, Angus, camp camp-x): ${LONG_DETAILS}`,
       sourceUpdatedAt: DATE_A,
+      observedAt: new Date("2026-01-10"),
     },
   ],
 );
@@ -614,6 +640,7 @@ export const edge_animal_created_at_fallback = fixture(
       langTag: "en",
       text: "animal — 'Sprout' REG-EDGE-01 (Goat, Boer, born 2025-06-01): currently camp camp-z, status 'active'",
       sourceUpdatedAt: DATE_C,
+      observedAt: null,
     },
   ],
 );

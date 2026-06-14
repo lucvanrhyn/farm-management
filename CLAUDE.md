@@ -61,6 +61,7 @@ The `promote` label gates merge into `main`. Luc may always apply it. Claude may
 - All sub-branch work happens inside `.worktrees/<wave-name>/` (the directory is gitignored at the repo root).
 - Branch name format: `wave/<issue-number>-<short-slug>` — e.g. `wave/18-claude-md-governance`.
 - Each worktree tracks `origin/main` so it can rebase cleanly. Long-running waves rebase daily.
+- **After creating a worktree, run `scripts/setup-worktree.sh` from inside it** — it runs `pnpm install --frozen-lockfile && pnpm prisma generate` and clears `.next/cache`. A fresh worktree has no generated Prisma client, so `tsc`/`next build` fail with cryptic type errors until this runs.
 - After the PR is merged and promoted, delete the branch + worktree (`git worktree remove`) so ops debt doesn't accumulate.
 
 ### Per-wave dispatch convention
