@@ -90,7 +90,6 @@ export default function StudioShell({
 }: {
   tier: FarmTier;
   enabledSpecies?: string[];
-  farmCount?: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();

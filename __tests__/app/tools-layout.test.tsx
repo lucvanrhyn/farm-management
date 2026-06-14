@@ -28,8 +28,7 @@ vi.mock('@/lib/auth', () => ({
 }));
 vi.mock('@/lib/meta-db', () => ({ getFarmCreds: getFarmCredsMock }));
 
-// Silence the AdminNav + TierProvider subtree — we only care about redirects.
-vi.mock('@/components/admin/AdminNav', () => ({ default: () => null }));
+// Silence the TierProvider subtree — we only care about redirects.
 vi.mock('@/components/tier-provider', () => ({
   TierProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

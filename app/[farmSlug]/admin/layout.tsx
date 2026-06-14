@@ -118,9 +118,6 @@ export default async function AdminLayout({
   // to load — a DB blip must never spam a farmer with the nudge.
   let einsteinEnabled = false;
   let methodologyScore: MethodologyCompleteness = methodologyCompleteness(undefined);
-  // Number of farms the authenticated user has access to — used by AdminNav to
-  // conditionally render the "← Switch farm" link (only shown when N ≥ 2).
-  const farmCount = (session.user.farms ?? []).length;
 
   const [credsResult, prismaResult] = await Promise.allSettled([
     getFarmCreds(farmSlug),
@@ -189,7 +186,7 @@ export default async function AdminLayout({
       // assistantName stays null → provider normalises to "Einstein".
     }
   }
-  // fail-open: if prisma unavailable, enabledSpecies stays undefined → AdminNav shows all,
+  // fail-open: if prisma unavailable, enabledSpecies stays undefined → StudioShell shows all,
   // and onboardingComplete stays `true` so we don't bounce on a DB blip.
 
   // Onboarding gate: fresh farms are redirected to the wizard, except for
@@ -204,7 +201,7 @@ export default async function AdminLayout({
   return (
     <AssistantNameProvider name={assistantName}>
       <TierProvider tier={tier}>
-        <StudioShell tier={tier} enabledSpecies={enabledSpecies} farmCount={farmCount}>
+        <StudioShell tier={tier} enabledSpecies={enabledSpecies}>
           <MethodologyNudgeBanner
             farmSlug={farmSlug}
             einsteinEnabled={einsteinEnabled}
