@@ -10,6 +10,7 @@ import { calcPastureGrowthRate } from "@/lib/server/analytics";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { crossSpecies, scoped } from "@/lib/server/species-scoped-prisma";
+import { PageHeader } from "@/components/ds";
 import type { AnimalCategory } from "@/lib/types";
 
 
@@ -209,19 +210,18 @@ export default async function CampDetailPage({
         </Link>
 
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: "var(--ft-text)" }}>
-            {camp.campName}
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-            {[
+        <PageHeader
+          className="px-0 py-0 mb-8"
+          title={camp.campName}
+          subtitle={
+            [
               camp.sizeHectares ? `${camp.sizeHectares} ha` : null,
               camp.waterSource ? camp.waterSource : null,
             ]
               .filter(Boolean)
-              .join(" · ") || "Camp performance overview"}
-          </p>
-        </div>
+              .join(" · ") || "camp record"
+          }
+        />
 
         {/* KPI grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

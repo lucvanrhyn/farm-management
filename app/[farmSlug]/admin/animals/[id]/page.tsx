@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageHeader } from "@/components/ds";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import type { SpeciesId } from "@/lib/species/types";
@@ -112,19 +113,27 @@ export default async function AnimalDetailPage({
         </Link>
 
         {/* Header */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold font-mono" style={{ color: "var(--ft-text)" }}>{animal.animalId}</h1>
-          {animal.name && <span className="text-lg" style={{ color: "var(--ft-subtle)" }}>— {animal.name}</span>}
-          <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${getCategoryChipColor(animal.category as AnimalCategory)}`}>
-            {getCategoryLabel(animal.category as AnimalCategory)}
-          </span>
-          {animal.status === "Active" && (
-            <div className="ml-auto flex items-center gap-2">
-              <EditAnimalButton animal={animal} camps={allCamps} />
-              <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="detail" />
-            </div>
-          )}
-        </div>
+        <PageHeader
+          className="px-0 py-0"
+          title={
+            <span className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono">{animal.animalId}</span>
+              {animal.name && <span className="text-lg" style={{ color: "var(--ft-subtle)" }}>— {animal.name}</span>}
+              <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${getCategoryChipColor(animal.category as AnimalCategory)}`}>
+                {getCategoryLabel(animal.category as AnimalCategory)}
+              </span>
+            </span>
+          }
+          subtitle="animal record"
+          right={
+            animal.status === "Active" ? (
+              <div className="flex items-center gap-2">
+                <EditAnimalButton animal={animal} camps={allCamps} />
+                <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="detail" />
+              </div>
+            ) : undefined
+          }
+        />
 
         {/* Tab bar */}
         <div

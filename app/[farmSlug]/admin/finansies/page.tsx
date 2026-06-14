@@ -75,12 +75,16 @@ export default async function FinansiesPage({
 
   return (
     <AdminPage className="space-y-2">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Finance</h1>
-          <div className="flex items-center gap-2">
-            <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
-          </div>
-        </div>
+        <PageHeader
+          className="px-0 py-0 mb-6"
+          title="Finance"
+          subtitle="finance ledger"
+          right={
+            <div className="flex items-center gap-2">
+              <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
+            </div>
+          }
+        />
         <FinansiesClient
           farmSlug={farmSlug}
           initialTransactions={transactions.map((t) => ({

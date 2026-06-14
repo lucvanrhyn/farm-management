@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import MobsManager from "@/components/admin/MobsManager";
+import { PageHeader } from "@/components/ds";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
@@ -83,12 +84,11 @@ export default async function AdminMobsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Mob Management</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          {mobs.length} mob{mobs.length !== 1 ? "s" : ""} · group and move animals together
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Mobs"
+        subtitle={`${mobs.length} mob${mobs.length !== 1 ? "s" : ""} · mobs & herds`}
+      />
       <MobsManager
         initialMobs={mobs}
         camps={camps}

@@ -17,6 +17,7 @@ import { VeldTab } from "@/components/admin/camps/VeldTab";
 import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { FeedOnOfferTab } from "@/components/admin/camps/FeedOnOfferTab";
 import AdminPage from "@/app/_components/AdminPage";
+import { PageHeader } from "@/components/ds";
 
 
 // Advanced-tier only tabs. The `camps` overview and `rainfall` tab stay
@@ -87,12 +88,11 @@ export default async function AdminCampsPage({
 
   return (
     <AdminPage>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ft-text)]">Camps</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-          {camps.length} camps · management and performance
-        </p>
-      </div>
+      <PageHeader
+        className="px-0 py-0 mb-6"
+        title="Camps"
+        subtitle={`${camps.length} grazing camps · management & performance`}
+      />
 
       <CampsTabBar activeTab={activeTab} farmSlug={farmSlug} />
 
