@@ -58,7 +58,7 @@ export default async function MapSettingsPage({
   if (!prisma) {
     return (
       <div className="p-8 bg-[var(--ft-bg)] min-h-screen">
-        <p className="text-red-500">Farm not found.</p>
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }

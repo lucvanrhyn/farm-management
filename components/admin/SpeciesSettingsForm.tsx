@@ -45,7 +45,7 @@ function SpeciesToggle({
       }}
     >
       <span
-        className="inline-block w-4 h-4 rounded-full bg-white shadow transition-transform"
+        className="inline-block w-4 h-4 rounded-full bg-[var(--ft-surface)] shadow transition-transform"
         style={{
           transform: enabled ? "translateX(26px)" : "translateX(2px)",
         }}

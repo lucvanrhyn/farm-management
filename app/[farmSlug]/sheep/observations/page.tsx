@@ -70,7 +70,7 @@ export default async function SheepObservationsPage({
     return (
       <AdminPage>
         <div className="flex-1 min-w-0">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );

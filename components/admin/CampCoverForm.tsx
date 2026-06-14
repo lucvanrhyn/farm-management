@@ -180,7 +180,7 @@ export default function CampCoverForm({ farmSlug, campId, sizeHectares, animalCo
         </div>
       )}
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-[var(--ft-crit)]">{error}</p>}
 
       <button
         onClick={handleSubmit}

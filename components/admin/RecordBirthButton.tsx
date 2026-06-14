@@ -87,7 +87,7 @@ export default function RecordBirthButton({ animals, camps }: Props) {
   }
 
   const inputCls =
-    "w-full border rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(122,92,30,0.4)]";
+    "w-full border rounded-xl px-4 py-2 text-sm bg-[var(--ft-surface)] focus:outline-none focus:ring-2 focus:ring-[rgba(122,92,30,0.4)]";
   const labelCls = "text-xs mb-1 block font-medium";
 
   return (
@@ -105,7 +105,7 @@ export default function RecordBirthButton({ animals, camps }: Props) {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            className="bg-[var(--ft-surface)] rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             style={{ border: "1px solid var(--ft-border)" }}
           >
             <h2 className="text-lg font-bold" style={{ color: "var(--ft-text)" }}>Record Birth</h2>

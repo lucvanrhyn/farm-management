@@ -32,7 +32,7 @@ export default async function AdminMapPage({
   if (!creds) {
     return (
       <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
-        <p className="text-sm text-red-600">Farm not found.</p>
+        <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export default async function AdminMapPage({
   if (!prisma) {
     return (
       <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
-        <p className="text-sm text-red-600">Farm not found.</p>
+        <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }

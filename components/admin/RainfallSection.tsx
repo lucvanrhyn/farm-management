@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 const RainfallClient = dynamic(
   () => import("./RainfallClient"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 interface Props {

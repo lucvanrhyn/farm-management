@@ -36,7 +36,7 @@ export default async function ElectionsPage({
   if (!prisma) {
     return (
       <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -58,36 +58,36 @@ export default async function ElectionsPage({
         <h1 className="text-2xl font-semibold text-[var(--ft-text)] mb-2">
           SARS Adopted-Value Elections
         </h1>
-        <p className="text-sm text-zinc-600 mb-6">
+        <p className="text-sm text-[var(--ft-muted)] mb-6">
           Per-class adopted standard values under First Schedule paragraph 6
           (binding per paragraph 7). The IT3 farming schedule applies the
           elected value within ±20% of the gazetted figure when valuing
           opening + closing livestock.
         </p>
 
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 mb-6">
+        <div className="rounded-lg border border-[var(--ft-border)] bg-[var(--ft-surface)] p-4 mb-6">
           <h2 className="text-base font-semibold text-[var(--ft-text)] mb-2">Source</h2>
-          <p className="text-xs text-zinc-600 leading-relaxed">
+          <p className="text-xs text-[var(--ft-muted)] leading-relaxed">
             {STANDARD_VALUES_SOURCE}
           </p>
         </div>
 
         {rows.length === 0 ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
-            <p className="text-sm text-amber-900">
+          <div className="rounded-lg border border-[var(--ft-fair)] bg-[var(--ft-fair-bg)] p-4 mb-6">
+            <p className="text-sm text-[var(--ft-fair)]">
               No elections recorded. The IT3 calculator will use the gazetted
               standard values for every class. To register an election while
               the management UI is being built, insert a row into
-              <code className="mx-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono text-xs">
+              <code className="mx-1 px-1.5 py-0.5 rounded bg-[var(--ft-fair-bg)] text-[var(--ft-fair)] font-mono text-xs">
                 SarsLivestockElection
               </code>
               via a one-off Turso shell script — see ops runbook.
             </p>
           </div>
         ) : (
-          <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
+          <div className="rounded-lg border border-[var(--ft-border)] bg-[var(--ft-surface)] overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-zinc-600 text-xs uppercase">
+              <thead className="bg-[var(--ft-surface)] text-[var(--ft-muted)] text-xs uppercase">
                 <tr>
                   <th className="px-3 py-2 text-left">Species</th>
                   <th className="px-3 py-2 text-left">Class</th>
@@ -98,14 +98,14 @@ export default async function ElectionsPage({
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-zinc-100">
+                  <tr key={r.id} className="border-t border-[var(--ft-border)]">
                     <td className="px-3 py-2 capitalize">{r.species}</td>
                     <td className="px-3 py-2">{r.ageCategory}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       R {r.electedValueZar}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.electedYear}</td>
-                    <td className="px-3 py-2 text-zinc-500">
+                    <td className="px-3 py-2 text-[var(--ft-subtle)]">
                       {r.sarsChangeApprovalRef ?? "—"}
                     </td>
                   </tr>
@@ -115,11 +115,11 @@ export default async function ElectionsPage({
           </div>
         )}
 
-        <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-4">
+        <div className="mt-8 rounded-lg border border-[var(--ft-border)] bg-[var(--ft-surface)] p-4">
           <h3 className="text-sm font-semibold text-[var(--ft-text)] mb-2">
             Election rules
           </h3>
-          <ul className="text-xs text-zinc-600 list-disc pl-5 space-y-1">
+          <ul className="text-xs text-[var(--ft-muted)] list-disc pl-5 space-y-1">
             <li>
               Elected value must be within ±20% of the gazetted standard value
               (paragraph 6(1)(b)/(c)/(d)(ii)).
@@ -127,7 +127,7 @@ export default async function ElectionsPage({
             <li>
               Once made, the election is binding for all subsequent returns
               (paragraph 7) and may not be varied without SARS approval — set
-              <code className="mx-1 px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 font-mono text-xs">
+              <code className="mx-1 px-1.5 py-0.5 rounded bg-[var(--ft-surface)] text-[var(--ft-text)] font-mono text-xs">
                 sarsChangeApprovalRef
               </code>
               when re-electing a different value.

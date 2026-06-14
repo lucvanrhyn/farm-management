@@ -18,7 +18,7 @@ export default async function AdminMobsPage({
     return (
       <AdminPage>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );

@@ -246,7 +246,7 @@ export function TaskBoard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium mb-1" style={{ color: "#5C3D2E" }}>
-                Title <span className="text-red-500">*</span>
+                Title <span className="text-[var(--ft-crit)]">*</span>
               </label>
               <input
                 type="text"
@@ -270,7 +270,7 @@ export function TaskBoard({
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: "#5C3D2E" }}>
-                Due Date <span className="text-red-500">*</span>
+                Due Date <span className="text-[var(--ft-crit)]">*</span>
               </label>
               <input
                 type="date"
@@ -282,7 +282,7 @@ export function TaskBoard({
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: "#5C3D2E" }}>
-                Assigned To <span className="text-red-500">*</span>
+                Assigned To <span className="text-[var(--ft-crit)]">*</span>
               </label>
               <input
                 type="text"
@@ -323,7 +323,7 @@ export function TaskBoard({
           </div>
 
           {createError && (
-            <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+            <p className="mt-2 text-xs text-[var(--ft-crit)] flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> {createError}
             </p>
           )}
@@ -407,7 +407,7 @@ export function TaskBoard({
                       {statusStyle.label}
                     </span>
                     {overdue && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--ft-crit-bg)] text-[var(--ft-crit)]">
                         Overdue
                       </span>
                     )}
@@ -446,10 +446,10 @@ export function TaskBoard({
                   </select>
                   <button
                     onClick={() => handleDelete(task.id)}
-                    className="p-1 rounded hover:bg-red-50 transition-colors"
+                    className="p-1 rounded hover:bg-[var(--ft-crit-bg)] transition-colors"
                     title="Delete task"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <Trash2 className="w-3.5 h-3.5 text-[var(--ft-crit)]" />
                   </button>
                 </div>
               </div>

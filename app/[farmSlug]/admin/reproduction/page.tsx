@@ -13,15 +13,15 @@ import nextDynamic from "next/dynamic";
 
 const PregnancyRateCycleChart = nextDynamic(
   () => import("@/components/admin/charts/PregnancyRateCycleChart"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 const DaysOpenHistogram = nextDynamic(
   () => import("@/components/admin/charts/DaysOpenHistogram"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 const WeaningRateKPI = nextDynamic(
   () => import("@/components/admin/charts/WeaningRateKPI"),
-  { loading: () => <div className="h-12 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-12 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 import GestationCalculator from "@/components/admin/charts/GestationCalculator";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -93,7 +93,7 @@ export default async function ReproductionPage({
     return (
       <AdminPage>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-red-500 text-sm">Farm not found.</p>
+          <p className="text-[var(--ft-crit)] text-sm">Farm not found.</p>
         </div>
       </AdminPage>
     );

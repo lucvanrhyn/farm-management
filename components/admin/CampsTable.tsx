@@ -6,7 +6,7 @@ import CampsTableClient, { type CampRow } from "./CampsTableClient";
 
 export default async function CampsTable({ camps, farmSlug }: { camps: Camp[]; farmSlug: string }) {
   const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
+  if (!prisma) return <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>;
 
   const [liveConditions, animalGroups, rotationCamps] = await Promise.all([
     getLatestCampConditions(prisma),

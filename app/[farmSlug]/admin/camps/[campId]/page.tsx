@@ -55,7 +55,7 @@ export default async function CampDetailPage({
   if (!prisma) {
     return (
       <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
-        <p className="text-red-500 text-sm">Farm not found.</p>
+        <p className="text-[var(--ft-crit)] text-sm">Farm not found.</p>
       </div>
     );
   }

@@ -9,7 +9,7 @@ import type { WeightPoint } from "@/components/admin/charts/WeightTrendChart";
 
 const WeightTrendChart = nextDynamic(
   () => import("@/components/admin/charts/WeightTrendChart"),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 // Standard SA market weight reference (450 kg — can be made configurable later)

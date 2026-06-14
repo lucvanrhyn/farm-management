@@ -80,7 +80,7 @@ export default async function AdminPage({
   if (!prisma) {
     return (
       <div className="flex min-h-screen bg-[var(--ft-bg)] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }

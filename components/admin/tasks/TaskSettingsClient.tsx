@@ -444,7 +444,7 @@ function EditTemplateDialog({
       }}
     >
       <div
-        className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-xl bg-[var(--ft-surface)] p-6 shadow-2xl"
         style={{ border: "1px solid rgba(156,142,122,0.2)" }}
       >
         <h2

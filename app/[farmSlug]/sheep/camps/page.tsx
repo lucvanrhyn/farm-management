@@ -39,7 +39,7 @@ export default async function SheepCampsPage({
     return (
       <AdminPage>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-red-500">Farm not found.</p>
+          <p className="text-[var(--ft-crit)]">Farm not found.</p>
         </div>
       </AdminPage>
     );

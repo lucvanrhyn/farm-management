@@ -124,7 +124,7 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
               type="date"
               value={matingDate}
               onChange={(e) => setMatingDate(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
+              className="border rounded-lg px-3 py-2 text-sm bg-[var(--ft-surface)]"
               style={{ borderColor: "var(--ft-border)", color: "var(--ft-text)" }}
             />
           </div>
@@ -141,7 +141,7 @@ export default function GestationCalculator({ copy, defaultBreed = "cattle_bonsm
               id="gc-breed"
               value={breed}
               onChange={(e) => setBreed(e.target.value as GestationBreed)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
+              className="border rounded-lg px-3 py-2 text-sm bg-[var(--ft-surface)]"
               style={{ borderColor: "var(--ft-border)", color: "var(--ft-text)" }}
             >
               {groups.map(({ species, entries }) => (

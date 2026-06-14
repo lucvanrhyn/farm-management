@@ -12,7 +12,7 @@ import nextDynamic from 'next/dynamic';
 
 const FeedOnOfferTrendChart = nextDynamic(
   () => import('@/components/feed-on-offer/FeedOnOfferTrendChart').then((m) => ({ default: m.FeedOnOfferTrendChart })),
-  { loading: () => <div className="h-48 animate-pulse bg-gray-100 rounded-lg" /> },
+  { loading: () => <div className="h-48 animate-pulse bg-[var(--ft-surface)] rounded-lg" /> },
 );
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +44,8 @@ export default async function FeedOnOfferToolPage({
   return (
     <div className="space-y-6 p-4">
       <header>
-        <h1 className="text-2xl font-semibold text-emerald-900">Feed on Offer</h1>
-        <p className="text-sm text-gray-600">
+        <h1 className="text-2xl font-semibold text-[var(--ft-good)]">Feed on Offer</h1>
+        <p className="text-sm text-[var(--ft-muted)]">
           Farm pasture inventory and grazing capacity. Record cover readings to track Feed on Offer per camp.
         </p>
       </header>

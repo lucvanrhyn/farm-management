@@ -33,8 +33,8 @@ export default async function DroughtToolPage({
   return (
     <div className="space-y-6 p-4">
       <header>
-        <h1 className="text-2xl font-semibold text-emerald-900">Drought Tracking</h1>
-        <p className="text-sm text-gray-600">
+        <h1 className="text-2xl font-semibold text-[var(--ft-good)]">Drought Tracking</h1>
+        <p className="text-sm text-[var(--ft-muted)]">
           Standard Precipitation Index (SPI) based on 30-year ERA5 climatology.
           Negative SPI = drier than normal; below −1 = meteorological drought.
         </p>

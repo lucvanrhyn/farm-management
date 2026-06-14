@@ -40,7 +40,7 @@ export default async function TelemetryPage({
   if (!prisma) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-red-500">Farm not found.</p>
+        <p className="text-[var(--ft-crit)]">Farm not found.</p>
       </div>
     );
   }
@@ -230,7 +230,7 @@ export default async function TelemetryPage({
                         >
                           {formatNumber(job.rowsImported)}
                           {job.rowsFailed > 0 && (
-                            <span className="ml-1 text-red-500">
+                            <span className="ml-1 text-[var(--ft-crit)]">
                               (−{formatNumber(job.rowsFailed)})
                             </span>
                           )}

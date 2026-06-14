@@ -18,7 +18,7 @@ export default async function PerformanceSection({
   to?: string;
 }) {
   const prisma = await getPrismaForFarm(farmSlug);
-  if (!prisma) return <p className="text-sm text-red-500">Farm not found.</p>;
+  if (!prisma) return <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>;
 
   const LSU_VALUES = getMergedLsuValues();
 

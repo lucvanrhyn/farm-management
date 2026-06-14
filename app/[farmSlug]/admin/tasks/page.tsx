@@ -45,7 +45,7 @@ export default async function TasksPage({
   if (!prisma) {
     return (
       <AdminPage>
-        <p className="text-sm text-red-600">Farm not found.</p>
+        <p className="text-sm text-[var(--ft-crit)]">Farm not found.</p>
       </AdminPage>
     );
   }
