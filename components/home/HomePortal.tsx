@@ -540,9 +540,9 @@ const HOME_CSS = `
   overflow-x: hidden;
   color: var(--ft-text);
   background:
-    radial-gradient(ellipse 80% 60% at 72% -5%, rgba(196,99,58,.16), transparent 60%),
-    radial-gradient(ellipse 70% 60% at 8% 100%, rgba(180,139,42,.12), transparent 55%),
-    linear-gradient(180deg, #14110D 0%, #1a140f 100%);
+    radial-gradient(ellipse 80% 60% at 72% -5%, rgba(46,125,114,.20), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 8% 100%, rgba(91,108,240,.14), transparent 55%),
+    linear-gradient(180deg, #14110D 0%, #121814 100%);
 }
 .ft-home-brand { position: absolute; top: 32px; left: 36px; z-index: 2; }
 .ft-home-greet { position: absolute; top: 35px; right: 36px; z-index: 2; }

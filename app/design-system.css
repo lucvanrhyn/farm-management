@@ -1,8 +1,9 @@
 /* ============================================================================
  * FarmTrack Overhaul — Design System
  * ----------------------------------------------------------------------------
- * Ported from the "FarmTrack Overhaul" Claude Design handoff (warm "Classic"
- * skin, landed defaults). Single source of truth for the reskin:
+ * Ported from the "FarmTrack Overhaul" Claude Design handoff — the signed-off
+ * LOCKED variant: skin "Retro" (70s print), teal accent #2E7D72, animated
+ * aurora background, full motion suite. Single source of truth for the reskin:
  *
  *   • Token system with three surface modes:
  *       :root            → light "Operations" surface (default)
@@ -10,12 +11,16 @@
  *       .light-surface   → light chrome over a dark map
  *   • Density modes (.density-airy | .density-balanced | .density-dense)
  *   • Shared primitive classes (.card, .pill, .btn, .segmented, .label, kbd …)
- *   • The landed "polish" FX baked in as defaults (card spotlight-glow,
- *     primary-button sheen, Einstein brief border-beam, page transitions).
+ *   • Retro skin: sharp 3px corners, 1.5px ink borders, hard offset drop
+ *     shadows, uppercase buttons/pills/labels.
+ *   • The locked "polish" FX baked in as defaults: card hover LIFT,
+ *     primary-button sheen + magnetic + click ripple, animated border beam on
+ *     every card AND the Einstein brief, KPI count-up, page transitions, and a
+ *     drifting aurora background (.ft-fx-bg-aurora).
  *
- * Fonts (Geist / Geist Mono / Fraunces) are loaded by next/font in
- * app/layout.tsx and surfaced as --font-geist-sans / --font-geist-mono /
- * --font-fraunces, which the --font-* tokens below reference.
+ * Fonts (Space Grotesk / Space Mono / DM Serif Display) are loaded by next/font
+ * in app/layout.tsx and surfaced as --font-space-grotesk / --font-space-mono /
+ * --font-dm-serif, which the --ft-font-* tokens below reference.
  * ========================================================================== */
 
 /* ----------------------------------------------------------------------------
@@ -31,9 +36,11 @@
   --ft-muted:     #6B5C4E;
   --ft-subtle:    #9C8E7A;
 
-  --ft-accent:       #C4633A; /* rust — primary brand accent */
-  --ft-accent-soft:  #E8C9B5;
-  --ft-accent-faint: #F4E6DA;
+  --ft-accent:       #2E7D72; /* teal — primary brand accent (locked Retro) */
+  --ft-accent-soft:  #A1C5C0;
+  --ft-accent-faint: #E2EDEB;
+  --ft-accent-hover: #266A60; /* darker teal — primary button hover */
+  --ft-on-accent:    #FFFFFF; /* text/icon colour on the accent fill */
 
   --ft-good:    #4A7C59;  --ft-good-bg: #E5EFE6;
   --ft-fair:    #B48B2A;  --ft-fair-bg: #F4E9CC;
@@ -45,11 +52,13 @@
   --ft-shadow:    0 6px 24px -8px rgba(28,22,18,.18), 0 2px 6px rgba(28,22,18,.06);
   --ft-shadow-lg: 0 24px 60px -20px rgba(28,22,18,.30);
 
-  --ft-r-sm: 8px;  --ft-r: 12px;  --ft-r-lg: 16px;  --ft-r-xl: 22px;
+  /* Retro skin: sharp corners (70s print). Hard offset shadows are inlined on
+     .ft-card / .ft-btn (they reference --ft-text so they adapt per surface). */
+  --ft-r-sm: 2px;  --ft-r: 3px;  --ft-r-lg: 3px;  --ft-r-xl: 4px;
 
-  --ft-font-sans:  var(--font-geist-sans), "Geist", "Inter", system-ui, -apple-system, sans-serif;
-  --ft-font-mono:  var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --ft-font-serif: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
+  --ft-font-sans:  var(--font-space-grotesk), "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --ft-font-mono:  var(--font-space-mono), "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ft-font-serif: var(--font-dm-serif), "DM Serif Display", "Iowan Old Style", Georgia, serif;
 
   /* default density (balanced) */
   --ft-row-pad: 14px; --ft-gap: 12px; --ft-card-pad: 18px;
@@ -68,7 +77,7 @@
   --ft-muted:     #B6A993;
   --ft-subtle:    #807461;
 
-  --ft-accent-faint: #2A1F17;
+  --ft-accent-faint: #16302C;
   --ft-good-bg: #1E2A1F;
   --ft-fair-bg: #2E2715;
   --ft-poor-bg: #2C1F17;
@@ -125,9 +134,9 @@
 .ft-scrollbar::-webkit-scrollbar-thumb { background: var(--ft-border2); border-radius: 10px; }
 .ft-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
-/* eyebrow label */
+/* eyebrow label — retro: extra-wide tracking */
 .ft-label {
-  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
   color: var(--ft-subtle); font-weight: 500; white-space: nowrap;
 }
 
@@ -136,8 +145,10 @@
  * -------------------------------------------------------------------------- */
 .ft-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 8px; border-radius: 999px;
-  font-size: 11px; font-weight: 500; letter-spacing: 0.02em; white-space: nowrap;
+  padding: 3px 8px; border-radius: var(--ft-r-sm);
+  border: 1px solid color-mix(in oklab, currentColor 32%, transparent);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
+  text-transform: uppercase;
 }
 .ft-pill-good  { background: var(--ft-good-bg);  color: var(--ft-good); }
 .ft-pill-fair  { background: var(--ft-fair-bg);  color: var(--ft-fair); }
@@ -147,31 +158,42 @@
 .ft-pill-muted { background: var(--ft-surface2); color: var(--ft-muted); }
 
 /* ----------------------------------------------------------------------------
- * 6. Card (with default spotlight-glow hover — landed "classic" feel)
+ * 6. Card — Retro skin: sharp corners, 1.5px ink border, hard offset shadow.
+ *    Locked hover = LIFT. Every card carries the animated border beam (::before)
+ *    keyed off --ft-beam-angle (declared in section 10).
  * -------------------------------------------------------------------------- */
 .ft-card {
   position: relative;
   isolation: isolate;
   background: var(--ft-surface);
-  border: 1px solid var(--ft-border);
+  border: 1.5px solid color-mix(in oklab, var(--ft-text) 42%, var(--ft-border));
   border-radius: var(--ft-r-lg);
-  box-shadow: var(--ft-shadow-sm);
+  box-shadow: 4px 4px 0 color-mix(in oklab, var(--ft-text) 22%, transparent);
   transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
 }
-.ft-card-interactive::after {
+
+/* animated border beam on every card (locked cardBeam) */
+.ft-card::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
-  pointer-events: none; opacity: 0; transition: opacity .3s ease; z-index: 2;
-  background: radial-gradient(220px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-              color-mix(in oklab, var(--ft-accent) 14%, transparent), transparent 60%);
+  padding: 1.2px; pointer-events: none; z-index: 3; opacity: .85;
+  background: conic-gradient(from var(--ft-beam-angle),
+              transparent 0 70%,
+              color-mix(in oklab, var(--ft-accent) 80%, #fff) 84%,
+              color-mix(in oklab, var(--ft-accent) 100%, #fff) 88%,
+              transparent 94% 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: ftBeam 5s linear infinite;
 }
-.ft-card-interactive:hover::after { opacity: 1; }
-.ft-card-interactive:hover {
-  border-color: color-mix(in oklab, var(--ft-accent) 35%, var(--ft-border));
-}
+
+/* interactive + lift cards rise off the page; the hard shadow deepens */
+.ft-card-interactive { cursor: pointer; }
+.ft-card-interactive:hover,
 .ft-card-lift:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--ft-shadow);
-  border-color: var(--ft-border2);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 color-mix(in oklab, var(--ft-text) 30%, transparent);
+  border-color: color-mix(in oklab, var(--ft-text) 52%, var(--ft-border));
 }
 
 /* dotted divider */
@@ -184,23 +206,29 @@
  * -------------------------------------------------------------------------- */
 .ft-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 9px 14px; border-radius: 10px;
-  border: 1px solid var(--ft-border2);
+  padding: 9px 14px; border-radius: var(--ft-r-sm);
+  border: 1.5px solid color-mix(in oklab, var(--ft-text) 34%, var(--ft-border2));
   background: var(--ft-surface);
   color: var(--ft-text);
-  font-size: 13px; font-weight: 500;
-  transition: background .15s ease, border-color .15s ease, color .15s ease;
+  font-size: 12.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+  box-shadow: 2px 2px 0 color-mix(in oklab, var(--ft-text) 12%, transparent);
+  transition: background .15s ease, border-color .15s ease, color .15s ease,
+              transform .08s ease, box-shadow .08s ease;
   white-space: nowrap; cursor: pointer;
 }
 .ft-btn:hover { background: var(--ft-surface2); }
+/* retro press: button drops onto the page, shadow collapses */
+.ft-btn:active { transform: translate(2px, 2px); box-shadow: none; }
 .ft-btn:disabled { opacity: .55; cursor: not-allowed; }
 
 .ft-btn-primary {
   position: relative; overflow: hidden;
-  background: var(--ft-accent); color: #FFF6EE; border-color: transparent;
+  background: var(--ft-accent); color: var(--ft-on-accent);
+  border-color: color-mix(in oklab, var(--ft-text) 34%, transparent);
 }
 .ft-btn-primary > * { position: relative; z-index: 1; }
-.ft-btn-primary:hover { background: #B45630; }
+.ft-btn-primary:hover { background: var(--ft-accent-hover); }
 .ft-btn-primary::after {
   content: ""; position: absolute; top: -20%; left: -160%;
   width: 55%; height: 140%; pointer-events: none;
@@ -210,14 +238,15 @@
 .ft-btn-primary:hover::after { animation: ftSheen .8s cubic-bezier(.3,.7,.4,1); }
 @keyframes ftSheen { to { left: 160%; } }
 
-.ft-btn-ghost { border-color: transparent; background: transparent; }
+.ft-btn-ghost { border-color: transparent; background: transparent; box-shadow: none; }
 .ft-btn-ghost:hover { background: var(--ft-surface2); }
+.ft-btn-ghost:active { transform: none; }
 
 /* small square icon-action button */
 .ft-action-btn {
   width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 8px; color: var(--ft-muted);
+  border-radius: var(--ft-r-sm); color: var(--ft-muted);
   transition: background .15s ease, color .15s ease; cursor: pointer;
 }
 .ft-action-btn:hover { background: var(--ft-accent-faint); color: var(--ft-accent); }
@@ -227,11 +256,11 @@
  * 8. Segmented control + tabs
  * -------------------------------------------------------------------------- */
 .ft-segmented {
-  display: inline-flex; padding: 3px; border-radius: 10px;
-  background: var(--ft-surface); border: 1px solid var(--ft-border);
+  display: inline-flex; padding: 3px; border-radius: var(--ft-r-sm);
+  background: var(--ft-surface); border: 1px solid var(--ft-border2);
 }
 .ft-segmented button {
-  padding: 6px 12px; border-radius: 8px; font-size: 12px; color: var(--ft-muted);
+  padding: 6px 12px; border-radius: var(--ft-r-sm); font-size: 12px; color: var(--ft-muted);
   display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
   border: 0; background: none; cursor: pointer; font-family: inherit; white-space: nowrap;
 }
@@ -251,9 +280,9 @@
  * -------------------------------------------------------------------------- */
 .ft-kbd {
   font-family: var(--ft-font-mono); font-size: 11px;
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: var(--ft-r-sm);
   background: var(--ft-surface2); color: var(--ft-muted);
-  border: 1px solid var(--ft-border); border-bottom-width: 2px;
+  border: 1px solid var(--ft-border2); border-bottom-width: 2px;
 }
 
 /* ----------------------------------------------------------------------------
@@ -286,9 +315,9 @@
  * -------------------------------------------------------------------------- */
 .ft-hero-photo {
   background:
-    radial-gradient(ellipse at 70% 60%, rgba(196,99,58,.22) 0%, transparent 60%),
-    radial-gradient(ellipse at 20% 30%, rgba(180,139,42,.16) 0%, transparent 55%),
-    linear-gradient(180deg, #1c1612 0%, #241b13 60%, #1a1410 100%);
+    radial-gradient(ellipse at 70% 60%, rgba(46,125,114,.30) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 30%, rgba(91,108,240,.18) 0%, transparent 55%),
+    linear-gradient(180deg, #121a18 0%, #14110D 60%, #100f0c 100%);
 }
 .ft-hero-grain {
   background-image: radial-gradient(rgba(255,240,210,.06) 1px, transparent 1px);
@@ -331,7 +360,7 @@
 .ft-sheet-up { animation: ftSheetUp .32s cubic-bezier(.3,.7,.4,1) both; }
 .ft-modal-in { animation: ftModalIn .22s ease both; }
 
-@keyframes ftPulseSoft { 0%,100% { box-shadow: 0 0 0 0 rgba(196,99,58,.4); } 50% { box-shadow: 0 0 0 6px rgba(196,99,58,0); } }
+@keyframes ftPulseSoft { 0%,100% { box-shadow: 0 0 0 0 rgba(46,125,114,.4); } 50% { box-shadow: 0 0 0 6px rgba(46,125,114,0); } }
 .ft-pulse-soft { animation: ftPulseSoft 2.2s ease-in-out infinite; }
 
 /* ----------------------------------------------------------------------------
@@ -339,8 +368,40 @@
  * -------------------------------------------------------------------------- */
 .ft-scope :focus-visible { outline: 2px solid var(--ft-accent); outline-offset: 2px; border-radius: 4px; }
 
+/* ----------------------------------------------------------------------------
+ * 15. Aurora background (locked bgFx) + click-ripple ink (locked clickRipple)
+ * ----------------------------------------------------------------------------
+ * <FxBackground> renders a single fixed full-viewport <div class="ft-fx-bg
+ * ft-fx-bg-aurora"> high in the authenticated tree. soft-light at low opacity
+ * keeps text legible while a teal→indigo glow drifts behind the whole product.
+ * The ripple span is appended to .ft-btn by <FxRuntime> on pointerdown.
+ * -------------------------------------------------------------------------- */
+.ft-fx-bg { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.ft-fx-bg-aurora {
+  opacity: .42; mix-blend-mode: soft-light;
+  background:
+    radial-gradient(40% 50% at 20% 25%, color-mix(in oklab, var(--ft-accent) 90%, transparent), transparent 70%),
+    radial-gradient(45% 55% at 82% 30%, color-mix(in oklab, var(--ft-accent) 55%, #5B6CF0), transparent 70%),
+    radial-gradient(50% 60% at 60% 88%, color-mix(in oklab, var(--ft-accent) 60%, #1E6F64), transparent 72%);
+  background-size: 200% 200%;
+  animation: ftAurora 18s ease-in-out infinite;
+}
+@keyframes ftAurora {
+  0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%; }
+  50%      { background-position: 30% 40%, 70% 30%, 40% 70%; }
+}
+
+.ft-ripple-ink {
+  position: absolute; border-radius: 50%; pointer-events: none; z-index: 0;
+  background: color-mix(in oklab, currentColor 28%, transparent);
+  transform: scale(0); animation: ftRipple .6s cubic-bezier(.2,.6,.3,1) forwards;
+}
+@keyframes ftRipple { to { transform: scale(2.4); opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .ft-brief::before { animation: none; }
+  .ft-brief::before,
+  .ft-card::before,
+  .ft-fx-bg-aurora { animation: none; }
   .ft-btn-primary:hover::after { animation: none; }
   .ft-tr-fade, .ft-tr-slide, .ft-pulse-soft, .ft-spin { animation: none; }
 }

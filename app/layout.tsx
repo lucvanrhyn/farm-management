@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display, DM_Sans, DM_Serif_Display, Fraunces, Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -75,14 +75,34 @@ const dmSerifDisplay = DM_Serif_Display({
   preload: true,
 });
 
-// FarmTrack Overhaul reskin headline face. The design's "Classic" skin uses
-// Fraunces for every serif heading (Operations/Home/Logger/Map titles). Exposed
-// as --font-fraunces and wired to --ft-font-serif / Tailwind `font-serif`.
+// FarmTrack Overhaul reskin headline face (legacy "Classic" skin). Kept loaded
+// for any non-reskin surface that still references --font-fraunces.
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
   style: ["normal", "italic"],
+  display: "swap",
+  preload: true,
+});
+
+// FarmTrack Overhaul reskin — locked "Retro" variant typography. The signed-off
+// design handoff (skin: retro) pairs Space Grotesk (body/sans) + Space Mono
+// (mono) with DM Serif Display (headlines, loaded above as --font-dm-serif).
+// These drive --ft-font-sans / --ft-font-mono / --ft-font-serif in
+// app/design-system.css and the Tailwind font-* utilities in globals.css.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  preload: true,
+});
+
+const spaceMono = Space_Mono({
+  variable: "--font-space-mono",
+  subsets: ["latin"],
+  weight: ["400", "700"],
   display: "swap",
   preload: true,
 });
@@ -118,7 +138,7 @@ export default function RootLayout({
     // attribute from a per-user / per-route locale instead of a literal.
     <html lang="en-ZA">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} ${fraunces.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${dmSans.variable} ${dmSerifDisplay.variable} ${fraunces.variable} ${spaceGrotesk.variable} ${spaceMono.variable} antialiased`}
       >
         {/*
           D2 — skip-to-content link. Visually hidden until focused

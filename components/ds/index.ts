@@ -17,3 +17,4 @@ export { Spark, makeSpark } from "./Spark";
 export { KpiCard } from "./KpiCard";
 export { Label, Kbd, DotLine } from "./primitives";
 export { FxRuntime } from "./FxRuntime";
+export { FxBackground } from "./FxBackground";
