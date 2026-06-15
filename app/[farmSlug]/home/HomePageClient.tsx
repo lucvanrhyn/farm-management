@@ -3,7 +3,7 @@
 /**
  * app/[farmSlug]/home/HomePageClient.tsx — Client Component
  *
- * The dark "Operations hub" landing portal. Renders the HomePortal presentation
+ * The light "cream" landing portal. Renders the HomePortal presentation
  * shell (4 destination tiles + Einstein brief) and owns the interactive wiring:
  *   - signOut (next-auth/react)
  *   - useFarmMode hook (active species + multi-species mode toggle)
@@ -17,8 +17,8 @@
  * getFarmIdentity() server-side. The branded farm name is in the initial HTML —
  * no useEffect fetch, no placeholder states (Issue #438 / PRD #434 guard).
  *
- * Surface mode: the root wraps in "dark-surface ft-scope" so the dark token set
- * + selection/focus styling apply (Home is a dark surface).
+ * Surface mode: the root wraps in "cream-surface ft-scope" so the light "cream"
+ * token set + selection/focus styling apply (locked homeTheme: cream).
  */
 
 import { useState } from "react";
@@ -58,12 +58,13 @@ export default function HomePageClient({
     "";
 
   // The hero image URL is still server-provided (no client fetch). It backs the
-  // root so the dark portal layers its warm radial glow over the branded photo.
+  // root, though the cream portal paints its opaque paper gradient over it — the
+  // locked cream Home is a clean paper surface, not a full-bleed photo backdrop.
   const heroImageUrl = initialFarmData.heroImageUrl;
 
   return (
     <div
-      className="dark-surface ft-scope"
+      className="cream-surface ft-scope"
       style={{
         position: "relative",
         minHeight: "100vh",

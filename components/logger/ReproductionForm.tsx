@@ -55,28 +55,28 @@ function BottomSheet({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
-        style={{ backgroundColor: "#1E0F07" }}
+        style={{ backgroundColor: "var(--ft-surface)" }}
       >
         <div className="flex justify-center pt-3 pb-1">
           <div
             className="w-10 h-1.5 rounded-full"
-            style={{ backgroundColor: "rgba(139, 105, 20, 0.4)" }}
+            style={{ backgroundColor: "var(--ft-border2)" }}
           />
         </div>
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: "1px solid rgba(92, 61, 46, 0.4)" }}
+          style={{ borderBottom: "1px solid var(--ft-border)" }}
         >
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: "var(--font-display)", color: "#F5F0E8" }}
+            style={{ fontFamily: "var(--ft-font-serif)", color: "var(--ft-text)" }}
           >
             {title}
           </h2>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: "rgba(92, 61, 46, 0.5)", color: "#D2B48C" }}
+            style={{ backgroundColor: "var(--ft-border2)", color: "var(--ft-muted)" }}
           >
             ×
           </button>
@@ -107,7 +107,7 @@ function ReproSubmitButton({
       onClick={onClick}
       disabled={disabled || submitting}
       className="w-full font-bold py-4 rounded-2xl text-base disabled:opacity-50 disabled:cursor-not-allowed"
-      style={{ backgroundColor: "#B87333", color: "#F5F0E8" }}
+      style={{ backgroundColor: "var(--ft-accent)", color: "var(--ft-on-accent)" }}
     >
       {submitting ? "Saving..." : label}
     </button>
@@ -161,14 +161,14 @@ const BASE_TYPE_OPTIONS: { value: ReproType; label: string; icon: string; desc: 
 ];
 
 const SELECTED_STYLE = {
-  border: "2px solid #B87333",
-  backgroundColor: "rgba(184,115,51,0.2)",
-  color: "#F5F0E8",
+  border: "2px solid var(--ft-accent)",
+  backgroundColor: "var(--ft-accent-faint)",
+  color: "var(--ft-text)",
 };
 const DEFAULT_STYLE = {
-  border: "1px solid rgba(92, 61, 46, 0.4)",
-  backgroundColor: "rgba(44, 21, 8, 0.5)",
-  color: "#D2B48C",
+  border: "1px solid var(--ft-border)",
+  backgroundColor: "var(--ft-surface2)",
+  color: "var(--ft-muted)",
 };
 
 const BCS_DESCRIPTIONS: Record<number, string> = {
@@ -321,7 +321,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 1: choose event type */}
         {step === "type" && (
           <>
-            <p className="text-sm" style={{ color: "#D2B48C" }}>
+            <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
               Select the type of reproductive event:
             </p>
             {TYPE_OPTIONS.map((opt) => (
@@ -333,10 +333,10 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               >
                 <span className="text-2xl leading-none shrink-0">{opt.icon}</span>
                 <div>
-                  <p className="font-semibold text-sm" style={{ color: "#F5F0E8" }}>
+                  <p className="font-semibold text-sm" style={{ color: "var(--ft-text)" }}>
                     {opt.label}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(210, 180, 140, 0.7)" }}>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--ft-muted)" }}>
                     {opt.desc}
                   </p>
                 </div>
@@ -348,7 +348,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2a: heat detection */}
         {step === "details" && selectedType === "heat_detection" && (
           <>
-            <p className="text-sm font-semibold" id="repro-heat-method-label" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-heat-method-label" style={{ color: "var(--ft-muted)" }}>
               How was heat detected?
             </p>
             {/*
@@ -392,7 +392,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2b: insemination */}
         {step === "details" && selectedType === "insemination" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>
               Service method
             </p>
             {(
@@ -411,7 +411,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               </button>
             ))}
             <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: "#D2B48C" }}>
+              <p className="text-sm font-semibold mb-2" style={{ color: "var(--ft-muted)" }}>
                 Bull tag (optional)
               </p>
               <input
@@ -419,11 +419,11 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 value={bullId}
                 onChange={(e) => setBullId(e.target.value)}
                 placeholder="e.g. BULL-001"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)] placeholder:opacity-40"
                 style={{
-                  backgroundColor: "rgba(26, 13, 5, 0.6)",
-                  border: "1px solid rgba(92, 61, 46, 0.5)",
-                  color: "#F5F0E8",
+                  backgroundColor: "var(--ft-surface2)",
+                  border: "1px solid var(--ft-border2)",
+                  color: "var(--ft-text)",
                 }}
               />
             </div>
@@ -441,7 +441,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2c: pregnancy scan */}
         {step === "details" && selectedType === "pregnancy_scan" && (
           <>
-            <p className="text-sm font-semibold" id="repro-scan-result-label" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" id="repro-scan-result-label" style={{ color: "var(--ft-muted)" }}>
               Scan result
             </p>
             {/*
@@ -488,7 +488,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2d: calving */}
         {step === "details" && selectedType === "calving" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>
               Calf outcome
             </p>
             {(
@@ -507,7 +507,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
               </button>
             ))}
             <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: "#D2B48C" }}>
+              <p className="text-sm font-semibold mb-2" style={{ color: "var(--ft-muted)" }}>
                 Calf tag (optional)
               </p>
               <input
@@ -515,11 +515,11 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 value={calfTag}
                 onChange={(e) => setCalfTag(e.target.value)}
                 placeholder="e.g. CALF-2026-001"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)] placeholder:opacity-40"
                 style={{
-                  backgroundColor: "rgba(26, 13, 5, 0.6)",
-                  border: "1px solid rgba(92, 61, 46, 0.5)",
-                  color: "#F5F0E8",
+                  backgroundColor: "var(--ft-surface2)",
+                  border: "1px solid var(--ft-border2)",
+                  color: "var(--ft-text)",
                 }}
               />
             </div>
@@ -537,7 +537,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2e: body condition score */}
         {step === "details" && selectedType === "body_condition_score" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>
               Body Condition Score (1-9)
             </p>
             <div className="flex flex-col gap-1.5">
@@ -571,7 +571,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2f: temperament score */}
         {step === "details" && selectedType === "temperament_score" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>
               Temperament Score (1-5)
             </p>
             <div className="flex flex-col gap-1.5">
@@ -600,11 +600,11 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* Step 2g: scrotal circumference */}
         {step === "details" && selectedType === "scrotal_circumference" && (
           <>
-            <p className="text-sm font-semibold" style={{ color: "#D2B48C" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--ft-muted)" }}>
               Scrotal Circumference
             </p>
             <div>
-              <p className="text-sm mb-2" style={{ color: "#D2B48C" }}>
+              <p className="text-sm mb-2" style={{ color: "var(--ft-muted)" }}>
                 Measurement in cm
               </p>
               <input
@@ -616,11 +616,11 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
                 value={scrotalCm}
                 onChange={(e) => setScrotalCm(e.target.value)}
                 placeholder="e.g. 36"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:opacity-40"
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)] placeholder:opacity-40"
                 style={{
-                  backgroundColor: "rgba(26, 13, 5, 0.6)",
-                  border: "1px solid rgba(92, 61, 46, 0.5)",
-                  color: "#F5F0E8",
+                  backgroundColor: "var(--ft-surface2)",
+                  border: "1px solid var(--ft-border2)",
+                  color: "var(--ft-text)",
                 }}
               />
             </div>
@@ -638,7 +638,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
         {/* S6 / obs-L1 — queue-write failure surfaced; latch released in
             `finally` so this is always paired with a re-enabled button. */}
         {step === "details" && error && (
-          <p className="text-sm text-center" style={{ color: "#C0574C" }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: "var(--ft-poor)" }}>{error}</p>
         )}
 
         {/* Photo capture — shown on the details step */}
@@ -651,7 +651,7 @@ export default function ReproductionForm({ animalId, animalSex, onClose, onSubmi
           <button
             onClick={() => setStep("type")}
             className="text-sm py-1 text-center"
-            style={{ color: "rgba(210, 180, 140, 0.5)" }}
+            style={{ color: "var(--ft-muted)" }}
           >
             ← Back
           </button>

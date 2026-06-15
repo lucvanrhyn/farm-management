@@ -41,7 +41,7 @@ export function EinsteinOverlay({
 
   return (
     <div
-      className="ft-einstein-overlay"
+      className="dark-surface ft-einstein-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Einstein AI Advisor"
@@ -77,15 +77,20 @@ export function EinsteinOverlay({
 }
 
 /**
- * Scoped overlay CSS. Tokens come from the dark-surface scope on the Home root
- * (the overlay renders inside it). The panel uses the warm "stage" gradient so
- * it reads as a lifted surface above the radial-glow background.
+ * Scoped overlay CSS. The overlay carries its OWN `dark-surface` scope — the
+ * Home root is now the light "cream" surface, so the Einstein chat reads as a
+ * self-contained dark modal whose warm "stage" gradient lifts above the scrim.
  */
 const OVERLAY_CSS = `
 .ft-einstein-overlay {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
+  /* The dark-surface class on this container supplies the modal's DARK token
+     set (the Home behind is now the light "cream" surface). We null its opaque
+     background (var --ft-bg) here so the translucent scrim below can still
+     frost-blur the cream Home through the overlay. */
+  background: transparent;
 }
 .ft-einstein-scrim {
   position: absolute; inset: 0;

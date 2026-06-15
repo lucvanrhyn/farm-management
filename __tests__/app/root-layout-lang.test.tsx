@@ -32,6 +32,8 @@ vi.mock('next/font/google', () => {
     Playfair_Display: fontStub,
     DM_Sans: fontStub,
     DM_Serif_Display: fontStub,
+    Space_Grotesk: fontStub,
+    Space_Mono: fontStub,
   };
 });
 

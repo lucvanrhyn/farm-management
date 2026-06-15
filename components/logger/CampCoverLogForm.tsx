@@ -26,7 +26,7 @@ const COVER_CATEGORIES = [
     desc: "Thick grass, minimal bare ground",
     hint: "approx 2000 kg DM/ha",
     icon: "🟢",
-    color: "border-lime-700 bg-lime-900/40 text-lime-300",
+    tone: "good",
   },
   {
     value: "Fair",
@@ -34,7 +34,7 @@ const COVER_CATEGORIES = [
     desc: "Moderate grass, some bare patches",
     hint: "approx 1100 kg DM/ha",
     icon: "🟡",
-    color: "border-amber-600 bg-amber-900/40 text-amber-300",
+    tone: "fair",
   },
   {
     value: "Poor",
@@ -42,11 +42,27 @@ const COVER_CATEGORIES = [
     desc: "Sparse grass, significant bare ground",
     hint: "approx 450 kg DM/ha",
     icon: "🔴",
-    color: "border-red-700 bg-red-900/40 text-red-300",
+    tone: "poor",
   },
 ] as const;
 
 type CoverCategory = "Good" | "Fair" | "Poor";
+type StatusTone = "good" | "fair" | "poor" | "crit" | "info";
+
+/**
+ * Selected status-card styling — mirrors the design handoff's status pattern
+ * (tinted background `color-mix(status 18%, surface)` + status text) using the
+ * --ft status tokens, so the selected card adapts to the light "paper" logger
+ * surface instead of the old dark-mode Tailwind swatches.
+ */
+function selectedToneStyle(tone: StatusTone): React.CSSProperties {
+  const c = `var(--ft-${tone})`;
+  return {
+    border: `1px solid ${c}`,
+    backgroundColor: `color-mix(in oklab, ${c} 18%, var(--ft-surface))`,
+    color: c,
+  };
+}
 
 function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -54,25 +70,25 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
-        style={{ backgroundColor: '#1E0F07' }}
+        style={{ backgroundColor: 'var(--ft-surface)' }}
       >
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }} />
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'var(--ft-border2)' }} />
         </div>
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.4)' }}
+          style={{ borderBottom: '1px solid var(--ft-border)' }}
         >
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            style={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
           >
             {title}
           </h2>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: 'rgba(92, 61, 46, 0.5)', color: '#D2B48C' }}
+            style={{ backgroundColor: 'var(--ft-border2)', color: 'var(--ft-muted)' }}
           >
             ×
           </button>
@@ -123,7 +139,7 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
     <BottomSheet title={`Pasture Cover — ${campName}`} onClose={onCancel}>
       <div className="p-5 flex flex-col gap-6">
         <div>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--ft-muted)' }}>
             Cover Category
           </p>
           <div className="flex flex-col gap-2">
@@ -133,13 +149,11 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
                 <button
                   key={cat.value}
                   onClick={() => setCoverCategory(cat.value)}
-                  className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-medium transition-colors ${
-                    isSelected ? cat.color : ""
-                  }`}
+                  className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-medium transition-colors"
                   style={
-                    !isSelected
-                      ? { border: '1px solid rgba(92, 61, 46, 0.4)', backgroundColor: 'rgba(44, 21, 8, 0.5)', color: '#D2B48C' }
-                      : {}
+                    isSelected
+                      ? selectedToneStyle(cat.tone)
+                      : { border: '1px solid var(--ft-border)', backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
                   }
                 >
                   <span className="text-xl">{cat.icon}</span>
@@ -156,7 +170,7 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {error && (
-          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: 'var(--ft-poor)' }}>{error}</p>
         )}
 
         <button
@@ -165,8 +179,8 @@ export default function CampCoverLogForm({ campName, onSubmit, onCancel }: Props
           className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
           style={
             !coverCategory || submitting
-              ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-              : { backgroundColor: '#B87333', color: '#F5F0E8' }
+              ? { backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
+              : { backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }
           }
         >
           {submitting ? "Saving..." : "Record Cover"}

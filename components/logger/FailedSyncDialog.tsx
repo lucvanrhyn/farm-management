@@ -388,19 +388,19 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl p-6 flex flex-col gap-4 max-h-[85dvh] overflow-y-auto"
-        style={{ backgroundColor: '#1E0F07', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
+        style={{ backgroundColor: 'var(--ft-surface)', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
       >
         <div className="flex justify-center">
           <div
             className="w-10 h-1.5 rounded-full"
-            style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
+            style={{ backgroundColor: 'var(--ft-border2)' }}
           />
         </div>
 
         <div className="flex items-center justify-between">
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            style={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
           >
             Failed to sync ({rows.length})
           </h2>
@@ -409,13 +409,13 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
             onClick={onRetryAll}
             disabled={busy || rows.length === 0}
             className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
-            style={{ backgroundColor: '#B33A3A', color: '#F5F0E8' }}
+            style={{ backgroundColor: 'var(--ft-crit)', color: 'var(--ft-on-accent)' }}
           >
             Retry all
           </button>
         </div>
 
-        <p className="text-xs" style={{ color: 'rgba(210, 180, 140, 0.7)' }}>
+        <p className="text-xs" style={{ color: 'var(--ft-muted)' }}>
           These rows failed to upload. Retry keeps your original record id so
           duplicates can&apos;t be created server-side.
         </p>
@@ -427,19 +427,19 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
               data-testid={`failed-row-${row.kind}-${row.localId}`}
               className="flex flex-col gap-2 p-3 rounded-xl"
               style={{
-                backgroundColor: 'rgba(44, 21, 8, 0.55)',
-                border: '1px solid rgba(179, 58, 58, 0.35)',
+                backgroundColor: 'var(--ft-surface2)',
+                border: '1px solid var(--ft-crit-bg)',
               }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-0.5">
                   <span
                     className="text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: '#B33A3A' }}
+                    style={{ color: 'var(--ft-crit)' }}
                   >
                     {row.typeLabel}
                   </span>
-                  <span className="text-sm font-medium" style={{ color: '#F5F0E8' }}>
+                  <span className="text-sm font-medium" style={{ color: 'var(--ft-text)' }}>
                     {row.subjectLabel}
                   </span>
                 </div>
@@ -450,7 +450,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                     onClick={() => onDiscardOne(row)}
                     disabled={busy}
                     className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
-                    style={{ backgroundColor: '#6B4226', color: '#F5F0E8' }}
+                    style={{ backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-text)', border: '1px solid var(--ft-border2)' }}
                   >
                     Discard
                   </button>
@@ -461,7 +461,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                     onClick={() => onRetryOne(row)}
                     disabled={busy}
                     className="text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-40"
-                    style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+                    style={{ backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }}
                   >
                     Retry
                   </button>
@@ -474,7 +474,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                 <p
                   data-testid={`duplicate-msg-${row.kind}-${row.localId}`}
                   className="text-[11px] font-medium"
-                  style={{ color: '#E0A050' }}
+                  style={{ color: 'var(--ft-fair)' }}
                 >
                   {row.duplicateMessage}
                 </p>
@@ -482,7 +482,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
                 row.isTerminal && (
                   <p
                     className="text-[11px] font-medium"
-                    style={{ color: '#E0A050' }}
+                    style={{ color: 'var(--ft-fair)' }}
                   >
                     Rejected by the server — won&apos;t retry. The data needs
                     fixing on a fresh entry; discard this stuck copy.
@@ -491,15 +491,15 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
               )}
               <div
                 className="text-xs flex flex-wrap gap-x-3 gap-y-1"
-                style={{ color: 'rgba(210, 180, 140, 0.7)' }}
+                style={{ color: 'var(--ft-muted)' }}
               >
                 <span>Attempted {row.attempts} time{row.attempts === 1 ? '' : 's'}</span>
                 {row.lastStatusCode !== null && (
                   <span
                     className="text-[10px] font-bold px-1.5 py-0.5 rounded"
                     style={{
-                      backgroundColor: 'rgba(179, 58, 58, 0.25)',
-                      color: '#F5F0E8',
+                      backgroundColor: 'var(--ft-crit-bg)',
+                      color: 'var(--ft-on-accent)',
                     }}
                   >
                     HTTP {row.lastStatusCode}
@@ -510,7 +510,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
               {row.lastError && (
                 <p
                   className="text-xs italic"
-                  style={{ color: 'rgba(210, 180, 140, 0.8)' }}
+                  style={{ color: 'var(--ft-muted)' }}
                 >
                   {truncateForDisplay(row.lastError)}
                 </p>
@@ -523,7 +523,7 @@ export default function FailedSyncDialog({ isOpen, onClose }: FailedSyncDialogPr
           type="button"
           onClick={onClose}
           className="text-sm py-2"
-          style={{ color: 'rgba(210, 180, 140, 0.5)' }}
+          style={{ color: 'var(--ft-muted)' }}
         >
           Close
         </button>

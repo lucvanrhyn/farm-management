@@ -202,7 +202,7 @@ export function LoggerStatusBar() {
               type="button"
               onClick={() => setDialogOpen(true)}
               className="ft-mono text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: 'var(--ft-crit)', color: '#FFF6EE' }}
+              style={{ backgroundColor: 'var(--ft-crit)', color: 'var(--ft-on-accent)' }}
               aria-label={`${failedCount} failed rows pending retry`}
             >
               Failed: {failedCount}
@@ -241,7 +241,7 @@ export function LoggerStatusBar() {
       {syncResult && syncResult.synced > 0 && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
-          style={{ backgroundColor: 'var(--ft-accent)', color: '#FFF6EE' }}
+          style={{ backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }}
         >
           ✓ {syncResult.synced} observation{syncResult.synced !== 1 ? 's' : ''} synced
         </div>
@@ -249,7 +249,7 @@ export function LoggerStatusBar() {
       {syncResult && syncResult.failed > 0 && (
         <div
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 text-sm font-medium px-5 py-3 rounded-2xl shadow-xl"
-          style={{ backgroundColor: 'var(--ft-crit)', color: '#FFF6EE' }}
+          style={{ backgroundColor: 'var(--ft-crit)', color: 'var(--ft-on-accent)' }}
           role="alert"
         >
           ✗ {syncResult.failed} observation{syncResult.failed !== 1 ? 's' : ''} failed to sync — open the offline log to retry
