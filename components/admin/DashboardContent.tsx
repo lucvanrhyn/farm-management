@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PrismaClient } from "@prisma/client";
 import DangerZone from "@/components/admin/DangerZone";
 import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
+import DoNextPanel from "@/components/admin/DoNextPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
 import { Card, StatusDot, Label, Icon, Spark, makeSpark } from "@/components/ds";
 import {
@@ -11,6 +12,8 @@ import {
 import { getSession } from "@/lib/auth";
 import { getTriage } from "@/lib/server/triage/get-triage";
 import type { AttentionItem } from "@/lib/server/triage/types";
+import { getDoNextFeed, type DoNextItem } from "@/lib/server/nudges/feed";
+import { isActionAlreadyScheduled } from "@/lib/server/nudges/task-dedup";
 import type { FarmTier } from "@/lib/tier";
 import type { SpeciesId } from "@/lib/species/types";
 import type { Status } from "@/components/ds";
@@ -38,6 +41,34 @@ async function loadTriageTeaser(
     return await getTriage(prisma, farmSlug, thresholds, mode);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Proactive Nudges v1 (decision 10a) — the ranked "Do Next" feed + the
+ * "already scheduled" flags for the dashboard DoNextPanel. Fail-open: the panel
+ * is a teaser, never load-bearing, so any tenant-DB blip degrades to "no panel"
+ * instead of taking the dashboard down (mirrors loadTriageTeaser).
+ */
+async function loadDoNext(
+  prisma: PrismaClient,
+  farmSlug: string,
+  userEmail: string,
+): Promise<{ items: DoNextItem[]; scheduledIds: string[] }> {
+  try {
+    if (!userEmail) return { items: [], scheduledIds: [] };
+    const items = await getDoNextFeed(farmSlug, userEmail);
+    // Flag the actions task-dedup already recognises as pending tasks, so the
+    // panel shows "already scheduled" rather than a duplicate add-task button.
+    const flags = await Promise.all(
+      items.map((it) => isActionAlreadyScheduled(prisma, it.action)),
+    );
+    const scheduledIds = items
+      .filter((_, i) => flags[i])
+      .map((it) => it.id);
+    return { items, scheduledIds };
+  } catch {
+    return { items: [], scheduledIds: [] };
   }
 }
 
@@ -127,6 +158,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
 
   const session = await getSession();
   const isAdmin = (session?.user?.role as string | undefined) === "ADMIN";
+  const userEmail = (session?.user?.email as string | undefined) ?? "";
 
   // Two cached calls in parallel (issue #414):
   //   - by-mode bundle keyed on (slug, mode) — species-dependent tiles
@@ -134,10 +166,13 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
   // Splitting the cache key for mode-independent values fixes the #411
   // `totalCamps` drift between cattle / sheep views: the shared entry
   // survives a FarmMode flip so the KPI tile stays stable.
-  const [byMode, shared, triageItems] = await Promise.all([
+  // `loadDoNext` (Proactive Nudges v1) joins the batch — fail-open, so it
+  // never blocks the dashboard if the notification feed errors.
+  const [byMode, shared, triageItems, doNext] = await Promise.all([
     getCachedDashboardOverviewByMode(farmSlug, mode),
     getCachedDashboardOverviewShared(farmSlug),
     loadTriageTeaser(prisma, farmSlug, mode),
+    loadDoNext(prisma, farmSlug, userEmail),
   ]);
   const {
     totalAnimals,
@@ -372,6 +407,14 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
               <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
             </div>
           )}
+          {/* Proactive Nudges v1 — one-tap "Do Next" actions (fail-open: the
+              loader returns no items on any error, so the panel self-hides). */}
+          <DoNextPanel
+            items={doNext.items}
+            farmSlug={farmSlug}
+            scheduledIds={doNext.scheduledIds}
+            createdBy={userEmail}
+          />
           <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} triage={triageItems} />
 
           {/* Reproductive overview — locked for basic tier */}

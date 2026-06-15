@@ -28,6 +28,7 @@ import type {
   DashboardAlert,
   DashboardAlerts,
 } from "@/lib/server/dashboard-alerts";
+import { computeStaleCampInspectionCount } from "./stale-inspection";
 
 /**
  * Independently-optional source inputs + required config.
@@ -76,17 +77,20 @@ export function composeAlerts(inputs: AlertInputs): DashboardAlerts {
   // We only count "uninspected" camps when totalCamps is supplied alongside
   // conditions (the full-pass shell always supplies both; the offline header
   // supplies camps.length).
-  let staleCampCount = 0;
-  if (campConditions && totalCamps != null) {
-    const staleThresholdMs = staleCampInspectionHours * 60 * 60 * 1000;
-    const uninspectedCamps = totalCamps - campConditions.size;
-    staleCampCount = uninspectedCamps;
-    for (const status of campConditions.values()) {
-      const inspectedAt = new Date(status.last_inspected_at);
-      const ageMs = now.getTime() - inspectedAt.getTime();
-      if (ageMs > staleThresholdMs) staleCampCount++;
-    }
-  }
+  //
+  // Proactive Nudges v1 — the counting rule + threshold are SHARED with the
+  // NEEDS_INSPECTION_DUE generator via `computeStaleCampInspectionCount`, so
+  // the dashboard alert and the notification can never drift on what "stale"
+  // means.
+  const staleCampCount =
+    campConditions && totalCamps != null
+      ? computeStaleCampInspectionCount(
+          campConditions,
+          totalCamps,
+          staleCampInspectionHours,
+          now,
+        )
+      : 0;
 
   // ── Camp grazing + fence (camp-conditions source) ──────────────────────────
   // Both derive from the SAME input class as each other (the offline-available

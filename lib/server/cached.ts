@@ -900,6 +900,13 @@ export interface CachedNotification {
   isRead: boolean;
   createdAt: string | Date;
   expiresAt?: string | Date | null;
+  /**
+   * Proactive Nudges v1 — the JSON payload (already round-tripped by the
+   * findMany below, which selects no columns). The do-next feed parses this to
+   * find action-carrying notifications. NotificationBell also reads
+   * `payload.action` to render its inline one-tap button.
+   */
+  payload?: string | null;
 }
 
 export interface CachedNotificationsPayload {

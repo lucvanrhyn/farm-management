@@ -29,10 +29,12 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { inngest } from "./client";
-import { getAllFarmSlugs } from "@/lib/meta-db";
+import { getAllFarmSlugs, getFarmCreds } from "@/lib/meta-db";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { evaluateAllAlerts, persistNotifications } from "@/lib/server/alerts";
+import { attachActions } from "@/lib/server/nudges/action-map";
 import { dispatchChannels } from "@/lib/server/alerts/dispatch";
+import { logger } from "@/lib/logger";
 import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 import { cleanupExpiredRateLimits } from "@/lib/rate-limit";
 import {
@@ -86,7 +88,24 @@ export const evaluateTenantAlerts = inngest.createFunction(
           throw new Error(`FarmSettings missing on tenant "${slug}"`);
         }
         const raw = await evaluateAllAlerts(prisma, settings, slug);
-        return serializeCandidates(raw);
+
+        // Proactive Nudges v1 — enrich candidates with one-tap actions BETWEEN
+        // evaluation and persistence. Resilient by design: a throw here (e.g.
+        // a transient creds lookup failure) must NOT poison the cron, so we
+        // fall back to the un-enriched candidates and log. The action rides
+        // inside `payload` so it survives serializeCandidates → persist.
+        let enriched = raw;
+        try {
+          const creds = await getFarmCreds(slug);
+          enriched = attachActions(raw, { farmSlug: slug, tier: creds?.tier ?? "basic" });
+        } catch (err) {
+          logger.warn("[alerts] attachActions failed — persisting un-enriched", {
+            tenant: slug,
+            reason: err instanceof Error ? err.message : String(err),
+          });
+        }
+
+        return serializeCandidates(enriched);
       },
     );
 
