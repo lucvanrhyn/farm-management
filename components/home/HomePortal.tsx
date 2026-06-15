@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * HomePortal — the dark "Operations hub" landing portal.
+ * HomePortal — the light "cream" landing portal (locked homeTheme: cream).
  *
  * One entry surface, four destinations:
  *   ADMIN → Operations · LOGGER → Camp Rounds · EINSTEIN → AI Advisor · MAP → Farm Map
@@ -539,10 +539,12 @@ const HOME_CSS = `
   min-height: 100vh;
   overflow-x: hidden;
   color: var(--ft-text);
+  /* locked cream Home backdrop (home.jsx cream theme): single warm rust glint
+     top-right over a cream paper linear wash. Opaque base covers the hero
+     photo on the root — the cream Home is a clean paper surface. */
   background:
-    radial-gradient(ellipse 80% 60% at 72% -5%, rgba(46,125,114,.20), transparent 60%),
-    radial-gradient(ellipse 70% 60% at 8% 100%, rgba(91,108,240,.14), transparent 55%),
-    linear-gradient(180deg, #14110D 0%, #121814 100%);
+    radial-gradient(ellipse 70% 50% at 82% -10%, rgba(196,99,58,.08), transparent 55%),
+    linear-gradient(180deg, #F5EFE3 0%, #EFE7D6 100%);
 }
 .ft-home-brand { position: absolute; top: 32px; left: 36px; z-index: 2; }
 .ft-home-greet { position: absolute; top: 35px; right: 36px; z-index: 2; }

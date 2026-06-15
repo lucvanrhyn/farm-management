@@ -54,7 +54,7 @@ export function SyncBadge({ count, ariaLabel }: SyncBadgeProps) {
       role="status"
       aria-label={label}
       className="ft-mono text-[10px] font-bold px-2 py-0.5 rounded-full"
-      style={{ backgroundColor: 'var(--ft-accent)', color: '#FFF6EE' }}
+      style={{ backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }}
     >
       {value} pending
     </span>

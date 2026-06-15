@@ -148,8 +148,8 @@ export default async function LoggerPage({
   const weekday = new Intl.DateTimeFormat("en-ZA", { weekday: "long" }).format(new Date());
 
   return (
-    <div className="dark-surface ft-scope min-h-screen">
-      {/* Header — dark editorial chrome */}
+    <div className="paper-surface ft-scope min-h-screen">
+      {/* Header — light "paper" editorial chrome (locked loggerTheme: paper) */}
       <div
         className="sticky top-0 z-10"
         style={{

@@ -38,10 +38,10 @@ export default function StickySubmitBar({ children, className = "" }: Props) {
       style={{
         // Translucent backdrop so the form content visible behind the bar
         // stays legible when scrolled-under.
-        backgroundColor: "rgba(30, 15, 7, 0.92)",
+        backgroundColor: "color-mix(in oklab, var(--ft-surface) 92%, transparent)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
-        borderTop: "1px solid rgba(92, 61, 46, 0.4)",
+        borderTop: "1px solid var(--ft-border)",
         // safe-area-inset-bottom via inline style — Tailwind/Lightning CSS
         // chokes on arbitrary padding values that wrap env() inside max().
         paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",

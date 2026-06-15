@@ -111,7 +111,7 @@ export function PhotoCapture({ onPhotoCapture, onError, existingPhotoUrl }: Prop
 
   return (
     <div>
-      <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>
+      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>
         Photo (optional)
       </p>
 
@@ -132,16 +132,16 @@ export function PhotoCapture({ onPhotoCapture, onError, existingPhotoUrl }: Prop
             src={previewUrl}
             alt="Captured photo preview"
             className="w-full rounded-xl object-cover"
-            style={{ maxHeight: '200px', border: '1px solid rgba(92, 61, 46, 0.5)' }}
+            style={{ maxHeight: '200px', border: '1px solid var(--ft-border2)' }}
           />
           <button
             type="button"
             onClick={handleRetake}
             className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
             style={{
-              backgroundColor: 'rgba(44, 21, 8, 0.5)',
-              border: '1px solid rgba(92, 61, 46, 0.4)',
-              color: '#D2B48C',
+              backgroundColor: 'var(--ft-surface2)',
+              border: '1px solid var(--ft-border)',
+              color: 'var(--ft-muted)',
             }}
           >
             Retake Photo
@@ -154,9 +154,9 @@ export function PhotoCapture({ onPhotoCapture, onError, existingPhotoUrl }: Prop
           className="w-full font-semibold rounded-2xl flex items-center justify-center gap-3 transition-colors active:scale-95"
           style={{
             minHeight: '52px',
-            backgroundColor: 'rgba(44, 21, 8, 0.5)',
-            border: '1px solid rgba(92, 61, 46, 0.4)',
-            color: '#D2B48C',
+            backgroundColor: 'var(--ft-surface2)',
+            border: '1px solid var(--ft-border)',
+            color: 'var(--ft-muted)',
           }}
         >
           <span className="text-xl">📷</span>
@@ -168,7 +168,7 @@ export function PhotoCapture({ onPhotoCapture, onError, existingPhotoUrl }: Prop
         <p
           role="alert"
           className="mt-2 text-sm font-medium"
-          style={{ color: '#F87171' }}
+          style={{ color: 'var(--ft-poor)' }}
         >
           {error.message}
         </p>

@@ -21,25 +21,25 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
-        style={{ backgroundColor: '#1E0F07' }}
+        style={{ backgroundColor: 'var(--ft-surface)' }}
       >
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }} />
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'var(--ft-border2)' }} />
         </div>
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.4)' }}
+          style={{ borderBottom: '1px solid var(--ft-border)' }}
         >
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            style={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
           >
             {title}
           </h2>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: 'rgba(92, 61, 46, 0.5)', color: '#D2B48C' }}
+            style={{ backgroundColor: 'var(--ft-border2)', color: 'var(--ft-muted)' }}
           >
             ×
           </button>
@@ -94,18 +94,18 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
         <div
           className="rounded-xl px-4 py-3 text-sm"
           style={{
-            backgroundColor: 'rgba(44, 21, 8, 0.5)',
-            color: '#D2B48C',
-            border: '1px solid rgba(92, 61, 46, 0.3)',
+            backgroundColor: 'var(--ft-surface2)',
+            color: 'var(--ft-muted)',
+            border: '1px solid var(--ft-border)',
           }}
         >
-          Current camp: <span className="font-bold" style={{ color: '#F5F0E8' }}>{sourceCampId}</span>
+          Current camp: <span className="font-bold" style={{ color: 'var(--ft-text)' }}>{sourceCampId}</span>
         </div>
 
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         <div>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>Move to camp</p>
+          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--ft-muted)' }}>Move to camp</p>
           <div className="grid grid-cols-3 gap-2">
             {destinations.map((camp) => (
               <button
@@ -114,8 +114,8 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
                 className="px-3 py-3 rounded-xl text-sm font-semibold transition-colors"
                 style={
                   destCampId === camp.camp_id
-                    ? { border: '2px solid #B87333', backgroundColor: 'rgba(184,115,51,0.2)', color: '#F5F0E8' }
-                    : { border: '1px solid rgba(92, 61, 46, 0.4)', backgroundColor: 'rgba(44, 21, 8, 0.5)', color: '#D2B48C' }
+                    ? { border: '2px solid var(--ft-accent)', backgroundColor: 'var(--ft-accent-faint)', color: 'var(--ft-text)' }
+                    : { border: '1px solid var(--ft-border)', backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
                 }
               >
                 {camp.camp_name}
@@ -125,7 +125,7 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
         </div>
 
         {error && (
-          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: 'var(--ft-poor)' }}>{error}</p>
         )}
 
         <StickySubmitBar>
@@ -135,8 +135,8 @@ export default function MovementForm({ animalId, sourceCampId, onClose, onSubmit
             className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
             style={
               !destCampId || submitting
-                ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-                : { backgroundColor: '#B87333', color: '#F5F0E8' }
+                ? { backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
+                : { backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }
             }
           >
             {submitting ? "Saving..." : "Confirm Move"}

@@ -9,6 +9,7 @@ import { FxRuntime } from "@/components/ds/FxRuntime";
 import { FxBackground } from "@/components/ds/FxBackground";
 import { AreaDock } from "@/components/ds/AreaDock";
 import { CommandPalette } from "@/components/ds/CommandPalette";
+import { AreaTransition } from "@/components/ds/AreaTransition";
 
 export default async function FarmSlugLayout({
   children,
@@ -61,10 +62,13 @@ export default async function FarmSlugLayout({
           {/* FarmTrack Overhaul reskin (locked Retro variant) — global chrome
               on every authenticated farm surface: the drifting aurora
               background, the magnetic/ripple/count-up FX runtime, the floating
-              area switcher, and the ⌘K command palette. */}
+              area switcher, and the ⌘K command palette. AreaTransition wraps
+              the page content with the locked `pageTransition: fade` (fades on
+              area switches only — see component doc). The chrome lives OUTSIDE
+              the fade so it never flickers on navigation. */}
           <FxBackground />
           <FxRuntime />
-          {children}
+          <AreaTransition>{children}</AreaTransition>
           <AreaDock />
           <CommandPalette />
         </OfflineProvider>

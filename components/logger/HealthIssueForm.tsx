@@ -39,27 +39,27 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
-        style={{ backgroundColor: '#1E0F07' }}
+        style={{ backgroundColor: 'var(--ft-surface)' }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }} />
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'var(--ft-border2)' }} />
         </div>
         {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.4)' }}
+          style={{ borderBottom: '1px solid var(--ft-border)' }}
         >
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            style={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
           >
             {title}
           </h2>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: 'rgba(92, 61, 46, 0.5)', color: '#D2B48C' }}
+            style={{ backgroundColor: 'var(--ft-border2)', color: 'var(--ft-muted)' }}
           >
             ×
           </button>
@@ -119,7 +119,7 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
       <div className="p-5 flex flex-col gap-6">
         {/* Symptoms */}
         <div>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--ft-muted)' }}>
             Symptoms (select all that apply)
           </p>
           <div className="grid grid-cols-2 gap-2">
@@ -130,8 +130,8 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
                 className="px-4 py-3 rounded-xl text-sm font-medium text-left transition-colors"
                 style={
                   selectedSymptoms.includes(s)
-                    ? { border: '2px solid #B87333', backgroundColor: 'rgba(184,115,51,0.2)', color: '#F5F0E8' }
-                    : { border: '1px solid rgba(92, 61, 46, 0.4)', backgroundColor: 'rgba(44, 21, 8, 0.5)', color: '#D2B48C' }
+                    ? { border: '2px solid var(--ft-accent)', backgroundColor: 'var(--ft-accent-faint)', color: 'var(--ft-text)' }
+                    : { border: '1px solid var(--ft-border)', backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
                 }
               >
                 {s}
@@ -142,7 +142,7 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
 
         {/* Severity */}
         <div>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>Severity</p>
+          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--ft-muted)' }}>Severity</p>
           <div className="flex flex-col gap-2">
             {SEVERITIES.map((sev) => (
               <button
@@ -151,8 +151,8 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
                 className="px-4 py-3 rounded-xl text-sm font-medium text-left transition-colors"
                 style={
                   severity === sev.value
-                    ? { border: '2px solid #B87333', backgroundColor: 'rgba(184,115,51,0.2)', color: '#F5F0E8' }
-                    : { border: '1px solid rgba(92, 61, 46, 0.4)', backgroundColor: 'rgba(44, 21, 8, 0.5)', color: '#D2B48C' }
+                    ? { border: '2px solid var(--ft-accent)', backgroundColor: 'var(--ft-accent-faint)', color: 'var(--ft-text)' }
+                    : { border: '1px solid var(--ft-border)', backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
                 }
               >
                 {sev.label}
@@ -165,7 +165,7 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {error && (
-          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: 'var(--ft-poor)' }}>{error}</p>
         )}
 
         {/* Submit — wrapped in StickySubmitBar (wave/262) so it stays in view
@@ -177,8 +177,8 @@ export default function HealthIssueForm({ animalId, campId: _campId, onClose, on
             className="w-full font-bold py-4 rounded-2xl text-base transition-colors"
             style={
               selectedSymptoms.length === 0 || submitting
-                ? { backgroundColor: 'rgba(92, 61, 46, 0.3)', color: '#D2B48C' }
-                : { backgroundColor: '#B87333', color: '#F5F0E8' }
+                ? { backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
+                : { backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }
             }
           >
             {submitting ? "Saving..." : "Submit Report"}

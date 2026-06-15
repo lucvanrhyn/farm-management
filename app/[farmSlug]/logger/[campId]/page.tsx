@@ -567,7 +567,7 @@ export default function CampInspectionPage({
 
   if (!campsLoaded) {
     return (
-      <div className="dark-surface ft-scope min-h-screen flex items-center justify-center">
+      <div className="paper-surface ft-scope min-h-screen flex items-center justify-center">
         <p className="ft-mono" style={{ color: 'var(--ft-muted)' }}>Loading…</p>
       </div>
     );
@@ -575,7 +575,7 @@ export default function CampInspectionPage({
 
   if (!camp) {
     return (
-      <div className="dark-surface ft-scope min-h-screen flex items-center justify-center">
+      <div className="paper-surface ft-scope min-h-screen flex items-center justify-center">
         <p className="ft-mono" style={{ color: 'var(--ft-muted)' }}>Camp not found: {decodedId}</p>
       </div>
     );
@@ -586,7 +586,7 @@ export default function CampInspectionPage({
   const grazingStatus = grazingQuality ? grazingToStatus(grazingQuality) : null;
 
   return (
-    <div className="dark-surface ft-scope min-h-screen flex flex-col">
+    <div className="paper-surface ft-scope min-h-screen flex flex-col">
       {/* Sticky header — PageHeader-style editorial chrome */}
       <div
         className="sticky top-0 z-10"
@@ -693,7 +693,7 @@ export default function CampInspectionPage({
                   onClick={handleCompleteVisit}
                   data-testid="camp-visit-completeness-btn"
                   className="w-full font-semibold py-5 rounded-2xl text-base transition-all flex items-center justify-center gap-3 active:scale-95"
-                  style={{ backgroundColor: btnBg, color: '#FFF6EE', boxShadow: btnShadow }}
+                  style={{ backgroundColor: btnBg, color: 'var(--ft-on-accent)', boxShadow: btnShadow }}
                 >
                   <Icon.check size={20} />
                   <span>{label}</span>
@@ -903,7 +903,7 @@ export default function CampInspectionPage({
               submitToast.kind === "duplicate"
                 ? "var(--ft-accent)"
                 : "var(--ft-crit)",
-            color: "#FFF6EE",
+            color: "var(--ft-on-accent)",
           }}
         >
           {submitToast.message}

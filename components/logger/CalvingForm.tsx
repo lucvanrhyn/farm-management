@@ -43,25 +43,25 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl"
-        style={{ backgroundColor: '#1E0F07' }}
+        style={{ backgroundColor: 'var(--ft-surface)' }}
       >
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }} />
+          <div className="w-10 h-1.5 rounded-full" style={{ backgroundColor: 'var(--ft-border2)' }} />
         </div>
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: '1px solid rgba(92, 61, 46, 0.4)' }}
+          style={{ borderBottom: '1px solid var(--ft-border)' }}
         >
           <h2
             className="font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
+            style={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
           >
             {title}
           </h2>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: 'rgba(92, 61, 46, 0.5)', color: '#D2B48C' }}
+            style={{ backgroundColor: 'var(--ft-border2)', color: 'var(--ft-muted)' }}
           >
             ×
           </button>
@@ -85,7 +85,7 @@ function SegmentGroup<T extends string>({
 }) {
   return (
     <div>
-      <p className="text-sm font-semibold mb-3" style={{ color: '#D2B48C' }}>{label}</p>
+      <p className="text-sm font-semibold mb-3" style={{ color: 'var(--ft-muted)' }}>{label}</p>
       <div className="flex gap-2">
         {options.map((opt) => (
           <button
@@ -94,8 +94,8 @@ function SegmentGroup<T extends string>({
             className="flex-1 py-3.5 rounded-2xl text-sm font-bold transition-colors flex flex-col items-center gap-1"
             style={
               value === opt.value
-                ? { border: '2px solid #B87333', backgroundColor: 'rgba(184,115,51,0.2)', color: '#F5F0E8' }
-                : { border: '1px solid rgba(92, 61, 46, 0.4)', backgroundColor: 'rgba(44, 21, 8, 0.4)', color: '#D2B48C' }
+                ? { border: '2px solid var(--ft-accent)', backgroundColor: 'var(--ft-accent-faint)', color: 'var(--ft-text)' }
+                : { border: '1px solid var(--ft-border)', backgroundColor: 'var(--ft-surface2)', color: 'var(--ft-muted)' }
             }
           >
             {opt.icon && <span className="text-xl">{opt.icon}</span>}
@@ -122,19 +122,19 @@ function TextInput({
 }) {
   return (
     <div>
-      <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>
-        {label}{required && <span style={{ color: '#C0574C' }}> *</span>}
+      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>
+        {label}{required && <span style={{ color: 'var(--ft-poor)' }}> *</span>}
       </p>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
+        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)] placeholder:text-[var(--ft-subtle)]"
         style={{
-          backgroundColor: 'rgba(26, 13, 5, 0.6)',
-          border: '1px solid rgba(92, 61, 46, 0.5)',
-          color: '#F5F0E8',
+          backgroundColor: 'var(--ft-surface2)',
+          border: '1px solid var(--ft-border2)',
+          color: 'var(--ft-text)',
         }}
       />
     </div>
@@ -284,17 +284,17 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
 
         {/* Date of birth */}
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Date of birth</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>Date of birth</p>
           <input
             type="date"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
             style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
-              colorScheme: 'dark',
+              backgroundColor: 'var(--ft-surface2)',
+              border: '1px solid var(--ft-border2)',
+              color: 'var(--ft-text)',
+              colorScheme: 'light',
             }}
           />
         </div>
@@ -302,15 +302,15 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         {/* Father picker — only shown if bulls available */}
         {bulls.length > 0 && (
           <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Father (optional)</p>
+            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>Father (optional)</p>
             <select
               value={fatherId}
               onChange={(e) => setFatherId(e.target.value)}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
               style={{
-                backgroundColor: 'rgba(26, 13, 5, 0.6)',
-                border: '1px solid rgba(92, 61, 46, 0.5)',
-                color: fatherId ? '#F5F0E8' : 'rgba(139,105,20,0.6)',
+                backgroundColor: 'var(--ft-surface2)',
+                border: '1px solid var(--ft-border2)',
+                color: fatherId ? 'var(--ft-text)' : 'var(--ft-subtle)',
               }}
             >
               <option value="">Unknown / not recorded</option>
@@ -333,15 +333,15 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
 
         {/* Category */}
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Category</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>Category</p>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
             style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
+              backgroundColor: 'var(--ft-surface2)',
+              border: '1px solid var(--ft-border2)',
+              color: 'var(--ft-text)',
             }}
           >
             {calfSex === "Female" ? (
@@ -360,15 +360,15 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
 
         {/* Calving difficulty */}
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Calving difficulty</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>Calving difficulty</p>
           <select
             value={calvingDifficulty}
             onChange={(e) => setCalvingDifficulty(e.target.value)}
-            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
             style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
+              backgroundColor: 'var(--ft-surface2)',
+              border: '1px solid var(--ft-border2)',
+              color: 'var(--ft-text)',
             }}
           >
             {CALVING_DIFFICULTY_OPTIONS.map((opt) => (
@@ -379,7 +379,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
 
         {/* Birth weight */}
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: '#D2B48C' }}>Birth weight (kg, optional)</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--ft-muted)' }}>Birth weight (kg, optional)</p>
           <input
             type="number"
             inputMode="decimal"
@@ -389,11 +389,11 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
             value={birthWeight}
             onChange={(e) => setBirthWeight(e.target.value)}
             placeholder="e.g. 32"
-            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333] placeholder:text-[#8B6914]/60"
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)] placeholder:text-[var(--ft-subtle)]"
             style={{
-              backgroundColor: 'rgba(26, 13, 5, 0.6)',
-              border: '1px solid rgba(92, 61, 46, 0.5)',
-              color: '#F5F0E8',
+              backgroundColor: 'var(--ft-surface2)',
+              border: '1px solid var(--ft-border2)',
+              color: 'var(--ft-text)',
             }}
           />
         </div>
@@ -402,7 +402,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
         <PhotoCapture onPhotoCapture={(blob) => setPhotoBlob(blob)} />
 
         {error && (
-          <p className="text-sm text-center" style={{ color: '#C0574C' }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: 'var(--ft-poor)' }}>{error}</p>
         )}
 
         <StickySubmitBar>
@@ -410,7 +410,7 @@ export default function CalvingForm({ animalId, campId, bulls = [], onClose, onS
             onClick={submit}
             disabled={!canSubmit || submitting}
             className="w-full font-bold py-4 rounded-2xl text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: '#B87333', color: '#F5F0E8' }}
+            style={{ backgroundColor: 'var(--ft-accent)', color: 'var(--ft-on-accent)' }}
           >
             {submitting ? "Saving..." : "Record Birth"}
           </button>

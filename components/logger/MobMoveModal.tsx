@@ -39,21 +39,21 @@ export default function MobMoveModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#1E0F07', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
+        style={{ backgroundColor: 'var(--ft-surface)', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}
       >
         <div className="flex justify-center">
           <div
             className="w-10 h-1.5 rounded-full"
-            style={{ backgroundColor: 'rgba(139, 105, 20, 0.4)' }}
+            style={{ backgroundColor: 'var(--ft-border2)' }}
           />
         </div>
         <ModalHeader
           title={`Move Mob: ${mob.name}`}
           onClose={onClose}
-          titleStyle={{ fontFamily: 'var(--font-display)', color: '#F5F0E8' }}
-          closeStyle={{ color: '#D2B48C' }}
+          titleStyle={{ fontFamily: 'var(--ft-font-serif)', color: 'var(--ft-text)' }}
+          closeStyle={{ color: 'var(--ft-muted)' }}
         />
-        <p className="text-sm" style={{ color: '#D2B48C' }}>
+        <p className="text-sm" style={{ color: 'var(--ft-muted)' }}>
           {mob.animal_count} animal{mob.animal_count !== 1 ? 's' : ''} will move together.
         </p>
         <select
@@ -61,9 +61,9 @@ export default function MobMoveModal({
           onChange={(e) => onDestCampChange(e.target.value)}
           className="w-full py-3 px-4 rounded-xl text-sm"
           style={{
-            backgroundColor: 'rgba(44, 21, 8, 0.5)',
-            border: '1px solid rgba(92, 61, 46, 0.4)',
-            color: '#D2B48C',
+            backgroundColor: 'var(--ft-surface2)',
+            border: '1px solid var(--ft-border)',
+            color: 'var(--ft-muted)',
           }}
         >
           <option value="">Select destination camp...</option>
@@ -80,8 +80,8 @@ export default function MobMoveModal({
           disabled={!destCamp || isSubmitting}
           className="w-full font-bold py-4 rounded-2xl text-sm transition-all active:scale-95 disabled:opacity-50"
           style={{
-            backgroundColor: '#B87333',
-            color: '#F5F0E8',
+            backgroundColor: 'var(--ft-accent)',
+            color: 'var(--ft-on-accent)',
           }}
         >
           {isSubmitting ? "Moving..." : "Confirm Move"}
@@ -89,7 +89,7 @@ export default function MobMoveModal({
         <button
           onClick={onClose}
           className="text-sm py-2"
-          style={{ color: 'rgba(210, 180, 140, 0.5)' }}
+          style={{ color: 'var(--ft-muted)' }}
         >
           Cancel
         </button>

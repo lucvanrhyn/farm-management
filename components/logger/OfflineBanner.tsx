@@ -48,18 +48,18 @@ export function OfflineBanner() {
         // Rust accent — distinctive against the warm dark chrome so the
         // banner is impossible to miss. Token-driven so it tracks theme.
         backgroundColor: 'var(--ft-accent)',
-        color: '#FFF6EE',
-        borderBottom: '1px solid color-mix(in oklab, #FFF6EE 18%, transparent)',
+        color: 'var(--ft-on-accent)',
+        borderBottom: '1px solid color-mix(in oklab, var(--ft-on-accent) 18%, transparent)',
       }}
     >
       <span aria-hidden>⚠</span>
       <span>You&apos;re offline.</span>
       {pendingCount > 0 ? (
-        <span style={{ color: 'color-mix(in oklab, #FFF6EE 85%, transparent)' }}>
+        <span style={{ color: 'color-mix(in oklab, var(--ft-on-accent) 85%, transparent)' }}>
           {pendingCount} change{pendingCount === 1 ? '' : 's'} queued — will sync when you reconnect.
         </span>
       ) : (
-        <span style={{ color: 'color-mix(in oklab, #FFF6EE 85%, transparent)' }}>
+        <span style={{ color: 'color-mix(in oklab, var(--ft-on-accent) 85%, transparent)' }}>
           Changes will be queued and synced when you reconnect.
         </span>
       )}

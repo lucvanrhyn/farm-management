@@ -5,10 +5,12 @@
  * LOCKED variant: skin "Retro" (70s print), teal accent #2E7D72, animated
  * aurora background, full motion suite. Single source of truth for the reskin:
  *
- *   • Token system with three surface modes:
+ *   • Token system with surface modes:
  *       :root            → light "Operations" surface (default)
- *       .dark-surface    → dark surface (Home, Logger, Map)
+ *       .dark-surface    → dark surface (Map)
  *       .light-surface   → light chrome over a dark map
+ *       .cream-surface   → light "cream" surface (Home — homeTheme: cream)
+ *       .paper-surface   → light "paper" surface (Logger — loggerTheme: paper)
  *   • Density modes (.density-airy | .density-balanced | .density-dense)
  *   • Shared primitive classes (.card, .pill, .btn, .segmented, .label, kbd …)
  *   • Retro skin: sharp 3px corners, 1.5px ink borders, hard offset drop
@@ -54,7 +56,7 @@
 
   /* Retro skin: sharp corners (70s print). Hard offset shadows are inlined on
      .ft-card / .ft-btn (they reference --ft-text so they adapt per surface). */
-  --ft-r-sm: 2px;  --ft-r: 3px;  --ft-r-lg: 3px;  --ft-r-xl: 4px;
+  --ft-r-sm: 2px;  --ft-r: 3px;  --ft-r-lg: 4px;  --ft-r-xl: 5px;
 
   --ft-font-sans:  var(--font-space-grotesk), "Space Grotesk", system-ui, -apple-system, sans-serif;
   --ft-font-mono:  var(--font-space-mono), "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -113,6 +115,42 @@
   color: var(--ft-text);
 }
 
+/* light "cream" surface — Home (locked homeTheme: cream) and light "paper"
+   surface — Logger (locked loggerTheme: paper). Both are LIGHT, so the teal
+   accent-faint, status backgrounds and soft shadow inherit from :root
+   automatically; each mode only overrides the surface palette that differs.
+   --ft-bg stays a SOLID colour (the sticky headers color-mix against it, which
+   needs a colour, not a gradient); the spec radial-glint gradient is painted
+   as `background` — for paper directly here (logger roots have no cover), and
+   for cream on the page's .ft-home-root (whose parent carries an inline hero
+   cover that would otherwise sit over a gradient set here). */
+.cream-surface {
+  --ft-bg:        #F5EFE3;
+  --ft-surface:   #FFFFFF;
+  --ft-surface2:  #FBF7EF;
+  --ft-border:    #E5DCCA;
+  --ft-border2:   #CFC3AC;
+  --ft-text:      #251B12;
+  --ft-muted:     #6B5C4E;
+  --ft-subtle:    #9C8E7A;
+  background: var(--ft-bg);
+  color: var(--ft-text);
+}
+.paper-surface {
+  --ft-bg:        #F6F1E7;
+  --ft-surface:   #FFFFFF;
+  --ft-surface2:  #F4EEE2;
+  --ft-border:    #E5DCCA;
+  --ft-border2:   #CFC3AC;
+  --ft-text:      #241B12;
+  --ft-muted:     #6B5C4E;
+  --ft-subtle:    #9C8E7A;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, #f3e9d6, transparent 55%),
+    linear-gradient(180deg, #F6F1E7, #EFE7D7);
+  color: var(--ft-text);
+}
+
 /* ----------------------------------------------------------------------------
  * 3. Density
  * -------------------------------------------------------------------------- */
@@ -167,7 +205,7 @@
   isolation: isolate;
   background: var(--ft-surface);
   border: 1.5px solid color-mix(in oklab, var(--ft-text) 42%, var(--ft-border));
-  border-radius: var(--ft-r-lg);
+  border-radius: var(--ft-r);
   box-shadow: 4px 4px 0 color-mix(in oklab, var(--ft-text) 22%, transparent);
   transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
 }
@@ -189,13 +227,14 @@
   animation: ftBeam 5s linear infinite;
 }
 
-/* interactive + lift cards rise off the page; the hard shadow deepens */
+/* interactive + lift cards rise off the page (locked cardHover: lift).
+   In the prototype the retro skin's hard offset shadow + ink border are
+   declared !important, so they stay put under the lift and only the
+   translateY animates — reproduced here by animating transform alone. */
 .ft-card-interactive { cursor: pointer; }
 .ft-card-interactive:hover,
 .ft-card-lift:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 color-mix(in oklab, var(--ft-text) 30%, transparent);
-  border-color: color-mix(in oklab, var(--ft-text) 52%, var(--ft-border));
+  transform: translateY(-3px);
 }
 
 /* dotted divider */
@@ -304,7 +343,7 @@
   position: relative;
   background: var(--ft-accent-faint);
   border: 1px solid color-mix(in oklab, var(--ft-accent) 22%, var(--ft-border));
-  border-radius: var(--ft-r-lg);
+  border-radius: var(--ft-r);
 }
 .ft-brief::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.4px;
@@ -389,11 +428,11 @@
  * -------------------------------------------------------------------------- */
 .ft-fx-bg { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
 .ft-fx-bg-aurora {
-  opacity: .42; mix-blend-mode: soft-light;
+  opacity: .5; mix-blend-mode: soft-light;
   background:
     radial-gradient(40% 50% at 20% 25%, color-mix(in oklab, var(--ft-accent) 90%, transparent), transparent 70%),
-    radial-gradient(45% 55% at 82% 30%, color-mix(in oklab, var(--ft-accent) 55%, #5B6CF0), transparent 70%),
-    radial-gradient(50% 60% at 60% 88%, color-mix(in oklab, var(--ft-accent) 60%, #1E6F64), transparent 72%);
+    radial-gradient(45% 55% at 82% 30%, color-mix(in oklab, var(--ft-accent) 60%, #5B6CF0), transparent 70%),
+    radial-gradient(50% 60% at 60% 88%, color-mix(in oklab, var(--ft-accent) 50%, #2E7D72), transparent 72%);
   background-size: 200% 200%;
   animation: ftAurora 18s ease-in-out infinite;
 }

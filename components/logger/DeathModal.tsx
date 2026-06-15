@@ -57,14 +57,14 @@ interface DeathModalProps {
 }
 
 const SELECTED_STYLE = {
-  border: "2px solid #B87333",
-  backgroundColor: "rgba(184,115,51,0.2)",
-  color: "#F5F0E8",
+  border: "2px solid var(--ft-accent)",
+  backgroundColor: "var(--ft-accent-faint)",
+  color: "var(--ft-text)",
 };
 const DEFAULT_STYLE = {
-  border: "1px solid rgba(92, 61, 46, 0.4)",
-  backgroundColor: "rgba(44, 21, 8, 0.5)",
-  color: "#D2B48C",
+  border: "1px solid var(--ft-border)",
+  backgroundColor: "var(--ft-surface2)",
+  color: "var(--ft-muted)",
 };
 
 export default function DeathModal({
@@ -118,23 +118,23 @@ export default function DeathModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className="relative rounded-t-3xl p-6 flex flex-col gap-4 max-h-[88vh] overflow-y-auto"
-        style={{ backgroundColor: "#1E0F07", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)" }}
+        style={{ backgroundColor: "var(--ft-surface)", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)" }}
       >
         <div className="flex justify-center">
           <div
             className="w-10 h-1.5 rounded-full"
-            style={{ backgroundColor: "rgba(139, 105, 20, 0.4)" }}
+            style={{ backgroundColor: "var(--ft-border2)" }}
           />
         </div>
         <ModalHeader
           title={`Record Death — ${animalId}`}
           onClose={onClose}
-          titleStyle={{ fontFamily: "var(--font-display)", color: "#F5F0E8" }}
-          closeStyle={{ color: "#D2B48C" }}
+          titleStyle={{ fontFamily: "var(--ft-font-serif)", color: "var(--ft-text)" }}
+          closeStyle={{ color: "var(--ft-muted)" }}
         />
-        <p className="text-sm" style={{ color: "#D2B48C" }}>
+        <p className="text-sm" style={{ color: "var(--ft-muted)" }}>
           Confirm that animal{" "}
-          <span className="font-bold" style={{ color: "#F5F0E8" }}>
+          <span className="font-bold" style={{ color: "var(--ft-text)" }}>
             {animalId}
           </span>{" "}
           is deceased.
@@ -149,7 +149,7 @@ export default function DeathModal({
         <p
           className="text-sm font-semibold"
           id="death-cause-label"
-          style={{ color: "#D2B48C" }}
+          style={{ color: "var(--ft-muted)" }}
         >
           Cause of death
         </p>
@@ -183,7 +183,7 @@ export default function DeathModal({
         <label
           htmlFor="death-carcass-disposal"
           className="text-sm font-semibold"
-          style={{ color: "#D2B48C" }}
+          style={{ color: "var(--ft-muted)" }}
         >
           Carcass disposal
         </label>
@@ -192,11 +192,11 @@ export default function DeathModal({
           required
           value={carcassDisposal}
           onChange={(e) => setCarcassDisposal(e.target.value)}
-          className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+          className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
           style={{
-            backgroundColor: "rgba(26, 13, 5, 0.6)",
-            border: "1px solid rgba(92, 61, 46, 0.5)",
-            color: "#F5F0E8",
+            backgroundColor: "var(--ft-surface2)",
+            border: "1px solid var(--ft-border2)",
+            color: "var(--ft-text)",
           }}
         >
           <option value="">Select disposal method…</option>
@@ -213,7 +213,7 @@ export default function DeathModal({
         <label
           htmlFor="death-notes"
           className="text-sm font-semibold"
-          style={{ color: "#D2B48C" }}
+          style={{ color: "var(--ft-muted)" }}
         >
           Notes (optional)
         </label>
@@ -224,16 +224,16 @@ export default function DeathModal({
           rows={2}
           maxLength={2000}
           placeholder="e.g. found in north camp, no predator signs"
-          className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#B87333]"
+          className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--ft-accent)]"
           style={{
-            backgroundColor: "rgba(26, 13, 5, 0.6)",
-            border: "1px solid rgba(92, 61, 46, 0.5)",
-            color: "#F5F0E8",
+            backgroundColor: "var(--ft-surface2)",
+            border: "1px solid var(--ft-border2)",
+            color: "var(--ft-text)",
           }}
         />
 
         {error && (
-          <p className="text-sm text-center" style={{ color: "#C0574C" }}>{error}</p>
+          <p className="text-sm text-center" style={{ color: "var(--ft-poor)" }}>{error}</p>
         )}
 
         <StickySubmitBar className="-mx-6 px-6 mt-2">
@@ -243,8 +243,8 @@ export default function DeathModal({
             disabled={!canSubmit}
             className="w-full font-bold py-4 rounded-2xl text-base transition-opacity"
             style={{
-              backgroundColor: "#B87333",
-              color: "#F5F0E8",
+              backgroundColor: "var(--ft-accent)",
+              color: "var(--ft-on-accent)",
               opacity: canSubmit ? 1 : 0.4,
               cursor: canSubmit ? "pointer" : "not-allowed",
             }}
@@ -255,7 +255,7 @@ export default function DeathModal({
             type="button"
             onClick={onClose}
             className="w-full text-sm py-2 mt-1"
-            style={{ color: "rgba(210, 180, 140, 0.5)" }}
+            style={{ color: "var(--ft-muted)" }}
           >
             Cancel
           </button>
