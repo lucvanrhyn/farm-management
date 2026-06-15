@@ -175,3 +175,224 @@ invariant, enforced by tests — not a runtime cost on every write. The
 pre-ADR-0006 fallback (`animal?.species ?? null` on a missing-animal
 read) silently wrote NULLs that the species-scoped read predicate's
 OR-branch had to tolerate; the throw closes that hole.
+
+---
+
+## Alerts
+
+ADR-0005 (dashboard-alert-composition) pins how a farm's red/amber alert
+set is derived. This section was specified by that ADR's grilling session
+(2026-05-17) but had drifted out of the file; it is restored here so the
+Herd Triage terms below have a canonical contract to contrast against.
+
+### Alert
+
+A `DashboardAlert` — an **aggregate**, farm- or species-level operational
+signal: `{ id, severity: "red" | "amber", icon, message, count, href,
+species }`. It answers *"how is the farm doing?"* An Alert **counts**, it
+never **identifies** an individual animal (e.g. `{ id: "poor-doers",
+count: 7, href: … }`). The per-animal data that produced the count is
+computed inside the detector and then collapsed away at the Alert boundary.
+
+### Alert source
+
+One of the eight independently-optional inputs to `composeAlerts`:
+species-module alerts, animals-in-withdrawal, camp-conditions, rotation
+status, veld summary, feed-on-offer, drought, and camp count (drives
+stale-inspection). An **absent source contributes nothing** — "not
+fetched" and "clean" are indistinguishable in the output, by design.
+
+### Alert composition (`composeAlerts`)
+
+The pure, total, deterministic function (`lib/server/alerts/compose.ts`)
+that decides every severity, message, and count. The **only** place those
+decisions live. `getDashboardAlerts` is the thin fetch shell that fans out
+the eight sources and calls it.
+
+### Partial alert pass
+
+`composeAlerts` called with a *subset* of sources — the offline dashboard
+header badge, which has only camp-conditions available locally.
+**Monotonicity invariant:** for any input bag, a partial pass yields a
+prefix of the full pass — every emitted id ⊆ the full pass's ids, and
+`partial.totalCount <= full.totalCount`. The header number is always a
+real subset of the canonical number, never a different formula.
+
+---
+
+## Herd Triage
+
+PRD (Herd Triage, grilling session 2026-06-14) introduces a per-animal
+lens that complements the aggregate Alert. Alert answers *"how is the
+farm?"*; Triage answers *"which animals need me right now?"* The two are
+**projections of the same detection** — Alert groups detector findings by
+reason and shows a count; the Attention Item groups them by animal and
+shows the reasons. See ADR (Attention Item read model).
+
+### Attention Item
+
+The per-animal counterpart to an Alert: `{ animalId, reasons[], urgency,
+severity, species }`, keyed to a single `Animal`. Carries one or more
+**reasons**. Distinct from Alert (aggregate) — an Attention Item is the
+group-by-animal residue of the same detection an Alert counts by reason.
+Never overloaded onto `DashboardAlert` (whose `count`/`href` have no
+per-animal meaning, and whose partial-pass monotonicity invariant was not
+designed to govern per-animal ranking).
+
+### Reason
+
+A single detector finding attached to an Attention Item — e.g.
+`poor-doer`, `open-cow`, `overdue-inspection`, `calving-interval-long`,
+`no-weight-on-record`, `no-camp`. A Reason id is shared with the Alert that
+counts the same finding (Alert `poor-doers` is the herd-level roll-up of
+every Attention Item carrying the `poor-doer` Reason), so detection logic
+and thresholds are defined once and projected two ways.
+
+### Snapshot reason
+
+A Reason computable from **imported animal attributes alone** (DOB/age,
+sex, breed, last-calving, current weight, camp assignment) with no logged
+observation history. Snapshot reasons guarantee the Triage list is
+populated on day-1 import — the acquisition-critical "aha" of the 7-day
+trial. Contrast **history reasons** (weight-drop, overdue-inspection,
+withdrawal) which require accrued observations and therefore *unlock* as
+the farmer logs ("unlock more").
+
+### Urgency
+
+The deterministic ordering key for the Triage list — a composite of each
+reason's severity/weight. **Rules decide urgency, not the LLM.** Two
+Attention Items with the same reasons rank identically regardless of
+narration.
+
+### Triage narration
+
+The LLM layer (Farm Einstein) that turns an Attention Item's structured
+reasons into natural language and answers follow-ups. It **never invents
+reasons** — it narrates only what the rules detected. Narration is online
+with a deterministic templated fallback offline, so detection and ranking
+stay fully offline-capable; only the prose degrades without connectivity.
+
+---
+
+## Recommended Actions (Nudges)
+
+PRD (Proactive AI nudges, grilling session 2026-06-14). Detection already
+exists — the Phase-J alert generators (`lib/server/alerts/*`), plus Alerts
+and Attention Items. A Recommended Action is the **do** affordance layered
+on top, deliberately **not** a new notification pipeline (adding one would
+be the third pipeline; the dual-pipeline debt is already noted). See ADR
+(Recommended Action affordance).
+
+### Recommended Action
+
+An optional structured action attached to an existing signal (Notification
+/ Alert / Attention Item): `{ taskType, target: { campId? | animalId? },
+prefill, label }`. It upgrades the signal's deep-link `href` from "navigate
+to a page" to "open a **prefilled** action." `taskType` reuses the `Task`
+vocabulary (`weighing | treatment | camp_move | water_point_service | …`).
+A signal with no sensible action carries none (info-only).
+
+### Nudge
+
+The UX surface and user-facing synonym: a signal that carries a Recommended
+Action, shown in a ranked "do next" feed. "Nudge" is the word the farmer
+sees; **Recommended Action** is the precise model term.
+
+### Propose-only execution
+
+Accepting a nudge **opens the prefilled action form** for the human to
+confirm and submit — it never auto-writes. "Do later" materialises a `Task`
+(status `pending`) from the same `{ taskType, target, prefill }`. True
+execute-on-approval (writing without opening the form) is the deferred
+Autopilot capstone, explicitly out of scope.
+
+### Action mapping
+
+The deterministic table from a signal's `type` to its Recommended Action
+(`taskType` + how to resolve `target` / `prefill`). Targets and prefill
+values come from existing engines (e.g. the rotation engine supplies the
+next camp for a `camp_move`), **never from the LLM** — mirroring Triage's
+rules-detect / LLM-narrate split. Einstein ranks and narrates nudges; it
+does not invent action targets.
+
+---
+
+## Farm Briefing
+
+PRD (Weekly AI digest, grilling session 2026-06-14). Upgrades the daily
+mechanical digest into an AI-narrated periodic summary. Reuses the existing
+digest machinery (`digestMode`, `digestDispatchedAt`, the Inngest
+dispatcher, `sendDailyDigest`'s send path) — not a new scheduler.
+
+### Farm Briefing
+
+An AI-narrated periodic summary of the farm — *what changed, what to watch,
+what to do* — composed from a deterministic **briefing payload**: recent
+notifications, top Attention Items (Triage), top Recommended Actions
+(nudges), and key changes (weights logged, repro events, deaths/sales,
+veld/rotation, drought). Einstein narrates the payload and never invents
+facts. Delivered by the weekly **Digest** (email) and an in-app "This week"
+surface.
+
+### Digest
+
+The scheduled delivery of farm signals, governed by the per-farm
+`digestMode`: `realtime` (per-event push), `daily` (the J4b
+category-grouped unread-notification roll-up email), and `weekly` (the AI
+**Farm Briefing**). `digestDispatchedAt` stamps the last send
+(stamp-before-flush idempotency, `dispatch.ts`). The mechanical daily
+digest remains for farms that want raw alerts; the weekly mode carries a
+Briefing.
+
+### Briefing payload
+
+The deterministic, structured aggregation the Farm Briefing narrates
+(sources above). Rules aggregate; the LLM narrates; a templated fallback
+renders the payload without the LLM, so a Briefing always sends even when
+Einstein is unavailable.
+
+---
+
+## Camp Profitability
+
+PRD (Profit-Per-Camp lite, grilling session 2026-06-14). Rolls the existing
+finance calculators (`getCostPerCamp`, `calcProfitabilityByAnimal`,
+`CogByCampRow`) up to the camp, per-LSU and per-hectare level. ADR-0012 pins
+the income-attribution rule. The farm-level P&L (`getFinancialKPIs`) remains
+the authoritative total; camp profitability is a reporting attribution, not a
+second accounting truth.
+
+### Camp profitability
+
+Income minus expenses attributed to a camp over a period:
+`profit(camp) = Σ income attributed to camp − Σ costs attributed/allocated to
+camp`. Costs reuse the existing attribution (`Transaction.campId`, or
+camp-tagged costs allocated across the camp's animals by
+`calcProfitabilityByAnimal`). Income uses the income-attribution rule below.
+
+### Income attribution (last-camp rule)
+
+A sale's income is credited to the camp the sold animal was in at sale time
+(its `currentCamp` / last camp before sale) — "where it was finished". For
+batch sales (`animalIds[]`), each animal's share credits its own last camp.
+This is the income counterpart to the already-existing cost attribution.
+Chosen over campId-only (most sales are animal-tagged → empty camps) and
+cost-only (no profit). **Known limitation:** an animal moved to a dedicated
+sale/holding camp just before sale credits income there, not to the
+production camp that did the value-add; v1 accepts this, future refinement
+may credit the prior production camp. See ADR-0012.
+
+### Per-LSU / per-hectare margin
+
+Camp profitability normalised for comparability: `profit(camp) ÷ camp LSU`
+(merged-LSU from the species registry) and `÷ camp sizeHectares`. Lets a
+small high-value camp be compared against a large extensive one.
+
+### Unallocated finance
+
+Transactions with neither `animalId` nor `campId` (farm overhead: salaries,
+licences, general fuel). Shown as a separate "unallocated" line, **never
+spread across camps by a formula** — keeps camp profitability honest rather
+than arbitrarily allocated. (Contrast camp-tagged costs, which ARE allocated
+to the camp's animals.)
