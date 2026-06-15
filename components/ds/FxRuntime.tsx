@@ -24,8 +24,8 @@ export function FxRuntime() {
     let magCur: HTMLElement | null = null;
     const resetMag = (el: HTMLElement | null) => {
       if (el) {
-        el.style.transform = "";
-        el.style.transition = "";
+        el.style.removeProperty("--ft-mag-x");
+        el.style.removeProperty("--ft-mag-y");
       }
     };
     const onMove = (e: PointerEvent) => {
@@ -44,8 +44,10 @@ export function FxRuntime() {
         const r = btn.getBoundingClientRect();
         const dx = e2.clientX - (r.left + r.width / 2);
         const dy = e2.clientY - (r.top + r.height / 2);
-        btn.style.transition = "transform .12s ease";
-        btn.style.transform = `translate(${(dx * 0.22).toFixed(1)}px, ${(dy * 0.3).toFixed(1)}px)`;
+        // Feed CSS custom props so the button's transform (declared in
+        // design-system.css) composes magnetic drift with the :active press.
+        btn.style.setProperty("--ft-mag-x", `${(dx * 0.22).toFixed(1)}px`);
+        btn.style.setProperty("--ft-mag-y", `${(dy * 0.3).toFixed(1)}px`);
       });
     };
     if (!reduce) {
@@ -64,8 +66,8 @@ export function FxRuntime() {
       ink.style.width = ink.style.height = `${size}px`;
       ink.style.left = `${e.clientX - r.left - size / 2}px`;
       ink.style.top = `${e.clientY - r.top - size / 2}px`;
-      if (getComputedStyle(b).position === "static") b.style.position = "relative";
-      b.style.overflow = "hidden";
+      // .ft-btn is already position:relative + overflow:hidden in CSS, so the
+      // ripple is contained without mutating (and never restoring) inline styles.
       b.appendChild(ink);
       window.setTimeout(() => ink.remove(), 620);
     };

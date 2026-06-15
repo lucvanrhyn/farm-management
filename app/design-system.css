@@ -172,8 +172,10 @@
   transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
 }
 
-/* animated border beam on every card (locked cardBeam) */
-.ft-card::before {
+/* animated border beam on every card (locked cardBeam). Excludes .ft-brief,
+   which owns its own (slightly slower) beam in §10 — otherwise that card would
+   carry two overlapping beams beating at different periods. */
+.ft-card:not(.ft-brief)::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
   padding: 1.2px; pointer-events: none; z-index: 3; opacity: .85;
   background: conic-gradient(from var(--ft-beam-angle),
@@ -205,6 +207,9 @@
  * 7. Buttons (primary gets a default diagonal "sheen" sweep on hover)
  * -------------------------------------------------------------------------- */
 .ft-btn {
+  /* position+overflow let <FxRuntime> drop a contained click-ripple into any
+     button without mutating inline styles. */
+  position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 9px 14px; border-radius: var(--ft-r-sm);
   border: 1.5px solid color-mix(in oklab, var(--ft-text) 34%, var(--ft-border2));
@@ -214,7 +219,7 @@
   text-transform: uppercase; letter-spacing: .04em;
   box-shadow: 2px 2px 0 color-mix(in oklab, var(--ft-text) 12%, transparent);
   transition: background .15s ease, border-color .15s ease, color .15s ease,
-              transform .08s ease, box-shadow .08s ease;
+              transform .12s ease, box-shadow .08s ease;
   white-space: nowrap; cursor: pointer;
 }
 .ft-btn:hover { background: var(--ft-surface2); }
@@ -223,12 +228,18 @@
 .ft-btn:disabled { opacity: .55; cursor: not-allowed; }
 
 .ft-btn-primary {
-  position: relative; overflow: hidden;
   background: var(--ft-accent); color: var(--ft-on-accent);
   border-color: color-mix(in oklab, var(--ft-text) 34%, transparent);
+  /* magnetic offset (set by <FxRuntime> as --ft-mag-x/y) composes with the
+     press translate below so the cursor-drift and the click-press coexist. */
+  transform: translate(var(--ft-mag-x, 0px), var(--ft-mag-y, 0px));
 }
 .ft-btn-primary > * { position: relative; z-index: 1; }
 .ft-btn-primary:hover { background: var(--ft-accent-hover); }
+.ft-btn-primary:active {
+  transform: translate(calc(var(--ft-mag-x, 0px) + 2px), calc(var(--ft-mag-y, 0px) + 2px));
+  box-shadow: none;
+}
 .ft-btn-primary::after {
   content: ""; position: absolute; top: -20%; left: -160%;
   width: 55%; height: 140%; pointer-events: none;
