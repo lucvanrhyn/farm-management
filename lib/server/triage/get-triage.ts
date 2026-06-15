@@ -71,6 +71,7 @@ async function findingsForSpecies(
   now: Date,
 ): Promise<Finding[]> {
   // Active animals for this species (scoped injects { species, status:Active }).
+  // audit-allow-deceased-flag: scoped() injects status:Active, so deceased are already excluded.
   const rows = (await scoped(prisma, speciesId).animal.findMany({
     select: TRIAGE_ANIMAL_SELECT,
     take: 10_000,
