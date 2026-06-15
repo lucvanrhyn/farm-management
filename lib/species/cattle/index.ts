@@ -10,6 +10,7 @@ import type {
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import { CATTLE_CONFIG } from "./config";
 import { getReproStatsForSpecies } from "../shared/repro-engine";
+import { detectPoorDoers } from "./poor-doer";
 
 // Re-export config for direct access
 export { CATTLE_CONFIG } from "./config";
@@ -103,43 +104,17 @@ export const cattleModule: SpeciesModule = {
     ).length;
 
     // ── Poor doers (weighing) ────────────────────────────────────────────────
+    // Detection is shared with Herd Triage via the pure `detectPoorDoers`
+    // helper (lib/species/cattle/poor-doer.ts). The alert COUNTs the
+    // per-animal ids; Triage consumes the ids themselves. Output of THIS
+    // alert is byte-identical to the previous inline block.
     const weighingObs = await scoped(prisma, "cattle").observation.findMany({
       where: { type: "weighing", animalId: { not: null } },
       select: { animalId: true, observedAt: true, details: true },
       orderBy: { observedAt: "asc" },
     });
 
-    const byAnimal = new Map<
-      string,
-      { date: Date; weightKg: number }[]
-    >();
-    for (const obs of weighingObs) {
-      if (!obs.animalId) continue;
-      let details: { weight_kg?: number } = {};
-      try {
-        details = JSON.parse(obs.details) as { weight_kg?: number };
-      } catch {
-        continue;
-      }
-      if (typeof details.weight_kg !== "number") continue;
-      const existing = byAnimal.get(obs.animalId) ?? [];
-      byAnimal.set(obs.animalId, [
-        ...existing,
-        { date: obs.observedAt, weightKg: details.weight_kg },
-      ]);
-    }
-
-    let poorDoerCount = 0;
-    for (const readings of byAnimal.values()) {
-      if (readings.length < 2) continue;
-      const first = readings[0];
-      const last = readings[readings.length - 1];
-      const days =
-        (last.date.getTime() - first.date.getTime()) / 86_400_000;
-      if (days <= 0) continue;
-      const longRunAdg = (last.weightKg - first.weightKg) / days;
-      if (longRunAdg < adgPoorDoerThreshold) poorDoerCount++;
-    }
+    const poorDoerCount = detectPoorDoers(weighingObs, adgPoorDoerThreshold).length;
 
     // ── Build alert list ─────────────────────────────────────────────────────
     const alerts: SpeciesAlert[] = [];

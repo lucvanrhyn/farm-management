@@ -8,20 +8,8 @@ import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import { getFarmFeedOnOfferPayload } from "@/lib/server/feed-on-offer";
 import { getDroughtPayload, type DroughtPayload } from "@/lib/server/drought";
-import { cattleModule } from "@/lib/species/cattle";
-import { sheepModule } from "@/lib/species/sheep";
-import { gameModule } from "@/lib/species/game";
-import type { SpeciesModule, SpeciesAlert, SpeciesId } from "@/lib/species/types";
-
-// Registry of all species modules, keyed by id. The set of modules we actually
-// query on each request is filtered by the farm's FarmSpeciesSettings — see
-// `getEnabledSpeciesModules` below. Cattle is always included as a safe
-// default (mirrors getCachedFarmSpeciesSettings semantics in lib/server/cached.ts).
-const ALL_SPECIES_MODULES: Record<SpeciesId, SpeciesModule> = {
-  cattle: cattleModule,
-  sheep: sheepModule,
-  game: gameModule,
-};
+import { getEnabledSpeciesModules } from "@/lib/server/species-modules";
+import type { SpeciesAlert, SpeciesId } from "@/lib/species/types";
 
 // ADR-0005: the pure composition core lives in `./alerts/compose`. Import it
 // for the shell's own delegation AND re-export it so existing import sites
@@ -71,34 +59,6 @@ export interface AlertThresholds {
 export interface PreFetchedAlertData {
   reproStats?: ReproStats;
   campConditions?: Map<string, LiveCampStatus>;
-}
-
-/**
- * Resolve the species modules to query for this farm. Reads FarmSpeciesSettings
- * via the request-scoped Prisma client and filters `ALL_SPECIES_MODULES` to the
- * enabled set. Cattle is always included (safe default — every farm has cattle
- * in our current data model, and the cached species-settings helper applies the
- * same fallback). On lookup failure we degrade to cattle-only so a transient DB
- * blip can't unintentionally surface alerts for species the farm doesn't run.
- */
-async function getEnabledSpeciesModules(
-  prisma: PrismaClient,
-): Promise<SpeciesModule[]> {
-  try {
-    const rows = await prisma.farmSpeciesSettings.findMany({
-      select: { species: true, enabled: true },
-      take: 50,
-    });
-    const enabled = new Set<string>(
-      rows.filter((r) => r.enabled).map((r) => r.species),
-    );
-    enabled.add("cattle");
-    return (Object.keys(ALL_SPECIES_MODULES) as SpeciesId[])
-      .filter((id) => enabled.has(id))
-      .map((id) => ALL_SPECIES_MODULES[id]);
-  } catch {
-    return [ALL_SPECIES_MODULES.cattle];
-  }
 }
 
 function toThresholdsRecord(t: AlertThresholds): Record<string, number> {

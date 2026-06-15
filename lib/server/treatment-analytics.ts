@@ -18,6 +18,13 @@ const DEFAULT_WITHDRAWAL_DAYS: Record<string, number> = {
 
 export interface WithdrawalAnimal {
   animalId: string;
+  /**
+   * The animal's TRUE species, looked up from its Animal row (not inferred).
+   * Withdrawal tracking is cross-species (drug-driven), so consumers that are
+   * species-aware — e.g. Herd Triage, which excludes population-tracked game —
+   * must filter on the real species rather than guessing. (#356 mislabel class)
+   */
+  species: string;
   name: string | null;
   campId: string;
   treatmentType: string;
@@ -75,11 +82,12 @@ export async function getAnimalsInWithdrawal(
     select: {
       animalId: true,
       name: true,
+      species: true,
     },
   });
 
   const activeAnimalMap = new Map(
-    activeAnimals.map((a) => [a.animalId, a.name])
+    activeAnimals.map((a) => [a.animalId, { name: a.name, species: a.species }])
   );
 
   // For each active animal, find their most recent treatment that still has a withdrawal window open
@@ -119,9 +127,11 @@ export async function getAnimalsInWithdrawal(
     // Keep the entry with the earliest withdrawal end (most urgent) per animal
     const existing = activeWithdrawals.get(animalId);
     if (!existing || withdrawalEndsAt < existing.withdrawalEndsAt) {
+      const active = activeAnimalMap.get(animalId);
       activeWithdrawals.set(animalId, {
         animalId,
-        name: activeAnimalMap.get(animalId) ?? null,
+        species: active?.species ?? "cattle",
+        name: active?.name ?? null,
         campId: obs.campId,
         treatmentType,
         treatedAt: obs.observedAt,
