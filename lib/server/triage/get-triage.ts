@@ -79,6 +79,16 @@ async function findingsForSpecies(
 
   if (rows.length === 0) return [];
 
+  // The active triage population for this species. The history detectors
+  // (poor-doer, dosing-overdue) run over the full Observation history, which
+  // — unlike scoped().animal reads — has NO status filter (observations
+  // persist after an animal dies or is sold). Intersecting their output with
+  // this set keeps triage to currently-active animals only, matching the
+  // snapshot detectors (which iterate `rows`) and the in-withdrawal path
+  // (status:Active-filtered). Without it, a deceased/sold animal that retains
+  // weighing/dosing observations leaks onto the per-animal list.
+  const activeIds = new Set<string>(rows.map((a) => a.animalId));
+
   const findings: Finding[] = [];
 
   if (speciesId === "cattle") {
@@ -98,6 +108,7 @@ async function findingsForSpecies(
 
     // poor-doer: reuse the SAME pure detector the cattle alert counts.
     for (const animalId of detectPoorDoers(weighing, thresholds.adgPoorDoerThreshold)) {
+      if (!activeIds.has(animalId)) continue; // drop dead/sold animals with stale weighings
       findings.push({ animalId, reasonId: "poor-doer", species: "cattle" });
     }
   } else if (speciesId === "sheep") {
@@ -130,6 +141,7 @@ async function findingsForSpecies(
         take: 100_000,
       })) as unknown as Array<{ animalId: string | null; observedAt: Date }>;
       for (const animalId of getDosingOverdue(dosing, DOSING_OVERDUE_DAYS)) {
+        if (!activeIds.has(animalId)) continue; // drop dead/sold animals with stale dosing
         findings.push({ animalId, reasonId: "dosing-overdue", species: "sheep" });
       }
     }

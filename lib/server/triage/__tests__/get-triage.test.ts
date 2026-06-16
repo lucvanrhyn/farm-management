@@ -238,6 +238,41 @@ describe("getTriage", () => {
     expect(p1?.reasons.some((r) => r.id === "poor-doer")).toBe(true);
   });
 
+  it("does NOT surface poor-doer for a non-active cattle animal that still has historical weighings", async () => {
+    // Observations persist after an animal dies / is sold, and scoped()
+    // observation reads carry NO status filter — so the weighing history
+    // contains a deceased animal's old weights. Its declining ADG must NOT
+    // surface it on triage: triage is the ACTIVE population only (the animals
+    // returned by scoped().animal.findMany, which injects status:Active).
+    mocks.cattleAnimals = [cattle("P1")]; // active herd = [P1] only
+    mocks.cattleWeighing = [
+      // P1 — healthy ADG (1.0 kg/d) → no finding
+      { animalId: "P1", observedAt: new Date("2026-01-01T00:00:00Z"), details: JSON.stringify({ weight_kg: 400 }) },
+      { animalId: "P1", observedAt: new Date("2026-04-11T00:00:00Z"), details: JSON.stringify({ weight_kg: 500 }) },
+      // DEAD1 — poor ADG (0.1 kg/d) but NOT in the active set
+      { animalId: "DEAD1", observedAt: new Date("2026-01-01T00:00:00Z"), details: JSON.stringify({ weight_kg: 400 }) },
+      { animalId: "DEAD1", observedAt: new Date("2026-04-11T00:00:00Z"), details: JSON.stringify({ weight_kg: 410 }) },
+    ];
+    const items = await getTriage(makePrisma(), "farm", THRESHOLDS);
+    expect(items.find((i) => i.animalId === "DEAD1")).toBeUndefined();
+  });
+
+  it("does NOT surface dosing-overdue for a non-active ewe that still has historical dosing", async () => {
+    // Same leak class on the sheep history path: a deceased/sold ewe's stale
+    // dosing observation must not surface her on triage even with active ewes
+    // present (gate open). Only the active population is triaged.
+    mocks.speciesSettings = [
+      { species: "cattle", enabled: true },
+      { species: "sheep", enabled: true },
+    ];
+    mocks.sheepAnimals = [sheep("S2")]; // active ewe → dosing gate open
+    mocks.sheepDosing = [
+      { animalId: "DEADEWE", observedAt: new Date("2020-01-01T00:00:00Z") }, // overdue, NOT active
+    ];
+    const items = await getTriage(makePrisma(), "mixed", THRESHOLDS);
+    expect(items.find((i) => i.animalId === "DEADEWE")).toBeUndefined();
+  });
+
   it("returns [] for an all-clean herd", async () => {
     mocks.cattleAnimals = [cattle("OK1"), cattle("OK2")];
     // some animal weighed so no-weight isn't suppressed-but-firing for all
