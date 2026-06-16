@@ -7,6 +7,7 @@ import FinancialChartsSection from "@/components/admin/FinancialChartsSection";
 import FinancialKPISection from "@/components/admin/FinancialKPISection";
 import BudgetVsActualSection from "@/components/admin/BudgetVsActualSection";
 import CostOfGainSection from "@/components/admin/CostOfGainSection";
+import ProfitPerCampSection from "@/components/admin/ProfitPerCampSection";
 import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
@@ -108,6 +109,9 @@ export default async function FinansiesPage({
         </Suspense>
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
           <CostOfGainSection farmSlug={farmSlug} from={from} to={to} cogScope={cogScope} />
+        </Suspense>
+        <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
+          <ProfitPerCampSection farmSlug={farmSlug} from={from} to={to} />
         </Suspense>
         <FinancialAnalyticsPanelLazy farmSlug={farmSlug} />
         <Suspense fallback={<div className="mt-8 h-48 rounded-xl animate-pulse" style={{ background: "var(--ft-surface)" }} />}>
