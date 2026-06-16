@@ -12,6 +12,8 @@ export type CardProps = React.HTMLAttributes<HTMLDivElement> & {
   interactive?: boolean;
   lift?: boolean;
   as?: React.ElementType;
+  /** present so polymorphic `as="button"` cards can set the native button type */
+  type?: "button" | "submit" | "reset";
 };
 
 export function Card({ interactive, lift, as, className, ...rest }: CardProps) {

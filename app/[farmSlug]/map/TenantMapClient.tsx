@@ -51,6 +51,8 @@ interface Props {
   farmLat: number | null;
   farmLng: number | null;
   farmSlug: string;
+  /** Mono geometry sub-line for the dark map header (computed server-side). */
+  headerSubtext?: string;
 }
 
 export default function TenantMapClient({
@@ -58,6 +60,7 @@ export default function TenantMapClient({
   farmLat,
   farmLng,
   farmSlug,
+  headerSubtext,
 }: Props) {
   const router = useRouter();
   const { mode } = useFarmModeSafe();
@@ -83,11 +86,13 @@ export default function TenantMapClient({
         style={{
           position: "relative",
           width: "100%",
-          // Mobile-responsive height: subtract the page header + safe-area
-          // padding. `100dvh` honours the dynamic viewport on mobile (so
-          // the map doesn't extend below the address bar).
-          height: "calc(100dvh - 9rem)",
+          // The dark chrome header now lives INSIDE FarmMap, so the map shell
+          // owns the full viewport band (minus the app chrome + outer page
+          // padding). `100dvh` honours the dynamic viewport on mobile.
+          height: "calc(100dvh - 5rem)",
           minHeight: "320px",
+          borderRadius: "var(--ft-card-r)",
+          overflow: "hidden",
         }}
       >
         <FarmMap
@@ -95,6 +100,9 @@ export default function TenantMapClient({
           onCampClick={handleCampClick}
           latitude={farmLat}
           longitude={farmLng}
+          headerTitle="Farm Map"
+          headerSubtext={headerSubtext}
+          backHref={`/${farmSlug}`}
         />
       </div>
 

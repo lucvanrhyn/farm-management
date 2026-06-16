@@ -11,6 +11,11 @@ interface Task {
   status: string;
   dueDate: string;
   assignedTo: string;
+  // `/api/tasks` (unbounded) spreads the full task row, so `campId` is on
+  // the wire. Optional/nullable because a task may be farm-wide (no camp).
+  // Rendered as a small mono camp tag — see the task row below. No invented
+  // data: when absent the tag is skipped entirely.
+  campId?: string | null;
 }
 
 // Map task priority onto the warm token status scale (var(--ft-crit/info/subtle)).
@@ -97,7 +102,17 @@ export function TodaysTasks() {
 
   return (
     <div className="ft-card mx-4 mb-4 p-3">
-      <p className="ft-label mb-2 px-1">Today&apos;s Tasks</p>
+      {/* Header row — Camp Rounds reference: check glyph + "{N} open tasks"
+          + a chevron affordance on the right. The count is the number of
+          incomplete tasks currently in view (tasks vanish optimistically on
+          complete, so `tasks.length` is exactly the open count). */}
+      <div className="mb-2 px-1 flex items-center gap-2">
+        <Icon.check size={15} className="shrink-0" style={{ color: "var(--ft-accent)" }} />
+        <span className="ft-label flex-1" style={{ margin: 0 }}>
+          {tasks.length} open task{tasks.length !== 1 ? "s" : ""}
+        </span>
+        <Icon.chevron size={15} className="shrink-0" style={{ color: "var(--ft-subtle)" }} />
+      </div>
       <div className="flex flex-col gap-2">
         {tasks.map((task) => {
           const dotColor = PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal;
@@ -125,6 +140,22 @@ export function TodaysTasks() {
                   <span className="ft-mono ml-2 text-[10px] font-semibold" style={{ color: "var(--ft-crit)" }}>Overdue</span>
                 )}
               </span>
+
+              {/* Camp tag — Camp Rounds reference: small mono camp code,
+                  right-aligned. Rendered ONLY when the task carries a
+                  `campId` (farm-wide tasks have none). The campId is the
+                  human-meaningful camp code used elsewhere in the app
+                  (e.g. VeldCampSummaryCards renders it as the camp name);
+                  no fabricated label. */}
+              {task.campId && (
+                <span
+                  className="ft-mono text-[10px] px-2 py-0.5 rounded-full shrink-0 max-w-[5rem] truncate"
+                  style={{ backgroundColor: "var(--ft-surface)", color: "var(--ft-muted)" }}
+                  title={task.campId}
+                >
+                  {task.campId}
+                </span>
+              )}
 
               {/* Complete button */}
               <button

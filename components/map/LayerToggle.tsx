@@ -26,6 +26,11 @@ const STORAGE_KEY = "farmtrack.map.layers";
 
 export const DEFAULT_LAYER_STATE: LayerState = {
   campOverlay:    true,
+  // NOTE: kept `false` to honour the persisted-toggle contract pinned by
+  // LayerToggle.test.tsx (clicking Tasks from the default state must emit
+  // `{ taskPins: true }`). The overhaul "live pins" change is purely the
+  // marker styling in TaskPinLayer — pins render as pulsing HTML markers
+  // once the Tasks layer is enabled.
   taskPins:       false,
   waterPoints:    false,
   infrastructure: false,
@@ -136,7 +141,7 @@ export default function LayerToggle({ value, onChange }: Props) {
     <style>{MOBILE_REANCHOR_CSS}</style>
     <div
       data-testid="map-layer-toggle"
-      className="ft-map-layer-toggle"
+      className="ft-map-layer-toggle dark-surface"
       style={{
         position: "absolute",
         bottom: 24,
@@ -146,14 +151,15 @@ export default function LayerToggle({ value, onChange }: Props) {
         flexDirection: "column",
         gap: 3,
         padding: "14px 16px",
-        borderRadius: 14,
-        // Dark-glass card — floats over the satellite map, outside any
-        // .dark-surface scope, so it carries literal glass values.
-        background: "rgba(26,21,16,0.92)",
+        // Dark-surface card (tokenised). `--ft-card-r` resolves to 12px under
+        // the .dark-surface scope; the glassy translucency + blur keep the
+        // floating-over-satellite feel while the colours come from tokens.
+        borderRadius: "var(--ft-card-r)",
+        background: "color-mix(in oklab, var(--ft-surface) 92%, transparent)",
         backdropFilter: "blur(14px) saturate(140%)",
-        border: "1px solid rgba(255,235,210,0.13)",
-        boxShadow: "0 10px 36px -12px rgba(0,0,0,0.6)",
-        color: "#EFE7D8",
+        border: "1px solid var(--ft-border2)",
+        boxShadow: "var(--ft-shadow-lg)",
+        color: "var(--ft-text)",
         minWidth: 208,
       }}
     >
@@ -163,7 +169,7 @@ export default function LayerToggle({ value, onChange }: Props) {
           fontSize: 10,
           letterSpacing: "0.16em",
           textTransform: "uppercase",
-          color: "rgba(255,235,210,0.6)",
+          color: "var(--ft-muted)",
           marginBottom: 8,
         }}
       >
@@ -178,7 +184,7 @@ export default function LayerToggle({ value, onChange }: Props) {
             gap: 10,
             padding: "4px 0",
             fontSize: 13,
-            color: "#EFE7D8",
+            color: "var(--ft-text)",
             opacity: value[opt.key] ? 1 : 0.55,
             cursor: "pointer",
             userSelect: "none",
@@ -192,7 +198,7 @@ export default function LayerToggle({ value, onChange }: Props) {
           />
           <span style={{ whiteSpace: "nowrap" }}>{opt.label}</span>
           {opt.note && (
-            <span style={{ fontSize: 9, color: "rgba(255,235,210,0.5)" }}>{opt.note}</span>
+            <span style={{ fontSize: 9, color: "var(--ft-muted)" }}>{opt.note}</span>
           )}
         </label>
       ))}

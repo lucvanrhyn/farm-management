@@ -39,9 +39,9 @@
   --ft-subtle:    #9C8E7A;
 
   --ft-accent:       #2E7D72; /* teal — primary brand accent (locked Retro) */
-  --ft-accent-soft:  #A1C5C0;
-  --ft-accent-faint: #E2EDEB;
-  --ft-accent-hover: #266A60; /* darker teal — primary button hover */
+  --ft-accent-soft:  #A6C7C1; /* accent mixed ~55% white (handoff tokens.html) */
+  --ft-accent-faint: #E3EEEC; /* accent mixed ~86% white (handoff tokens.html) */
+  --ft-accent-hover: #25655C; /* accent-press (handoff): primary button hover/press */
   --ft-on-accent:    #FFFFFF; /* text/icon colour on the accent fill */
 
   --ft-good:    #4A7C59;  --ft-good-bg: #E5EFE6;
@@ -54,9 +54,15 @@
   --ft-shadow:    0 6px 24px -8px rgba(28,22,18,.18), 0 2px 6px rgba(28,22,18,.06);
   --ft-shadow-lg: 0 24px 60px -20px rgba(28,22,18,.30);
 
-  /* Retro skin: sharp corners (70s print). Hard offset shadows are inlined on
-     .ft-card / .ft-btn (they reference --ft-text so they adapt per surface). */
+  /* Retro skin: sharp corners (70s print) for buttons/pills/inputs/segmented.
+     Hard offset shadows are inlined on .ft-card / .ft-btn (they reference
+     --ft-text so they adapt per surface). */
   --ft-r-sm: 2px;  --ft-r: 3px;  --ft-r-lg: 4px;  --ft-r-xl: 5px;
+  /* CARD radius — the locked variant rounds CARDS (handoff README: admin 16px,
+     logger 14px, home 16px) even though the base retro primitives stay sharp.
+     The reference screenshots confirm rounded cards; only the chrome controls
+     are squared off. Per-surface overrides set this below. */
+  --ft-card-r: 16px;
 
   --ft-font-sans:  var(--font-space-grotesk), "Space Grotesk", system-ui, -apple-system, sans-serif;
   --ft-font-mono:  var(--font-space-mono), "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -89,6 +95,7 @@
   --ft-shadow:    0 8px 32px -8px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.4);
   --ft-shadow-lg: 0 24px 80px -20px rgba(0,0,0,.7);
 
+  --ft-card-r: 12px; /* dark map chrome / panels read slightly tighter */
   background: var(--ft-bg);
   color: var(--ft-text);
 }
@@ -133,6 +140,7 @@
   --ft-text:      #251B12;
   --ft-muted:     #6B5C4E;
   --ft-subtle:    #9C8E7A;
+  --ft-card-r:    16px; /* home cards (handoff README: home 16px) */
   background: var(--ft-bg);
   color: var(--ft-text);
 }
@@ -145,6 +153,7 @@
   --ft-text:      #241B12;
   --ft-muted:     #6B5C4E;
   --ft-subtle:    #9C8E7A;
+  --ft-card-r:    14px; /* logger tiles (handoff README: logger 14px) */
   background:
     radial-gradient(ellipse 80% 50% at 50% -10%, #f3e9d6, transparent 55%),
     linear-gradient(180deg, #F6F1E7, #EFE7D7);
@@ -205,7 +214,7 @@
   isolation: isolate;
   background: var(--ft-surface);
   border: 1.5px solid color-mix(in oklab, var(--ft-text) 42%, var(--ft-border));
-  border-radius: var(--ft-r);
+  border-radius: var(--ft-card-r);
   box-shadow: 4px 4px 0 color-mix(in oklab, var(--ft-text) 22%, transparent);
   transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
 }
@@ -343,7 +352,7 @@
   position: relative;
   background: var(--ft-accent-faint);
   border: 1px solid color-mix(in oklab, var(--ft-accent) 22%, var(--ft-border));
-  border-radius: var(--ft-r);
+  border-radius: var(--ft-card-r);
 }
 .ft-brief::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.4px;

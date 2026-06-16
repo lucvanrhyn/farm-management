@@ -39,6 +39,12 @@ const outlineLayer: LayerProps = {
   },
 };
 
+// Camp labels read as dark "pills" floating over the satellite map. Mapbox
+// symbol layers can't paint a true rounded background behind text, so the pill
+// look is approximated with a strong, wide dark text-halo (the overhaul dark
+// chrome ink `#14110D` at full opacity) — the halo bleeds into a soft slab
+// around the glyphs, matching the reference's pill labels while keeping the
+// fill-by-status polygon ramp untouched.
 const labelLayer: LayerProps = {
   id: "camp-label",
   type: "symbol",
@@ -47,18 +53,21 @@ const labelLayer: LayerProps = {
       "format",
       ["get", "campName"], { "font-scale": 1.0, "text-font": ["literal", ["Open Sans Bold", "Arial Unicode MS Bold"]] },
       "\n", {},
-      ["get", "labelSubtext"], { "font-scale": 0.75, "text-font": ["literal", ["Open Sans Regular", "Arial Unicode MS Regular"]] },
+      ["get", "labelSubtext"], { "font-scale": 0.72, "text-font": ["literal", ["Open Sans Regular", "Arial Unicode MS Regular"]] },
     ] as unknown as string,
     "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
-    "text-size": 12,
+    "text-size": 12.5,
     "text-anchor": "center",
     "text-allow-overlap": false,
-    "text-line-height": 1.4,
+    "text-line-height": 1.45,
+    "text-padding": 6,
   },
   paint: {
-    "text-color": "#ffffff",
-    "text-halo-color": "rgba(0,0,0,0.7)",
-    "text-halo-width": 1.5,
+    "text-color": "#F5EBD4",
+    // Wide, near-opaque dark halo → reads as a dark pill slab behind the text.
+    "text-halo-color": "rgba(20,17,13,0.92)",
+    "text-halo-width": 2.4,
+    "text-halo-blur": 0.6,
   },
 };
 

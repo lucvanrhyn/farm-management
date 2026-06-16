@@ -127,10 +127,10 @@ export default async function AdminAnimalsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Animals"
-        subtitle="catalogue"
+        subtitle={`${speciesTotal.toLocaleString()} total in herd · ${mode}`}
         right={
           <div className="flex items-center gap-2">
-            <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} />
+            <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} label="Export CSV" />
             <RecordBirthButton animals={animals as unknown as PrismaAnimal[]} camps={camps} />
           </div>
         }

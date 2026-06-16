@@ -71,8 +71,10 @@ const CAMPS: Camp[] = [
 const HINT_TEXT = /searched full herd/i;
 
 function typeSearch(value: string) {
+  // Redesign placeholder: "Search by ID, camp, mob…" (the search index now
+  // also covers camp + mob names, so the placeholder is truthful).
   const input = screen.getByPlaceholderText(
-    /search id or name/i,
+    /search by id/i,
   ) as HTMLInputElement;
   fireEvent.change(input, { target: { value } });
 }

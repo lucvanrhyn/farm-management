@@ -49,44 +49,51 @@ export default function CampPresenceFallback({
   return (
     <section
       data-testid="camp-presence-fallback"
-      className="mt-3 md:mt-4 rounded-lg border border-[#E6DFD3] bg-white"
+      className="ft-scope mt-3 md:mt-4 overflow-hidden"
+      style={{
+        background: "var(--ft-surface)",
+        border: "1px solid var(--ft-border2)",
+        borderRadius: "var(--ft-card-r)",
+      }}
     >
       <div
         data-testid="camp-presence-cta"
-        className="flex flex-col gap-2 border-b border-[#E6DFD3] p-3 md:flex-row md:items-center md:justify-between md:p-4"
+        className="flex flex-col gap-2 p-3 md:flex-row md:items-center md:justify-between md:p-4"
+        style={{ borderBottom: "1px solid var(--ft-border)" }}
       >
         <div>
-          <p className="text-sm font-semibold text-[#1C1815]">
+          <p className="text-sm font-semibold" style={{ color: "var(--ft-text)" }}>
             {missing.length} camp{missing.length === 1 ? "" : "s"} without a map
             boundary
           </p>
-          <p className="mt-0.5 text-xs" style={{ color: "#9C8E7A" }}>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--ft-muted)" }}>
             These camps can&apos;t show on the satellite map until you draw
             their boundary. They&apos;re still fully usable from the list below.
           </p>
         </div>
         <a
           href={`/${slug}/admin/map`}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-[#8B6914] px-3 py-2 text-xs font-semibold text-white hover:bg-[#735710]"
+          className="ft-btn ft-btn-primary inline-flex shrink-0 items-center justify-center"
+          style={{ whiteSpace: "nowrap" }}
         >
           Draw boundaries &rarr;
         </a>
       </div>
 
-      <ul className="divide-y divide-[#F0EBE1]">
+      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {missing.map(({ camp }) => (
-          <li key={camp.camp_id}>
+          <li key={camp.camp_id} style={{ borderBottom: "1px solid var(--ft-border)" }}>
             <div
               data-testid={`camp-presence-row-${camp.camp_id}`}
               onClick={() => onCampClick(camp.camp_id)}
-              className="flex cursor-pointer items-center justify-between gap-3 p-3 hover:bg-[#FAFAF8] md:px-4"
+              className="ft-row-hover flex cursor-pointer items-center justify-between gap-3 p-3 md:px-4"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-[#1C1815]">
+                <p className="truncate text-sm font-medium" style={{ color: "var(--ft-text)" }}>
                   {camp.camp_name}
                 </p>
                 {camp.size_hectares != null && (
-                  <p className="text-xs" style={{ color: "#9C8E7A" }}>
+                  <p className="text-xs" style={{ color: "var(--ft-muted)" }}>
                     {camp.size_hectares} ha
                   </p>
                 )}
@@ -96,7 +103,8 @@ export default function CampPresenceFallback({
                   camp.camp_id,
                 )}`}
                 onClick={(e) => e.stopPropagation()}
-                className="shrink-0 text-xs font-semibold text-[#8B6914] hover:underline"
+                className="shrink-0 text-xs font-semibold hover:underline"
+                style={{ color: "var(--ft-accent)" }}
               >
                 Open &rarr;
               </a>

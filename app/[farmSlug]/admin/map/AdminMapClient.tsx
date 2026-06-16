@@ -21,6 +21,8 @@ interface Props {
   campData: CampData[];
   farmLat: number | null;
   farmLng: number | null;
+  /** Mono geometry/long-press sub-line for the dark map header. */
+  headerSubtext?: string;
 }
 
 export default function AdminMapClient({
@@ -29,6 +31,7 @@ export default function AdminMapClient({
   campData,
   farmLat,
   farmLng,
+  headerSubtext,
 }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [lngLat, setLngLat] = useState<{ lng: number; lat: number } | null>(null);
@@ -68,14 +71,38 @@ export default function AdminMapClient({
     [tier],
   );
 
+  // "Route today →" link rendered into the dark header's right slot (replaces
+  // the light page-header link that previously lived in admin/map/page.tsx).
+  const routeTodayLink = (
+    <Link
+      href={`/${farmSlug}/admin/map/route-today`}
+      className="ft-btn"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+    >
+      Route today &rarr;
+    </Link>
+  );
+
   return (
-    <div style={{ position: "relative", width: "100%", height: "calc(100vh - 12rem)" }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "calc(100vh - 8rem)",
+        borderRadius: "var(--ft-card-r)",
+        overflow: "hidden",
+      }}
+    >
       <FarmMap
         campData={campData}
         onCampClick={handleCampClick}
         onLongPress={handleLongPress}
         latitude={farmLat}
         longitude={farmLng}
+        headerTitle="Farm map"
+        headerSubtext={headerSubtext}
+        backHref={`/${farmSlug}`}
+        headerExtra={routeTodayLink}
       />
 
       <LogAtSpotSheet

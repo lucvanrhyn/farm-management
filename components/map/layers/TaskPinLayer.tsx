@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TaskPinLayer — renders farm tasks as priority-colored pins.
+ * TaskPinLayer — renders farm tasks as priority-colored "live" pins.
  *
  * Fetch: GET /api/{farmSlug}/map/task-pins?status={statusFilter}
  * Source shape: { tasks: Array<{ id, title, priority, status, lat?, lng?, campId? }> }
@@ -10,12 +10,17 @@
  *  - If task has lat && lng → use them.
  *  - Else if task has campId and the camp's GeoJSON is available → centroid.
  *  - Else → skip the task (no pin).
+ *
+ * Overhaul (Wave map-pixel): pins are HTML <Marker>s wearing the shared
+ * `.ft-pulse-soft` accent halo so live tasks/fires read as gently pulsing
+ * markers (Mapbox `circle` paint cannot animate without a per-frame interval).
+ * The fetch/centroid wiring is unchanged.
  */
 
 import { useEffect, useState } from "react";
-import { Source, Layer, type LayerProps } from "react-map-gl/mapbox";
+import { Marker } from "react-map-gl/mapbox";
 import type { Camp } from "@/lib/types";
-import { fetchLayerJson, buildCampCentroidMap, EMPTY_FC, type FetchState } from "./_utils";
+import { fetchLayerJson, buildCampCentroidMap, type FetchState } from "./_utils";
 
 interface TaskPin {
   id: string;
@@ -44,35 +49,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   low:    "#3b82f6",
 };
 
-const circleLayer: LayerProps = {
-  id: "task-pins-layer",
-  type: "circle",
-  paint: {
-    "circle-radius": 7,
-    "circle-color": ["get", "color"],
-    "circle-stroke-color": "#1A1510",
-    "circle-stroke-width": 2,
-  },
-};
-
-const labelLayer: LayerProps = {
-  id: "task-pins-label",
-  type: "symbol",
-  layout: {
-    "text-field": ["get", "title"],
-    "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
-    "text-size": 11,
-    "text-offset": [0, 1.2],
-    "text-anchor": "top",
-    "text-optional": true,
-    "text-allow-overlap": false,
-  },
-  paint: {
-    "text-color": "#F5EBD4",
-    "text-halo-color": "rgba(0,0,0,0.75)",
-    "text-halo-width": 1.2,
-  },
-};
+interface PlacedPin {
+  id: string;
+  title: string;
+  color: string;
+  lng: number;
+  lat: number;
+}
 
 export default function TaskPinLayer({ farmSlug, camps, statusFilter }: Props) {
   const fetchUrl = statusFilter
@@ -96,7 +79,7 @@ export default function TaskPinLayer({ farmSlug, camps, statusFilter }: Props) {
   if (state.status !== "ready") return null;
 
   const centroidMap = buildCampCentroidMap(camps);
-  const features: GeoJSON.Feature[] = [];
+  const pins: PlacedPin[] = [];
 
   for (const t of state.data.tasks ?? []) {
     let lng: number | null = null;
@@ -110,25 +93,65 @@ export default function TaskPinLayer({ farmSlug, camps, statusFilter }: Props) {
     }
     if (lng == null || lat == null) continue;
 
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [lng, lat] },
-      properties: {
-        id: t.id,
-        title: t.title,
-        priority: t.priority ?? "medium",
-        color: PRIORITY_COLORS[t.priority ?? "medium"] ?? PRIORITY_COLORS.medium,
-      },
+    pins.push({
+      id: t.id,
+      title: t.title,
+      color: PRIORITY_COLORS[t.priority ?? "medium"] ?? PRIORITY_COLORS.medium,
+      lng,
+      lat,
     });
   }
 
-  const data: GeoJSON.FeatureCollection =
-    features.length === 0 ? EMPTY_FC : { type: "FeatureCollection", features };
+  if (pins.length === 0) return null;
 
   return (
-    <Source id="task-pins-source" type="geojson" data={data}>
-      <Layer {...circleLayer} />
-      <Layer {...labelLayer} />
-    </Source>
+    <>
+      {pins.map((p) => (
+        <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
+          <div
+            data-testid={`task-pin-${p.id}`}
+            title={p.title}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+              pointerEvents: "none",
+            }}
+          >
+            {/* Pulsing dot — the .ft-pulse-soft accent halo telegraphs "live". */}
+            <span
+              className="ft-pulse-soft"
+              style={{
+                display: "block",
+                width: 14,
+                height: 14,
+                borderRadius: 999,
+                background: p.color,
+                border: "2px solid #14110D",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
+              }}
+            />
+            <span
+              className="ft-mono"
+              style={{
+                fontSize: 10.5,
+                lineHeight: 1.1,
+                maxWidth: 120,
+                padding: "2px 6px",
+                borderRadius: 6,
+                background: "rgba(20,17,13,0.86)",
+                color: "#F5EBD4",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {p.title}
+            </span>
+          </div>
+        </Marker>
+      ))}
+    </>
   );
 }

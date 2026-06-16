@@ -15,17 +15,41 @@
  */
 
 import { useEffect } from "react";
-import { EinsteinChat } from "@/components/einstein/EinsteinChat";
+import {
+  EinsteinChat,
+  type EinsteinBriefItem,
+} from "@/components/einstein/EinsteinChat";
 import { Icon } from "@/components/ds";
+
+/**
+ * The opening briefing shown when the sheet has no messages yet. Status-dotted
+ * (poor/fair/info) prioritized items + tappable suggested-prompt chips. Chip
+ * taps submit through EinsteinChat's existing send path.
+ */
+const SHEET_BRIEF: readonly EinsteinBriefItem[] = [
+  { status: "poor", text: "Camp H mob — water trough empty, move today" },
+  { status: "fair", text: "VR-014 thin in B1 — pull to kraal for feeding" },
+  { status: "info", text: "3 cows clear withdrawal Saturday — sale-ready" },
+];
+
+const SHEET_PROMPTS: readonly string[] = [
+  "What needs attention today?",
+  "Which camps are low on feed?",
+  "Where should I move the H mob?",
+  "Who clears withdrawal this week?",
+];
 
 export function EinsteinOverlay({
   open,
   onClose,
   farmSlug,
+  firstName,
 }: {
   open: boolean;
   onClose: () => void;
   farmSlug: string;
+  /** First name for the sheet greeting bubble (optional). */
+  firstName?: string;
 }) {
   // Esc closes the overlay.
   useEffect(() => {
@@ -68,7 +92,13 @@ export function EinsteinOverlay({
           <Icon.close size={16} />
         </button>
 
-        <EinsteinChat farmSlug={farmSlug} className="ft-einstein-chat" />
+        <EinsteinChat
+          farmSlug={farmSlug}
+          className="ft-einstein-chat"
+          firstName={firstName}
+          brief={SHEET_BRIEF}
+          suggestedPrompts={SHEET_PROMPTS}
+        />
       </div>
 
       <style>{OVERLAY_CSS}</style>

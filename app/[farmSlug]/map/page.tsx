@@ -95,23 +95,12 @@ export default async function TenantMapPage({
   const campsWithBoundary = campData.filter((d) => !!d.camp.geojson).length;
   const totalHead = campData.reduce((sum, d) => sum + (d.stats?.total ?? 0), 0);
 
+  // Mono geometry sub-line for the dark map header (this copy is reused inside
+  // FarmMap's header bar, replacing the light page header that lived here).
+  const headerSubtext = `${camps.length} camp${camps.length === 1 ? "" : "s"} · ${campsWithBoundary} with boundary geometry · ${totalHead} head`;
+
   return (
     <div className="ft-scope min-w-0 p-3 md:p-6" style={{ background: "var(--ft-bg)" }}>
-      <div className="mb-3 md:mb-4">
-        <h1
-          className="ft-serif"
-          style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, margin: 0, color: "var(--ft-text)" }}
-        >
-          Farm Map
-        </h1>
-        <p
-          className="ft-mono"
-          style={{ fontSize: 12, color: "var(--ft-muted)", marginTop: 6, letterSpacing: ".02em" }}
-        >
-          {camps.length} camp{camps.length === 1 ? "" : "s"} · {campsWithBoundary} with boundary geometry · {totalHead} head
-        </p>
-      </div>
-
       {campData.length === 0 ? (
         // The farm has no camps at all → onboarding empty state instead of a
         // blank map (#288). The camp read is cross-species (#364), so this
@@ -124,6 +113,7 @@ export default async function TenantMapPage({
           farmLat={settings?.latitude ?? null}
           farmLng={settings?.longitude ?? null}
           farmSlug={farmSlug}
+          headerSubtext={headerSubtext}
         />
       )}
     </div>

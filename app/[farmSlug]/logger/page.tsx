@@ -10,7 +10,10 @@ import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getCachedCampList } from "@/lib/server/cached";
+import type { CachedCamp } from "@/lib/server/cached";
 import { shouldRenderSheepEmptyState } from "@/lib/domain/camp/inspection-freshness";
+import { Icon } from "@/components/ds";
+import { relativeTime } from "@/lib/utils";
 import type { PrismaClient } from "@prisma/client";
 import type { SpeciesId } from "@/lib/species/types";
 
@@ -110,6 +113,45 @@ async function resolveAllowedCampIds(
   }
 }
 
+/**
+ * "Today's round" progress, derived from the species-scoped cached camp
+ * list (`getCachedCampList(farmSlug, mode)` — the SAME fetch the sheep
+ * empty-state check already runs, so no extra DB round-trip).
+ *
+ *   - `total`     = number of camps visible for the active species.
+ *   - `done`      = camps whose most-recent inspection is dated TODAY
+ *                   (local date). `last_inspected_at` is populated because
+ *                   the caller passed a `species` filter (Issue #437).
+ *   - `freshness` = relative-time of the single most-recent inspection
+ *                   across all camps, or null when nothing inspected yet.
+ *
+ * All real data — no fabricated counts. When the list is empty / freshness
+ * unknown the caller renders sensible placeholders.
+ */
+function deriveTodaysRound(camps: CachedCamp[]): {
+  done: number;
+  total: number;
+  freshness: string | null;
+} {
+  const total = camps.length;
+  const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+  let done = 0;
+  let latestMs = 0;
+  let latestIso: string | null = null;
+  for (const camp of camps) {
+    const iso = camp.last_inspected_at;
+    if (!iso) continue;
+    const inspectedDateStr = new Date(iso).toLocaleDateString("en-CA");
+    if (inspectedDateStr === todayStr) done += 1;
+    const ms = Date.parse(iso);
+    if (!Number.isNaN(ms) && ms > latestMs) {
+      latestMs = ms;
+      latestIso = iso;
+    }
+  }
+  return { done, total, freshness: latestIso ? relativeTime(latestIso) : null };
+}
+
 export const metadata: Metadata = {
   title: "Logger — FarmTrack",
 };
@@ -125,24 +167,26 @@ export default async function LoggerPage({
   const loggerName = session?.user?.name ?? "Logger";
 
   const mode = await getFarmMode(farmSlug);
-  const [farmName, allowedCampIds, sheepEmpty] = await Promise.all([
+  const [farmName, allowedCampIds, campList] = await Promise.all([
     resolveFarmName(farmSlug),
     resolveAllowedCampIds(farmSlug, mode),
-    // Issue #437 — server-side check whether to render the sheep empty-state
-    // banner in place of the misleading "19 × 0 animals · Just now" grid.
-    // Failure-isolated: if the cached camp list throws we fall back to
-    // false and the picker renders as usual (existing behaviour).
-    getCachedCampList(farmSlug, mode)
-      .then((camps) => shouldRenderSheepEmptyState(mode, camps))
-      .catch((err) => {
-        logger.error("[logger/page] sheep empty-state check failed — falling back to picker render", {
-          farmSlug,
-          mode,
-          error: err,
-        });
-        return false;
-      }),
+    // Issue #437 — the species-scoped cached camp list. Used for BOTH the
+    // sheep empty-state gate AND the new "Today's round" progress card
+    // (single fetch, no extra DB round-trip). Failure-isolated: on throw we
+    // fall back to an empty list so the picker renders as usual (existing
+    // behaviour) and the round card shows a sensible empty placeholder.
+    getCachedCampList(farmSlug, mode).catch((err) => {
+      logger.error("[logger/page] cached camp list fetch failed — falling back to picker render", {
+        farmSlug,
+        mode,
+        error: err,
+      });
+      return [] as CachedCamp[];
+    }),
   ]);
+
+  const sheepEmpty = shouldRenderSheepEmptyState(mode, campList);
+  const round = deriveTodaysRound(campList);
 
   // Weekday for the editorial mono subtitle ("{user} · {weekday}").
   const weekday = new Intl.DateTimeFormat("en-ZA", { weekday: "long" }).format(new Date());
@@ -160,25 +204,50 @@ export default async function LoggerPage({
         }}
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
-          <div className="min-w-0 flex-1">
-            <div
-              className="ft-mono"
-              style={{ fontSize: 10, letterSpacing: '.16em', color: 'var(--ft-subtle)', textTransform: 'uppercase' }}
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            {/* Back chevron → hub home (Camp Rounds reference, top-left). A
+                plain link works in this server component and gives field
+                workers a one-tap exit. Sign-out lives in the profile button
+                on the right (SignOutButton). */}
+            <a
+              href={`/${farmSlug}/home`}
+              className="ft-action-btn shrink-0"
+              style={{ marginLeft: -8, marginTop: 2 }}
+              title="Back to home"
+              aria-label="Back to home"
             >
-              Logger · {farmName}
-            </div>
-            <h1
-              className="ft-serif truncate"
-              style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, marginTop: 4, color: 'var(--ft-text)' }}
-            >
-              Camp Rounds
-            </h1>
-            <div className="ft-mono" style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 5 }}>
-              {loggerName} · {weekday}
+              <Icon.chevronL size={20} />
+            </a>
+            <div className="min-w-0 flex-1">
+              {/* Eyebrow: mono uppercase "LOGGER" with the farm name beneath. */}
+              <div
+                className="ft-mono"
+                style={{ fontSize: 10, letterSpacing: '.16em', color: 'var(--ft-subtle)', textTransform: 'uppercase' }}
+              >
+                Logger
+              </div>
+              <div
+                className="ft-mono truncate"
+                style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 2 }}
+              >
+                {farmName}
+              </div>
+              <h1
+                className="ft-serif truncate"
+                style={{ fontSize: 29, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, marginTop: 6, color: 'var(--ft-text)' }}
+              >
+                Camp Rounds
+              </h1>
+              <div className="ft-mono" style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 5 }}>
+                {loggerName} · {weekday}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <SignOutButton />
+          {/* Profile button (Camp Rounds reference, top-right). Collapsed to a
+              single user-icon sign-out button — the duplicate back-to-home
+              button is redundant with the top-left chevron above. */}
+          <div className="flex items-center shrink-0">
+            <SignOutButton variant="profile" />
           </div>
         </div>
 
@@ -200,6 +269,54 @@ export default async function LoggerPage({
         {/* Offline status bar — logic preserved, chrome restyled to tokens */}
         <LoggerStatusBar />
       </div>
+
+      {/* Today's round — Camp Rounds reference card directly under the
+          header. Real data only: `total` is the camp count for the active
+          species and `done` is the number inspected today (derived from the
+          species-scoped cached camp list, no extra fetch). Hidden when there
+          are no camps for the active mode (e.g. the sheep empty-state path)
+          so we never show a fake "0/0" round. */}
+      {round.total > 0 && (
+        <div className="px-4 pt-4">
+          <div className="ft-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="ft-label" style={{ margin: 0 }}>Today&apos;s round</span>
+              <span
+                className="ft-mono"
+                style={{ fontSize: 11, color: round.freshness ? 'var(--ft-good)' : 'var(--ft-subtle)' }}
+              >
+                ● {round.freshness ?? 'No rounds yet'}
+              </span>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <div
+                className="h-2 flex-1 overflow-hidden rounded-full"
+                style={{ backgroundColor: 'var(--ft-surface2)' }}
+                role="progressbar"
+                aria-valuenow={round.done}
+                aria-valuemin={0}
+                aria-valuemax={round.total}
+                aria-label="Camps inspected today"
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.round((round.done / round.total) * 100)}%`,
+                    backgroundColor: 'var(--ft-accent)',
+                    transition: 'width .3s ease',
+                  }}
+                />
+              </div>
+              <span
+                className="ft-mono shrink-0"
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--ft-text)' }}
+              >
+                {round.done}/{round.total}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TodaysTasks />
 

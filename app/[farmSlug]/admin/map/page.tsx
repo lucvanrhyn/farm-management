@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
  */
 
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
@@ -77,30 +76,21 @@ export default async function AdminMapPage({
     grazing: "Good",
   }));
 
-  return (
-    <div className="min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
-      <div className="mb-4 flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--ft-text)]">Farm map</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--ft-subtle)" }}>
-            {camps.length} camp{camps.length === 1 ? "" : "s"} · long-press to log at a spot
-          </p>
-        </div>
-        <Link
-          href={`/${farmSlug}/admin/map/route-today`}
-          className="text-xs font-medium rounded-lg px-3 py-1.5"
-          style={{ background: "#0ea5e9", color: "#fff" }}
-        >
-          Route today →
-        </Link>
-      </div>
+  // Mono sub-line for the dark map header (replaces the light page header that
+  // lived here). The "Route today →" link + serif title now render inside
+  // FarmMap's dark header bar via AdminMapClient.
+  const campsWithBoundary = campData.filter((d) => !!d.camp.geojson).length;
+  const headerSubtext = `${camps.length} camp${camps.length === 1 ? "" : "s"} · ${campsWithBoundary} with boundary geometry · long-press to log at a spot`;
 
+  return (
+    <div className="ft-scope min-w-0 p-4 md:p-8 bg-[var(--ft-bg)]">
       <AdminMapClient
         farmSlug={farmSlug}
         tier={creds.tier}
         campData={campData}
         farmLat={settings?.latitude ?? null}
         farmLng={settings?.longitude ?? null}
+        headerSubtext={headerSubtext}
       />
     </div>
   );
