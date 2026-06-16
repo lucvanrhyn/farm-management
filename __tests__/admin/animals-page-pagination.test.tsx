@@ -155,12 +155,18 @@ describe("<AdminAnimalsPage /> — SSR pagination", () => {
     });
     render(element);
 
-    // Each row links to the animal detail page, so we can count render rows
-    // by counting those links.
-    const links = screen
-      .getAllByRole("link")
-      .filter((a) => a.getAttribute("href")?.startsWith("/delta-livestock/admin/animals/"));
-    expect(links.length).toBe(50);
+    // Each row links to the animal detail page. The redesign gives every row
+    // two links to that same destination (the ID cell + an end-of-row chevron
+    // affordance), so count DISTINCT detail destinations to measure rows.
+    const detailHrefs = new Set(
+      screen
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("href"))
+        .filter((h): h is string =>
+          !!h && h.startsWith("/delta-livestock/admin/animals/"),
+        ),
+    );
+    expect(detailHrefs.size).toBe(50);
 
     // Load more control is visible when a nextCursor exists.
     expect(screen.getByRole("button", { name: /load more/i })).toBeInTheDocument();

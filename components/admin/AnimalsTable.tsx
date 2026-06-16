@@ -8,9 +8,10 @@ import {
   useEffect,
 } from "react";
 import Link from "next/link";
-import { getCategoryLabel, getCategoryChipColor, getAnimalAge } from "@/lib/utils";
+import { getCategoryLabel, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
+import { Pill, Kbd, Icon } from "@/components/ds";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { getSpeciesModule, isValidSpecies } from "@/lib/species/registry";
 import { useResyncOnPropChange } from "@/lib/client/use-resync-on-prop-change";
@@ -61,10 +62,39 @@ interface Props {
   deceasedTotal?: number;
 }
 
-const farmInput =
-  "rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
+// Camp / status filters stay as styled native selects (the brief keeps these
+// as selects; only the category filter becomes a retro chip row). Tokenised
+// surface + border + accent focus ring.
 const farmSelect =
-  "rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[rgba(122,92,30,0.4)]";
+  "rounded-[var(--ft-r-sm)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ft-accent)]";
+
+/** Retro category filter chip — uppercase mono. Active = filled accent. */
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className="ft-mono"
+      style={{
+        padding: "5px 12px",
+        borderRadius: "var(--ft-r-sm)",
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: ".05em",
+        textTransform: "uppercase",
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        border: active ? "1px solid var(--ft-accent)" : "1px solid var(--ft-border2)",
+        background: active ? "var(--ft-accent)" : "var(--ft-surface)",
+        color: active ? "#FFF6EE" : "var(--ft-muted)",
+        transition: "background .15s ease, color .15s ease, border-color .15s ease",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
 
 export default function AnimalsTable({
   animals: initialAnimals,
@@ -146,16 +176,21 @@ export default function AnimalsTable({
   }, [nextCursor, loadingMore, species, setAnimals, setNextCursor]);
 
   // Precompute a lowercase search index so we don't call toLowerCase() on
-  // every animal on every keystroke. Keyed off `animals` identity.
-  const indexed = useMemo(
-    () =>
-      animals.map((a) => ({
-        animal: a,
-        idLower: a.animalId.toLowerCase(),
-        nameLower: (a.name ?? "").toLowerCase(),
-      })),
-    [animals],
-  );
+  // every animal on every keystroke. Keyed off `animals`/`camps`/`mobs`.
+  // The index also covers camp (id + name) and mob name so the redesigned
+  // "Search by ID, camp, mob…" placeholder is truthful — typing a camp or mob
+  // name filters the loaded roster, not just animal ID / name.
+  const indexed = useMemo(() => {
+    const campNameById = new Map(camps.map((c) => [c.camp_id, c.camp_name]));
+    const mobNameById = new Map((mobs ?? []).map((m) => [m.id, m.name]));
+    return animals.map((a) => ({
+      animal: a,
+      idLower: a.animalId.toLowerCase(),
+      nameLower: (a.name ?? "").toLowerCase(),
+      campLower: `${a.currentCamp ?? ""} ${campNameById.get(a.currentCamp ?? "") ?? ""}`.toLowerCase(),
+      mobLower: (a.mobId ? mobNameById.get(a.mobId) ?? "" : "").toLowerCase(),
+    }));
+  }, [animals, camps, mobs]);
   const activeAnimals = useMemo(
     () => indexed.filter((e) => e.animal.status !== "Deceased"),
     [indexed],
@@ -192,8 +227,15 @@ export default function AnimalsTable({
     const source = tab === "deceased" ? deceasedAnimals : activeAnimals;
     const q = deferredSearch.toLowerCase();
     return source
-      .filter(({ animal: a, idLower, nameLower }) => {
-        if (q && !idLower.includes(q) && !nameLower.includes(q)) return false;
+      .filter(({ animal: a, idLower, nameLower, campLower, mobLower }) => {
+        if (
+          q &&
+          !idLower.includes(q) &&
+          !nameLower.includes(q) &&
+          !campLower.includes(q) &&
+          !mobLower.includes(q)
+        )
+          return false;
         if (campFilter !== "all" && a.currentCamp !== campFilter) return false;
         if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
         if (tab === "active" && statusFilter !== "all" && a.status !== statusFilter) return false;
@@ -353,7 +395,6 @@ export default function AnimalsTable({
   const categories: AnimalCategory[] = getSpeciesModule(
     taxonomySpecies,
   ).config.categories.map((c) => c.value);
-  const statuses: AnimalStatus[] = ["Active", "Sold", "Deceased"];
 
   // Issue #205 — header count text. SSR previously hard-coded `animals.length`
   // in page.tsx so the number never updated when Load more streamed the next
@@ -413,8 +454,8 @@ export default function AnimalsTable({
         )}
       </p>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "var(--ft-surface)" }}>
+      {/* Active / Deceased tabs — tokenised segmented control */}
+      <div className="ft-segmented w-fit" role="tablist" aria-label="Animal lifecycle">
         {(["active", "deceased"] as const).map((t) => {
           // Issue #255 — Deceased badge prefers the SSR-provided
           // `deceasedTotal` (true count from the DB) and falls back to the
@@ -432,23 +473,13 @@ export default function AnimalsTable({
           return (
             <button
               key={t}
+              role="tab"
+              aria-selected={isActive}
+              className={isActive ? "active" : ""}
               onClick={() => { setTab(t); setPage(1); setSearch(""); setCampFilter("all"); setCategoryFilter("all"); setStatusFilter("all"); }}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-              style={
-                isActive
-                  ? { background: "var(--ft-surface)", color: "var(--ft-text)", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-                  : { color: "var(--ft-subtle)" }
-              }
             >
               {t === "active" ? "Active / Sold" : "Deceased"}
-              <span
-                className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
-                style={
-                  isActive
-                    ? { background: t === "active" ? "rgba(74,124,89,0.15)" : "rgba(192,87,76,0.12)", color: t === "active" ? "var(--ft-good)" : "var(--ft-poor)" }
-                    : { background: "rgba(156,142,122,0.15)", color: "var(--ft-subtle)" }
-                }
-              >
+              <span className="ft-mono ft-tabnums" style={{ fontSize: 10.5, color: "var(--ft-subtle)" }}>
                 {count.toLocaleString()}
               </span>
             </button>
@@ -456,24 +487,46 @@ export default function AnimalsTable({
         })}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      {/* Full-width search with ⌘K hint */}
+      <div
+        className="ft-card flex items-center gap-2.5"
+        style={{ padding: "9px 14px", boxShadow: "var(--ft-shadow-sm)" }}
+      >
+        <span style={{ color: "var(--ft-accent)" }}><Icon.search size={16} /></span>
         <input
           type="text"
-          placeholder="Search ID or name..."
+          placeholder="Search by ID, camp, mob…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className={farmInput}
-          style={{
-            background: "var(--ft-surface)",
-            border: "1px solid var(--ft-border)",
-            color: "var(--ft-text)",
-            width: "14rem",
-          }}
+          className="flex-1 bg-transparent text-sm focus:outline-none"
+          style={{ color: "var(--ft-text)", border: 0 }}
         />
+        <Kbd>⌘K</Kbd>
+      </div>
+
+      {/* Category filter — retro chip row (All + real category values). Active
+          chip = filled accent. Replaces the native category <select>. */}
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by category">
+        <FilterChip
+          label="All"
+          active={categoryFilter === "all"}
+          onClick={() => { setCategoryFilter("all"); setPage(1); }}
+        />
+        {categories.map((c) => (
+          <FilterChip
+            key={c}
+            label={getCategoryLabel(c)}
+            active={categoryFilter === c}
+            onClick={() => { setCategoryFilter(c); setPage(1); }}
+          />
+        ))}
+      </div>
+
+      {/* Camp / status selects + result count */}
+      <div className="flex flex-wrap items-center gap-3">
         <select
           value={campFilter}
           onChange={(e) => { setCampFilter(e.target.value); setPage(1); }}
@@ -488,23 +541,6 @@ export default function AnimalsTable({
           {camps.map((c) => (
             <option key={c.camp_id} value={c.camp_id}>
               {c.camp_name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          className={farmSelect}
-          style={{
-            background: "var(--ft-surface)",
-            border: "1px solid var(--ft-border)",
-            color: "var(--ft-text)",
-          }}
-        >
-          <option value="all">All Categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {getCategoryLabel(c)}
             </option>
           ))}
         </select>
@@ -527,7 +563,7 @@ export default function AnimalsTable({
             ))}
           </select>
         )}
-        <span className="ml-auto text-sm self-center" style={{ color: "var(--ft-subtle)" }}>
+        <span className="ml-auto text-sm self-center ft-mono" style={{ color: "var(--ft-subtle)" }}>
           {filtered.length.toLocaleString()} animals found
         </span>
       </div>
@@ -553,21 +589,18 @@ export default function AnimalsTable({
       )}
 
       {/* Table */}
-      <div
-        className="overflow-x-auto rounded-2xl"
-        style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
-      >
+      <div className="ft-card overflow-x-auto" style={{ padding: 0 }}>
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ borderBottom: "1px solid var(--ft-border)" }}>
+            <tr style={{ borderBottom: "1.5px solid var(--ft-border)" }}>
               {(tab === "active"
-                ? [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ...(mobs && mobs.length > 0 ? [["mobId", "Mob"]] : []), ["status", "Status"], ["", ""]] as [string, string][]
-                : [["animalId", "ID"], ["category", "Category"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
+                ? [["animalId", "ID"], ["category", "Type"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ...(mobs && mobs.length > 0 ? [["mobId", "Mob"]] : []), ["status", "Status"], ["", ""]] as [string, string][]
+                : [["animalId", "ID"], ["category", "Type"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
               ).map(([key, label]) => (
                 <th
                   key={key || "__actions"}
-                  className={`text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${key ? "cursor-pointer select-none" : ""}`}
-                  style={{ color: "var(--ft-subtle)", background: "var(--ft-surface)" }}
+                  className={`ft-mono text-left px-3 py-2.5 text-[10px] font-semibold uppercase ${key ? "cursor-pointer select-none" : ""}`}
+                  style={{ color: "var(--ft-subtle)", background: "var(--ft-surface2)", letterSpacing: ".08em" }}
                   onClick={() => key && toggleSort(key)}
                 >
                   {label}
@@ -580,7 +613,11 @@ export default function AnimalsTable({
             {pageData.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={
+                    tab === "active"
+                      ? 7 + (mobs && mobs.length > 0 ? 1 : 0)
+                      : 6
+                  }
                   className="px-4 py-10 text-center text-sm"
                   style={{ color: "var(--ft-subtle)" }}
                 >
@@ -591,53 +628,35 @@ export default function AnimalsTable({
             {pageData.map((animal) => (
               <tr
                 key={animal.animalId}
-                className="transition-colors"
+                className="ft-row-hover transition-colors"
                 style={{ borderBottom: "1px solid var(--ft-border)" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(122,92,30,0.05)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Link
-                      href={`/${farmSlug}/admin/animals/${animal.animalId}`}
-                      className="font-mono text-sm font-semibold transition-colors"
-                      style={{ color: "var(--ft-text)" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-fair)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-text)")}
-                    >
-                      {animal.animalId}
-                    </Link>
-                    {withdrawalIds?.has(animal.animalId) && (
-                      <span
-                        className="text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0"
-                        style={{
-                          background: "rgba(196,144,48,0.15)",
-                          color: "var(--ft-fair)",
-                          border: "1px solid rgba(196,144,48,0.3)",
-                        }}
-                      >
-                        In withdrawal
-                      </span>
-                    )}
-                  </div>
+                  <Link
+                    href={`/${farmSlug}/admin/animals/${animal.animalId}`}
+                    className="ft-mono text-sm font-semibold transition-colors"
+                    style={{ color: "var(--ft-text)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-accent)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-text)")}
+                  >
+                    {animal.animalId}
+                  </Link>
                 </td>
                 <td className="px-3 py-2">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getCategoryChipColor(animal.category)}`}>
-                    {getCategoryLabel(animal.category)}
-                  </span>
+                  <Pill tone="muted">{getCategoryLabel(animal.category)}</Pill>
                 </td>
                 <td className="px-3 py-2 text-sm" style={{ color: "var(--ft-muted)" }}>
                   {animal.sex === "Male" ? "Male" : "Female"}
                 </td>
-                <td className="px-3 py-2 text-sm font-mono" style={{ color: "var(--ft-subtle)" }}>
+                <td className="px-3 py-2 text-sm ft-mono" style={{ color: "var(--ft-subtle)" }}>
                   {getAnimalAge(animal.dateOfBirth ?? undefined)}
                 </td>
                 <td className="px-3 py-2">
                   <Link
                     href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
-                    className="text-sm font-medium font-mono transition-colors"
+                    className="text-sm font-medium ft-mono transition-colors"
                     style={{ color: "var(--ft-muted)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-fair)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-accent)")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-muted)")}
                   >
                     {animal.currentCamp}
@@ -651,24 +670,39 @@ export default function AnimalsTable({
                       </td>
                     )}
                     <td className="px-3 py-2">
-                      <span className="flex items-center gap-1.5">
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: animal.status === "Active" ? "var(--ft-good)" : "var(--ft-subtle)" }}
-                        />
-                        <span className="text-xs" style={{ color: animal.status === "Active" ? "var(--ft-good)" : "var(--ft-subtle)" }}>
+                      {/* Status as uppercase token pills — stacks the lifecycle
+                          status (ACTIVE/SOLD) with any in-withdrawal flag the
+                          real data carries (no synthetic "pregnant" flag — the
+                          animal row has no such field). */}
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        <Pill tone={animal.status === "Active" ? "good" : "muted"}>
                           {animal.status}
-                        </span>
+                        </Pill>
+                        {withdrawalIds?.has(animal.animalId) && (
+                          <Pill tone="fair">In withdrawal</Pill>
+                        )}
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      {animal.status === "Active" && (
-                        <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {animal.status === "Active" && (
+                          <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
+                        )}
+                        <Link
+                          href={`/${farmSlug}/admin/animals/${animal.animalId}`}
+                          aria-label={`View ${animal.animalId}`}
+                          className="shrink-0 transition-colors"
+                          style={{ color: "var(--ft-subtle)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-accent)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-subtle)")}
+                        >
+                          <Icon.chevron size={16} />
+                        </Link>
+                      </div>
                     </td>
                   </>
                 ) : (
-                  <td className="px-3 py-2 text-sm font-mono" style={{ color: "var(--ft-crit)" }}>
+                  <td className="px-3 py-2 text-sm ft-mono" style={{ color: "var(--ft-crit)" }}>
                     {animal.deceasedAt ? new Date(animal.deceasedAt).toLocaleDateString("en-ZA") : "—"}
                   </td>
                 )}
@@ -685,27 +719,17 @@ export default function AnimalsTable({
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
-            style={{
-              border: "1px solid var(--ft-border)",
-              color: "var(--ft-muted)",
-              background: "transparent",
-            }}
+            className="ft-btn disabled:opacity-30"
           >
             ← Previous
           </button>
-          <span className="text-sm font-mono" style={{ color: "var(--ft-subtle)" }}>
+          <span className="text-sm ft-mono ft-tabnums" style={{ color: "var(--ft-subtle)" }}>
             Page {page} of {totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 transition-colors"
-            style={{
-              border: "1px solid var(--ft-border)",
-              color: "var(--ft-muted)",
-              background: "transparent",
-            }}
+            className="ft-btn disabled:opacity-30"
           >
             Next →
           </button>
@@ -720,12 +744,7 @@ export default function AnimalsTable({
           <button
             onClick={loadMore}
             disabled={loadingMore}
-            className="px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
-            style={{
-              border: "1px solid var(--ft-border)",
-              color: "var(--ft-muted)",
-              background: "var(--ft-surface)",
-            }}
+            className="ft-btn disabled:opacity-50"
           >
             {loadingMore ? "Loading…" : `Load more (${animals.length.toLocaleString()} loaded)`}
           </button>

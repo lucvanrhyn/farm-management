@@ -19,7 +19,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Icon } from "@/components/ds";
+import { Icon, Card, Kbd, DotLine } from "@/components/ds";
 import type { FarmMode } from "@/lib/farm-mode";
 import { useAssistantName } from "@/hooks/useAssistantName";
 
@@ -136,57 +136,110 @@ function GreetChip({ firstName, hour, date }: { firstName: string; hour: number;
   );
 }
 
-function StatPill({ breed, animalCount, campCount }: { breed: string; animalCount: number; campCount: number }) {
+/**
+ * Definition list of the four farm facts (BREED / ANIMALS / CAMPS / OWNER).
+ * Mono-uppercase label left (.ft-label), serif value right, dotted divider
+ * between rows (DotLine primitive). Replaces the old glass StatPill.
+ */
+function StatList({
+  breed,
+  animalCount,
+  campCount,
+  owner,
+}: {
+  breed: string;
+  animalCount: number;
+  campCount: number;
+  owner: string;
+}) {
+  const rows: ReadonlyArray<{ label: string; value: string; tabnums?: boolean }> = [
+    { label: "Breed", value: breed },
+    { label: "Animals", value: animalCount.toLocaleString(), tabnums: true },
+    { label: "Camps", value: campCount.toLocaleString(), tabnums: true },
+    { label: "Owner", value: owner },
+  ];
   return (
-    <div
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 12, padding: "10px 18px",
-        background: "var(--ft-surface)", border: "1px solid var(--ft-border)",
-        borderRadius: 999, backdropFilter: "blur(8px)",
-      }}
-    >
-      <span className="ft-mono" style={{ fontSize: 12, color: "var(--ft-muted)" }}>{breed}</span>
-      <span style={{ color: "var(--ft-subtle)" }}>·</span>
-      <span className="ft-mono ft-tabnums" style={{ fontSize: 12, color: "var(--ft-text)" }}>
-        {animalCount.toLocaleString()} animals
-      </span>
-      <span style={{ color: "var(--ft-subtle)" }}>·</span>
-      <span className="ft-mono ft-tabnums" style={{ fontSize: 12, color: "var(--ft-text)" }}>
-        {campCount} camps
-      </span>
-    </div>
+    <dl style={{ width: "100%", maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 0 }}>
+      {rows.map((r, i) => (
+        <div key={r.label}>
+          {i > 0 && <DotLine style={{ margin: "0" }} />}
+          <div
+            style={{
+              display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              gap: 16, padding: "11px 2px",
+            }}
+          >
+            <dt className="ft-label" style={{ margin: 0 }}>{r.label}</dt>
+            <dd
+              className={`ft-serif${r.tabnums ? " ft-tabnums" : ""}`}
+              style={{ margin: 0, fontSize: 19, color: "var(--ft-text)", textAlign: "right", lineHeight: 1.1 }}
+            >
+              {r.value}
+            </dd>
+          </div>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-function StatusFooter({ owner, onSignOut }: { owner: string; onSignOut: () => void }) {
+function StatusFooter({
+  owner,
+  greeting,
+  date,
+  onSignOut,
+}: {
+  owner: string;
+  greeting: string;
+  date: string;
+  onSignOut: () => void;
+}) {
   return (
-    <div
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap",
-        gap: 15, color: "var(--ft-muted)", fontSize: 13,
-      }}
-    >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 999, background: "#5DBB6B", boxShadow: "0 0 12px #5DBB6B" }} />
-        Online
-      </span>
-      <span style={{ color: "var(--ft-subtle)" }}>·</span>
-      <span>Synced just now</span>
-      <span style={{ color: "var(--ft-subtle)" }}>·</span>
-      <span>{owner}</span>
-      <span style={{ color: "var(--ft-subtle)" }}>·</span>
-      <button
-        type="button"
-        onClick={onSignOut}
-        className="ft-btn-ghost"
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+      {/* greeting + date line (reuses the GreetChip greeting+date) */}
+      <div
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px",
-          borderRadius: 6, color: "var(--ft-muted)", cursor: "pointer",
-          background: "transparent", border: "1px solid transparent",
+          display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap",
+          gap: 10, color: "var(--ft-muted)", fontSize: 13,
         }}
       >
-        <Icon.signout size={14} /> Sign out
-      </button>
+        <span>{greeting}</span>
+        <span style={{ color: "var(--ft-subtle)" }}>·</span>
+        <span className="ft-mono">{date}</span>
+        <span style={{ color: "var(--ft-subtle)" }}>·</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+          Press <Kbd>⌘K</Kbd> anywhere to jump
+        </span>
+      </div>
+      {/* status row */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap",
+          gap: 15, color: "var(--ft-muted)", fontSize: 13,
+        }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 999, background: "#5DBB6B", boxShadow: "0 0 12px #5DBB6B" }} />
+          Online
+        </span>
+        <span style={{ color: "var(--ft-subtle)" }}>·</span>
+        <span>Synced just now</span>
+        <span style={{ color: "var(--ft-subtle)" }}>·</span>
+        <span>{owner}</span>
+        <span style={{ color: "var(--ft-subtle)" }}>·</span>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="ft-btn-ghost"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px",
+            borderRadius: 6, color: "var(--ft-muted)", cursor: "pointer",
+            background: "transparent", border: "1px solid transparent",
+          }}
+        >
+          <Icon.signout size={14} /> Sign out
+        </button>
+      </div>
     </div>
   );
 }
@@ -239,18 +292,21 @@ function DestCardBlock({ d, onActivate }: { d: HomeDestination; onActivate: () =
   );
 }
 
-/** Mobile full-width destination row. */
+/** Mobile full-width destination row — retro .ft-card treatment. */
 function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => void }) {
   const accenty = d.featured || d.ai;
   const pct = Math.round((4 / 19) * 100);
   return (
-    <button
+    <Card
+      as="button"
+      interactive
       type="button"
       onClick={onActivate}
       style={{
-        display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", cursor: "pointer",
-        padding: "15px 16px", minHeight: 80, borderRadius: 17, color: "var(--ft-text)",
-        background: cardBg(d), border: `1px solid ${cardBorder(d)}`,
+        display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
+        padding: "15px 16px", minHeight: 80, color: "var(--ft-text)",
+        // accent tint for Logger (featured) + Einstein (ai); plain surface otherwise.
+        background: cardBg(d),
       }}
     >
       <div
@@ -264,10 +320,10 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
         <d.Icon size={24} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="ft-mono" style={{ fontSize: 9.5, letterSpacing: ".18em", color: "var(--ft-subtle)" }}>
+        <div className="ft-mono" style={{ fontSize: 10, letterSpacing: ".2em", color: "var(--ft-subtle)" }}>
           {d.label}
         </div>
-        <div className="ft-serif" style={{ fontSize: 21, lineHeight: 1.05, marginTop: 1 }}>{d.title}</div>
+        <div className="ft-serif" style={{ fontSize: 27, lineHeight: 1.05, marginTop: 2 }}>{d.title}</div>
         {d.key === "logger" ? (
           <div style={{ marginTop: 7, height: 5, borderRadius: 999, background: "var(--ft-surface2)", overflow: "hidden" }}>
             <div style={{ width: `${pct}%`, height: "100%", background: "var(--ft-accent)" }} />
@@ -288,7 +344,39 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
       ) : (
         <Icon.chevron size={18} style={{ color: "var(--ft-accent)", flexShrink: 0 }} />
       )}
-    </button>
+    </Card>
+  );
+}
+
+/**
+ * Cover image slot (mobile) — signature element of the phone "cover" layout.
+ * Full-width rounded retro card (.ft-card) with a dashed inner frame, a muted
+ * centered Icon.image glyph, and a bottom-left "Aerial — {farmName}" caption.
+ * Placeholder until a real cover photo source exists.
+ */
+function PhoneCover({ farmName }: { farmName: string }) {
+  return (
+    <Card style={{ position: "relative", height: 190, overflow: "hidden", padding: 12 }}>
+      <div
+        style={{
+          position: "absolute", inset: 12, borderRadius: 12,
+          border: "1.5px dashed var(--ft-border2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--ft-subtle)",
+        }}
+      >
+        <Icon.image size={40} />
+      </div>
+      <div
+        className="ft-mono"
+        style={{
+          position: "absolute", left: 18, bottom: 16, fontSize: 11,
+          letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ft-muted)",
+        }}
+      >
+        Aerial — {farmName}
+      </div>
+    </Card>
   );
 }
 
@@ -301,8 +389,8 @@ function PhoneBriefPeek({ onAskEinstein }: { onAskEinstein: () => void }) {
       onClick={onAskEinstein}
       className="ft-brief"
       style={{
-        textAlign: "left", cursor: "pointer", width: "100%", borderRadius: 16, padding: "14px 16px",
-        color: "var(--ft-text)", background: "var(--ft-surface)", border: "1px solid var(--ft-border)",
+        textAlign: "left", cursor: "pointer", width: "100%", padding: "14px 16px",
+        color: "var(--ft-text)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -353,8 +441,8 @@ function PhoneTabBar({
           type="button"
           onClick={it.fn}
           style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            color: "var(--ft-muted)", cursor: "pointer", background: "transparent", border: 0,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+            minHeight: 44, color: "var(--ft-muted)", cursor: "pointer", background: "transparent", border: 0,
           }}
         >
           <it.Ico size={20} />
@@ -433,7 +521,7 @@ export function HomePortal({
           className="ft-mono"
           style={{ fontSize: 12, color: "var(--ft-accent)", letterSpacing: ".22em", textTransform: "uppercase", marginBottom: 24 }}
         >
-          {breed} Farm Management System
+          {breed} FMS
         </div>
         <h1
           className="ft-serif ft-home-headline"
@@ -448,8 +536,8 @@ export function HomePortal({
           </span>
         </h1>
 
-        <div style={{ marginTop: 30 }}>
-          <StatPill breed={breed} animalCount={animalCount} campCount={campCount} />
+        <div style={{ marginTop: 34 }}>
+          <StatList breed={breed} animalCount={animalCount} campCount={campCount} owner={owner} />
         </div>
 
         {isMultiMode && (
@@ -484,7 +572,12 @@ export function HomePortal({
         </div>
 
         <div style={{ marginTop: 44 }}>
-          <StatusFooter owner={owner} onSignOut={onSignOut} />
+          <StatusFooter
+            owner={owner}
+            greeting={`${greetingFor(hour)}${firstName ? `, ${firstName}` : ""}`}
+            date={date}
+            onSignOut={onSignOut}
+          />
         </div>
       </div>
 
@@ -518,6 +611,8 @@ export function HomePortal({
               Online
             </span>
           </div>
+
+          <PhoneCover farmName={head || farmName} />
 
           <PhoneBriefPeek onAskEinstein={onAskEinstein} />
 
@@ -553,7 +648,7 @@ const HOME_CSS = `
   max-width: 1200px; margin: 0 auto; padding: 140px 32px 72px;
   text-align: center; position: relative; z-index: 1;
 }
-.ft-home-headline { font-size: clamp(54px, 8.5vw, 118px); }
+.ft-home-headline { font-size: clamp(48px, 6vw, 72px); }
 /* Tail word drops to its own line (the design's two-line treatment) while the
    markup keeps a contiguous "Head Tail" text run for accessibility/tests. */
 .ft-home-tail { display: block; }

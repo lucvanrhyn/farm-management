@@ -165,15 +165,20 @@ function KpiTile({
       </div>
       <div className="mt-3 flex items-end gap-2">
         {/* The wrapping span carries the label-style; the value span overrides
-            with the big tabnums treatment. The label text sits directly after
-            the value span (only a closing tag between). */}
+            with the big tabnums treatment. CRITICAL: the label text must sit
+            directly after the value span with ONLY a closing tag between them
+            so the tolerant e2e greps —
+            `(\d[\d,]*)\s*(?:</[^>]+>\s*)*Total Animals` (admin-journey,
+            dashboard-counter-stability, multi-species-toggle specs) — keep
+            matching. Do NOT interpose a unit/opening element between the value
+            digits and the label; per-tile units live in the `sub` caption. */}
         <span
           style={{ fontSize: 12.5, color: "var(--ft-muted)", lineHeight: 1 }}
         >
           <span
             className="ft-tabnums"
             data-ft-ticker
-            style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em", display: "block", marginBottom: 6 }}
+            style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em", display: "block", marginBottom: 8 }}
           >
             {value}
           </span>
@@ -182,7 +187,7 @@ function KpiTile({
         {spark && <Spark values={spark} w={56} h={18} color="var(--ft-good)" className="mb-0.5" />}
       </div>
       {sub && (
-        <div className="mt-1.5" style={{ fontSize: 11.5, color: "var(--ft-subtle)" }}>
+        <div className="mt-1.5" style={{ fontSize: 11.5, color: "var(--ft-subtle)", lineHeight: 1.45 }}>
           {sub}
         </div>
       )}
@@ -274,7 +279,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
       iconColor: "var(--ft-good)",
       value: totalAnimals,
       label: "Total Animals",
-      sub: "Active",
+      sub: `${totalAnimals.toLocaleString()} head active${withdrawalCount > 0 ? ` · ${withdrawalCount} in withdrawal` : ""}`,
       status: "good",
       accentValue: "good",
       spark: makeSpark("herd", 7),
@@ -285,8 +290,10 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
       iconColor: "var(--ft-muted)",
       value: totalCamps,
       label: "Total Camps",
-      sub: "Farm layout",
-      status: "good",
+      sub: lowGrazingCount > 0
+        ? `${totalCamps} camps · ${lowGrazingCount} below 7d grazing`
+        : `${totalCamps} camps · grazing steady`,
+      status: lowGrazingCount > 0 ? "fair" : "good",
       href: `/${farmSlug}/admin/camps`,
     },
     {
@@ -304,7 +311,9 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
       iconColor: healthIssuesThisWeek === 0 ? "var(--ft-good)" : healthIssuesThisWeek > 3 ? "var(--ft-crit)" : "var(--ft-poor)",
       value: healthIssuesThisWeek,
       label: "Health Issues · 7d",
-      sub: healthIssuesThisWeek === 0 ? "All clear" : healthIssuesThisWeek > 3 ? "Critical" : "Monitor",
+      sub: healthIssuesThisWeek === 0
+        ? "All clear · no flags this week"
+        : `${healthIssuesThisWeek} flags · ${healthIssuesThisWeek > 3 ? "critical — review now" : "monitor affected"}`,
       status: healthIssuesThisWeek === 0 ? "good" : healthIssuesThisWeek > 3 ? "critical" : "poor",
       accentValue: healthIssuesThisWeek === 0 ? "good" : undefined,
       href: `/${farmSlug}/admin/observations`,
@@ -387,39 +396,19 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
   }
 
   // ── Crit banner summary ──────────────────────────────────────────────────────
+  // Low-grazing keeps its own dedicated, clickable alert below (a one-click jump
+  // to /admin/performance — issue #369 guards its "{n} camp(s) with <7 days
+  // grazing remaining" phrasing). The generic strip handles the remaining urgent
+  // signals so the two never duplicate the same line.
   const critItems: string[] = [];
-  if (lowGrazingCount > 0) critItems.push(`${lowGrazingCount} ${lowGrazingCount === 1 ? "camp" : "camps"} <7 days grazing`);
   if (healthIssuesThisWeek > 3) critItems.push(`${healthIssuesThisWeek} health issues this week`);
   if (deathsToday > 0) critItems.push(`${deathsToday} ${deathsToday === 1 ? "death" : "deaths"} today`);
 
   return (
     <>
-      {/* Low-grazing alert */}
-      {lowGrazingCount > 0 && (
-        <Link
-          href={`/${farmSlug}/admin/performance`}
-          className="flex items-center gap-2.5 mb-4 transition-opacity hover:opacity-80"
-          style={{
-            padding: "13px 18px",
-            borderRadius: "var(--ft-r)",
-            background: "var(--ft-crit-bg)",
-            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
-            color: "var(--ft-crit)",
-          }}
-        >
-          <Icon.alerts size={17} />
-          <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
-            {lowGrazingCount}{" "}
-            {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
-            with &lt;7 days grazing remaining
-          </p>
-          <span className="ml-auto text-xs ft-mono" style={{ color: "var(--ft-crit)" }}>View Performance →</span>
-        </Link>
-      )}
-
       {/* KPI ribbon — responsive grid of command-layout tiles */}
       <div
-        className="grid gap-3 mb-5"
+        className="grid gap-3 mb-4"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
       >
         {kpis.map((k) => (
@@ -427,28 +416,64 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
         ))}
       </div>
 
-      {/* Command body — Einstein brief + crit banner + 3-column dense grid.
-          Responsive: 1col (mobile) → 2col (lg) → 1.3/1/.9 (xl). Tailwind
-          arbitrary track template since the design's admin-cmd-grid CSS lives
-          in a stylesheet this surface no longer relies on. */}
-      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr]">
-        {/* Column 1 — crit banner + needs attention */}
+      {/* Low-grazing alert — dedicated, clickable jump to camp performance.
+          Kept as its own element (not folded into the generic strip below) so
+          the farmer gets a one-tap rotation-planning CTA. Issue #369: the space
+          before `with` MUST stay an explicit {" "} expression — a bare literal
+          space is dropped by the production SWC whitespace strip. */}
+      {lowGrazingCount > 0 && (
+        <Link
+          href={`/${farmSlug}/admin/performance`}
+          className="flex items-center gap-2.5 mb-5 ft-card-lift"
+          style={{
+            padding: "13px 18px",
+            background: "var(--ft-crit-bg)",
+            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+            borderRadius: "var(--ft-r)",
+            color: "var(--ft-crit)",
+          }}
+        >
+          <Icon.alerts size={17} />
+          <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>GRAZING</span>
+          <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
+            {lowGrazingCount}{" "}
+            {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
+            with &lt;7 days grazing remaining
+          </p>
+          <span className="ml-auto ft-mono" style={{ fontSize: 11.5, color: "var(--ft-crit)" }}>Plan rotations →</span>
+        </Link>
+      )}
+
+      {/* Full-width urgent strip — sits directly under the KPI row, summarising
+          the urgent health / death signals composed from the same real data.
+          Reference desktop-operations.png: the crit strip spans the whole width
+          beneath the KPIs rather than being buried in a column. */}
+      {critItems.length > 0 && (
+        <div
+          className="flex items-center gap-2.5 mb-5"
+          style={{
+            padding: "13px 18px",
+            background: "var(--ft-crit-bg)",
+            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+            borderRadius: "var(--ft-r)",
+            color: "var(--ft-crit)",
+          }}
+        >
+          <Icon.alerts size={17} />
+          <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>URGENT</span>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
+        </div>
+      )}
+
+      {/* ── Primary hero — 2-column: NEEDS ATTENTION (left) + Einstein
+          TODAY'S BRIEF (right). Reference desktop-operations.png. The rest of
+          the real cards (reproduction, recent activity, camp status, feed,
+          quick actions, data health) are kept as secondary sections below. */}
+      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-[1.25fr_1fr] mb-4">
+        {/* Hero left — Proactive Nudges "Do Next" feed (#566) above Needs
+            Attention (#565 per-animal Herd Triage teaser). Both are fail-open
+            and self-hide when empty. */}
         <div className="flex flex-col gap-4 min-w-0">
-          {critItems.length > 0 && (
-            <div
-              className="flex items-center gap-2.5"
-              style={{
-                padding: "13px 18px",
-                background: "var(--ft-crit-bg)",
-                border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
-                borderRadius: "var(--ft-r)",
-                color: "var(--ft-crit)",
-              }}
-            >
-              <Icon.alerts size={17} />
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
-            </div>
-          )}
           {/* Proactive Nudges v1 — one-tap "Do Next" actions (fail-open: the
               loader returns no items on any error, so the panel self-hides). */}
           <DoNextPanel
@@ -458,7 +483,42 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
             createdBy={userEmail}
           />
           <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} triage={triageItems} />
+        </div>
 
+        {/* Hero right — Einstein "Today's Brief" rotating border-beam card */}
+        <Card className="ft-brief min-w-0" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "14px 18px" }}>
+            <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
+              <Icon.einstein size={17} />
+              <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · TODAY&apos;S BRIEF</span>
+              <span className="flex-1" />
+              <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {briefBullets.map((b, i) => (
+                <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 13.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
+                  <span>{b.text}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3.5 flex gap-2">
+              <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary" style={{ fontSize: 12, padding: "7px 12px" }}>
+                <Icon.einstein size={13} /> Open advisor
+              </Link>
+              <Link href={`/${farmSlug}/admin/performance`} className="ft-btn" style={{ fontSize: 12, padding: "7px 12px" }}>
+                Plan rotations
+              </Link>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Secondary sections — all the remaining real cards, kept below the
+          hero. 3-column dense grid: 1col (mobile) → 2col (lg) → 1.3/1/.9 (xl). */}
+      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr]">
+        {/* Column 1 — reproduction overview */}
+        <div className="flex flex-col gap-4 min-w-0">
           {/* Reproductive overview — locked for basic tier */}
           {isBasic ? (
             <Card className="flex flex-col" style={{ padding: "var(--ft-card-pad)" }}>
@@ -528,39 +588,14 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
           )}
         </div>
 
-        {/* Column 2 — Einstein brief + recent activity timeline */}
+        {/* Column 2 — Weekly Briefing (#567) + recent activity timeline
+            (Einstein brief is now in the hero above) */}
         <div className="flex flex-col gap-4 min-w-0">
-          {/* Einstein "Today's Brief" — rotating border-beam card */}
-          <Card className="ft-brief" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "14px 18px" }}>
-              <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
-                <Icon.einstein size={17} />
-                <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · TODAY&apos;S BRIEF</span>
-                <span className="flex-1" />
-                <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {briefBullets.map((b, i) => (
-                  <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 13.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
-                    <span>{b.text}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3.5 flex gap-2">
-                <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary" style={{ fontSize: 12, padding: "7px 12px" }}>
-                  <Icon.einstein size={13} /> Open advisor
-                </Link>
-                <Link href={`/${farmSlug}/admin/performance`} className="ft-btn" style={{ fontSize: 12, padding: "7px 12px" }}>
-                  Plan rotations
-                </Link>
-              </div>
-            </div>
-          </Card>
-
           {/* Weekly Farm Briefing v1 (decision 8) — the deterministic "This
               week" card. ALWAYS on; fail-open via loadThisWeek (null → no
-              card), so a tenant-DB blip never takes the dashboard down. */}
+              card), so a tenant-DB blip never takes the dashboard down. The
+              Einstein "Today's Brief" lives in the hero above, so it is not
+              duplicated in this column. */}
           {thisWeek && <ThisWeekBriefing payload={thisWeek} farmSlug={farmSlug} />}
 
           {/* Recent activity — restyle of "Recent Health Incidents" timeline */}

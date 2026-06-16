@@ -1,5 +1,7 @@
 // components/admin/NeedsAttentionPanel.tsx
 import Link from "next/link";
+import { Card, Pill, StatusDot, Label, Icon } from "@/components/ds";
+import type { Status } from "@/components/ds";
 import type { DashboardAlerts, DashboardAlert } from "@/lib/server/dashboard-alerts";
 import type { AttentionItem } from "@/lib/server/triage/types";
 import { narrateHerdGlance } from "@/lib/server/triage/narrate";
@@ -22,43 +24,33 @@ interface Props {
 const TRIAGE_TEASER_LIMIT = 5;
 
 function AlertRow({ alert }: { alert: DashboardAlert }) {
-  const isRed = alert.severity === "red";
-  const dotColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
-  const borderColor = isRed ? "rgba(192,87,76,0.25)" : "rgba(139,105,20,0.25)";
-  const bgColor = isRed ? "rgba(192,87,76,0.06)" : "rgba(139,105,20,0.06)";
-  const badgeBg = isRed ? "rgba(192,87,76,0.12)" : "rgba(139,105,20,0.12)";
-  const textColor = isRed ? "var(--ft-poor)" : "var(--ft-fair)";
+  // Map the alert severity onto the shared status palette: red → poor (warm
+  // rust), amber → fair (ochre). StatusDot / Pill then pull the tokenised
+  // colour so the row never hand-rolls off-palette rgba values.
+  const status: Status = alert.severity === "red" ? "poor" : "fair";
 
   return (
     <Link
       href={alert.href}
-      className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-opacity hover:opacity-80"
-      style={{
-        background: bgColor,
-        border: `1px solid ${borderColor}`,
-      }}
+      className="ft-row-hover flex items-center gap-3 px-3 py-2.5"
+      style={{ borderRadius: "var(--ft-r-sm)" }}
     >
-      {/* Colored dot indicator */}
-      <span
-        className="w-2 h-2 rounded-full shrink-0"
-        style={{ background: dotColor }}
-      />
+      <StatusDot status={status} size={8} />
 
       {/* Message */}
       <span className="flex-1 text-sm" style={{ color: "var(--ft-text)" }}>
         {alert.message}
       </span>
 
-      {/* Count badge */}
-      <span
-        className="text-xs font-semibold font-mono px-2 py-0.5 rounded-full shrink-0"
-        style={{ background: badgeBg, color: textColor }}
-      >
+      {/* Count badge — tokenised pill */}
+      <Pill tone={status} className="shrink-0">
         {alert.count}
-      </span>
+      </Pill>
 
-      {/* Arrow */}
-      <span className="text-xs shrink-0" style={{ color: textColor }}>→</span>
+      {/* Chevron to detail */}
+      <span className="shrink-0" style={{ color: "var(--ft-subtle)" }}>
+        <Icon.chevron size={15} />
+      </span>
     </Link>
   );
 }
@@ -163,57 +155,40 @@ export default function NeedsAttentionPanel({ alerts, farmSlug, triage }: Props)
     return (
       <>
         {triageTeaser}
-        <div
-          className="rounded-xl px-5 py-4 flex items-center gap-3 mb-6"
-          style={{ background: "rgba(74,124,89,0.08)", border: "1px solid rgba(74,124,89,0.2)" }}
+        <Card
+          className="flex items-center gap-3"
+          style={{ padding: "16px 20px" }}
         >
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--ft-good)" }} />
+          <StatusDot status="good" size={8} />
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--ft-good)" }}>All clear</p>
-            <p className="text-xs mt-0.5" style={{ color: "#6B8F72" }}>No immediate actions required.</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ft-muted)" }}>No immediate actions required.</p>
           </div>
-        </div>
+        </Card>
       </>
     );
   }
 
-  const borderStyle = alerts.red.length > 0
-    ? "rgba(192,87,76,0.3)"
-    : "rgba(139,105,20,0.3)";
+  const headStatus: Status = alerts.red.length > 0 ? "poor" : "fair";
 
   return (
     <>
       {triageTeaser}
-      <div
-        className="rounded-xl p-4 mb-6"
-        style={{
-          background: "var(--ft-surface)",
-          border: `1px solid ${borderStyle}`,
-          borderLeft: `4px solid ${alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)"}`,
-        }}
-      >
+      <Card style={{ padding: "var(--ft-card-pad)" }}>
         {/* Header */}
-        <div className="flex items-center gap-2 mb-3">
-          <span
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)" }}
-          >
-            Needs Attention
+        <div className="flex items-center gap-2.5 mb-3">
+          <span style={{ color: `var(--ft-${headStatus})` }}>
+            <Icon.alerts size={16} />
           </span>
-          <span
-            className="text-xs font-semibold font-mono px-2 py-0.5 rounded-full"
-            style={{
-              background: alerts.red.length > 0 ? "rgba(192,87,76,0.12)" : "rgba(139,105,20,0.12)",
-              color: alerts.red.length > 0 ? "var(--ft-poor)" : "var(--ft-fair)",
-            }}
-          >
+          <Label style={{ color: `var(--ft-${headStatus})` }}>Needs Attention</Label>
+          <Pill tone={headStatus} className="ml-auto">
             {alerts.totalCount} {alerts.totalCount === 1 ? "item" : "items"}
-          </span>
+          </Pill>
         </div>
 
         {/* Red alerts section */}
         {alerts.red.length > 0 && (
-          <div className="flex flex-col gap-2 mb-3">
+          <div className="flex flex-col gap-1.5 mb-1.5">
             {alerts.red.map((alert) => (
               <AlertRow key={alert.id} alert={alert} />
             ))}
@@ -224,19 +199,16 @@ export default function NeedsAttentionPanel({ alerts, farmSlug, triage }: Props)
         {alerts.amber.length > 0 && (
           <>
             {alerts.red.length > 0 && (
-              <div
-                className="my-2"
-                style={{ borderTop: "1px solid var(--ft-surface2)" }}
-              />
+              <div className="my-1.5" style={{ borderTop: "1px dashed var(--ft-border2)" }} />
             )}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {alerts.amber.map((alert) => (
                 <AlertRow key={alert.id} alert={alert} />
               ))}
             </div>
           </>
         )}
-      </div>
+      </Card>
     </>
   );
 }

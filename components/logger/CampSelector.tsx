@@ -226,7 +226,7 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
 
             <div>
               <p
-                className="ft-serif text-xl leading-none pr-6"
+                className="ft-serif text-[22px] leading-none pr-6"
                 style={{ fontWeight: 500, color: "var(--ft-text)" }}
               >
                 {camp.camp_name}

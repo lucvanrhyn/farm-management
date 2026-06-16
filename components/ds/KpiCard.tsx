@@ -15,6 +15,7 @@ export function KpiCard({
   icon,
   label,
   value,
+  unit,
   sub,
   status,
   badge,
@@ -26,6 +27,8 @@ export function KpiCard({
   icon?: React.ReactNode;
   label: React.ReactNode;
   value: React.ReactNode;
+  /** Small unit/qualifier rendered beside the big value (e.g. "head", "in calf"). */
+  unit?: React.ReactNode;
   sub?: React.ReactNode;
   status?: Status;
   badge?: React.ReactNode;
@@ -53,17 +56,22 @@ export function KpiCard({
         <span
           className="ft-tabnums"
           data-ft-ticker
-          style={{ fontSize: 30, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em" }}
+          style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em" }}
         >
           {value}
         </span>
+        {unit && (
+          <span style={{ fontSize: 12.5, color: "var(--ft-subtle)", lineHeight: 1, paddingBottom: 2 }}>
+            {unit}
+          </span>
+        )}
         {spark && <Spark values={spark} w={56} h={18} className="mb-1" />}
       </div>
       <div className="mt-1.5" style={{ fontSize: 12.5, color: "var(--ft-muted)" }}>
         {label}
       </div>
       {sub && (
-        <div className="mt-1" style={{ fontSize: 11.5, color: "var(--ft-subtle)" }}>
+        <div className="mt-1" style={{ fontSize: 11.5, color: "var(--ft-subtle)", lineHeight: 1.45 }}>
           {sub}
         </div>
       )}

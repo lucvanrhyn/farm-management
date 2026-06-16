@@ -12,7 +12,6 @@ import NotificationBell from "@/components/admin/NotificationBell";
 import { buildNavGroups, flattenNav, PRIMARY_PATHS, type ResolvedNavLink } from "@/components/admin/nav-model";
 import { Icon } from "./icons";
 import { Kbd } from "./primitives";
-import { cn } from "@/lib/utils";
 
 function BrandMark({ slug, compact = false }: { slug: string; compact?: boolean }) {
   return (
@@ -150,11 +149,15 @@ export default function StudioShell({
           <ChevronRight size={12} style={{ color: "var(--ft-subtle)" }} />
           <span style={{ color: "var(--ft-text)", fontWeight: 600 }}>{crumbLabel}</span>
         </nav>
+        {/* Centered command bar — flex spacers on both sides pull the search to
+            the optical centre of the bar (reference desktop-operations.png). */}
         <div style={{ flex: 1 }} />
         <CommandBar wide />
+        <div style={{ flex: 1 }} />
         {isMultiMode && <ModeSwitcher variant="header" />}
         <NotificationBell farmSlug={slug} />
         <SignOutButton />
+        <Avatar />
       </header>
 
       {/* ── Mobile brand bar ───────────────────────────────────────── */}

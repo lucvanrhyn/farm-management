@@ -26,14 +26,16 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
+  type Ref,
 } from "react";
 import Link from "next/link";
 import { useAssistantName } from "@/hooks/useAssistantName";
-import { Icon } from "@/components/ds";
+import { Icon, StatusDot, Button, Pill } from "@/components/ds";
 import CitationChip from "./CitationChip";
 import type { Citation } from "@/lib/einstein/retriever";
 import type { EinsteinAnswer } from "@/lib/einstein/answer";
@@ -83,9 +85,53 @@ export type EinsteinRefusedReason =
 // Types + constants
 // ---------------------------------------------------------------------------
 
+/**
+ * A single prioritized item shown in the "Today's brief" card. `status` colours
+ * the leading dot (poor/fair/info). `text` is the human-readable line.
+ */
+export interface EinsteinBriefItem {
+  readonly status: BriefStatus;
+  readonly text: string;
+}
+
+/** Brief-card statuses — a strict subset of the DS <StatusDot> palette. */
+type BriefStatus = "poor" | "fair" | "good" | "critical" | "info";
+
+/**
+ * Imperative handle a parent can hold to drive the chat from outside the
+ * component (e.g. the desktop advisor page's action-button row). `sendPrompt`
+ * funnels straight into the same streaming send path the composer uses.
+ */
+export interface EinsteinChatHandle {
+  sendPrompt: (prompt: string) => void;
+}
+
 export interface EinsteinChatProps {
   readonly farmSlug: string;
   readonly className?: string;
+  /** Imperative handle exposing `sendPrompt` for external action triggers. */
+  readonly controlsRef?: Ref<EinsteinChatHandle>;
+  /** First name for the greeting line in the empty-state brief (optional). */
+  readonly firstName?: string;
+  /**
+   * When provided (and the transcript is empty) the empty view renders the
+   * rich "Today's brief" presentation — a greeting bubble, a status-dotted
+   * brief card and suggested-prompt chips — instead of the plain prompt copy.
+   * Used by the phone bottom-sheet (and any surface that wants the briefing
+   * on open). Tapping a chip submits it through the existing send path.
+   */
+  readonly brief?: readonly EinsteinBriefItem[];
+  /** Suggested-prompt chips shown under the brief / empty-state. */
+  readonly suggestedPrompts?: readonly string[];
+  /** Override the composer placeholder (defaults to `Ask {assistantName}…`). */
+  readonly placeholder?: string;
+  /**
+   * Render the "Advisor" mode pill beside the composer. Visual mode indicator,
+   * on by default — does not alter the send payload.
+   */
+  readonly advisorMode?: boolean;
+  /** Hide the internal chat header (host surfaces that supply their own). */
+  readonly hideHeader?: boolean;
 }
 
 type MessageRole = "user" | "assistant" | "error";
@@ -118,7 +164,17 @@ const CITATION_MARKER = /\[(\d+)\]/g;
 // Component
 // ---------------------------------------------------------------------------
 
-export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
+export function EinsteinChat({
+  farmSlug,
+  className,
+  controlsRef,
+  firstName,
+  brief,
+  suggestedPrompts,
+  placeholder,
+  advisorMode = true,
+  hideHeader = false,
+}: EinsteinChatProps) {
   const assistantName = useAssistantName();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -151,8 +207,12 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
   // Send handler
   // ------------------------------------------------------------------
 
-  const handleSend = useCallback(async () => {
-    const question = input.trim();
+  const handleSend = useCallback(async (preset?: string) => {
+    // `preset` lets suggested-prompt chips / brief action buttons drive the
+    // EXACT same send path as the composer — they pass their text directly so
+    // we don't depend on a race-y setInput()→read cycle. With no preset we read
+    // the composer value as before.
+    const question = (preset ?? input).trim();
     if (!question || streaming) return;
 
     const userMessage: ChatMessage = {
@@ -266,6 +326,19 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
     [handleSend],
   );
 
+  // Suggested-prompt chips + brief action buttons funnel through here so they
+  // reuse the SAME streaming/citation/error pipeline as the composer.
+  const sendPrompt = useCallback(
+    (prompt: string) => {
+      void handleSend(prompt);
+    },
+    [handleSend],
+  );
+
+  // Expose the send path to a parent (desktop action-button row) without
+  // forking any chat logic — the parent just calls handle.sendPrompt(text).
+  useImperativeHandle(controlsRef, () => ({ sendPrompt }), [sendPrompt]);
+
   const onFeedback = useCallback(
     async (messageId: string, value: "up" | "down") => {
       const target = messages.find((m) => m.id === messageId);
@@ -312,7 +385,9 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
     >
       <EinsteinChatStyles />
 
-      {/* Header — assistant wordmark (Fraunces) + mono online status */}
+      {/* Header — assistant wordmark (Fraunces) + mono online status.
+          Host surfaces that render their own header pass hideHeader. */}
+      {hideHeader ? null : (
       <header
         className="flex items-center gap-3 px-5 py-4"
         style={{ borderBottom: "1px solid var(--ft-border)" }}
@@ -367,6 +442,7 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
           </div>
         </div>
       </header>
+      )}
 
       <div
         ref={scrollRef}
@@ -374,7 +450,17 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
         data-testid="einstein-transcript"
       >
         {messages.length === 0 && !streaming ? (
-          <EmptyState assistantName={assistantName} />
+          brief && brief.length > 0 ? (
+            <BriefEmptyState
+              assistantName={assistantName}
+              firstName={firstName}
+              brief={brief}
+              suggestedPrompts={suggestedPrompts}
+              onPrompt={sendPrompt}
+            />
+          ) : (
+            <EmptyState assistantName={assistantName} />
+          )
         ) : null}
 
         {messages.map((message) => (
@@ -420,19 +506,48 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
           Ask {assistantName}
         </label>
         <div
-          className="flex items-center gap-2 py-1 pl-4 pr-1"
+          className="flex items-center gap-2 py-1 pl-2 pr-1"
           style={{
             borderRadius: 999,
             background: "var(--ft-surface)",
             border: "1px solid var(--ft-border)",
           }}
         >
+          {advisorMode ? (
+            <span
+              className="ft-mono flex shrink-0 items-center gap-1.5 self-center"
+              data-testid="einstein-advisor-pill"
+              aria-label="Advisor mode on"
+              style={{
+                borderRadius: 999,
+                padding: "5px 9px",
+                fontSize: 10,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                background: "var(--ft-accent-faint)",
+                color: "var(--ft-accent)",
+                border: "1px solid color-mix(in oklab, var(--ft-accent) 30%, transparent)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 999,
+                  background: "var(--ft-accent)",
+                }}
+              />
+              Advisor
+            </span>
+          ) : null}
           <textarea
             id="einstein-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={`Ask ${assistantName}…`}
+            placeholder={placeholder ?? `Ask ${assistantName}…`}
             rows={1}
             className="flex-1 min-w-0 resize-none border-0 bg-transparent text-sm focus:outline-none"
             style={{ color: "var(--ft-text)" }}
@@ -477,6 +592,202 @@ export function EinsteinChat({ farmSlug, className }: EinsteinChatProps) {
 export default EinsteinChat;
 
 // ---------------------------------------------------------------------------
+// Desktop advisor panel — title + always-on brief + action row + chat
+// ---------------------------------------------------------------------------
+
+/** One numbered brief line. `bold` entities are emphasised in the body copy. */
+export interface AdvisorBriefItem {
+  readonly text: string;
+  /** Substrings of `text` to render bold (e.g. ["Camp H", "VR-014"]). */
+  readonly bold?: readonly string[];
+}
+
+/** A preset action button on the desktop advisor page. */
+export interface AdvisorAction {
+  readonly label: string;
+  /** Prompt sent to the chat when clicked (defaults to the label). */
+  readonly prompt?: string;
+}
+
+export interface EinsteinAdvisorPanelProps {
+  readonly farmSlug: string;
+  readonly assistantName: string;
+  readonly firstName?: string;
+  /** Greeting line above the numbered brief. */
+  readonly greeting?: string;
+  readonly briefItems: readonly AdvisorBriefItem[];
+  readonly actions: readonly AdvisorAction[];
+}
+
+/**
+ * Desktop "AI Advisor" composition. Renders the always-on brief card and an
+ * action-button row ABOVE the real <EinsteinChat>, wiring both into the chat's
+ * existing send path via an imperative handle — no chat logic is forked.
+ *
+ * Client component (owns the handle ref + click handlers) so the server page
+ * shell can render it directly without its own client island.
+ */
+export function EinsteinAdvisorPanel({
+  farmSlug,
+  assistantName,
+  firstName,
+  greeting,
+  briefItems,
+  actions,
+}: EinsteinAdvisorPanelProps) {
+  const chatRef = useRef<EinsteinChatHandle>(null);
+  const greetLine =
+    greeting ??
+    `Good morning${firstName?.trim() ? ` ${firstName.trim()}` : ""}. Three things worth your attention before lunch:`;
+
+  return (
+    <div className="ft-scope flex h-full min-h-0 flex-col gap-4">
+      {/* Title row — serif H1 36px + mono model pill + subtitle */}
+      <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1
+            className="ft-serif"
+            data-testid="advisor-title"
+            style={{
+              fontSize: 36,
+              fontWeight: 500,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.05,
+              margin: 0,
+              color: "var(--ft-text)",
+            }}
+          >
+            AI Advisor
+          </h1>
+          <Pill tone="muted" className="ft-mono">
+            {assistantName.toUpperCase()} · CLAUDE 3.5
+          </Pill>
+        </div>
+        <div
+          className="ft-mono"
+          style={{
+            fontSize: 12,
+            color: "var(--ft-muted)",
+            marginTop: 6,
+            letterSpacing: ".02em",
+          }}
+        >
+          Ask anything about the farm
+        </div>
+      </div>
+
+      {/* Always-on brief card (accent beam) — numbered, entities bold */}
+      <div className="ft-brief px-5 py-4" data-testid="advisor-brief">
+        <div
+          className="ft-mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: ".14em",
+            textTransform: "uppercase",
+            color: "var(--ft-accent)",
+          }}
+        >
+          {assistantName}
+        </div>
+        <p
+          style={{
+            fontSize: 14.5,
+            lineHeight: 1.6,
+            color: "var(--ft-text)",
+            margin: "8px 0 10px",
+          }}
+        >
+          {greetLine}
+        </p>
+        <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {briefItems.map((item, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-2.5"
+              style={{ marginTop: i === 0 ? 0 : 8 }}
+            >
+              <span
+                className="ft-mono shrink-0"
+                aria-hidden="true"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--ft-accent)",
+                  lineHeight: 1.6,
+                  minWidth: 16,
+                }}
+              >
+                {i + 1}.
+              </span>
+              <span
+                style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--ft-text)" }}
+              >
+                <BoldEntities text={item.text} bold={item.bold} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Action button row — outline retro buttons → seed the chat send path */}
+      <div className="flex flex-wrap gap-2" data-testid="advisor-actions">
+        {actions.map((a) => (
+          <Button
+            key={a.label}
+            variant="default"
+            className="ft-mono"
+            onClick={() => chatRef.current?.sendPrompt(a.prompt ?? a.label)}
+            style={{ textTransform: "uppercase", letterSpacing: ".06em", fontSize: 11 }}
+          >
+            {a.label}
+          </Button>
+        ))}
+      </div>
+
+      {/* The real chat panel (unchanged behaviour) */}
+      <div className="ft-card min-h-0 flex-1 overflow-hidden">
+        <EinsteinChat
+          farmSlug={farmSlug}
+          controlsRef={chatRef}
+          placeholder="Ask about herd performance…"
+          className="h-full"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Render `text` with each `bold` substring wrapped in <strong> (text colour). */
+function BoldEntities({
+  text,
+  bold,
+}: {
+  text: string;
+  bold?: readonly string[];
+}) {
+  if (!bold || bold.length === 0) return <>{text}</>;
+  // Build a single alternation regex, escaping each entity. Longest-first so
+  // overlapping entities (e.g. "Camp H" vs "H") match the more specific one.
+  const ordered = [...bold].sort((a, b) => b.length - a.length);
+  const escaped = ordered.map((b) => b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${escaped.join("|")})`, "g");
+  const parts = text.split(re);
+  return (
+    <>
+      {parts.map((part, i) =>
+        ordered.includes(part) ? (
+          <strong key={i} style={{ fontWeight: 600, color: "var(--ft-text)" }}>
+            {part}
+          </strong>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -504,6 +815,156 @@ function EmptyState({ assistantName }: { assistantName: string }) {
     >
       Ask {assistantName} a question about your farm. Answers cite the
       underlying records so you can verify every claim.
+    </div>
+  );
+}
+
+const WEEKDAY = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+/**
+ * Rich empty-state (phone bottom-sheet + any briefing surface): a greeting
+ * "bubble", a status-dotted brief card and tappable suggested-prompt chips.
+ * Every chip funnels through `onPrompt` → the component's real send path, so
+ * the streaming / citation / error pipeline is reused verbatim.
+ *
+ * Hygiene: the assistant name is threaded through (never hardcoded "Einstein")
+ * so the rename editor propagates here too and the empty-state guard test
+ * (no literal "Einstein" in the transcript) stays green.
+ */
+function BriefEmptyState({
+  assistantName,
+  firstName,
+  brief,
+  suggestedPrompts,
+  onPrompt,
+}: {
+  assistantName: string;
+  firstName?: string;
+  brief: readonly EinsteinBriefItem[];
+  suggestedPrompts?: readonly string[];
+  onPrompt: (prompt: string) => void;
+}) {
+  const who = firstName?.trim() ? firstName.trim() : "there";
+  const weekday = WEEKDAY[new Date().getDay()];
+
+  return (
+    <div className="space-y-3" data-testid="einstein-brief-empty">
+      {/* greeting "bubble" — surface card, assistant-name aware via context */}
+      <div className="flex justify-start">
+        <div
+          className="ft-card max-w-[88%] px-3.5 py-2.5 text-sm"
+          style={{
+            background: "var(--ft-surface)",
+            borderBottomLeftRadius: 5,
+            color: "var(--ft-text)",
+          }}
+        >
+          Morning, {who} — here&rsquo;s your brief for {weekday}.
+        </div>
+      </div>
+
+      {/* brief card — coloured StatusDots, one line per prioritized item */}
+      <div className="ft-brief px-3.5 py-3" data-testid="einstein-brief-card">
+        <div
+          className="ft-mono mb-2.5"
+          style={{
+            fontSize: 10,
+            letterSpacing: ".12em",
+            textTransform: "uppercase",
+            color: "var(--ft-accent)",
+          }}
+        >
+          {assistantName} · Today&rsquo;s brief
+        </div>
+        <ul className="space-y-2.5" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {brief.map((item, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="mt-[5px] shrink-0">
+                <BriefDot status={item.status} />
+              </span>
+              <span
+                style={{
+                  fontSize: 13.5,
+                  lineHeight: 1.5,
+                  color: "var(--ft-text)",
+                }}
+              >
+                {item.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {suggestedPrompts && suggestedPrompts.length > 0 ? (
+        <SuggestedChips prompts={suggestedPrompts} onPrompt={onPrompt} />
+      ) : null}
+    </div>
+  );
+}
+
+/** info-aware dot: <StatusDot> has no "info"/"good" overlap with brief tones. */
+function BriefDot({ status }: { status: BriefStatus }) {
+  if (status === "info") {
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-block",
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: "var(--ft-info)",
+          boxShadow: "0 0 0 3px color-mix(in oklab, var(--ft-info) 15%, transparent)",
+        }}
+      />
+    );
+  }
+  return <StatusDot status={status} />;
+}
+
+/**
+ * Tappable suggested-prompt chips. Each chip submits its own text through the
+ * shared send path (no composer round-trip), so the chat logic is never forked.
+ */
+function SuggestedChips({
+  prompts,
+  onPrompt,
+}: {
+  prompts: readonly string[];
+  onPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 pt-1" data-testid="einstein-suggested-chips">
+      {prompts.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onPrompt(p)}
+          className="ft-mono transition-colors"
+          data-testid="einstein-suggested-chip"
+          style={{
+            borderRadius: 999,
+            padding: "7px 12px",
+            fontSize: 12,
+            letterSpacing: ".01em",
+            textTransform: "none",
+            background: "var(--ft-surface)",
+            color: "var(--ft-text)",
+            border: "1px solid var(--ft-border2)",
+          }}
+        >
+          {p}
+        </button>
+      ))}
     </div>
   );
 }

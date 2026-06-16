@@ -81,17 +81,19 @@ describe("<AnimalsTable /> — explicit species prop beats ambient mode (#323)",
       />,
     );
 
-    // Sheep taxonomy must be present in the category filter <select>.
+    // Sheep taxonomy must be present in the category filter chip row
+    // (the redesign replaced the native <select> with retro filter chips —
+    // buttons whose accessible name is the category label).
     for (const cat of ["Ewe", "Ram", "Wether", "Hogget", "Lamb"]) {
       expect(
-        screen.getByRole("option", { name: cat }),
+        screen.getByRole("button", { name: cat }),
       ).toBeTruthy();
     }
 
     // Cattle taxonomy must NOT leak in (the regression symptom).
     for (const cat of ["Cow", "Bull", "Heifer", "Calf", "Ox"]) {
       expect(
-        screen.queryByRole("option", { name: cat }),
+        screen.queryByRole("button", { name: cat }),
       ).toBeNull();
     }
   });
@@ -109,10 +111,11 @@ describe("<AnimalsTable /> — explicit species prop beats ambient mode (#323)",
       />,
     );
 
-    // Ambient mode is "cattle" — cattle taxonomy should render unchanged.
+    // Ambient mode is "cattle" — cattle taxonomy should render unchanged
+    // (category filter chips, post-redesign).
     for (const cat of ["Cow", "Bull", "Heifer", "Calf", "Ox"]) {
       expect(
-        screen.getByRole("option", { name: cat }),
+        screen.getByRole("button", { name: cat }),
       ).toBeTruthy();
     }
   });
