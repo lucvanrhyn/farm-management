@@ -64,6 +64,7 @@ const SOURCES: Record<string, Partial<AlertInputs>> = {
     withdrawalAnimals: [
       {
         animalId: "a1",
+        species: "cattle",
         name: null,
         campId: "c1",
         treatmentType: "ab",

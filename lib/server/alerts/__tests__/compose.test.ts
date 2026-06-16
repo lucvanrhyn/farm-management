@@ -155,6 +155,7 @@ describe("composeAlerts — withdrawal source", () => {
         withdrawalAnimals: [
           {
             animalId: "a1",
+            species: "cattle",
             name: null,
             campId: "c1",
             treatmentType: "antibiotic",

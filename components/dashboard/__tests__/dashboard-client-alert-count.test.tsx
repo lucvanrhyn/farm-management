@@ -186,6 +186,7 @@ describe("DashboardClient header — partial composeAlerts pass", () => {
       withdrawalAnimals: [
         {
           animalId: "a1",
+          species: "cattle",
           name: null,
           campId: "c1",
           treatmentType: "ab",

@@ -9,9 +9,37 @@ import {
   getCachedDashboardOverviewShared,
 } from "@/lib/server/cached";
 import { getSession } from "@/lib/auth";
+import { getTriage } from "@/lib/server/triage/get-triage";
+import type { AttentionItem } from "@/lib/server/triage/types";
 import type { FarmTier } from "@/lib/tier";
 import type { SpeciesId } from "@/lib/species/types";
 import type { Status } from "@/components/ds";
+
+/**
+ * Per-animal Herd Triage teaser for the dashboard NeedsAttentionPanel
+ * (decision 10a). Fail-open: triage is a teaser, never load-bearing, so any
+ * tenant-DB blip degrades to "no teaser" instead of taking down the dashboard.
+ * mode threads the active-species switcher so the teaser tracks the page.
+ */
+async function loadTriageTeaser(
+  prisma: PrismaClient,
+  farmSlug: string,
+  mode: SpeciesId,
+): Promise<AttentionItem[]> {
+  try {
+    const settings = await prisma.farmSettings.findFirst();
+    const thresholds = {
+      adgPoorDoerThreshold: settings?.adgPoorDoerThreshold ?? 0.7,
+      calvingAlertDays: settings?.calvingAlertDays ?? 14,
+      daysOpenLimit: settings?.daysOpenLimit ?? 365,
+      campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
+      staleCampInspectionHours: settings?.alertThresholdHours ?? 48,
+    };
+    return await getTriage(prisma, farmSlug, thresholds, mode);
+  } catch {
+    return [];
+  }
+}
 
 interface Props {
   farmSlug: string;
@@ -106,9 +134,10 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
   // Splitting the cache key for mode-independent values fixes the #411
   // `totalCamps` drift between cattle / sheep views: the shared entry
   // survives a FarmMode flip so the KPI tile stays stable.
-  const [byMode, shared] = await Promise.all([
+  const [byMode, shared, triageItems] = await Promise.all([
     getCachedDashboardOverviewByMode(farmSlug, mode),
     getCachedDashboardOverviewShared(farmSlug),
+    loadTriageTeaser(prisma, farmSlug, mode),
   ]);
   const {
     totalAnimals,
@@ -343,7 +372,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
               <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
             </div>
           )}
-          <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} />
+          <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} triage={triageItems} />
 
           {/* Reproductive overview — locked for basic tier */}
           {isBasic ? (
