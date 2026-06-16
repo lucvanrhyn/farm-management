@@ -39,7 +39,8 @@ export type EmailTemplate =
   | "alert-digest"
   | "quote"
   | "consulting-lead"
-  | "password-reset";
+  | "password-reset"
+  | "weekly-briefing";
 
 export interface SendEmailOptions<T = Record<string, unknown>> {
   to: string;
@@ -219,12 +220,74 @@ const passwordResetRenderer: Renderer = (data) => {
   };
 };
 
+// ── Weekly-briefing renderer (Weekly Farm Briefing v1) ──────────────────────
+// Mirrors alertDigestRenderer: INLINE HEX only (CSS vars don't survive email
+// clients), escapeHtml on all farmer-supplied content, the same warm editorial
+// palette. Renders the prose intro + the three deterministic payload sections;
+// a section's heading is OMITTED entirely when its list is empty (graceful
+// degradation — the LLM never invents facts, so an empty section is silence).
+
+interface BriefingSectionSpec {
+  heading: string;
+  items: string[];
+  accent: string; // inline hex for the heading + bullet
+}
+
+function briefingSectionHtml(spec: BriefingSectionSpec): string {
+  if (spec.items.length === 0) return "";
+  const items = spec.items
+    .map(
+      (line) => `<li style="margin:6px 0;display:flex;align-items:flex-start;">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${spec.accent};margin:6px 9px 0 0;flex-shrink:0;"></span>
+        <span style="color:#1A1510;line-height:1.5;">${escapeHtml(line)}</span>
+      </li>`,
+    )
+    .join("");
+  return `<div style="margin:18px 0;">
+    <h2 style="font-size:14px;color:${spec.accent};margin:8px 0;text-transform:uppercase;letter-spacing:0.6px;">${escapeHtml(spec.heading)}</h2>
+    <ul style="list-style:none;padding:0;margin:0;">${items}</ul>
+  </div>`;
+}
+
+const weeklyBriefingRenderer: Renderer = (data) => {
+  const farmSlug = String(data.farmSlug ?? "");
+  const farmName = String(data.farmName ?? farmSlug);
+  const intro = String(data.intro ?? "");
+  const baseUrl = getBaseUrl();
+  const asLines = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+  const sections = [
+    briefingSectionHtml({ heading: "What changed", items: asLines(data.whatChanged), accent: "#8B6914" }),
+    briefingSectionHtml({ heading: "What to watch", items: asLines(data.whatToWatch), accent: "#B45309" }),
+    briefingSectionHtml({ heading: "What to do", items: asLines(data.whatToDo), accent: "#1A1510" }),
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return {
+    subject: `Your weekly FarmTrack briefing — ${farmName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#1A1510;">
+        <h1 style="font-size:22px;margin:0 0 4px;">This week on ${escapeHtml(farmName)}</h1>
+        <p style="color:#6B5B43;margin:0 0 18px;font-size:15px;line-height:1.55;">${escapeHtml(intro)}</p>
+        ${sections || "<p style='color:#8A8A8A;'>A quiet week — nothing flagged. The herd is steady.</p>"}
+        <p style="color:#8A8A8A;font-size:12px;margin-top:32px;">
+          You received this weekly briefing because weekly digests are enabled on your FarmTrack account.
+          Change preferences at <a href="${baseUrl}/${farmSlug}/admin/settings/alerts">/${farmSlug}/admin/settings/alerts</a>.
+        </p>
+      </div>
+    `,
+  };
+};
+
 const RENDERERS: Record<EmailTemplate, Renderer> = {
   "verify-email": verifyEmailRenderer,
   "alert-digest": alertDigestRenderer,
   quote: quoteRenderer,
   "consulting-lead": consultingLeadRenderer,
   "password-reset": passwordResetRenderer,
+  "weekly-briefing": weeklyBriefingRenderer,
 };
 
 // ── Public API ──────────────────────────────────────────────────────────────

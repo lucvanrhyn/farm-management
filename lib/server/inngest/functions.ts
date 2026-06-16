@@ -37,6 +37,8 @@ import { dispatchChannels } from "@/lib/server/alerts/dispatch";
 import { logger } from "@/lib/logger";
 import { revalidateNotificationWrite } from "@/lib/server/revalidate";
 import { cleanupExpiredRateLimits } from "@/lib/rate-limit";
+import { sendWeeklyBriefing } from "@/lib/server/briefing/send-weekly-briefing";
+import { isoYearWeek } from "@/lib/server/briefing/iso-week";
 import {
   serializeCandidates,
   deserializeCandidates,
@@ -179,8 +181,77 @@ export const dailyRateLimitCleanup = inngest.createFunction(
   },
 );
 
+// ── Weekly Farm Briefing v1 ───────────────────────────────────────────────────
+//
+// A NEW, dedicated weekly path that is fully ADDITIVE to the daily realtime/
+// digest path above (decision 1/2/10): we DO NOT touch dailyAlertFanout /
+// evaluateTenantAlerts / dispatchChannels / sendDailyDigest.
+//
+//   1. weeklyBriefingFanout — Monday 05:00 SAST cron. Loads tenant slugs and
+//      emits one "briefing/weekly.tenant" event per tenant. Each event id is
+//      week-stamped (`weekly-briefing/{slug}/{isoYearWeek}`) so Inngest
+//      deduplicates a double-fired cron to a single per-tenant delivery per ISO
+//      week — belt-and-suspenders on top of the once-a-week cron (decision 3,
+//      idempotency with NO migration).
+//   2. sendTenantWeeklyBriefing — event handler. Builds the deterministic
+//      briefing payload over a 7-day window, narrates the intro, and sends the
+//      'weekly-briefing' email — but ONLY to tenants with an AlertPreference
+//      opted into digestMode='weekly' (the audience gate lives inside
+//      sendWeeklyBriefing, decision 7).
+
+export const weeklyBriefingFanout = inngest.createFunction(
+  {
+    id: "weekly-briefing-fanout",
+    triggers: [{ cron: "TZ=Africa/Johannesburg 0 5 * * 1" }],
+  },
+  async ({ step }) => {
+    const slugs = await step.run("load-tenants", () => getAllFarmSlugs());
+    if (slugs.length === 0) return { tenantCount: 0 };
+    // Week-stamp computed once at fan-out so every tenant event for this run
+    // shares the same ISO week id-suffix.
+    const week = isoYearWeek(new Date());
+    await step.sendEvent(
+      "fan-out-weekly",
+      slugs.map((slug: string) => ({
+        // Inngest deduplicates by event `id` — a re-fired cron in the same ISO
+        // week produces identical ids and collapses to one delivery per tenant.
+        id: `weekly-briefing/${slug}/${week}`,
+        name: "briefing/weekly.tenant",
+        data: { slug, week },
+      })),
+    );
+    return { tenantCount: slugs.length, week };
+  },
+);
+
+export const sendTenantWeeklyBriefing = inngest.createFunction(
+  {
+    id: "send-tenant-weekly-briefing",
+    retries: 3,
+    concurrency: { limit: 5 },
+    triggers: [{ event: "briefing/weekly.tenant" }],
+  },
+  async ({ event, step }) => {
+    const { slug } = event.data as { slug: string; week?: string };
+
+    const result = await step.run("send-weekly-briefing", async () => {
+      const prisma = (await getPrismaForFarm(slug)) as PrismaClient | null;
+      if (!prisma) throw new Error(`No farm credentials for tenant "${slug}"`);
+      const settings = await prisma.farmSettings.findFirst({
+        select: { farmName: true, aiSettings: true },
+      });
+      if (!settings) throw new Error(`FarmSettings missing on tenant "${slug}"`);
+      return sendWeeklyBriefing(prisma, settings, slug);
+    });
+
+    return { slug, ...result };
+  },
+);
+
 export const ALL_FUNCTIONS = [
   dailyAlertFanout,
   evaluateTenantAlerts,
   dailyRateLimitCleanup,
+  weeklyBriefingFanout,
+  sendTenantWeeklyBriefing,
 ];

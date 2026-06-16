@@ -15,15 +15,39 @@ import {
   dailyAlertFanout,
   evaluateTenantAlerts,
   dailyRateLimitCleanup,
+  weeklyBriefingFanout,
+  sendTenantWeeklyBriefing,
   ALL_FUNCTIONS,
 } from "@/lib/server/inngest/functions";
+import { isoYearWeek } from "@/lib/server/briefing/iso-week";
+
+function fnId(f: unknown): string {
+  const probe = f as { id?: string | (() => string); opts?: { id?: string }; name?: string };
+  return typeof probe.id === "function" ? probe.id() : probe.id ?? probe.opts?.id ?? probe.name ?? "";
+}
 
 describe("inngest functions contract", () => {
   it("exposes all functions in ALL_FUNCTIONS", () => {
-    expect(ALL_FUNCTIONS).toHaveLength(3);
+    expect(ALL_FUNCTIONS).toHaveLength(5);
     expect(ALL_FUNCTIONS).toContain(dailyAlertFanout);
     expect(ALL_FUNCTIONS).toContain(evaluateTenantAlerts);
     expect(ALL_FUNCTIONS).toContain(dailyRateLimitCleanup);
+    expect(ALL_FUNCTIONS).toContain(weeklyBriefingFanout);
+    expect(ALL_FUNCTIONS).toContain(sendTenantWeeklyBriefing);
+  });
+
+  it("pins the weekly-briefing fan-out + handler function ids", () => {
+    expect(fnId(weeklyBriefingFanout)).toContain("weekly-briefing-fanout");
+    expect(fnId(sendTenantWeeklyBriefing)).toContain("send-tenant-weekly-briefing");
+  });
+
+  it("does NOT regress the daily realtime/digest path (additive only)", () => {
+    // The daily fanout + evaluate functions are still present and distinct from
+    // the weekly ones.
+    expect(fnId(dailyAlertFanout)).toContain("daily-alert-fanout");
+    expect(fnId(evaluateTenantAlerts)).toContain("evaluate-tenant-alerts");
+    expect(weeklyBriefingFanout).not.toBe(dailyAlertFanout);
+    expect(sendTenantWeeklyBriefing).not.toBe(evaluateTenantAlerts);
   });
 
   it("pins the cron function id to 'daily-alert-fanout'", () => {
