@@ -19,7 +19,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { getTriage } from "@/lib/server/triage/get-triage";
-import { getDoNextFeed } from "@/lib/server/nudges/feed";
+import { getDoNextFeed, type DoNextItem } from "@/lib/server/nudges/feed";
+import type { AttentionItem } from "@/lib/server/triage/types";
 import { getDroughtPayload } from "@/lib/server/drought";
 import { getFarmSummary as getVeldSummary } from "@/lib/server/veld-score";
 import {
@@ -45,6 +46,17 @@ export interface CollectOptions {
   /** Whose nudges feed to read (recipient for email, current user in-app). */
   userEmail: string;
   farmName: string;
+  /**
+   * Already-loaded sources from the caller (the dashboard card path). When a
+   * field is provided, the briefing REUSES it instead of recomputing — the
+   * dashboard already ran getTriage (mode-scoped teaser) + getDoNextFeed on the
+   * same render, so re-fetching them here would run the hot authenticated page's
+   * heaviest reads twice (F1). Omitted (email path) → both fetched farm-wide.
+   */
+  prefetched?: {
+    attentionItems?: AttentionItem[];
+    doNext?: DoNextItem[];
+  };
 }
 
 export interface CollectResult {
@@ -190,12 +202,20 @@ export async function collectBriefingSources(
   const since = windowStart(opts.now);
   const { thresholds, latitude, longitude } = await resolveThresholds(prisma);
 
+  const pre = opts.prefetched;
   const [notifications, attentionItems, doNext, keyChanges] = await Promise.all([
     readRecentNotifications(prisma, since),
-    getTriage(prisma, farmSlug, thresholds).catch(() => []),
-    opts.userEmail
-      ? getDoNextFeed(farmSlug, opts.userEmail, opts.now).catch(() => [])
-      : Promise.resolve([]),
+    // Reuse the dashboard's already-loaded triage when the caller passed it;
+    // otherwise (email path) compute farm-wide. `!== undefined` so an empty
+    // prefetched list is honoured as "nothing to watch", not a refetch trigger.
+    pre?.attentionItems !== undefined
+      ? Promise.resolve(pre.attentionItems)
+      : getTriage(prisma, farmSlug, thresholds).catch(() => [] as AttentionItem[]),
+    pre?.doNext !== undefined
+      ? Promise.resolve(pre.doNext)
+      : opts.userEmail
+        ? getDoNextFeed(farmSlug, opts.userEmail, opts.now).catch(() => [] as DoNextItem[])
+        : Promise.resolve([] as DoNextItem[]),
     readKeyChanges(prisma, since, latitude, longitude, opts.now),
   ]);
 

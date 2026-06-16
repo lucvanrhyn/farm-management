@@ -133,6 +133,29 @@ describe("collectBriefingSources", () => {
     expect(payload.whatToDo).toEqual([]);
   });
 
+  it("reuses prefetched triage + nudges (dashboard card path) without refetching", async () => {
+    const { payload } = await collectBriefingSources(fakePrisma(), "trio-b", {
+      now: NOW,
+      userEmail: "a@b.com",
+      farmName: "Trio-B",
+      prefetched: {
+        attentionItems: [
+          { animalId: "EWE-9", reasons: [{ id: "dosing-overdue", severity: "amber", weight: 2 }], urgency: 2, severity: "amber", species: "sheep" },
+        ],
+        doNext: [
+          { id: "d9", type: "SHEARING_DUE", severity: "amber", message: "shear", href: "/s", action: { taskType: "shearing", target: {}, prefill: {}, label: "Shear 12 ewes" }, dueDate: null, createdAt: NOW.toISOString() },
+        ],
+      },
+    });
+    // The already-loaded values flow straight into the payload...
+    expect(payload.whatToWatch.join(" ")).toContain("EWE-9");
+    expect(payload.whatToDo.join(" ")).toContain("Shear 12 ewes");
+    // ...and the expensive dashboard sources are NOT recomputed (the hot-path
+    // double-getTriage F1 fix — see DashboardContent.loadThisWeek).
+    expect(mockGetTriage).not.toHaveBeenCalled();
+    expect(mockGetDoNext).not.toHaveBeenCalled();
+  });
+
   it("counts weighings + deaths over the 7-day window into key changes", async () => {
     const { payload } = await collectBriefingSources(
       fakePrisma({

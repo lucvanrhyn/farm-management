@@ -88,14 +88,21 @@ async function loadThisWeek(
   prisma: PrismaClient,
   farmSlug: string,
   userEmail: string,
+  attentionItems: AttentionItem[],
+  doNext: DoNextItem[],
 ): Promise<BriefingPayload | null> {
   try {
     const settings = await getCachedFarmSettings(farmSlug);
+    // Reuse the triage + do-next this render already loaded (teaser + panel) so
+    // the always-on briefing card does NOT re-run getTriage — that would run the
+    // dashboard's heaviest reads twice on the hottest authenticated page (F1).
     return await getWeeklyBriefingForFarm(
       prisma,
       farmSlug,
       userEmail,
       settings.farmName,
+      undefined,
+      { attentionItems, doNext },
     );
   } catch {
     return null;
@@ -198,13 +205,17 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
   // survives a FarmMode flip so the KPI tile stays stable.
   // `loadDoNext` (Proactive Nudges v1) joins the batch — fail-open, so it
   // never blocks the dashboard if the notification feed errors.
-  const [byMode, shared, triageItems, doNext, thisWeek] = await Promise.all([
+  const [byMode, shared, triageItems, doNext] = await Promise.all([
     getCachedDashboardOverviewByMode(farmSlug, mode),
     getCachedDashboardOverviewShared(farmSlug),
     loadTriageTeaser(prisma, farmSlug, mode),
     loadDoNext(prisma, farmSlug, userEmail),
-    loadThisWeek(prisma, farmSlug, userEmail),
   ]);
+  // Weekly Briefing card runs AFTER the batch so it can reuse the triage +
+  // do-next just loaded above instead of recomputing getTriage (F1 hot-path
+  // fix). Its remaining reads (notifications + 7-day key changes) are still
+  // fail-open inside loadThisWeek.
+  const thisWeek = await loadThisWeek(prisma, farmSlug, userEmail, triageItems, doNext.items);
   const {
     totalAnimals,
     reproStats,

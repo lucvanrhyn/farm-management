@@ -33,7 +33,7 @@ import {
 import { ZAR_PER_USD } from "@/lib/einstein/embeddings";
 import { logger } from "@/lib/logger";
 import { narrateBriefing, templatedBriefingNarration } from "./narrator";
-import { collectBriefingSources } from "./collect";
+import { collectBriefingSources, type CollectOptions } from "./collect";
 import type { BriefingPayload } from "./payload";
 
 /** Pessimistic pre-stamp token budget for the one-shot narration call. The
@@ -217,11 +217,13 @@ export async function getWeeklyBriefingForFarm(
   userEmail: string,
   farmName: string,
   now: Date = new Date(),
+  prefetched?: CollectOptions["prefetched"],
 ): Promise<BriefingPayload> {
   const { payload } = await collectBriefingSources(prisma, farmSlug, {
     now,
     userEmail,
     farmName,
+    prefetched,
   });
   return payload;
 }
