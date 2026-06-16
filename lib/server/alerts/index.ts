@@ -19,6 +19,8 @@ import { evaluate as waterService } from "./water-service";
 import { evaluate as taxDeadline } from "./tax-deadline";
 import { evaluate as spiDrought } from "./spi-drought";
 import { evaluate as lsuOverstock } from "./lsu-overstock";
+import { evaluate as needsInspection } from "./needs-inspection";
+import { evaluate as rotationMoveDue } from "./rotation-move-due";
 import { evaluate as legacyDashboard } from "./legacy-dashboard";
 import { logger } from "@/lib/logger";
 
@@ -40,6 +42,9 @@ const GENERATORS: NamedGenerator[] = [
   { name: "TAX_DEADLINE", run: taxDeadline },
   { name: "SPI_DROUGHT", run: spiDrought },
   { name: "LSU_OVERSTOCK", run: lsuOverstock },
+  // Proactive Nudges v1 — join the existing fan-out (ADR-0011).
+  { name: "NEEDS_INSPECTION_DUE", run: needsInspection },
+  { name: "ROTATION_MOVE_DUE", run: rotationMoveDue },
   { name: "LEGACY_DASHBOARD", run: legacyDashboard },
 ];
 
@@ -68,6 +73,6 @@ export async function evaluateAllAlerts(
   return out;
 }
 
-export type { AlertCandidate, AlertCategory, AlertSeverity } from "./types";
+export type { AlertCandidate, AlertCategory, AlertSeverity, RecommendedAction } from "./types";
 export { COLLAPSE_THRESHOLD, getCollapseThreshold } from "./types";
 export { persistNotifications, collapseCandidates } from "./dedup";

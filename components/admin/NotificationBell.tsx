@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Bell, X, CheckCheck } from "lucide-react";
 import { scopeHref } from "@/lib/notifications/scope-href";
+import type { RecommendedAction } from "@/lib/server/alerts";
 
 interface NotificationItem {
   id: string;
@@ -13,6 +14,36 @@ interface NotificationItem {
   href: string;
   isRead: boolean;
   createdAt: string;
+  /**
+   * Proactive Nudges v1 (decision 10b) — the notification's JSON payload. When
+   * it carries a RecommendedAction (`payload.action`), the bell renders a
+   * one-tap action link under the message.
+   */
+  payload?: string | null;
+}
+
+/**
+ * Parse `payload.action` out of a notification's persisted JSON. Returns the
+ * RecommendedAction when present and well-formed, else null. Defensive: a
+ * malformed/legacy payload is inert (never throws).
+ */
+function parseAction(payload: string | null | undefined): RecommendedAction | null {
+  if (!payload) return null;
+  try {
+    const parsed = JSON.parse(payload);
+    const action = parsed && typeof parsed === "object" ? parsed.action : undefined;
+    if (
+      action &&
+      typeof action === "object" &&
+      typeof action.taskType === "string" &&
+      typeof action.label === "string"
+    ) {
+      return action as RecommendedAction;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 const SEVERITY_COLORS = {
@@ -166,6 +197,7 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
             ) : (
               notifications.map((n) => {
                 const colors = SEVERITY_COLORS[n.severity];
+                const action = parseAction(n.payload);
                 return (
                   <div
                     key={n.id}
@@ -179,21 +211,38 @@ export default function NotificationBell({ farmSlug }: { farmSlug: string }) {
                       className="mt-1 w-2 h-2 rounded-full shrink-0"
                       style={{ background: n.isRead ? "var(--ft-border2)" : colors.dot }}
                     />
-                    <Link
-                      href={scopeHref(n.href, farmSlug)}
-                      onClick={() => {
-                        if (!n.isRead) void markRead(n.id);
-                        setOpen(false);
-                      }}
-                      className="flex-1 min-w-0"
-                    >
-                      <p
-                        className="text-xs leading-snug"
-                        style={{ color: n.isRead ? "var(--ft-muted)" : "var(--ft-text)" }}
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        href={scopeHref(n.href, farmSlug)}
+                        onClick={() => {
+                          if (!n.isRead) void markRead(n.id);
+                          setOpen(false);
+                        }}
+                        className="block"
                       >
-                        {n.message}
-                      </p>
-                    </Link>
+                        <p
+                          className="text-xs leading-snug"
+                          style={{ color: n.isRead ? "var(--ft-muted)" : "var(--ft-text)" }}
+                        >
+                          {n.message}
+                        </p>
+                      </Link>
+                      {/* One-tap action (decision 10b) — navigates to the
+                          prefilled form, marking the row read on the way. */}
+                      {action && (
+                        <Link
+                          href={scopeHref(n.href, farmSlug)}
+                          onClick={() => {
+                            if (!n.isRead) void markRead(n.id);
+                            setOpen(false);
+                          }}
+                          className="ft-btn ft-btn-primary mt-1.5"
+                          style={{ fontSize: 11, padding: "4px 9px" }}
+                        >
+                          {action.label}
+                        </Link>
+                      )}
+                    </div>
                     {!n.isRead && (
                       <button
                         type="button"

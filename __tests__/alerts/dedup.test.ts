@@ -165,4 +165,173 @@ describe("collapseCandidates", () => {
     const out = collapseCandidates(group);
     expect(out).toHaveLength(2);
   });
+
+  // Proactive Nudges v1 — when candidates carry an `action` in payload and
+  // collapse into one aggregate, the action must survive (the collapsed
+  // candidate rebuilds payload from scratch, so it has to be re-attached).
+  it("preserves payload.action when ≥3 candidates collapse", () => {
+    const action = {
+      taskType: "weighing",
+      target: { animalId: "A-1" },
+      prefill: { animalId: "A-1" },
+      label: "Weigh A-1",
+    };
+    const group = [1, 2, 3].map((i) =>
+      mkCandidate({
+        dedupKey: `NO_WEIGHING_90D:a-${i}:2026-W16`,
+        payload: { animalId: `A-${i}`, action },
+      }),
+    );
+    const out = collapseCandidates(group);
+    expect(out).toHaveLength(1);
+    expect(out[0].payload.action).toEqual(action);
+  });
+
+  // Proactive Nudges v1 — per-entity action-bearing tenant-collapsed nudges
+  // (NEEDS_INSPECTION_DUE / ROTATION_MOVE_DUE / WATER_SERVICE_OVERDUE_30D /
+  // SHEARING_DUE / CRUTCHING_DUE) MUST NOT collapse at low counts: the whole
+  // point of the feature is one targeted action per camp/mob/water-point. With
+  // the old default threshold of 1, even a single such candidate folded into a
+  // generic "1 ... (grouped)" aggregate (1 < 1 === false), and with 2 distinct
+  // entities all-but-the-first action was discarded.
+  function mkActionCandidate(type: string, campId: string): AlertCandidate {
+    const action = {
+      taskType: "camp_inspection",
+      target: { campId },
+      prefill: { campId },
+      label: `Inspect ${campId}`,
+    };
+    return mkCandidate({
+      type,
+      dedupKey: `${type}:${campId}:2026-W16`,
+      collapseKey: "tenant",
+      payload: { campId, action },
+      message: `Camp "${campId}" not inspected within 48h`,
+      action,
+    });
+  }
+
+  it("passes a SINGLE tenant-collapsed nudge through with its real message + dedupKey + action", () => {
+    const c = mkActionCandidate("NEEDS_INSPECTION_DUE", "c1");
+    const out = collapseCandidates([c]);
+    expect(out).toHaveLength(1);
+    // Not folded into a synthetic aggregate.
+    expect(out[0].payload.collapsed).toBeUndefined();
+    expect(out[0].message).toBe('Camp "c1" not inspected within 48h');
+    expect(out[0].dedupKey).toBe("NEEDS_INSPECTION_DUE:c1:2026-W16");
+    expect((out[0].payload as { campId?: string }).campId).toBe("c1");
+    expect(out[0].action).toEqual(c.action);
+  });
+
+  it("keeps each distinct per-entity action when TWO tenant-collapsed nudges pass through", () => {
+    const c1 = mkActionCandidate("NEEDS_INSPECTION_DUE", "c1");
+    const c2 = mkActionCandidate("NEEDS_INSPECTION_DUE", "c2");
+    const out = collapseCandidates([c1, c2]);
+    expect(out).toHaveLength(2);
+    const byCamp = new Map(
+      out.map((o) => [(o.payload as { campId?: string }).campId, o]),
+    );
+    // Both camps keep their OWN action target — not just the first.
+    expect(byCamp.get("c1")?.action?.target.campId).toBe("c1");
+    expect(byCamp.get("c2")?.action?.target.campId).toBe("c2");
+  });
+
+  it("keeps each distinct ROTATION_MOVE_DUE action when two mobs are overdue", () => {
+    const mk = (sourceCampId: string, targetCampId: string) => {
+      const action = {
+        taskType: "camp_move",
+        target: { campId: targetCampId },
+        prefill: { sourceCampId, targetCampId },
+        label: `Move to ${targetCampId}`,
+      };
+      return mkCandidate({
+        type: "ROTATION_MOVE_DUE",
+        dedupKey: `ROTATION_MOVE_DUE:${sourceCampId}:2026-W16`,
+        collapseKey: "tenant",
+        payload: { sourceCampId, targetCampId, action },
+        action,
+      });
+    };
+    const out = collapseCandidates([mk("c1", "c2"), mk("c3", "c4")]);
+    expect(out).toHaveLength(2);
+    const targets = out
+      .map((o) => o.action?.target.campId)
+      .sort();
+    expect(targets).toEqual(["c2", "c4"]);
+  });
+
+  it("still folds the new nudge types once they reach their noise threshold", () => {
+    // Threshold for NEEDS_INSPECTION_DUE is 3 — three stale camps collapse.
+    const group = ["c1", "c2", "c3"].map((id) =>
+      mkActionCandidate("NEEDS_INSPECTION_DUE", id),
+    );
+    const out = collapseCandidates(group);
+    expect(out).toHaveLength(1);
+    expect(out[0].payload.collapsed).toBe(true);
+    expect(out[0].payload.count).toBe(3);
+    // A representative action still survives the aggregate.
+    expect(out[0].action).toBeTruthy();
+  });
+});
+
+describe("persistNotifications — action round-trip", () => {
+  it("merges payload.action into an existing unread row without dropping it", async () => {
+    const existingRow = {
+      id: "exist-1",
+      type: "NO_WEIGHING_90D",
+      dedupKey: "NO_WEIGHING_90D:a-1:2026-W16",
+      severity: "amber",
+      message: "A-1 not weighed",
+      href: "/admin/animals",
+      isRead: false,
+      // Existing row had NO action; incoming candidate carries one.
+      payload: JSON.stringify({ animalIds: ["A-1"], count: 1 }),
+    };
+    const update = vi.fn().mockImplementation(({ data, where }) =>
+      Promise.resolve({ ...existingRow, ...data, id: where.id }),
+    );
+    const prisma = makePrisma({
+      notification: {
+        findFirst: vi.fn().mockResolvedValue(existingRow),
+        update,
+        create: vi.fn(),
+      },
+    });
+    const action = {
+      taskType: "weighing",
+      target: { animalId: "A-1" },
+      prefill: { animalId: "A-1" },
+      label: "Weigh A-1",
+    };
+    const next = mkCandidate({ payload: { animalId: "A-1", action } });
+    await persistNotifications(prisma, [next]);
+    const persistedPayload = JSON.parse(update.mock.calls[0][0].data.payload);
+    expect(persistedPayload.action).toEqual(action);
+  });
+
+  it("persists payload.action verbatim on a brand-new row", async () => {
+    const create = vi
+      .fn()
+      .mockImplementation(({ data }) => Promise.resolve({ ...data, id: "new-1" }));
+    const prisma = makePrisma({
+      notification: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create,
+        update: vi.fn(),
+      },
+    });
+    const action = {
+      taskType: "camp_move",
+      target: { campId: "camp-7" },
+      prefill: { campId: "camp-7" },
+      label: "Move mob to Camp 7",
+    };
+    const next = mkCandidate({
+      dedupKey: "ROTATION_MOVE_DUE:mob-1:2026-W16",
+      payload: { mobId: "mob-1", action },
+    });
+    await persistNotifications(prisma, [next]);
+    const persistedPayload = JSON.parse(create.mock.calls[0][0].data.payload);
+    expect(persistedPayload.action).toEqual(action);
+  });
 });

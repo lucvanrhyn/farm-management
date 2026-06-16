@@ -16,7 +16,7 @@
 // writing the same key.
 
 import type { PrismaClient, Notification } from "@prisma/client";
-import type { AlertCandidate } from "./types";
+import type { AlertCandidate, RecommendedAction } from "./types";
 import { getCollapseThreshold } from "./types";
 
 /**
@@ -38,6 +38,12 @@ interface PayloadWithIds {
   count?: number;
   animalId?: string;
   campId?: string;
+  [key: string]: unknown;
+}
+
+/** Payload subset that may carry a Proactive Nudges v1 action. */
+interface PayloadWithAction {
+  action?: RecommendedAction;
   [key: string]: unknown;
 }
 
@@ -120,6 +126,12 @@ export function collapseCandidates(candidates: AlertCandidate[]): AlertCandidate
           .filter((v): v is string => typeof v === "string"),
       ),
     );
+    // Proactive Nudges v1 — `collapseCandidates` rebuilds payload from
+    // scratch, so an `action` attached upstream would be lost on collapse.
+    // The collapsed nudge points at the first member's action (its target is
+    // representative; the feed's task-dedup + per-target ranking own the rest),
+    // mirrored into payload.action so it survives the Notification round-trip.
+    const action = first.action ?? (first.payload as PayloadWithAction).action;
     const aggregated: AlertCandidate = {
       type: first.type,
       category: first.category,
@@ -132,10 +144,12 @@ export function collapseCandidates(candidates: AlertCandidate[]): AlertCandidate
         animalIds,
         campIds,
         collapseKey: first.collapseKey,
+        ...(action ? { action } : {}),
       },
       message: `${group.length} ${first.type.toLowerCase().replace(/_/g, " ")} alerts (grouped)`,
       href: first.href,
       expiresAt: first.expiresAt,
+      ...(action ? { action } : {}),
     };
     out.push(aggregated);
   }
