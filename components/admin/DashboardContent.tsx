@@ -406,11 +406,12 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
 
   return (
     <>
-      {/* KPI ribbon — responsive grid of command-layout tiles */}
-      <div
-        className="grid gap-3 mb-4"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
-      >
+      {/* KPI ribbon — command-layout tiles. Responsive column counts (NOT a
+          single auto-fill min-width) so phone shows a COMPACT multi-up tile
+          grid instead of one full-width card per KPI — matching the reference
+          phone "stat" layout's tile row rather than a tall stack. Desktop lands
+          on 6-across like the reference command layout. */}
+      <div className="grid gap-3 mb-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {kpis.map((k) => (
           <KpiTile key={k.label} {...k} />
         ))}
