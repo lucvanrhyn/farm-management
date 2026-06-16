@@ -4,16 +4,20 @@ import DangerZone from "@/components/admin/DangerZone";
 import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
 import DoNextPanel from "@/components/admin/DoNextPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
+import ThisWeekBriefing from "@/components/admin/ThisWeekBriefing";
 import { Card, StatusDot, Label, Icon, Spark, makeSpark } from "@/components/ds";
 import {
   getCachedDashboardOverviewByMode,
   getCachedDashboardOverviewShared,
+  getCachedFarmSettings,
 } from "@/lib/server/cached";
 import { getSession } from "@/lib/auth";
 import { getTriage } from "@/lib/server/triage/get-triage";
 import type { AttentionItem } from "@/lib/server/triage/types";
 import { getDoNextFeed, type DoNextItem } from "@/lib/server/nudges/feed";
 import { isActionAlreadyScheduled } from "@/lib/server/nudges/task-dedup";
+import { getWeeklyBriefingForFarm } from "@/lib/server/briefing/send-weekly-briefing";
+import type { BriefingPayload } from "@/lib/server/briefing/payload";
 import type { FarmTier } from "@/lib/tier";
 import type { SpeciesId } from "@/lib/species/types";
 import type { Status } from "@/components/ds";
@@ -69,6 +73,39 @@ async function loadDoNext(
     return { items, scheduledIds };
   } catch {
     return { items: [], scheduledIds: [] };
+  }
+}
+
+/**
+ * Weekly Farm Briefing v1 (decision 8) — the deterministic "This week" payload
+ * for the in-app card. ALWAYS on (no audience gate, no LLM — the dashboard hot
+ * path uses ONLY the deterministic payload; narration is reserved for the weekly
+ * email). Fail-open: any tenant-DB blip degrades to "no card" instead of taking
+ * the dashboard down (mirrors loadTriageTeaser / loadDoNext). Returns null on
+ * any error so the card simply does not mount.
+ */
+async function loadThisWeek(
+  prisma: PrismaClient,
+  farmSlug: string,
+  userEmail: string,
+  attentionItems: AttentionItem[],
+  doNext: DoNextItem[],
+): Promise<BriefingPayload | null> {
+  try {
+    const settings = await getCachedFarmSettings(farmSlug);
+    // Reuse the triage + do-next this render already loaded (teaser + panel) so
+    // the always-on briefing card does NOT re-run getTriage — that would run the
+    // dashboard's heaviest reads twice on the hottest authenticated page (F1).
+    return await getWeeklyBriefingForFarm(
+      prisma,
+      farmSlug,
+      userEmail,
+      settings.farmName,
+      undefined,
+      { attentionItems, doNext },
+    );
+  } catch {
+    return null;
   }
 }
 
@@ -174,6 +211,11 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
     loadTriageTeaser(prisma, farmSlug, mode),
     loadDoNext(prisma, farmSlug, userEmail),
   ]);
+  // Weekly Briefing card runs AFTER the batch so it can reuse the triage +
+  // do-next just loaded above instead of recomputing getTriage (F1 hot-path
+  // fix). Its remaining reads (notifications + 7-day key changes) are still
+  // fail-open inside loadThisWeek.
+  const thisWeek = await loadThisWeek(prisma, farmSlug, userEmail, triageItems, doNext.items);
   const {
     totalAnimals,
     reproStats,
@@ -515,6 +557,11 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
               </div>
             </div>
           </Card>
+
+          {/* Weekly Farm Briefing v1 (decision 8) — the deterministic "This
+              week" card. ALWAYS on; fail-open via loadThisWeek (null → no
+              card), so a tenant-DB blip never takes the dashboard down. */}
+          {thisWeek && <ThisWeekBriefing payload={thisWeek} farmSlug={farmSlug} />}
 
           {/* Recent activity — restyle of "Recent Health Incidents" timeline */}
           <Card style={{ padding: 0, overflow: "hidden" }}>
