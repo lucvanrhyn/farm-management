@@ -34,7 +34,7 @@ export function PageHeader({
       <div className="min-w-0 flex-1">
         <h1
           className="ft-serif"
-          style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, margin: 0 }}
+          style={{ fontSize: "clamp(28px, 3.4vw, 34px)", fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, margin: 0 }}
         >
           {title}
         </h1>
