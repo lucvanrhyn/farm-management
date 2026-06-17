@@ -222,6 +222,7 @@ CREATE TABLE "Task" (
     "description" TEXT,
     "campId" TEXT,
     "animalId" TEXT,
+    "waterPointId" TEXT,
     "assignedTo" TEXT NOT NULL,
     "createdBy" TEXT NOT NULL,
     "dueDate" TEXT NOT NULL,
@@ -1033,4 +1034,5 @@ export const BASELINE_MIGRATION_NAMES: readonly string[] = [
   '0026_observation_notes.sql',
   '0027_einstein_budget_atomic_counter.sql',
   '0028_einstein_chunk_observed_at.sql',
+  '0029_task_water_point_id.sql',
 ];

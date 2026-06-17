@@ -1,0 +1,33 @@
+-- 0029_task_water_point_id.sql
+--
+-- Proactive Nudges v1 follow-up — make water-point service nudges schedulable.
+--
+-- The WATER_SERVICE_OVERDUE_30D nudge produces a one-tap action whose target is
+-- a `waterPointId` (a GameWaterPoint id). Until now the `Task` model had only
+-- `campId` / `animalId` target columns, so the do-later ("add as task") path
+-- silently dropped the waterPointId: the created task was untargeted, task-dedup
+-- could not tell two boreholes apart, and the UI hid the "Add as task" button
+-- entirely (a water point carries no campId in the alert payload). This adds the
+-- precise target column so a water-point service task is targeted, dedup-able,
+-- and schedulable.
+--
+-- Discipline notes (mirror 0026_observation_notes.sql):
+--   * Additive only — pure `ALTER TABLE … ADD COLUMN` on Task. No DROP/RENAME,
+--     no User/_migrations touch → within promote scope (runs on promote across
+--     every tenant clone; a nullable ADD COLUMN is safe).
+--   * NULLABLE, no backfill, no default. Existing tasks keep
+--     `waterPointId = NULL`; only water_point_service do-later tasks set it.
+--     SQLite/libSQL's `ADD COLUMN NOT NULL` would require a server-side default
+--     we don't want.
+--   * Idempotency comes from the migrator's per-tenant `_migrations` bookkeeping
+--     (lib/migrator.ts) — SQLite/libSQL has no `ADD COLUMN IF NOT EXISTS`;
+--     re-running is prevented by the bookkeeping row, not per-statement guards.
+--   * `verifyMigrationApplied` (#141) parses the ALTER and probes
+--     pragma_table_info; on a silent miss the bookkeeping row rolls back so the
+--     file re-runs next batch.
+--   * `checkPrismaColumnParity` (#137) verifies the live column matches the
+--     Prisma declaration in the same commit (`Task.waterPointId`).
+--   * Identifier quoting per feedback-quote-sql-keywords-in-migrations.md —
+--     `Task` is a SQL keyword in some dialects; double-quote table + column.
+
+ALTER TABLE "Task" ADD COLUMN "waterPointId" TEXT;

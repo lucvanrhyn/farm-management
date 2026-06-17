@@ -27,8 +27,8 @@ function toIsoDate(d: Date): string {
 
 /**
  * Build the CreateTaskInput for a do-later action. The task is `pending`, due
- * today, assigned to the actor, scoped to the action's target (campId or
- * animalId), and tagged `recurrenceSource: nudge:<nudgeType>`.
+ * today, assigned to the actor, scoped to the action's target (campId, animalId,
+ * or waterPointId), and tagged `recurrenceSource: nudge:<nudgeType>`.
  */
 export function buildNudgeTaskInput(
   action: RecommendedAction,
@@ -36,7 +36,7 @@ export function buildNudgeTaskInput(
   ctx: DoLaterContext,
 ): CreateTaskInput {
   const now = ctx.now ?? new Date();
-  const { campId, animalId } = action.target;
+  const { campId, animalId, waterPointId } = action.target;
 
   return {
     title: action.label,
@@ -47,6 +47,7 @@ export function buildNudgeTaskInput(
     taskType: action.taskType,
     ...(campId ? { campId } : {}),
     ...(animalId ? { animalId } : {}),
+    ...(waterPointId ? { waterPointId } : {}),
     recurrenceSource: `nudge:${nudgeType}`,
   };
 }

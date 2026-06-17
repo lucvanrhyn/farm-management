@@ -27,9 +27,9 @@ export async function isActionAlreadyScheduled(
   prisma: PrismaClient,
   action: RecommendedAction,
 ): Promise<boolean> {
-  const { campId, animalId } = action.target;
+  const { campId, animalId, waterPointId } = action.target;
   // IT3 / farm-wide actions have no per-entity target id — nothing to dedup on.
-  if (!campId && !animalId) return false;
+  if (!campId && !animalId && !waterPointId) return false;
 
   try {
     const tasks = await listTasksUnbounded(prisma, {
@@ -37,9 +37,13 @@ export async function isActionAlreadyScheduled(
       taskType: action.taskType,
       ...(campId ? { campId } : {}),
     });
-    // `listTasksUnbounded` filters campId in the where clause but not animalId
-    // (no animalId filter exists on ListTasksFilters), so for animal-targeted
-    // actions we match in memory on the returned pending+taskType set.
+    // `listTasksUnbounded` filters campId in the where clause but not animalId or
+    // waterPointId (no such filters on ListTasksFilters), so for those targets we
+    // match in memory on the returned pending+taskType set. Matching waterPointId
+    // exactly is what keeps two boreholes in one camp from colliding.
+    if (waterPointId) {
+      return tasks.some((t) => t.waterPointId === waterPointId);
+    }
     if (animalId) {
       return tasks.some((t) => t.animalId === animalId);
     }

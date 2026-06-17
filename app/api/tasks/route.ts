@@ -139,6 +139,7 @@ interface CreateTaskBody {
   priority?: string;
   campId?: string | null;
   animalId?: string | null;
+  waterPointId?: string | null;
   taskType?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -191,6 +192,7 @@ export const POST = adminWrite<CreateTaskBody>({
       priority: body.priority,
       campId: body.campId ?? null,
       animalId: body.animalId ?? null,
+      waterPointId: body.waterPointId ?? null,
       taskType: body.taskType ?? null,
       lat: body.lat ?? null,
       lng: body.lng ?? null,

@@ -62,4 +62,20 @@ describe("buildNudgeTaskInput", () => {
     expect(input.campId).toBe("c2");
     expect(input.taskType).toBe("camp_move");
   });
+
+  it("maps a water_point_service action to waterPointId (target has no camp)", () => {
+    const input = buildNudgeTaskInput(
+      action({
+        taskType: "water_point_service",
+        target: { waterPointId: "wp-1" },
+        label: "Service Borehole 3",
+      }),
+      "WATER_SERVICE_OVERDUE_30D",
+      { createdBy: ACTOR, now: new Date("2026-06-16T08:00:00Z") },
+    );
+    expect(input.waterPointId).toBe("wp-1");
+    expect(input.taskType).toBe("water_point_service");
+    expect(input.campId).toBeUndefined();
+    expect(input.animalId).toBeUndefined();
+  });
 });

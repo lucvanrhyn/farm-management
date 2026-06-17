@@ -58,6 +58,33 @@ describe("isActionAlreadyScheduled", () => {
     );
   });
 
+  it("returns true when a pending task matches taskType + waterPointId", async () => {
+    listTasksUnbounded.mockResolvedValue([
+      { id: "t3", status: "pending", taskType: "water_point_service", waterPointId: "wp-1" },
+    ]);
+    const hit = await isActionAlreadyScheduled(
+      prisma,
+      action({ taskType: "water_point_service", target: { waterPointId: "wp-1" } }),
+    );
+    expect(hit).toBe(true);
+    expect(listTasksUnbounded).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ status: "pending", taskType: "water_point_service" }),
+    );
+  });
+
+  it("does NOT mark a different water point scheduled (no cross-borehole collision)", async () => {
+    // A pending service task exists for wp-1; the nudge for wp-2 must stay actionable.
+    listTasksUnbounded.mockResolvedValue([
+      { id: "t3", status: "pending", taskType: "water_point_service", waterPointId: "wp-1" },
+    ]);
+    const hit = await isActionAlreadyScheduled(
+      prisma,
+      action({ taskType: "water_point_service", target: { waterPointId: "wp-2" } }),
+    );
+    expect(hit).toBe(false);
+  });
+
   it("returns false when no pending task matches", async () => {
     listTasksUnbounded.mockResolvedValue([]);
     const hit = await isActionAlreadyScheduled(prisma, action());

@@ -117,6 +117,47 @@ describe("DoNextPanel — add as task / do-later (decision 7)", () => {
     expect(body.recurrenceSource).toBe("nudge:NO_WEIGHING_90D");
   });
 
+  it("shows 'add as task' for a water-point nudge (waterPointId target, no camp/animal)", () => {
+    const water = nudge({
+      id: "wp-n1",
+      type: "WATER_SERVICE_OVERDUE_30D",
+      message: "Borehole 3 last serviced 45 days ago",
+      href: `/${FARM}/admin/game/infrastructure`,
+      action: {
+        taskType: "water_point_service",
+        target: { waterPointId: "wp-1" },
+        prefill: { waterPointId: "wp-1", name: "Borehole 3" },
+        label: "Service Borehole 3",
+      },
+    });
+    render(<DoNextPanel items={[water]} farmSlug={FARM} />);
+    expect(screen.getByRole("button", { name: /add as task/i })).toBeTruthy();
+  });
+
+  it("POSTs a water-point do-later task carrying the waterPointId", async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const water = nudge({
+      id: "wp-n2",
+      type: "WATER_SERVICE_OVERDUE_30D",
+      message: "Borehole 3 last serviced 45 days ago",
+      href: `/${FARM}/admin/game/infrastructure`,
+      action: {
+        taskType: "water_point_service",
+        target: { waterPointId: "wp-1" },
+        prefill: { waterPointId: "wp-1", name: "Borehole 3" },
+        label: "Service Borehole 3",
+      },
+    });
+    render(<DoNextPanel items={[water]} farmSlug={FARM} createdBy="me@farm.test" />);
+    fireEvent.click(screen.getByRole("button", { name: /add as task/i }));
+
+    const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/tasks")!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.taskType).toBe("water_point_service");
+    expect(body.waterPointId).toBe("wp-1");
+    expect(body.recurrenceSource).toBe("nudge:WATER_SERVICE_OVERDUE_30D");
+  });
+
   it("shows 'already scheduled' instead of the add-task button when flagged", () => {
     render(
       <DoNextPanel
