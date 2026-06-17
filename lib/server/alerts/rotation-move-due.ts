@@ -4,10 +4,11 @@
 // current camp is `overstayed` or `overdue_rest` while still occupied) AND a
 // ready destination camp exists. A rested camp can take only ONE mob, so each
 // overdue mob is assigned a DISTINCT destination drawn from the engine's
-// `nextToGraze` ranking (best-rested first); the most urgent mob picks first.
-// attachActions hangs a one-tap `camp_move` action off the candidate, pre-filling
-// source + destination so the farmer confirms a move the engine already computed
-// (targets are NEVER from the LLM).
+// `nextToGraze` ranking (best-rested first); when ready camps are scarce the
+// most-overdue mob (highest daysGrazed) picks first. attachActions hangs a
+// one-tap `camp_move` action off the candidate, pre-filling source + destination
+// so the farmer confirms a move the engine already computed (targets are NEVER
+// from the LLM).
 //
 // This joins the EXISTING alerts/ pipeline (ADR-0011: no third generator
 // family). It reuses the canonical rotation read model `getRotationStatusByCamp`
@@ -48,15 +49,25 @@ export async function evaluate(
   const expiresAt = defaultExpiry(now);
 
   // Destinations are a CONSUMABLE pool drawn best-rested-first (the engine's
-  // ranking) — a rested camp can receive only one mob. The most urgent mob
-  // (overstayed before overdue_rest) picks first; once the pool is empty the
-  // remaining overdue mobs emit nothing. This is what stops every overdue mob
-  // from being routed to the single best camp (double-booking).
-  const moveDueRank = (status: string): number =>
-    status === "overstayed" ? 0 : 1;
+  // ranking) — a rested camp can receive only one mob. This is what stops every
+  // overdue mob from being routed to the single best camp (double-booking).
+  //
+  // When ready camps are scarcer than overdue mobs, the MOST overdue mob picks
+  // first: sort by daysGrazed desc (longest past its grazing window), with
+  // campId as a stable final tiebreak so the allocation is deterministic across
+  // cron runs (a camp must not flip between "move now" and "nothing" on DB row
+  // order — there is no orderBy upstream). MOVE_DUE_STATUSES keeps "overdue_rest"
+  // defensively, but classifyCampStatus only marks an OCCUPIED camp "overstayed",
+  // so every source that survives the currentMobs filter is overstayed in
+  // practice — hence we rank by overdue-ness, not status severity.
   const overdue = rotation.camps
     .filter((c) => MOVE_DUE_STATUSES.has(c.status) && c.currentMobs[0])
-    .sort((a, b) => moveDueRank(a.status) - moveDueRank(b.status));
+    .sort((a, b) => {
+      const da = a.daysGrazed ?? -1;
+      const db = b.daysGrazed ?? -1;
+      if (db !== da) return db - da; // most overdue first
+      return a.campId < b.campId ? -1 : a.campId > b.campId ? 1 : 0; // stable
+    });
 
   const available = [...rotation.nextToGraze];
   const candidates: AlertCandidate[] = [];

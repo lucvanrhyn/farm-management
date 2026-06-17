@@ -146,6 +146,26 @@ describe("getProfitPerCamp — read wiring", () => {
     expect(c1.profitPerLsu).toBeCloseTo(2000);
   });
 
+  it("attributes a deceased/culled animal's EXPENSES (final vet/meds) to its last camp's cost, symmetric with income", async () => {
+    // The calculator attributes income AND cost through the same last-camp map,
+    // so broadening the roster also pulls a disposed animal's animal-tagged
+    // expenses out of 'unallocated' onto its last camp — pinned here so the
+    // (intended, ADR-0012-symmetric) behavior can't silently regress.
+    const { prisma } = fakePrisma({
+      transactions: [
+        { type: "expense", amount: 1200, animalId: "DEC1", animalIds: null, campId: null },
+      ],
+      camps: [{ campId: "camp-1", campName: "North", sizeHectares: 10 }],
+      animals: [
+        { animalId: "DEC1", category: "Cow", currentCamp: "camp-1", status: "Deceased" },
+      ],
+    });
+    const { rows, unallocated } = await getProfitPerCamp(prisma, "trio-b");
+    const c1 = rows.find((r) => r.campId === "camp-1")!;
+    expect(c1.cost).toBe(1200);
+    expect(unallocated.cost).toBe(0);
+  });
+
   it("reports overhead with no animalId/campId as a separate unallocated line", async () => {
     const { prisma } = fakePrisma({
       transactions: [

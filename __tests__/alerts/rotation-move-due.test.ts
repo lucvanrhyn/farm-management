@@ -113,4 +113,44 @@ describe("rotation-move-due generator", () => {
     const out = await evaluate(makePrisma({}), makeSettings({}), "trio");
     expect(out).toEqual([]);
   });
+
+  // ── Distinct destination per overdue mob (no double-booking) ────────────────
+  it("routes two overstayed mobs to two DIFFERENT rested camps", async () => {
+    getRotationStatusByCamp.mockResolvedValue(
+      payload({
+        camps: [
+          { campId: "c1", campName: "North", status: "overstayed", daysGrazed: 15, currentMobs: [{ mobId: "m1", mobName: "Steers", animalCount: 40 }] },
+          { campId: "c2", campName: "East", status: "overstayed", daysGrazed: 12, currentMobs: [{ mobId: "m2", mobName: "Cows", animalCount: 30 }] },
+          { campId: "r1", campName: "South", status: "resting_ready", currentMobs: [] },
+          { campId: "r2", campName: "West", status: "resting_ready", currentMobs: [] },
+        ],
+        nextToGraze: [
+          { campId: "r1", daysRested: 65 },
+          { campId: "r2", daysRested: 50 },
+        ],
+      }),
+    );
+    const out = await evaluate(makePrisma({}), makeSettings({}), "trio");
+    const targets = out.map((c) => c.payload.targetCampId);
+    expect(out).toHaveLength(2);
+    expect(new Set(targets).size).toBe(2); // distinct — a rested camp takes one mob
+    expect([...targets].sort()).toEqual(["r1", "r2"]);
+  });
+
+  it("gives the most-overdue mob (highest daysGrazed) the only ready camp when destinations are scarce", async () => {
+    getRotationStatusByCamp.mockResolvedValue(
+      payload({
+        camps: [
+          { campId: "c1", campName: "North", status: "overstayed", daysGrazed: 10, currentMobs: [{ mobId: "m1", mobName: "Steers", animalCount: 40 }] },
+          { campId: "c2", campName: "East", status: "overstayed", daysGrazed: 25, currentMobs: [{ mobId: "m2", mobName: "Cows", animalCount: 30 }] },
+          { campId: "r1", campName: "South", status: "resting_ready", currentMobs: [] },
+        ],
+        nextToGraze: [{ campId: "r1", daysRested: 65 }],
+      }),
+    );
+    const out = await evaluate(makePrisma({}), makeSettings({}), "trio");
+    expect(out).toHaveLength(1);
+    expect(out[0].payload.sourceCampId).toBe("c2"); // daysGrazed 25 > 10 → most overdue wins the scarce camp
+    expect(out[0].payload.targetCampId).toBe("r1");
+  });
 });
