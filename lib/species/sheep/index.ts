@@ -136,7 +136,7 @@ async function getAlerts(
   const now = new Date();
   const cutoff18m = daysAgo(548);
 
-  const [joiningObs, lambingObs, dosingObs, shearingObs, ewesCount] =
+  const [joiningObs, lambingObs, dosingObs, shearingObs, ewesCount, activeAnimals] =
     await Promise.all([
       scoped(prisma, SPECIES).observation.findMany({
         where: { type: "joining", observedAt: { gte: cutoff18m } },
@@ -162,10 +162,26 @@ async function getAlerts(
           category: { in: ["Ewe", "Maiden Ewe"] },
         },
       }),
+      // Active roster — every animal-derived alert below (lambing imminent,
+      // lambing overdue, dosing overdue) intersects this set so a deceased/
+      // sold ewe's retained joining/dosing observation can't inflate a count.
+      // scoped() observation reads carry NO status filter; scoped().animal
+      // injects status:Active. Matches Herd Triage (get-triage.ts) — ADR-0010.
+      scoped(prisma, SPECIES).animal.findMany({
+        where: { status: "Active" },
+        select: { animalId: true },
+        take: 10_000,
+      }),
     ]);
 
-  // 1. Lambing imminent (< 14 days away)
+  // The active population. Observations persist after an animal dies / is sold,
+  // so every id harvested from observation history (joining, dosing) is
+  // intersected with this set before it counts toward an alert.
+  const activeIds = new Set(activeAnimals.map((a) => a.animalId));
+
+  // 1. Lambing imminent (< 14 days away) — active ewes only.
   const imminentLambings = joiningObs.filter((obs) => {
+    if (!obs.animalId || !activeIds.has(obs.animalId)) return false;
     const expectedMs =
       obs.observedAt.getTime() + GESTATION_DAYS * MS_PER_DAY;
     const daysAway = (expectedMs - now.getTime()) / MS_PER_DAY;
@@ -192,7 +208,7 @@ async function getAlerts(
   }
 
   const overdueJoinings = joiningObs.filter((obs) => {
-    if (!obs.animalId) return false;
+    if (!obs.animalId || !activeIds.has(obs.animalId)) return false;
     const daysSinceJoining =
       (now.getTime() - obs.observedAt.getTime()) / MS_PER_DAY;
     if (daysSinceJoining <= 160) return false;
@@ -217,7 +233,9 @@ async function getAlerts(
 
   // 3. Dosing overdue (no dosing in last 90 days AND active ewes exist)
   if (ewesCount > 0) {
-    const overdueAnimals = getDosingOverdue(dosingObs, 90);
+    const overdueAnimals = getDosingOverdue(dosingObs, 90).filter((id) =>
+      activeIds.has(id),
+    );
     if (overdueAnimals.length > 0) {
       alerts.push({
         id: "sheep-dosing-due",

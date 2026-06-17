@@ -106,15 +106,34 @@ export const cattleModule: SpeciesModule = {
     // ── Poor doers (weighing) ────────────────────────────────────────────────
     // Detection is shared with Herd Triage via the pure `detectPoorDoers`
     // helper (lib/species/cattle/poor-doer.ts). The alert COUNTs the
-    // per-animal ids; Triage consumes the ids themselves. Output of THIS
-    // alert is byte-identical to the previous inline block.
-    const weighingObs = await scoped(prisma, "cattle").observation.findMany({
-      where: { type: "weighing", animalId: { not: null } },
-      select: { animalId: true, observedAt: true, details: true },
-      orderBy: { observedAt: "asc" },
-    });
+    // per-animal ids; Triage consumes the ids themselves.
+    //
+    // We read the weighing history AND the active roster together. scoped()
+    // observation reads carry NO status filter (observations persist after an
+    // animal dies / is sold — see species-scoped-prisma.ts), so the history
+    // includes deceased/sold animals; scoped().animal injects status:Active.
+    // Intersecting the two keeps a dead animal's stale declining ADG out of
+    // the count, holding this alert in lock-step with Herd Triage, which
+    // intersects the same way (lib/server/triage/get-triage.ts). This is the
+    // dashboard half of the ADR-0010 same-population invariant.
+    const [weighingObs, activeAnimals] = await Promise.all([
+      scoped(prisma, "cattle").observation.findMany({
+        where: { type: "weighing", animalId: { not: null } },
+        select: { animalId: true, observedAt: true, details: true },
+        orderBy: { observedAt: "asc" },
+      }),
+      scoped(prisma, "cattle").animal.findMany({
+        where: { status: "Active" },
+        select: { animalId: true },
+        take: 10_000,
+      }),
+    ]);
 
-    const poorDoerCount = detectPoorDoers(weighingObs, adgPoorDoerThreshold).length;
+    const activeIds = new Set(activeAnimals.map((a) => a.animalId));
+    const poorDoerCount = detectPoorDoers(
+      weighingObs,
+      adgPoorDoerThreshold,
+    ).filter((id) => activeIds.has(id)).length;
 
     // ── Build alert list ─────────────────────────────────────────────────────
     const alerts: SpeciesAlert[] = [];
