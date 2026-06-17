@@ -44,6 +44,7 @@ export interface CreateTaskInput {
   priority?: string;
   campId?: string | null;
   animalId?: string | null;
+  waterPointId?: string | null;
   taskType?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -121,6 +122,10 @@ export async function createTask(
       campId: typeof input.campId === "string" && input.campId ? input.campId : null,
       animalId:
         typeof input.animalId === "string" && input.animalId ? input.animalId : null,
+      waterPointId:
+        typeof input.waterPointId === "string" && input.waterPointId
+          ? input.waterPointId
+          : null,
       // Phase K new fields
       taskType: resolvedTaskType,
       lat: typeof input.lat === "number" ? input.lat : null,

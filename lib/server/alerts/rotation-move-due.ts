@@ -2,10 +2,13 @@
 //
 // Proactive Nudges v1 (#nudges) — fires when a mob is overdue to move (its
 // current camp is `overstayed` or `overdue_rest` while still occupied) AND a
-// ready destination camp exists. The destination = the rotation engine's top
-// recommendation, `nextToGraze[0]`. attachActions hangs a one-tap `camp_move`
-// action off the candidate, pre-filling source + destination so the farmer
-// confirms a move the engine already computed (targets are NEVER from the LLM).
+// ready destination camp exists. A rested camp can take only ONE mob, so each
+// overdue mob is assigned a DISTINCT destination drawn from the engine's
+// `nextToGraze` ranking (best-rested first); when ready camps are scarce the
+// most-overdue mob (highest daysGrazed) picks first. attachActions hangs a
+// one-tap `camp_move` action off the candidate, pre-filling source + destination
+// so the farmer confirms a move the engine already computed (targets are NEVER
+// from the LLM).
 //
 // This joins the EXISTING alerts/ pipeline (ADR-0011: no third generator
 // family). It reuses the canonical rotation read model `getRotationStatusByCamp`
@@ -37,26 +40,48 @@ export async function evaluate(
     return [];
   }
 
-  // The engine's top destination recommendation. No ready camp ⇒ nothing to
-  // recommend, so we emit nothing rather than a move-to-nowhere nudge.
-  const target = rotation.nextToGraze[0];
-  if (!target) return [];
-
-  const targetCamp = rotation.camps.find((c) => c.campId === target.campId);
-  const targetName = targetCamp?.campName ?? target.campId;
+  // No rested camp ⇒ nowhere to send anyone, so emit nothing rather than a
+  // move-to-an-occupied-camp nudge.
+  if (rotation.nextToGraze.length === 0) return [];
 
   const now = new Date();
   const week = toIsoWeek(now);
   const expiresAt = defaultExpiry(now);
+
+  // Destinations are a CONSUMABLE pool drawn best-rested-first (the engine's
+  // ranking) — a rested camp can receive only one mob. This is what stops every
+  // overdue mob from being routed to the single best camp (double-booking).
+  //
+  // When ready camps are scarcer than overdue mobs, the MOST overdue mob picks
+  // first: sort by daysGrazed desc (longest past its grazing window), with
+  // campId as a stable final tiebreak so the allocation is deterministic across
+  // cron runs (a camp must not flip between "move now" and "nothing" on DB row
+  // order — there is no orderBy upstream). MOVE_DUE_STATUSES keeps "overdue_rest"
+  // defensively, but classifyCampStatus only marks an OCCUPIED camp "overstayed",
+  // so every source that survives the currentMobs filter is overstayed in
+  // practice — hence we rank by overdue-ness, not status severity.
+  const overdue = rotation.camps
+    .filter((c) => MOVE_DUE_STATUSES.has(c.status) && c.currentMobs[0])
+    .sort((a, b) => {
+      const da = a.daysGrazed ?? -1;
+      const db = b.daysGrazed ?? -1;
+      if (db !== da) return db - da; // most overdue first
+      return a.campId < b.campId ? -1 : a.campId > b.campId ? 1 : 0; // stable
+    });
+
+  const available = [...rotation.nextToGraze];
   const candidates: AlertCandidate[] = [];
 
-  for (const camp of rotation.camps) {
-    if (!MOVE_DUE_STATUSES.has(camp.status)) continue;
-    // Only an OCCUPIED camp can have a mob that's overdue to move.
+  for (const camp of overdue) {
     const mob = camp.currentMobs[0];
-    if (!mob) continue;
-    // Don't recommend moving a mob into the camp it's already in.
-    if (camp.campId === target.campId) continue;
+    if (!mob) continue; // the filter guarantees this; narrows the type for TS
+    // Claim the best still-available destination that isn't this camp itself
+    // (never recommend moving a mob into the camp it's already in).
+    const destIdx = available.findIndex((d) => d.campId !== camp.campId);
+    if (destIdx === -1) continue; // no distinct rested camp left for this mob
+    const [dest] = available.splice(destIdx, 1);
+    const targetCamp = rotation.camps.find((c) => c.campId === dest.campId);
+    const targetName = targetCamp?.campName ?? dest.campId;
 
     candidates.push({
       type: "ROTATION_MOVE_DUE",
@@ -67,7 +92,7 @@ export async function evaluate(
       payload: {
         sourceCampId: camp.campId,
         sourceCampName: camp.campName,
-        targetCampId: target.campId,
+        targetCampId: dest.campId,
         targetCampName: targetName,
         mobId: mob.mobId ?? null,
         mobName: mob.mobName ?? null,

@@ -265,6 +265,7 @@ describe("createTask(prisma, input)", () => {
     const data = create.mock.calls[0][0].data;
     expect(data.campId).toBeNull();
     expect(data.animalId).toBeNull();
+    expect(data.waterPointId).toBeNull();
     expect(data.lat).toBeNull();
     expect(data.lng).toBeNull();
     expect(data.recurrenceRule).toBeNull();
@@ -272,5 +273,25 @@ describe("createTask(prisma, input)", () => {
     expect(data.templateId).toBeNull();
     expect(data.completedObservationId).toBeNull();
     expect(data.recurrenceSource).toBeNull();
+  });
+
+  it("persists waterPointId for a water-point service task", async () => {
+    await createTask(prisma, {
+      title: "Service Borehole 3",
+      dueDate: "2026-06-16",
+      assignedTo: "worker@farm.com",
+      createdBy: "admin@farm.com",
+      taskType: "water_point_service",
+      waterPointId: "wp-1",
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          taskType: "water_point_service",
+          waterPointId: "wp-1",
+        }),
+      }),
+    );
   });
 });

@@ -6,9 +6,11 @@
 //   1. income + expense transactions over the date STRING range (non-species
 //      Transaction model -> raw prisma.transaction is allowed)
 //   2. camps (name + size) via the farm-wide cross-species door
-//   3. animals where status in {Active, Sold} via the farm-wide door — a SOLD
-//      animal retains its currentCamp (its last/finishing camp) and carries the
-//      sale income; ACTIVE animals alone drive each camp's LSU denominator.
+//   3. animals where status in {Active, Sold, Deceased, Culled} via the farm-wide
+//      door — a Sold/Deceased/Culled animal retains its currentCamp (its
+//      last/finishing camp) and carries its income (sale, slaughter/mortality,
+//      cull-for-meat) AND its animal-tagged costs, both attributed to that camp;
+//      ACTIVE animals alone drive each camp's LSU denominator.
 //
 // This is a REPORTING view, not a second ledger — getFinancialKPIs remains the
 // authoritative farm total (ADR-0012).
@@ -61,12 +63,17 @@ export async function getProfitPerCamp(
     crossSpecies(prisma, "farm-wide-audit").camp.findMany({
       select: { campId: true, campName: true, sizeHectares: true },
     }),
-    // Active animals drive the LSU denominator; Sold animals carry sale income
-    // and their last camp. The literal status:{in:[...]} predicate satisfies the
-    // deceased-flag audit. Full roster needed for accurate attribution.
-    // audit-allow-findmany: full Active+Sold roster required for last-camp attribution + LSU denominator.
+    // Active animals drive the LSU denominator; Sold/Deceased/Culled animals
+    // carry income (sale, slaughter/mortality, cull-for-meat) AND animal-tagged
+    // costs (e.g. a final vet/medication bill), both attributed to their last
+    // camp — so they must be in the roster or those amounts leak to "unallocated"
+    // (the calculator attributes income and cost through the same last-camp map;
+    // symmetric per ADR-0012). The literal status:{in:[...]} predicate satisfies
+    // the deceased-flag audit; the LSU denominator stays Active-only via the
+    // status guard below.
+    // audit-allow-findmany: full disposed+active roster required for last-camp income attribution.
     crossSpecies(prisma, "farm-wide-audit").animal.findMany({
-      where: { status: { in: ["Active", "Sold"] } },
+      where: { status: { in: ["Active", "Sold", "Deceased", "Culled"] } },
       select: { animalId: true, category: true, currentCamp: true, status: true },
     }),
   ]);

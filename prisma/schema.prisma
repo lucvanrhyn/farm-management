@@ -310,12 +310,13 @@ model Mob {
 }
 
 model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  campId      String?
-  animalId    String?
-  assignedTo  String
+  id           String  @id @default(cuid())
+  title        String
+  description  String?
+  campId       String?
+  animalId     String?
+  waterPointId String? // GameWaterPoint.id target for water_point_service tasks
+  assignedTo   String
   createdBy   String
   dueDate     String
   status      String   @default("pending")

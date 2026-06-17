@@ -64,11 +64,13 @@ function NudgeCard({
   const accent = item.severity === "red" ? "var(--ft-poor)" : "var(--ft-fair)";
   const href = scopeHref(item.href, farmSlug);
   const gated = item.action.upgradeGated === true;
-  // A do-later task needs a per-entity target (camp/animal). Upgrade-gated and
-  // farm-wide (IT3) actions have nothing to schedule.
+  // A do-later task needs a per-entity target (camp / animal / water point).
+  // Upgrade-gated and farm-wide (IT3) actions have nothing to schedule.
   const canSchedule =
     !gated &&
-    (!!item.action.target.campId || !!item.action.target.animalId);
+    (!!item.action.target.campId ||
+      !!item.action.target.animalId ||
+      !!item.action.target.waterPointId);
 
   async function addAsTask() {
     if (addState !== "idle") return;
