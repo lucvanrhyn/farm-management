@@ -20,7 +20,17 @@ interface FakeRows {
 function fakePrisma(rows: FakeRows) {
   const txFindMany = vi.fn().mockResolvedValue(rows.transactions ?? []);
   const campFindMany = vi.fn().mockResolvedValue(rows.camps ?? []);
-  const animalFindMany = vi.fn().mockResolvedValue(rows.animals ?? []);
+  // Status-aware: honour the query's `where.status.in` filter so a too-narrow
+  // predicate genuinely drops animals from the result (mirrors the real DB).
+  // Without this the fake would return excluded animals and hide the bug.
+  const animalFindMany = vi.fn().mockImplementation((args?: { where?: { status?: { in?: string[] } } }) => {
+    const statusIn = args?.where?.status?.in;
+    const all = (rows.animals ?? []) as Array<{ status?: string }>;
+    const filtered = Array.isArray(statusIn)
+      ? all.filter((a) => typeof a.status === "string" && statusIn.includes(a.status))
+      : all;
+    return Promise.resolve(filtered);
+  });
   const prisma = {
     transaction: { findMany: txFindMany },
     camp: { findMany: campFindMany },
@@ -40,12 +50,14 @@ describe("getProfitPerCamp — read wiring", () => {
     expect(where.type).toBeUndefined();
   });
 
-  it("queries animals with a literal status:{in:['Active','Sold']} predicate", async () => {
+  it("queries animals with a literal status:{in:[...]} predicate that includes deceased/culled for income attribution", async () => {
     const { prisma, animalFindMany } = fakePrisma({});
     await getProfitPerCamp(prisma, "trio-b");
 
     const where = animalFindMany.mock.calls.at(-1)?.[0]?.where as Record<string, unknown>;
-    expect(where.status).toEqual({ in: ["Active", "Sold"] });
+    // All four real statuses: Active drives LSU; Sold/Deceased/Culled carry
+    // income (sale, slaughter/mortality, cull-for-meat) and their last camp.
+    expect(where.status).toEqual({ in: ["Active", "Sold", "Deceased", "Culled"] });
   });
 
   it("attributes a single-animal sale to the sold animal's last camp", async () => {
@@ -79,6 +91,57 @@ describe("getProfitPerCamp — read wiring", () => {
     const { rows } = await getProfitPerCamp(prisma, "trio-b");
     const c1 = rows.find((r) => r.campId === "camp-1")!;
     // Only 1 active Cow -> LSU 1.0 -> profitPerLsu = 2000 / 1.0 = 2000
+    expect(c1.lsu).toBeCloseTo(1.0);
+    expect(c1.profitPerLsu).toBeCloseTo(2000);
+  });
+
+  it("attributes a DECEASED animal's income (slaughter/mortality) to its last camp, not unallocated", async () => {
+    const { prisma } = fakePrisma({
+      transactions: [
+        { type: "income", amount: 8000, animalId: "DEC1", animalIds: null, campId: null },
+      ],
+      camps: [{ campId: "camp-1", campName: "North", sizeHectares: 10 }],
+      animals: [
+        { animalId: "DEC1", category: "Cow", currentCamp: "camp-1", status: "Deceased" },
+      ],
+    });
+    const { rows, unallocated } = await getProfitPerCamp(prisma, "trio-b");
+    const c1 = rows.find((r) => r.campId === "camp-1")!;
+    expect(c1.income).toBe(8000);
+    expect(unallocated.income).toBe(0);
+  });
+
+  it("attributes a CULLED animal's income (cull-for-meat) to its last camp, not unallocated", async () => {
+    const { prisma } = fakePrisma({
+      transactions: [
+        { type: "income", amount: 3500, animalId: "CUL1", animalIds: null, campId: null },
+      ],
+      camps: [{ campId: "camp-1", campName: "North", sizeHectares: 10 }],
+      animals: [
+        { animalId: "CUL1", category: "Cow", currentCamp: "camp-1", status: "Culled" },
+      ],
+    });
+    const { rows, unallocated } = await getProfitPerCamp(prisma, "trio-b");
+    const c1 = rows.find((r) => r.campId === "camp-1")!;
+    expect(c1.income).toBe(3500);
+    expect(unallocated.income).toBe(0);
+  });
+
+  it("keeps the LSU denominator ACTIVE-only — deceased/culled animals attribute income but never inflate LSU", async () => {
+    const { prisma } = fakePrisma({
+      transactions: [
+        { type: "income", amount: 2000, animalId: "DEC1", animalIds: null, campId: null },
+      ],
+      camps: [{ campId: "camp-1", campName: "North", sizeHectares: 10 }],
+      animals: [
+        { animalId: "ACT1", category: "Cow", currentCamp: "camp-1", status: "Active" },
+        { animalId: "DEC1", category: "Cow", currentCamp: "camp-1", status: "Deceased" },
+      ],
+    });
+    const { rows } = await getProfitPerCamp(prisma, "trio-b");
+    const c1 = rows.find((r) => r.campId === "camp-1")!;
+    // Income from the deceased cow attributes here, but only the 1 active cow
+    // counts toward LSU -> profitPerLsu = 2000 / 1.0, NOT 2000 / 2.0.
     expect(c1.lsu).toBeCloseTo(1.0);
     expect(c1.profitPerLsu).toBeCloseTo(2000);
   });
