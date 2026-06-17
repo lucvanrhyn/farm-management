@@ -62,9 +62,9 @@
      Tokens.html (the authoritative source — "when a value is in question, this
      file wins") specifies cards 3px / large cards 4px and explicitly warns:
      "Do not use the soft 8/12/16px rounded look — that was the default skin and
-     is wrong." So all surfaces inherit 4px here; chrome controls use the even
-     sharper --ft-r-sm (2px) / --ft-r (3px). */
-  --ft-card-r: 4px;
+     is wrong." Regular cards use 3px (--ft-r); large cards use --ft-r-lg (4px);
+     chrome controls use the even sharper --ft-r-sm (2px). */
+  --ft-card-r: 3px;
 
   --ft-font-sans:  var(--font-space-grotesk), "Space Grotesk", system-ui, -apple-system, sans-serif;
   --ft-font-mono:  var(--font-space-mono), "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -97,7 +97,7 @@
   --ft-shadow:    0 8px 32px -8px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.4);
   --ft-shadow-lg: 0 24px 80px -20px rgba(0,0,0,.7);
 
-  --ft-card-r: 4px; /* dark map chrome / panels — retro near-square (Tokens.html) */
+  --ft-card-r: 3px; /* dark map chrome / panels — retro near-square (Tokens.html) */
   background: var(--ft-bg);
   color: var(--ft-text);
 }
@@ -142,7 +142,7 @@
   --ft-text:      #251B12;
   --ft-muted:     #6B5C4E;
   --ft-subtle:    #9C8E7A;
-  --ft-card-r:    4px; /* home cards — retro near-square (Tokens.html) */
+  --ft-card-r:    3px; /* home cards — retro near-square (Tokens.html) */
   background: var(--ft-bg);
   color: var(--ft-text);
 }
@@ -155,7 +155,7 @@
   --ft-text:      #241B12;
   --ft-muted:     #6B5C4E;
   --ft-subtle:    #9C8E7A;
-  --ft-card-r:    4px; /* logger tiles — retro near-square (Tokens.html) */
+  --ft-card-r:    3px; /* logger tiles — retro near-square (Tokens.html) */
   background:
     radial-gradient(ellipse 80% 50% at 50% -10%, #f3e9d6, transparent 55%),
     linear-gradient(180deg, #F6F1E7, #EFE7D7);
@@ -215,9 +215,9 @@
   position: relative;
   isolation: isolate;
   background: var(--ft-surface);
-  border: 1.5px solid color-mix(in oklab, var(--ft-text) 72%, var(--ft-border));
+  border: 1.5px solid color-mix(in oklab, var(--ft-text) 78%, var(--ft-border));
   border-radius: var(--ft-card-r);
-  box-shadow: 4px 4px 0 color-mix(in oklab, var(--ft-text) 55%, transparent);
+  box-shadow: 4px 4px 0 color-mix(in oklab, var(--ft-text) 80%, transparent);
   transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s ease, border-color .22s ease;
 }
 
@@ -262,12 +262,12 @@
   position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 9px 14px; border-radius: var(--ft-r-sm);
-  border: 1.5px solid color-mix(in oklab, var(--ft-text) 62%, var(--ft-border2));
+  border: 1.5px solid color-mix(in oklab, var(--ft-text) 78%, var(--ft-border2));
   background: var(--ft-surface);
   color: var(--ft-text);
   font-size: 12.5px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em;
-  box-shadow: 2px 2px 0 color-mix(in oklab, var(--ft-text) 45%, transparent);
+  box-shadow: 2px 2px 0 color-mix(in oklab, var(--ft-text) 70%, transparent);
   transition: background .15s ease, border-color .15s ease, color .15s ease,
               transform .12s ease, box-shadow .08s ease;
   white-space: nowrap; cursor: pointer;
@@ -354,7 +354,7 @@
   position: relative;
   background: var(--ft-accent-faint);
   border: 1px solid color-mix(in oklab, var(--ft-accent) 22%, var(--ft-border));
-  border-radius: var(--ft-card-r);
+  border-radius: var(--ft-r-lg); /* large card — 4px (Tokens.html) */
 }
 .ft-brief::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.4px;
