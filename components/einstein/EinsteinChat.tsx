@@ -583,6 +583,16 @@ export function EinsteinChat({
               />
               Advisor
             </span>
+          ) : bareComposer ? (
+            // Desktop advisor composer leads with a search glyph (desk_5) in
+            // place of the mode pill — reads as a "ask anything" search bar.
+            <span
+              aria-hidden="true"
+              className="flex shrink-0 items-center justify-center self-center"
+              style={{ paddingLeft: 6, color: "var(--ft-subtle)" }}
+            >
+              <Icon.search size={16} />
+            </span>
           ) : null}
           <textarea
             id="einstein-input"
@@ -600,30 +610,51 @@ export function EinsteinChat({
             type="submit"
             disabled={!canSend}
             aria-label={`Ask ${assistantName}`}
-            className="flex shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed"
+            className={`flex shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed${
+              bareComposer ? " ft-mono" : ""
+            }`}
             data-testid="einstein-send"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 999,
-              background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
-              color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
-            }}
+            style={
+              bareComposer
+                ? {
+                    // Desktop advisor composer: a labelled "ASK" pill (desk_5)
+                    // rather than the phone's circular arrow.
+                    borderRadius: 999,
+                    padding: "9px 18px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                    background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
+                    color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
+                  }
+                : {
+                    width: 38,
+                    height: 38,
+                    borderRadius: 999,
+                    background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
+                    color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
+                  }
+            }
           >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M5 12h14" />
-              <path d="M13 6l6 6-6 6" />
-            </svg>
+            {bareComposer ? (
+              "Ask"
+            ) : (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14" />
+                <path d="M13 6l6 6-6 6" />
+              </svg>
+            )}
           </button>
         </div>
       </form>
@@ -659,7 +690,20 @@ export interface EinsteinAdvisorPanelProps {
   readonly greeting?: string;
   readonly briefItems: readonly AdvisorBriefItem[];
   readonly actions: readonly AdvisorAction[];
+  /**
+   * Exemplar questions rendered as a labelled chip grid BELOW the composer
+   * (desk_5). Each chip seeds the chat send path. Omitted → no grid renders.
+   */
+  readonly suggestedPrompts?: readonly string[];
 }
+
+/** Leading glyphs for the suggested-prompt chips, cycled by index. */
+const SUGGESTED_PROMPT_ICONS = [
+  <Icon.breeding key="breeding" size={15} />,
+  <Icon.animals key="animals" size={15} />,
+  <Icon.finance key="finance" size={15} />,
+  <Icon.camps key="camps" size={15} />,
+] as const;
 
 /**
  * Desktop "AI Advisor" composition. Renders the always-on brief card and an
@@ -676,6 +720,7 @@ export function EinsteinAdvisorPanel({
   greeting,
   briefItems,
   actions,
+  suggestedPrompts,
 }: EinsteinAdvisorPanelProps) {
   const chatRef = useRef<EinsteinChatHandle>(null);
   const greetLine =
@@ -683,7 +728,7 @@ export function EinsteinAdvisorPanel({
     `Good morning${firstName?.trim() ? ` ${firstName.trim()}` : ""}. Three things worth your attention before lunch:`;
 
   return (
-    <div className="ft-scope flex h-full min-h-0 flex-col gap-4">
+    <div className="ft-scope flex flex-col gap-4">
       {/* Title row — serif H1 36px + mono model pill + subtitle */}
       <div>
         <div className="flex flex-wrap items-center gap-3">
@@ -813,22 +858,70 @@ export function EinsteinAdvisorPanel({
         </div>
       </div>
 
-      {/* The real chat panel — bare (no card frame): the transcript flows under
-          the brief card and the composer reads as a free-standing rounded bar
-          on the light paper admin surface (desk_5). Behaviour unchanged —
-          streaming, citations, feedback all live in <EinsteinChat>. */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* The real chat panel — bare (no card frame): the composer reads as a
+          free-standing rounded bar sitting directly UNDER the brief card on the
+          light paper admin surface (desk_5). With no fixed height the empty
+          transcript collapses, so the composer flows under the brief; it grows
+          downward once a conversation starts. Behaviour unchanged — streaming,
+          citations, feedback all live in <EinsteinChat>. */}
+      <div className="flex flex-col">
         <EinsteinChat
           farmSlug={farmSlug}
           controlsRef={chatRef}
-          placeholder="Ask about herd performance…"
-          className="h-full"
+          placeholder="Ask about herd performance, grazing, finance, breeding…"
           hideHeader
           hideEmptyState
           bareComposer
+          advisorMode={false}
           surface="inherit"
         />
       </div>
+
+      {/* Suggested-prompt grid (desk_5) — labelled section under the composer.
+          A two-up chip grid of exemplar questions; each seeds the chat send
+          path verbatim via the same imperative handle the action row uses. */}
+      {suggestedPrompts && suggestedPrompts.length > 0 ? (
+        <div data-testid="advisor-suggested-prompts">
+          <div
+            className="ft-mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              color: "var(--ft-muted)",
+              marginBottom: 10,
+            }}
+          >
+            Suggested prompts
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {suggestedPrompts.map((p, i) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => chatRef.current?.sendPrompt(p)}
+                className="ft-mono ft-row-hover flex items-center gap-2.5 text-left"
+                data-testid="advisor-suggested-chip"
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "var(--ft-r-sm)",
+                  background: "var(--ft-surface)",
+                  border: "1px solid var(--ft-border)",
+                  color: "var(--ft-text)",
+                  fontSize: 12,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span className="shrink-0" style={{ color: "var(--ft-accent)" }}>
+                  {SUGGESTED_PROMPT_ICONS[i % SUGGESTED_PROMPT_ICONS.length]}
+                </span>
+                <span>{p}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
