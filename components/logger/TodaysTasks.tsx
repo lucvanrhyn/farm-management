@@ -90,7 +90,8 @@ export function TodaysTasks() {
   if (tasks.length === 0) {
     return (
       <div
-        className="ft-card mx-4 mb-4 px-4 py-3 flex items-center gap-2"
+        className="ft-card mx-4 mb-4 flex items-center gap-2"
+        style={{ padding: "13px 15px" }}
       >
         <Icon.check size={16} className="shrink-0" style={{ color: "var(--ft-good)" }} />
         <p className="text-sm font-medium" style={{ color: "var(--ft-good)" }}>
@@ -101,40 +102,47 @@ export function TodaysTasks() {
   }
 
   return (
-    <div className="ft-card mx-4 mb-4 p-3">
-      {/* Header row — Camp Rounds reference: check glyph + "{N} open tasks"
-          + a chevron affordance on the right. The count is the number of
-          incomplete tasks currently in view (tasks vanish optimistically on
-          complete, so `tasks.length` is exactly the open count). */}
-      <div className="mb-2 px-1 flex items-center gap-2">
-        <Icon.check size={15} className="shrink-0" style={{ color: "var(--ft-accent)" }} />
-        <span className="ft-label flex-1" style={{ margin: 0 }}>
+    <div className="ft-card mx-4 mb-4" style={{ padding: "13px 15px" }}>
+      {/* Header row — Camp Rounds reference (phone_3.jpg): check glyph +
+          "{N} open tasks" (sentence case, medium weight — NOT an uppercase
+          label) + a chevron affordance on the right. The count is the number
+          of incomplete tasks currently in view (tasks vanish optimistically
+          on complete, so `tasks.length` is exactly the open count). */}
+      <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
+        <Icon.check size={14} className="shrink-0" style={{ color: "var(--ft-good)" }} />
+        <span className="flex-1 whitespace-nowrap" style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ft-text)" }}>
           {tasks.length} open task{tasks.length !== 1 ? "s" : ""}
         </span>
-        <Icon.chevron size={15} className="shrink-0" style={{ color: "var(--ft-subtle)" }} />
+        <Icon.chevron size={14} className="shrink-0" style={{ color: "var(--ft-subtle)" }} />
       </div>
-      <div className="flex flex-col gap-2">
+      {/* Flat bullet rows — the reference renders each task as a borderless
+          row: small accent bullet + label + a right-aligned mono camp code.
+          No surface2 box, no border, no trailing button. Completion is
+          preserved by making the whole row a tappable button (tap to mark
+          done) — the real `handleComplete` behaviour is unchanged. */}
+      <div className="flex flex-col" style={{ gap: 7 }}>
         {tasks.map((task) => {
           const dotColor = PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal;
           const overdue = task.dueDate < TODAY;
 
           return (
-            <div
+            <button
               key={task.id}
-              className="rounded-xl px-3 py-2.5 flex items-center gap-3"
-              style={{
-                background: "var(--ft-surface2)",
-                border: `1px solid ${overdue ? "var(--ft-crit)" : "var(--ft-border)"}`,
-              }}
+              type="button"
+              onClick={() => handleComplete(task.id)}
+              className="flex w-full items-center text-left active:opacity-60 transition-opacity"
+              style={{ gap: 9, fontSize: 12, color: "var(--ft-muted)" }}
+              title="Mark complete"
+              aria-label={`Mark complete: ${task.title}`}
             >
-              {/* Priority dot */}
+              {/* Priority bullet — 4px accent-scale dot per the reference. */}
               <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ background: dotColor }}
+                className="rounded-full shrink-0"
+                style={{ width: 4, height: 4, background: overdue ? "var(--ft-crit)" : dotColor }}
               />
 
               {/* Title */}
-              <span className="flex-1 text-sm" style={{ color: "var(--ft-text)" }}>
+              <span className="truncate flex-1">
                 {task.title}
                 {overdue && (
                   <span className="ft-mono ml-2 text-[10px] font-semibold" style={{ color: "var(--ft-crit)" }}>Overdue</span>
@@ -149,25 +157,14 @@ export function TodaysTasks() {
                   no fabricated label. */}
               {task.campId && (
                 <span
-                  className="ft-mono text-[10px] px-2 py-0.5 rounded-full shrink-0 max-w-[5rem] truncate"
-                  style={{ backgroundColor: "var(--ft-surface)", color: "var(--ft-muted)" }}
+                  className="ft-mono shrink-0 max-w-[5rem] truncate"
+                  style={{ fontSize: 11, color: "var(--ft-subtle)" }}
                   title={task.campId}
                 >
                   {task.campId}
                 </span>
               )}
-
-              {/* Complete button */}
-              <button
-                onClick={() => handleComplete(task.id)}
-                className="ft-action-btn w-6 h-6 shrink-0"
-                style={{ borderRadius: 999, border: "1px solid var(--ft-border2)" }}
-                title="Mark complete"
-                aria-label="Mark complete"
-              >
-                <Icon.check size={14} />
-              </button>
-            </div>
+            </button>
           );
         })}
       </div>

@@ -175,7 +175,7 @@ export default function CampSelector({ allowedCampIds }: CampSelectorProps = {})
       {visibleCamps.length === 0 ? (
         <CampEmptyState speciesLabel={speciesLabel} />
       ) : (
-      <div className="grid grid-cols-2 gap-3 p-4">
+      <div className="grid grid-cols-2 gap-2.5 p-4">
       {visibleCamps.map((camp) => {
         const animalCount = camp.animal_count ?? 0;
         const lastTime = camp.last_inspected_at ? relativeTime(camp.last_inspected_at) : "Never";

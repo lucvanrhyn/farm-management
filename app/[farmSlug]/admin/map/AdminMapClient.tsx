@@ -99,7 +99,7 @@ export default function AdminMapClient({
         onLongPress={handleLongPress}
         latitude={farmLat}
         longitude={farmLng}
-        headerTitle="Farm map"
+        headerTitle="Farm Map"
         headerSubtext={headerSubtext}
         backHref={`/${farmSlug}`}
         headerExtra={routeTodayLink}

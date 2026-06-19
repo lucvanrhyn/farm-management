@@ -97,7 +97,11 @@ export default async function EinsteinPage({
 
   return (
     <div
-      className="ft-scope flex min-h-screen min-w-0 flex-col"
+      // Fill the viewport under the 62px StudioShell header on desktop so the
+      // chat's flex-1 transcript distributes the gap and the composer pins to
+      // the bottom of the fold (desk_5). Mobile keeps min-height so the page
+      // can grow with content.
+      className="ft-scope flex min-h-screen min-w-0 flex-col md:h-[calc(100dvh-62px)] md:min-h-0"
       style={{ background: "var(--ft-bg)", color: "var(--ft-text)" }}
     >
       {/* Desktop advisor composition — serif H1 + model pill, always-on brief

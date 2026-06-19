@@ -12,7 +12,9 @@ import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { ACTIVE_STATUS } from "@/lib/animals/active-species-filter";
 import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { searchAnimals, countAnimalsByStatus } from "@/lib/server/animal-search";
+import { getAnimalWeightSummaries } from "@/lib/server/weight-analytics";
 import type { Camp, Mob, PrismaAnimal } from "@/lib/types";
+import type { AnimalWeightInfo } from "@/components/admin/AnimalsTable";
 import AdminPage from "@/app/_components/AdminPage";
 
 // SSR page size. 50 keeps the initial HTML payload under ~100 KB for trio-b
@@ -72,7 +74,7 @@ export default async function AdminAnimalsPage({
   // the status filter; per-species camp/mob reads stay on the facade
   // because they have no lifecycle-axis ambiguity.
   const speciesPrisma = scoped(prisma, mode);
-  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, statusCounts, crossSpeciesTotal] = await Promise.all([
+  const [animals, prismaCamps, withdrawalAnimals, prismaMobs, statusCounts, crossSpeciesTotal, weightSummaries, settings] = await Promise.all([
     searchAnimals(prisma, {
       mode,
       includeDeceased: true,
@@ -93,9 +95,31 @@ export default async function AdminAnimalsPage({
     // cross-species by design: drives the reconciliation total in the header
     // on multi-species tenants. Matches `getCachedFarmSummary` (lib/server/cached.ts).
     crossSpecies(prisma, "farm-wide-audit").animal.count({ where: { status: ACTIVE_STATUS } }),
+    // Real WEIGHT / ADG / ADG-trend per animal for the catalogue table. One
+    // batched weighing read grouped in-memory (no query per row) — see
+    // getAnimalWeightSummaries. Animals never weighed are absent from the map
+    // and render "—".
+    getAnimalWeightSummaries(prisma),
+    prisma.farmSettings.findFirst({ select: { adgPoorDoerThreshold: true } }).catch(() => null),
   ]);
   const speciesTotal = statusCounts.active;
   const deceasedTotal = statusCounts.deceased;
+  const poorDoerThreshold = settings?.adgPoorDoerThreshold ?? 0.7;
+
+  // Serialize the weight map to a plain record keyed by animalId for the
+  // client table (Maps don't survive the server→client boundary).
+  const weightById: Record<string, AnimalWeightInfo> = {};
+  for (const a of animals) {
+    const s = weightSummaries.get(a.animalId);
+    if (s) {
+      weightById[a.animalId] = {
+        weight: s.latestWeight,
+        adg: s.adg,
+        isPoorDoer: s.isPoorDoer,
+        series: s.series,
+      };
+    }
+  }
 
   const withdrawalIds = new Set(withdrawalAnimals.map((w) => w.animalId));
 
@@ -127,7 +151,12 @@ export default async function AdminAnimalsPage({
       <PageHeader
         className="px-0 py-0 mb-6"
         title="Animals"
-        subtitle={`${speciesTotal.toLocaleString()} total in herd · ${mode}`}
+        subtitle={
+          // Mirrors the reference masthead "20+ active · 875 total in herd".
+          // "active" = the hydrated batch's Active rows (a floor, hence the
+          // "+"); "total in herd" = the real per-species Active count.
+          `${animals.filter((a) => a.status === "Active").length}+ active · ${speciesTotal.toLocaleString()} total in herd`
+        }
         right={
           <div className="flex items-center gap-2">
             <ExportButton farmSlug={farmSlug} exportType="animals" species={mode} label="Export CSV" />
@@ -141,6 +170,8 @@ export default async function AdminAnimalsPage({
         farmSlug={farmSlug}
         withdrawalIds={withdrawalIds}
         mobs={mobs}
+        weightById={weightById}
+        poorDoerThreshold={poorDoerThreshold}
         initialNextCursor={nextCursor}
         species={mode}
         speciesTotal={speciesTotal}

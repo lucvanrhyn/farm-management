@@ -35,7 +35,7 @@
  *   - No behaviour regression when all non-camp layers are toggled off.
  */
 
-import { useRef, useState, useReducer, useCallback, useMemo } from "react";
+import { useRef, useState, useReducer, useCallback, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Map, {
   GeolocateControl,
@@ -221,6 +221,27 @@ const RESPONSIVE_CSS = `
 }
 `;
 
+// ── Responsive: desktop ⇄ phone breakpoint (matches RESPONSIVE_CSS 768px) ──────
+// SSR-safe via useSyncExternalStore — the server snapshot is `false` (no
+// `window`), the client subscribes to the matchMedia change event. Drives the
+// camps-panel default (open as a split column on desktop per desk_3.jpg, closed
+// over the full-bleed map on phone per phone_4.jpg) without a setState-in-effect
+// lint error or a hydration mismatch.
+const DESKTOP_MQ = "(min-width: 769px)";
+function subscribeDesktop(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const mql = window.matchMedia(DESKTOP_MQ);
+  mql.addEventListener("change", cb);
+  return () => mql.removeEventListener("change", cb);
+}
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP_MQ).matches,
+    () => false,
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function FarmMap({
@@ -236,7 +257,17 @@ export default function FarmMap({
   const [localOverlay, setLocalOverlay] = useState<OverlayMode>("grazing");
   const [layerState, updateLayers] = useLayerState();
   const [theme, setTheme] = useState<MapTheme>("satellite");
-  const [showCampList, setShowCampList] = useState(false);
+  // desk_3.jpg renders the camps panel OPEN as a split column; phone_4.jpg is a
+  // full-bleed map with no panel. So the panel defaults open on desktop and
+  // closed on phone, while the header/topbar toggle can still override either
+  // way. `campListOverride` is null until the user toggles, then it pins the
+  // explicit choice; otherwise visibility follows the breakpoint.
+  const isDesktop = useIsDesktop();
+  const [campListOverride, setCampListOverride] = useState<boolean | null>(null);
+  const showCampList = campListOverride ?? isDesktop;
+  const toggleCampList = useCallback(() => {
+    setCampListOverride((prev) => !(prev ?? isDesktop));
+  }, [isDesktop]);
 
   // Single discriminated-union state for the FarmMap shell. The reducer
   // enforces mutual exclusion — only one of (drawing-boundary,
@@ -527,7 +558,7 @@ export default function FarmMap({
               {headerExtra}
               <button
                 type="button"
-                onClick={() => setShowCampList((v) => !v)}
+                onClick={toggleCampList}
                 aria-pressed={showCampList}
                 className="ft-btn"
                 style={{
@@ -615,46 +646,57 @@ export default function FarmMap({
           />
         )}
 
-        {/* ── Phone floating glass top bar (back + camps pill + layers) ────── */}
+        {/* ── Phone floating top bar (phone_4.jpg) ─────────────────────────────
+            THREE separate floating glass elements over the full-bleed map: a
+            back-chevron glass square, a two-line title pill ("Farm Map" serif /
+            "<n> camps" mono), and a layers glass square. Matches mapmobile.jsx's
+            PhoneGlassBtn + glass title pill layout rather than one continuous
+            bar. The container itself is a transparent flex row. */}
         <div
           className="ft-map-phone-topbar"
           style={{
             position: "absolute", top: 8, left: 8, right: 8, zIndex: 22,
             alignItems: "center", gap: 8,
-            padding: "8px 10px", borderRadius: "var(--ft-card-r)",
-            ...DARK_GLASS,
           }}
         >
           <Link
             href={homeHref}
             aria-label="Back to farm home"
-            style={{ display: "inline-flex", color: "var(--ft-text)", flexShrink: 0 }}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 38, height: 38, borderRadius: 11, flexShrink: 0,
+              color: "var(--ft-text)", ...DARK_GLASS,
+            }}
           >
-            <Icon.chevronL size={20} />
+            <Icon.chevronL size={18} />
           </Link>
-          <span
-            className="ft-pill ft-pill-muted"
-            style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}
+          <div
+            style={{
+              flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+              justifyContent: "center", height: 38, padding: "0 14px",
+              borderRadius: 11, ...DARK_GLASS,
+            }}
           >
-            <span className="ft-serif" style={{ fontWeight: 500 }}>
+            <span className="ft-serif" style={{ fontSize: 15, fontWeight: 500, lineHeight: 1, color: "var(--ft-text)" }}>
               {headerTitle ?? "Farm Map"}
             </span>
             {headerSubtext && (
-              <span className="ft-mono" style={{ marginLeft: 6, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                · {headerSubtext.split("·")[0]?.trim()}
+              <span className="ft-mono" style={{ fontSize: 9.5, opacity: 0.7, marginTop: 2, color: "var(--ft-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {headerSubtext.split("·")[0]?.trim()}
               </span>
             )}
-          </span>
+          </div>
           <button
             type="button"
             aria-label="Camps list"
-            onClick={() => setShowCampList((v) => !v)}
+            onClick={toggleCampList}
             aria-pressed={showCampList}
             style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 34, height: 34, borderRadius: 10, flexShrink: 0, cursor: "pointer",
-              border: "none",
-              background: showCampList ? "var(--ft-accent)" : "transparent",
+              width: 38, height: 38, borderRadius: 11, flexShrink: 0, cursor: "pointer",
+              ...DARK_GLASS,
+              background: showCampList ? "var(--ft-accent)" : DARK_GLASS.background,
+              border: showCampList ? "1px solid transparent" : DARK_GLASS.border,
               color: showCampList ? "var(--ft-on-accent)" : "var(--ft-text)",
             }}
           >
@@ -666,14 +708,18 @@ export default function FarmMap({
             accent active state. Engine/handler logic unchanged; visual only. On
             phone this becomes a horizontal-scroll chip row (.ft-map-overlay-bar). */}
         <div
-          className="ft-map-overlay-bar"
+          className="ft-map-overlay-bar ft-scrollbar"
           style={{
             // Clear the absolute dark header on desktop; the phone media query
             // re-anchors this to top:64 under the floating glass top bar.
             position: "absolute", top: headerTitle ? 78 : 12, left: 12, zIndex: 10,
-            display: "flex", flexWrap: "wrap", gap: 4, padding: 4,
-            // Leave a right gutter so the wrapped row never slides under the
-            // top-right Mapbox nav/geolocate control column on narrow screens.
+            // Single horizontal glass pill bar (desk_3.jpg): one row, no wrap,
+            // overflow-scroll so the last item ("Veld Condition") clips at the
+            // map edge exactly like the reference rather than stacking a 2nd row.
+            display: "flex", flexWrap: "nowrap", gap: 4, padding: 4,
+            overflowX: "auto",
+            // Leave a right gutter so the row never slides under the top-right
+            // Mapbox nav/geolocate control column.
             maxWidth: "calc(100% - 78px)",
             borderRadius: "var(--ft-card-r)", ...DARK_GLASS,
           }}
@@ -735,7 +781,7 @@ export default function FarmMap({
             }}
           >
             <Icon.move size={15} />
-            {isMovingMob ? "Exit Move" : "Move Mob"}
+            {isMovingMob ? "Exit move" : "Move mob"}
           </button>
 
           <button
@@ -752,7 +798,7 @@ export default function FarmMap({
             }}
           >
             {isDrawing ? <Icon.close size={15} /> : <Icon.plus size={15} />}
-            {isDrawing ? "Cancel Drawing" : "Draw Camp Boundary"}
+            {isDrawing ? "Cancel drawing" : "Draw camp boundary"}
           </button>
         </div>
 
@@ -844,7 +890,7 @@ export default function FarmMap({
             <button
               type="button"
               aria-label="Close camps list"
-              onClick={() => setShowCampList(false)}
+              onClick={() => setCampListOverride(false)}
               className="ft-action-btn"
               style={{ color: "var(--ft-muted)" }}
             >
@@ -873,9 +919,21 @@ export default function FarmMap({
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {cd.camp.camp_name}
                     </span>
-                    <span className="ft-mono" style={{ fontSize: 11.5, color: "var(--ft-muted)", flexShrink: 0 }}>
-                      {cd.stats.total} head
-                      {cd.camp.size_hectares != null ? ` · ${cd.camp.size_hectares} ha` : ""}
+                    {/* Two-line right column mirrors desk_3.jpg ("71 / 1850kg"):
+                        real active head count on top, size below. Production
+                        does not compute per-camp feed-DM on this page, so the
+                        truthful second line is hectares (omitted when unknown). */}
+                    <span
+                      className="ft-mono ft-tabnums"
+                      style={{ fontSize: 11.5, color: "var(--ft-muted)", flexShrink: 0, textAlign: "right", lineHeight: 1.35 }}
+                    >
+                      <span style={{ color: "var(--ft-text)" }}>{cd.stats.total} head</span>
+                      {cd.camp.size_hectares != null && (
+                        <>
+                          <br />
+                          {cd.camp.size_hectares} ha
+                        </>
+                      )}
                     </span>
                   </button>
                 </li>

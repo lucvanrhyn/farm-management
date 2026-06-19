@@ -142,6 +142,13 @@ export default function WeatherWidget({ latitude, longitude }: WeatherWidgetProp
   // effectiveGeoFailed is true if geolocation is unavailable (via useSsrSafeState).
   useEffect(() => {
     if (coords || effectiveGeoFailed) return;
+    // Guard the geolocation API directly here too: useSsrSafeState resolves the
+    // client value on its own effect, which may not have run before THIS effect
+    // on first commit — so navigator.geolocation can still be undefined (jsdom /
+    // any non-geo environment). Bail without a synchronous setState (the
+    // `geoFailed` useSsrSafeState already derives this case on its own sync);
+    // calling getCurrentPosition on an undefined API would otherwise throw.
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {

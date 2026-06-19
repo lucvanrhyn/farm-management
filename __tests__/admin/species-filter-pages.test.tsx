@@ -31,6 +31,7 @@ const campFindUniqueMock = vi.fn();
 const campCoverFindFirstMock = vi.fn();
 const campCoverFindManyMock = vi.fn();
 const mobFindManyMock = vi.fn();
+const farmSettingsFindFirstMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
 const getFarmModeMock = vi.fn();
 const getFarmCredsMock = vi.fn();
@@ -38,6 +39,7 @@ const getLatestCampConditionsMock = vi.fn();
 const getAnimalsInWithdrawalMock = vi.fn();
 const getRotationStatusByCampMock = vi.fn();
 const getAnimalWeightDataMock = vi.fn();
+const getAnimalWeightSummariesMock = vi.fn();
 const getCostPerAnimalMock = vi.fn();
 const calcPastureGrowthRateMock = vi.fn();
 
@@ -68,6 +70,7 @@ vi.mock("@/lib/server/analytics", () => ({
 }));
 vi.mock("@/lib/server/weight-analytics", () => ({
   getAnimalWeightData: getAnimalWeightDataMock,
+  getAnimalWeightSummaries: getAnimalWeightSummariesMock,
 }));
 vi.mock("@/lib/server/financial-analytics", () => ({
   getCostPerAnimal: getCostPerAnimalMock,
@@ -127,6 +130,9 @@ function buildPrismaMock() {
     mob: {
       findMany: mobFindManyMock,
     },
+    farmSettings: {
+      findFirst: farmSettingsFindFirstMock,
+    },
   };
 }
 
@@ -139,6 +145,8 @@ beforeEach(() => {
   getAnimalsInWithdrawalMock.mockResolvedValue([]);
   getRotationStatusByCampMock.mockResolvedValue({ camps: [] });
   getAnimalWeightDataMock.mockResolvedValue({ records: [], adg: null });
+  getAnimalWeightSummariesMock.mockResolvedValue(new Map());
+  farmSettingsFindFirstMock.mockResolvedValue({ adgPoorDoerThreshold: 0.7 });
   getCostPerAnimalMock.mockResolvedValue({ totalCost: 0, breakdown: [] });
   calcPastureGrowthRateMock.mockResolvedValue({
     currentKgDmPerHa: null,
