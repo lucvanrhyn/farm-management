@@ -221,6 +221,11 @@ export interface DestroyBranchDbInput {
    * (or was already manually destroyed) and only the meta row needs cleaning.
    */
   skipTursoDestroy?: boolean;
+  /**
+   * Injectable backoff sleep between transient destroy retries. Defaults to a
+   * real `setTimeout`-based delay; tests inject a no-op to run instantly.
+   */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface DestroyBranchDbResult {
@@ -436,12 +441,42 @@ export function diffTouchesEscalated(changedPaths: ReadonlyArray<string>): boole
 
 // ── Phase 3 functions ─────────────────────────────────────────────────────────
 
+// ── Recycle-clone hardening: transient-failure-tolerant destroy ───────────────
+
+/** Max attempts (initial + retries) for the cosmetic `turso db destroy`. */
+const TURSO_DESTROY_MAX_ATTEMPTS = 3;
+/** Linear backoff base (ms); retry before attempt N waits (N-1) × base. */
+const TURSO_DESTROY_RETRY_BASE_MS = 500;
+
+/**
+ * Turso's platform API reports transient throttling as a MISLEADING
+ * "token ... is invalid" error (a concurrent-op rate-limit signal, not real
+ * token expiry — ops root-cause 2026-06-13), alongside the usual rate-limit /
+ * 429 / 503 / timeout shapes. These are safe to retry. A genuine error (database
+ * not found, permission denied) is NOT transient and fails fast so we never mask
+ * a real problem behind retries.
+ */
+function isTransientTursoError(err: unknown): boolean {
+  if (!(err instanceof TursoCliError)) return false;
+  return /token[\s\S]*invalid|invalid[\s\S]*token|rate.?limit|too many requests|\b429\b|\b503\b|service unavailable|temporarily unavailable|timeout|timed out/i.test(
+    err.stderr,
+  );
+}
+
+const _defaultDestroySleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Destroy the Turso DB clone for a branch and delete its meta row.
  *
  * Idempotent: if no meta row exists, returns false/false without touching Turso.
  * Atomic around failure: if Turso destroy fails, the meta row is preserved so
  * the operator can retry with skipTursoDestroy=true after manual cleanup.
+ *
+ * Resilient: the `turso db destroy` step retries transient platform throttling
+ * (the misleading "TURSO_API_TOKEN invalid" rate-limit signal) up to
+ * {@link TURSO_DESTROY_MAX_ATTEMPTS} times with linear backoff, so a cosmetic
+ * teardown blip doesn't strand the clone or red a successful prod promote.
  */
 export async function destroyBranchDb(
   input: DestroyBranchDbInput,
@@ -460,10 +495,24 @@ export async function destroyBranchDb(
     return { branchName, tursoDestroyed: false, metaRowDeleted: false };
   }
 
-  // 2. Optionally run the turso CLI destroy step.
+  // 2. Optionally run the turso CLI destroy step, tolerating transient Turso
+  //    platform throttling (the misleading "TURSO_API_TOKEN invalid" rate-limit
+  //    signal). A genuine error fails fast; on final failure the meta row is
+  //    preserved (caller contract) so the operator can retry skipTursoDestroy.
   if (!skipTursoDestroy) {
-    // Throws TursoCliError on failure — meta row is NOT deleted in that case.
-    await cli.run(['db', 'destroy', existing.tursoDbName, '--yes']);
+    const sleep = input.sleep ?? _defaultDestroySleep;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await cli.run(['db', 'destroy', existing.tursoDbName, '--yes']);
+        break;
+      } catch (err) {
+        if (attempt < TURSO_DESTROY_MAX_ATTEMPTS && isTransientTursoError(err)) {
+          await sleep(TURSO_DESTROY_RETRY_BASE_MS * attempt);
+          continue;
+        }
+        throw err;
+      }
+    }
   }
 
   // 3. Delete the meta row (only reached if turso destroy succeeded or was skipped).
