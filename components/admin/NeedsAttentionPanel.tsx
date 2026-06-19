@@ -60,7 +60,7 @@ function AlertRow({ alert }: { alert: DashboardAlert }) {
  * a herd-glance one-liner + the top-N ranked animals (the orchestrator already
  * sorts them) + a deep-link to the full triage page.
  */
-function TriageTeaser({
+export function TriageTeaser({
   triage,
   farmSlug,
 }: {

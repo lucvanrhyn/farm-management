@@ -101,15 +101,15 @@ async function getFarmModeCookie(
 }
 
 /**
- * Extract the numeric animal count from the "Total Animals" stat tile on the
- * admin overview page. Returns null when the tile is not present.
+ * Extract the numeric animal count from the Animals KPI tile on the admin
+ * overview page. Returns null when the tile is not present.
  *
- * The tile renders as:
- *   <p class="text-xl ... font-mono ...">103</p>
- *   <p class="text-xs ...">Total Animals</p>
+ * The frozen-design tile carries a copy-independent anchor:
+ *   <span data-ft-kpi-value="animals" ...>103</span>
  *
- * We locate the "Total Animals" label, traverse to its sibling numeric element,
- * then read the text. `AnimatedNumber` renders the integer as plain text.
+ * We read the rendered HTML and pull the integer that follows the stable
+ * `data-ft-kpi-value="animals"` attribute — this survives the relabel from
+ * "Total Animals" to "Animals" because it never depended on the visible copy.
  */
 async function readTotalAnimalsCount(
   page: import('@playwright/test').Page,
@@ -156,8 +156,10 @@ test.describe('Issue #236 — multi-species toggle: real-browser journey', () =>
     // Must not have been bounced to /login.
     await expect(page).not.toHaveURL(/\/login/);
 
-    // "Total Animals" tile must exist.
-    await expect(page.getByText('Total Animals', { exact: true }).first()).toBeVisible();
+    // The Animals KPI tile must exist. Anchor on the stable `data-ft-kpi`
+    // attribute — the frozen design renders the label as "Animals", not
+    // "Total Animals", so copy-based locators no longer match.
+    await expect(page.locator('[data-ft-kpi="animals"]').first()).toBeVisible();
 
     // The ModeSwitcher "Cattle" button must be present on a multi-species tenant.
     await expect(page.getByRole('button', { name: /Cattle/ })).toBeVisible();
@@ -172,8 +174,8 @@ test.describe('Issue #236 — multi-species toggle: real-browser journey', () =>
     await page.goto(`${BASE_URL}/${TRIO_B_SLUG}/admin`, { waitUntil: 'domcontentloaded' });
     await expect(page).not.toHaveURL(/\/login/);
 
-    // Step 3: wait for the "Total Animals" tile and capture the cattle baseline.
-    await expect(page.getByText('Total Animals', { exact: true }).first()).toBeVisible({
+    // Step 3: wait for the Animals KPI tile and capture the cattle baseline.
+    await expect(page.locator('[data-ft-kpi="animals"]').first()).toBeVisible({
       timeout: 15_000,
     });
     const cattleCount = await readTotalAnimalsCount(page);
@@ -211,8 +213,8 @@ test.describe('Issue #236 — multi-species toggle: real-browser journey', () =>
     // Reload to trigger the server-side species filter.
     await page.reload({ waitUntil: 'domcontentloaded' });
 
-    // Step 6: "Total Animals" must now reflect the sheep count.
-    await expect(page.getByText('Total Animals', { exact: true }).first()).toBeVisible({
+    // Step 6: the Animals KPI tile must now reflect the sheep count.
+    await expect(page.locator('[data-ft-kpi="animals"]').first()).toBeVisible({
       timeout: 15_000,
     });
     const sheepCount = await readTotalAnimalsCount(page);

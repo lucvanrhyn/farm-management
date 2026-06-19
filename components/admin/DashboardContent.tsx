@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { PrismaClient } from "@prisma/client";
 import DangerZone from "@/components/admin/DangerZone";
-import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
+import NeedsAttentionPanel, { TriageTeaser } from "@/components/admin/NeedsAttentionPanel";
 import DoNextPanel from "@/components/admin/DoNextPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
 import ThisWeekBriefing from "@/components/admin/ThisWeekBriefing";
@@ -206,6 +206,40 @@ function KpiTile({
   );
 }
 
+/**
+ * Compact stat tile for the phone `stat` overview (frozen PA_StatTile,
+ * adminmobile.jsx). Icon + tone dot on top, large tabular value, caption below.
+ * Phone-only — copy carries no data-ft anchors (the desktop ribbon owns those).
+ */
+function StatTile({
+  icon,
+  value,
+  caption,
+  tone,
+}: {
+  icon: React.ReactNode;
+  value: React.ReactNode;
+  caption: string;
+  tone: "good" | "crit" | "fair" | "info" | "muted";
+}) {
+  const c = {
+    good: "var(--ft-good)", crit: "var(--ft-crit)", fair: "var(--ft-fair)",
+    info: "var(--ft-info)", muted: "var(--ft-text)",
+  }[tone];
+  return (
+    <Card style={{ padding: 13 }}>
+      <div className="flex items-center justify-between" style={{ color: "var(--ft-muted)" }}>
+        {icon}
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: c }} />
+      </div>
+      <div className="ft-tabnums" style={{ fontSize: 22, fontWeight: 500, letterSpacing: "-0.02em", marginTop: 9, lineHeight: 1, color: tone === "muted" ? "var(--ft-text)" : c }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--ft-muted)", marginTop: 5, lineHeight: 1.3 }}>{caption}</div>
+    </Card>
+  );
+}
+
 export default async function DashboardContent({ farmSlug, prisma, tier, mode, assistantName, latitude, longitude }: Props) {
   const isBasic = tier === "basic";
 
@@ -403,24 +437,72 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
 
   return (
     <>
-      {/* KPI ribbon — the six frozen-design domain tiles. Desktop lands on
-          6-across (`repeat(6,1fr)`, gap 10) exactly like the reference command
-          layout; collapses to 3-/2-up on smaller widths. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      {/* ── Phone `stat` overview (frozen PA_OverviewStat, adminmobile.jsx) —
+          shown < lg only. Hero count + spark, a 3-up stat row, the Einstein
+          brief peek, then the compact Needs-Attention list. The desktop command
+          ribbon below carries the data-ft-kpi anchors the e2e specs read, so
+          this phone block stays copy-only (no duplicate anchors). */}
+      <div className="lg:hidden flex flex-col gap-3.5">
+        <Card className="flex items-baseline justify-between" style={{ padding: 18 }}>
+          <div>
+            <div className="ft-serif ft-tabnums" style={{ fontSize: 46, fontWeight: 500, lineHeight: 0.9, letterSpacing: "-0.03em", color: "var(--ft-text)" }}>
+              {totalAnimals}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ft-muted)", marginTop: 6 }}>
+              animals across {totalCamps} {totalCamps === 1 ? "camp" : "camps"}
+            </div>
+          </div>
+          <Spark values={makeSpark(`herd-${farmSlug}`, 7)} w={96} h={34} color="var(--ft-good)" />
+        </Card>
+        <div className="grid grid-cols-3 gap-2.5">
+          <StatTile icon={<Icon.camps size={15} />} value={totalCamps} caption="Total camps" tone="muted" />
+          <StatTile icon={<Icon.health size={15} />} value={healthIssuesThisWeek} caption="Health issues" tone={healthIssuesThisWeek > 0 ? "crit" : "good"} />
+          <StatTile icon={<Icon.check size={15} />} value={`${inspectedToday}/${totalCamps}`} caption="Inspected today" tone="info" />
+        </div>
+        {/* Einstein brief peek — the same real bullets as the desktop brief. */}
+        <Card className="ft-brief" style={{ padding: "14px 16px" }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 11 }}>
+            <div className="flex items-center gap-2" style={{ color: "var(--ft-accent)" }}>
+              <Icon.einstein size={15} />
+              <span className="ft-mono" style={{ fontSize: 9.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · 06:00</span>
+            </div>
+            <Link href={`/${farmSlug}/admin/einstein`} className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-accent)" }}>Ask →</Link>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {briefBullets.map((b, i) => (
+              <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 12.5, color: "var(--ft-muted)", lineHeight: 1.45 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
+                <span>{b.text}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} />
+      </div>
+
+      {/* KPI ribbon — the six frozen-design domain tiles, the desktop command
+          layout's control-room header (6-across, gap 10 — the reference @1440).
+          Shown lg+ only; the phone `stat` block above replaces it < lg. Carries
+          the data-ft-kpi anchors the e2e specs read. */}
+      <div className="hidden lg:grid lg:grid-cols-6 gap-2.5">
         {kpis.map((k) => (
           <KpiTile key={k.kpiKey} {...k} />
         ))}
       </div>
 
-      {/* ── Command body — the frozen-design 3-column grid (measured 1.3fr /
-          1fr / .9fr, gap 16, margin-top 18). Col 1 = alerts + Do-Next + Needs
-          Attention; Col 2 = Einstein Today's Brief + Recent Activity; Col 3 =
-          Weather + Feed-on-offer. Collapses to one column < lg. */}
+      {/* ── Command body — the frozen-design 3-column control room (measured
+          1.3fr / 1fr / .9fr, gap 16, margin-top 18). Col 1 = alerts + compact
+          Needs-Attention; Col 2 = Einstein Today's Brief + Recent Activity;
+          Col 3 = Weather + Feed-on-offer. Shown lg+ only — the phone `stat`
+          block above is the < lg surface. Do-Next + the per-animal triage teaser
+          are relocated into the "More" disclosure to match the reference, which
+          ends Col 1 at the Needs-Attention list (no weigh-in queue). */}
       <div
-        className="grid gap-4 items-start grid-cols-1 lg:grid-cols-[1.3fr_1fr_.9fr]"
+        className="hidden lg:grid gap-4 items-start lg:grid-cols-[1.3fr_1fr_.9fr]"
         style={{ marginTop: 18 }}
       >
-        {/* Col 1 — alerts, Do-Next nudges, Needs Attention */}
+        {/* Col 1 — alerts + compact Needs Attention (reference Col 1 stops here;
+            Do-Next + triage live in "More"). */}
         <div className="flex flex-col gap-4 min-w-0">
           {/* Low-grazing alert — clickable jump to camp performance. Issue #369:
               the space before `with` MUST stay an explicit {" "} expression — a
@@ -463,14 +545,7 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
               <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
             </div>
           )}
-          {/* Proactive Nudges v1 — one-tap "Do Next" (fail-open: self-hides). */}
-          <DoNextPanel
-            items={doNext.items}
-            farmSlug={farmSlug}
-            scheduledIds={doNext.scheduledIds}
-            createdBy={userEmail}
-          />
-          <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} triage={triageItems} />
+          <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} />
         </div>
 
         {/* Col 2 — Einstein "Today's Brief" beam card + Recent Activity */}
@@ -562,8 +637,22 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
           style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ft-subtle)", padding: "10px 2px", fontWeight: 600 }}
         >
           <Icon.chevron size={13} className="ft-more-caret" />
-          More — reproduction, weekly briefing, camp status &amp; data health
+          More — do-next, triage, reproduction, weekly briefing, camp status &amp; data health
         </summary>
+      {/* Relocated from Col 1 so the above-fold control room matches the
+          reference (Col 1 ends at Needs-Attention). The Do-Next nudge queue and
+          the per-animal triage teaser stay one tap away — nothing is lost. */}
+      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 mt-4">
+        <DoNextPanel
+          items={doNext.items}
+          farmSlug={farmSlug}
+          scheduledIds={doNext.scheduledIds}
+          createdBy={userEmail}
+        />
+        {triageItems.length > 0 && (
+          <TriageTeaser triage={triageItems} farmSlug={farmSlug} />
+        )}
+      </div>
       <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr] mt-4">
         {/* Column 1 — reproduction overview */}
         <div className="flex flex-col gap-4 min-w-0">
