@@ -10,9 +10,15 @@
  * digestMode='weekly' (opt-in via the existing column). The in-app card
  * (getWeeklyBriefingForFarm) is ALWAYS on and does NOT consult this gate.
  *
- * Idempotency: the weekly CRON fires once per ISO week per tenant via a
- * week-stamped Inngest event id, so this function does not need its own
- * marker — the cron is the at-most-once boundary (functions.ts).
+ * Idempotency (two layers): the weekly CRON fires once per ISO week per tenant
+ * via a week-stamped Inngest event id (covers a re-fired cron). That alone does
+ * NOT cover an Inngest `step.run` RETRY — step.run is at-least-once, so a retry
+ * after sendEmail succeeded but before the step checkpointed would RESEND. So
+ * this function ALSO claims a per-(tenant, week) marker via the Notification
+ * @@unique(type, dedupKey) rail BEFORE narrating/sending; a retry finds the
+ * claim and short-circuits (mirrors the alerts dispatch stamp-before-send
+ * at-most-once contract). The marker row carries an already-past expiresAt so
+ * the notification feed (expiresAt > now) never surfaces it to a farmer.
  *
  * AlertPreference / User are NOT species models — raw prisma is allowed.
  */
@@ -34,7 +40,27 @@ import { ZAR_PER_USD } from "@/lib/einstein/embeddings";
 import { logger } from "@/lib/logger";
 import { narrateBriefing, templatedBriefingNarration } from "./narrator";
 import { collectBriefingSources, type CollectOptions } from "./collect";
+import { isoYearWeek } from "./iso-week";
 import type { BriefingPayload } from "./payload";
+
+/**
+ * Notification `type` for the per-(tenant, week) briefing-dispatch marker. The
+ * row is written with an already-past `expiresAt` so the notification feed
+ * (which filters `expiresAt > now`) never surfaces it to a farmer — it exists
+ * only to make the send idempotent under Inngest step retry, riding the same
+ * @@unique(type, dedupKey) rail the alert dedup uses.
+ */
+const BRIEFING_DISPATCH_MARKER_TYPE = "weekly_briefing_dispatched";
+
+/** Prisma raises P2002 on a unique-constraint violation (the week already
+ *  claimed). Narrow guard so this module avoids importing runtime Prisma types. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    "code" in err &&
+    (err as { code?: string }).code === "P2002"
+  );
+}
 
 /** Pessimistic pre-stamp token budget for the one-shot narration call. The
  *  briefing prompt is small (no methodology / no chunks), so the input is well
@@ -101,6 +127,40 @@ export async function sendWeeklyBriefing(
     userEmail: to,
     farmName: settings.farmName,
   });
+
+  // 3b. Claim the (tenant, week) BEFORE narrating + sending so an Inngest step
+  //     retry that re-enters this function short-circuits instead of resending.
+  //     Placed after the (cheap) payload build but before the (paid) narration:
+  //     a payload-build failure still retries cleanly (no claim yet), while the
+  //     retry-after-send window is closed and the AI budget is not re-debited on
+  //     a retry. At-most-once by design: a hard send failure after the claim
+  //     skips the week rather than risk a duplicate email — the correct trade-off
+  //     for a weekly digest (matches alerts dispatch).
+  const week = isoYearWeek(now);
+  try {
+    await prisma.notification.create({
+      data: {
+        type: BRIEFING_DISPATCH_MARKER_TYPE,
+        severity: "info",
+        message: `Weekly briefing dispatched (${week})`,
+        href: "",
+        dedupKey: `${BRIEFING_DISPATCH_MARKER_TYPE}:${week}`,
+        // Belt-and-braces invisibility: an already-past expiresAt keeps it out of
+        // the in-app feed (filters expiresAt > now), and isRead:true keeps it out
+        // of the daily alert-digest email (filters isRead:false, NOT expiresAt) —
+        // otherwise this internal marker would render as a dead-link line in the
+        // farmer's digest. It is bookkeeping, never user-facing.
+        isRead: true,
+        expiresAt: new Date(0),
+        payload: "{}",
+      },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return { sent: false, reason: "already-sent-this-week", to };
+    }
+    throw err;
+  }
 
   // 4. Narrate the email intro under the SAME AI budget guard Einstein uses
   //    (mark-before-send → reconcile). Fail-soft at every step: an over-budget

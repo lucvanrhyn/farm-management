@@ -213,7 +213,7 @@ export async function getReproStats(
   // the caller omitted it — export call-sites, which produce cattle exports).
   const db = scoped(prisma, "cattle");
 
-  const [reproObs, calvingObs, allCamps] = await Promise.all([
+  const [reproObs, calvingObs, allCamps, activeAnimals] = await Promise.all([
     db.observation.findMany({
       where: {
         type: { in: ["heat_detection", "insemination", "pregnancy_scan"] },
@@ -231,11 +231,26 @@ export async function getReproStats(
       select: selectFields,
     }),
     db.camp.findMany({ select: { campId: true, campName: true } }),
+    // Active roster. `upcomingCalvings` (below) is projected from insemination /
+    // pregnancy-scan observations, which persist after a cow dies / is sold / is
+    // culled (scoped().observation carries NO status filter). Without this
+    // intersection a non-active cow is surfaced as "due to calve" on
+    // /admin/reproduction and leaks into the calving/reproduction CSV exports.
+    // scoped().animal injects status:Active. This is the same ADR-0010
+    // same-population invariant the dashboard alert paths hold. The other KPIs
+    // (pregnancy/calving rate, days-open) intentionally span cross-status
+    // breeding history and are deliberately NOT filtered.
+    db.animal.findMany({
+      where: { status: "Active" },
+      select: { animalId: true },
+      take: 50_000,
+    }),
   ]);
 
   type ObsRow = (typeof reproObs)[0];
 
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));
+  const activeAnimalIds = new Set(activeAnimals.map((a) => a.animalId));
 
   // ── Activity KPIs ────────────────────────────────────────────────────────
 
@@ -328,6 +343,9 @@ export async function getReproStats(
 
   const upcomingCalvings: UpcomingCalving[] = [];
   for (const animalId of candidateIds) {
+    // ADR-0010 — upcomingCalvings is an active-roster projection; a deceased /
+    // sold / culled cow's retained insemination must not surface as due to calve.
+    if (!activeAnimalIds.has(animalId)) continue;
     const scanObs = latestScanByAnimal.get(animalId);
     const insemObs = latestInsemByAnimal.get(animalId);
     const useScan = scanObs != null && parseDetails(scanObs.details).result === "pregnant";

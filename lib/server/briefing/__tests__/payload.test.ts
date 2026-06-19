@@ -125,6 +125,26 @@ describe("buildBriefingPayload — nudges feed → what to do", () => {
     const p = buildBriefingPayload(emptySources());
     expect(p.whatToDo).toEqual([]);
   });
+
+  it("never emits 'undefined.' when an action label is missing/blank", () => {
+    const mk = (label: string | undefined): DoNextItem => ({
+      id: `d-${label ?? "none"}`,
+      type: "ROTATION_MOVE_DUE",
+      severity: "amber",
+      message: "m",
+      href: "/x",
+      action: { label } as unknown as DoNextItem["action"],
+      dueDate: null,
+      createdAt: "2026-06-14T00:00:00Z",
+    });
+    const sources = emptySources();
+    sources.doNext = [mk(undefined), mk(""), mk("Service Borehole 1")];
+    const p = buildBriefingPayload(sources);
+    // The malformed items are skipped entirely — no "undefined." / "." line.
+    expect(p.whatToDo).not.toContain("undefined.");
+    expect(p.whatToDo).not.toContain(".");
+    expect(p.whatToDo).toEqual(["Service Borehole 1."]);
+  });
 });
 
 describe("buildBriefingPayload — key changes → what changed (7-day window)", () => {

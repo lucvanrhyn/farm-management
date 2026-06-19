@@ -169,12 +169,20 @@ function buildWhatToWatch(sources: BriefingSources): string[] {
   return lines;
 }
 
-/** Build the "what to do" section from the ranked nudges feed. */
+/** Build the "what to do" section from the ranked nudges feed.
+ *  Skips any item without a non-blank action label so the briefing never renders
+ *  a degenerate "undefined." / "." line (the feed gate normally guarantees a
+ *  string label, but this keeps the deterministic payload total). Filtering
+ *  before the cap means a malformed item never consumes one of the TOP_ACTIONS
+ *  slots. */
 function buildWhatToDo(doNext: DoNextItem[]): string[] {
-  return doNext.slice(0, TOP_ACTIONS).map((d) => {
-    const due = d.dueDate ? ` (due ${d.dueDate})` : "";
-    return `${d.action.label}${due}.`;
-  });
+  return doNext
+    .filter((d) => typeof d.action?.label === "string" && d.action.label.trim() !== "")
+    .slice(0, TOP_ACTIONS)
+    .map((d) => {
+      const due = d.dueDate ? ` (due ${d.dueDate})` : "";
+      return `${d.action.label}${due}.`;
+    });
 }
 
 /** Local Oxford-list join (the shared joinClauses lives in templated-fallback,
