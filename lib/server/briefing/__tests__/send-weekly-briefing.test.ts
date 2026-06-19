@@ -72,6 +72,10 @@ function fakePrisma(opts: {
         return Promise.resolve(opts.adminEmail ? { email: opts.adminEmail } : null);
       }),
     },
+    // Idempotency marker write (one per (tenant, week)); first claim succeeds.
+    notification: {
+      create: vi.fn().mockResolvedValue({ id: "marker-1" }),
+    },
   } as never;
 }
 

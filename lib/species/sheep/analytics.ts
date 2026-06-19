@@ -13,6 +13,13 @@ function daysDiff(from: Date, to: Date): number {
  * Compute upcoming lambing dates from joining observations.
  * Expected lambing = joining date + 150 days.
  * Only returns entries where daysAway is between -7 and 90.
+ *
+ * `activeAnimalIds` is the active ewe roster. Joining observations persist
+ * after a ewe dies / is sold / is culled, so the projection MUST be intersected
+ * with the active roster — otherwise a non-active ewe is surfaced as "due to
+ * lamb" on /sheep/reproduction and in the "Due <30 days" KPI (ADR-0010
+ * same-population invariant). Required (not optional) so every call site is
+ * forced to supply it — the structural cure for this leak class.
  */
 export function getUpcomingLambings(
   joiningObs: Array<{
@@ -22,12 +29,14 @@ export function getUpcomingLambings(
     details: string;
   }>,
   campMap: Map<string, string>,
+  activeAnimalIds: ReadonlySet<string>,
 ): UpcomingBirth[] {
   const now = new Date();
   const results: UpcomingBirth[] = [];
 
   for (const obs of joiningObs) {
     if (!obs.animalId) continue;
+    if (!activeAnimalIds.has(obs.animalId)) continue;
 
     const expectedDate = new Date(
       obs.observedAt.getTime() + GESTATION_DAYS * MS_PER_DAY,

@@ -10,7 +10,11 @@ export type AnimalSex = "Male" | "Female";
 // Game: "Adult Male" | "Adult Female" | "Sub-adult" | "Juvenile"
 export type AnimalCategory = string;
 
-export type AnimalStatus = "Active" | "Sold" | "Deceased";
+// Canonical lifecycle set — must stay in sync with VALID_STATUS in
+// lib/domain/animals/update-animal.ts. "Culled" was historically missing here,
+// which let new code type animal status against an incomplete union — the seed
+// of the deceased/culled lifecycle-leak class (ADR-0010).
+export type AnimalStatus = "Active" | "Sold" | "Deceased" | "Culled";
 
 export type GrazingQuality = "Good" | "Fair" | "Poor" | "Overgrazed";
 

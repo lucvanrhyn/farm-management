@@ -87,7 +87,7 @@ async function getReproStats(prisma: PrismaClient): Promise<SpeciesReproStats> {
   const cutoff18m = daysAgo(548); // ~18 months
   const cutoff12m = daysAgo(365);
 
-  const [joiningObs, lambingObs, camps] = await Promise.all([
+  const [joiningObs, lambingObs, camps, activeAnimals] = await Promise.all([
     scoped(prisma, SPECIES).observation.findMany({
       where: { type: "joining", observedAt: { gte: cutoff18m } },
       select: { animalId: true, campId: true, observedAt: true, details: true },
@@ -99,9 +99,20 @@ async function getReproStats(prisma: PrismaClient): Promise<SpeciesReproStats> {
     scoped(prisma, SPECIES).camp.findMany({
       select: { campId: true, campName: true },
     }),
+    // Active roster — upcomingBirths is projected from joining observations,
+    // which persist after a ewe dies / is sold / is culled. scoped().animal
+    // injects status:Active; the projection is intersected with this set so a
+    // non-active ewe is never surfaced as "due to lamb" (ADR-0010). Matches the
+    // intersection getAlerts already does for lambing-imminent/overdue.
+    scoped(prisma, SPECIES).animal.findMany({
+      where: { status: "Active" },
+      select: { animalId: true },
+      take: 50_000,
+    }),
   ]);
 
   const campMap = new Map(camps.map((c) => [c.campId, c.campName]));
+  const activeIds = new Set(activeAnimals.map((a) => a.animalId));
 
   const joinings12m = joiningObs.filter((o) => o.observedAt >= cutoff12m);
   const lambings12m = lambingObs.filter((o) => o.observedAt >= cutoff12m);
@@ -111,7 +122,7 @@ async function getReproStats(prisma: PrismaClient): Promise<SpeciesReproStats> {
     lambings12m.length,
   );
 
-  const upcomingBirths = getUpcomingLambings(joiningObs, campMap);
+  const upcomingBirths = getUpcomingLambings(joiningObs, campMap, activeIds);
 
   return {
     pregnancyRate: null,

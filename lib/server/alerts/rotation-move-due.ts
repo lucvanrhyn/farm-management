@@ -20,6 +20,7 @@ import type { PrismaClient, FarmSettings } from "@prisma/client";
 import type { AlertCandidate } from "./types";
 import { defaultExpiry, toIsoWeek } from "./helpers";
 import { getRotationStatusByCamp } from "@/lib/server/rotation-engine";
+import { crossSpecies } from "@/lib/server/species-scoped-prisma";
 import { logger } from "@/lib/logger";
 
 /** Statuses where the mob has stayed too long and should move. */
@@ -43,6 +44,22 @@ export async function evaluate(
   // No rested camp ⇒ nowhere to send anyone, so emit nothing rather than a
   // move-to-an-occupied-camp nudge.
   if (rotation.nextToGraze.length === 0) return [];
+
+  // Species is a hard partition (Camp is keyed on (species, campId)): a cattle
+  // mob must never be routed into a sheep camp. nextToGraze carries only campId,
+  // so resolve each camp's species here. Fail-OPEN when a species is unknown
+  // (prod always has Camp.species NOT NULL; only test fixtures omit it) — a
+  // destination is excluded ONLY when we positively know it is a different
+  // species, so a legitimate move is never suppressed.
+  let campSpecies = new Map<string, string>();
+  try {
+    const campRows = await crossSpecies(prisma, "analytics-rollup").camp.findMany({
+      select: { campId: true, species: true },
+    });
+    campSpecies = new Map(campRows.map((c) => [c.campId, c.species]));
+  } catch {
+    // leave map empty → no species filtering (fail-open)
+  }
 
   const now = new Date();
   const week = toIsoWeek(now);
@@ -75,10 +92,17 @@ export async function evaluate(
   for (const camp of overdue) {
     const mob = camp.currentMobs[0];
     if (!mob) continue; // the filter guarantees this; narrows the type for TS
+    const mobSpecies = mob.species ?? campSpecies.get(camp.campId) ?? null;
     // Claim the best still-available destination that isn't this camp itself
-    // (never recommend moving a mob into the camp it's already in).
-    const destIdx = available.findIndex((d) => d.campId !== camp.campId);
-    if (destIdx === -1) continue; // no distinct rested camp left for this mob
+    // (never recommend moving a mob into the camp it's already in) AND that is
+    // the same species as the mob (hard partition; fail-open on unknown species).
+    const destIdx = available.findIndex((d) => {
+      if (d.campId === camp.campId) return false;
+      const destSpecies = campSpecies.get(d.campId) ?? null;
+      if (mobSpecies && destSpecies && destSpecies !== mobSpecies) return false;
+      return true;
+    });
+    if (destIdx === -1) continue; // no distinct same-species rested camp for this mob
     const [dest] = available.splice(destIdx, 1);
     const targetCamp = rotation.camps.find((c) => c.campId === dest.campId);
     const targetName = targetCamp?.campName ?? dest.campId;
@@ -88,7 +112,12 @@ export async function evaluate(
       category: "veld",
       severity: camp.status === "overstayed" ? "red" : "amber",
       dedupKey: `ROTATION_MOVE_DUE:${camp.campId}:${week}`,
-      collapseKey: "tenant",
+      // Per-source-camp collapse key (NOT "tenant"): each overdue mob is a
+      // DISTINCT physical move to a DISTINCT destination (#572). A tenant-wide
+      // key let collapseCandidates fold ≥3 moves into one notification that kept
+      // only the first mob's action, discarding the rest — undoing #572 at the
+      // multi-mob case. A per-camp key keeps every move individually actionable.
+      collapseKey: `rotation:${camp.campId}`,
       payload: {
         sourceCampId: camp.campId,
         sourceCampName: camp.campName,

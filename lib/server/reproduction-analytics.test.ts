@@ -23,17 +23,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { getReproStats } from "./reproduction-analytics";
 
-// Minimal fake Prisma: the engine only touches observation.findMany and
-// camp.findMany. Each is a spy resolving an empty result so the cattle path
-// runs to completion without a real DB.
+// Minimal fake Prisma: the engine touches observation.findMany, camp.findMany
+// and animal.findMany (the active roster, intersected into upcomingCalvings).
+// Each is a spy resolving an empty result so the cattle path runs to completion
+// without a real DB.
 function makeFakePrisma() {
   const observationFindMany = vi.fn().mockResolvedValue([]);
   const campFindMany = vi.fn().mockResolvedValue([]);
+  const animalFindMany = vi.fn().mockResolvedValue([]);
   const prisma = {
     observation: { findMany: observationFindMany },
     camp: { findMany: campFindMany },
+    animal: { findMany: animalFindMany },
   } as unknown as PrismaClient;
-  return { prisma, observationFindMany, campFindMany };
+  return { prisma, observationFindMany, campFindMany, animalFindMany };
 }
 
 describe("getReproStats — species scope (#356)", () => {

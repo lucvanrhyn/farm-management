@@ -54,7 +54,12 @@ export async function evaluate(
       category: "compliance",
       severity: "amber",
       dedupKey: `WATER_SERVICE_OVERDUE_30D:${wp.id}:${week}`,
-      collapseKey: "tenant",
+      // Per-water-point collapse key (NOT "tenant"): each borehole is a distinct
+      // service task with its own one-tap schedule action. A tenant-wide key let
+      // collapseCandidates fold ≥3 overdue points into one notification keeping
+      // only the first borehole's action, making the rest unschedulable from the
+      // Do-Next panel. A per-point key keeps every borehole individually actionable.
+      collapseKey: `water:${wp.id}`,
       payload: {
         waterPointId: wp.id,
         name: wp.name,
@@ -79,7 +84,7 @@ export async function evaluate(
       category: "compliance",
       severity: "red",
       dedupKey: `WATER_SERVICE_NON_OP:${wp.id}:${toIsoDate(now)}`,
-      collapseKey: "tenant",
+      collapseKey: `water:${wp.id}`,
       payload: { waterPointId: wp.id, name: wp.name, status: wp.status },
       message: `Water point "${wp.name}" status: ${wp.status}`,
       href: `/${farmSlug}/admin/game/infrastructure`,
