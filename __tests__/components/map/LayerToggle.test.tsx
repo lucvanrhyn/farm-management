@@ -72,6 +72,8 @@ describe("<LayerToggle />", () => {
 
   it("renders a checkbox for each of the 9 layers", () => {
     render(<Harness />);
+    // The panel starts collapsed behind a launcher (all breakpoints); open it.
+    fireEvent.click(screen.getByTestId("map-layers-button"));
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(9);
   });
@@ -81,6 +83,7 @@ describe("<LayerToggle />", () => {
     const value = { ...DEFAULT_LAYER_STATE };
     render(<LayerToggle value={value} onChange={(p) => changes.push(p)} />);
 
+    fireEvent.click(screen.getByTestId("map-layers-button"));
     const taskPinsCheckbox = screen.getByLabelText(/tasks/i);
     fireEvent.click(taskPinsCheckbox);
     expect(changes).toEqual([{ taskPins: true }]);

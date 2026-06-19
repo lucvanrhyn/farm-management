@@ -113,31 +113,29 @@ interface Props {
 }
 
 /**
- * Phone collapse + mobile re-anchor.
+ * Collapsible Layers panel (all breakpoints) + phone re-anchor.
  *
- * Issue #468 (re-anchor): on desktop the Layers panel sits bottom-right and the
- * action cluster sits bottom-left — they clear each other. At narrow widths the
- * two overlays meet in the middle of the bottom band, so below 640px the panel
- * docks to the TOP-right instead.
+ * Congestion fix: the always-open 9-row panel painted over a large slice of the
+ * map — worst on phone, but the frozen reference shows no floating layers panel
+ * on desktop either. The panel now starts COLLAPSED on every breakpoint as a
+ * small floating `.ft-map-layers-btn` launcher; tapping it opens the panel, and
+ * the panel's `.ft-map-layers-close` × re-collapses it.
  *
- * Congestion fix (phone): the always-open 9-row panel paints over a large slice
- * of the narrow map (the frozen phone reference shows only a collapsed layers
- * launcher, not the open panel). Below 640px the panel is therefore hidden
- * until the user taps the floating `.ft-map-layers-btn` launcher; tapping the
- * panel's close control re-collapses it. Desktop is byte-for-byte unchanged —
- * the launcher is `display:none` and the panel renders inline regardless of the
- * collapsed flag (the panel-hide rule is media-gated to ≤640px). CSS-only split
- * ⇒ SSR-safe (no hydration branch; the `collapsed` flag starts identical on
- * server and client, and only flips on user interaction).
+ * Issue #468 (phone re-anchor): on desktop the open panel sits bottom-right and
+ * the action cluster sits bottom-left — they clear each other. At ≤640px the two
+ * would meet in the middle of the bottom band, so on phone the OPEN panel docks
+ * to the top-right instead. Desktop keeps the bottom-right anchor.
+ *
+ * CSS-only collapse ⇒ SSR-safe: the `collapsed` flag starts `true` identically
+ * on server and client (no hydration branch); both launcher and panel are always
+ * in the DOM and only their `display` flips. The flag changes on user interaction.
  */
 const MOBILE_REANCHOR_CSS = `
-.ft-map-layers-btn { display: none; }
-.ft-map-layers-close { display: none; }
+.ft-map-layers-btn[data-collapsed="true"]    { display: inline-flex !important; }
+.ft-map-layers-btn[data-collapsed="false"]   { display: none !important; }
+.ft-map-layers-close                         { display: inline-flex; }
+.ft-map-layer-toggle[data-collapsed="true"]  { display: none !important; }
 @media (max-width: 640px) {
-  .ft-map-layers-btn[data-collapsed="true"]   { display: inline-flex !important; }
-  .ft-map-layers-btn[data-collapsed="false"]  { display: none !important; }
-  .ft-map-layers-close                         { display: inline-flex !important; }
-  .ft-map-layer-toggle[data-collapsed="true"]  { display: none !important; }
   .ft-map-layer-toggle[data-collapsed="false"] {
     bottom: auto !important;
     top: 96px !important;
@@ -148,9 +146,9 @@ const MOBILE_REANCHOR_CSS = `
 `;
 
 export default function LayerToggle({ value, onChange }: Props) {
-  // Phone-only collapse. Starts collapsed (matches the SSR markup on both
-  // server and client). Desktop ignores this flag — the panel-hide CSS only
-  // matches ≤640px, and the launcher is display:none above it.
+  // Collapse state (all breakpoints). Starts collapsed — identical SSR markup
+  // on server and client — so the panel-hide CSS shows just the launcher until
+  // the user opens it. Flips only on interaction (no hydration branch).
   const [collapsed, setCollapsed] = useState(true);
   const dc = collapsed ? "true" : "false";
 
@@ -158,8 +156,8 @@ export default function LayerToggle({ value, onChange }: Props) {
     <>
     <style>{MOBILE_REANCHOR_CSS}</style>
 
-    {/* Floating launcher — phone only. Opens the panel; on desktop it is
-        display:none and the panel is always inline. */}
+    {/* Floating launcher. Visible while collapsed (every breakpoint); opens the
+        panel. Hidden once the panel is open. */}
     <button
       type="button"
       data-collapsed={dc}
@@ -229,7 +227,7 @@ export default function LayerToggle({ value, onChange }: Props) {
         >
           Layers
         </span>
-        {/* Close control — phone only (desktop has no collapse). */}
+        {/* Close control — re-collapses the panel back to the launcher. */}
         <button
           type="button"
           aria-label="Close layers"

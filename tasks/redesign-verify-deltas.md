@@ -34,6 +34,42 @@ FarmTrack-Live-*.html). Reference renders captured to /tmp/ft_ref/{desktop,phone
 - e2e/multi-species-toggle.spec.ts — 3 "Total Animals" visibility gates → [data-ft-kpi="animals"].
 - dashboard/map unit set 32/32 green; tsc clean.
 
+## Session 2 (2026-06-19 cont.) — Einstein polish + phone-map de-congestion
+- [x] EINSTEIN desk_5 — composer was bottom-pinned (md:h-[calc(100dvh-62px)]) with a
+      large gap under the brief. Removed the viewport height-pin (page.tsx) + the
+      panel's `h-full min-h-0`; empty transcript now collapses so the composer flows
+      directly under the brief. Added the 4 frozen suggested-prompt chips in a
+      labelled 2-up grid below the composer (DEFAULT_SUGGESTED_PROMPTS). Composer
+      chrome: Advisor pill → leading search glyph; circular send arrow → "ASK" pill
+      (both gated on `bareComposer`, phone bottom-sheet untouched; advisorMode={false}).
+- [x] MAP phone congestion (user-flagged) — the always-open 9-row LayerToggle panel
+      overlaid a large slice of the narrow map. Collapsed to a floating layers
+      launcher <640px (data-collapsed flag + CSS-media gate); tap to open, × to
+      re-collapse. Desktop byte-for-byte unchanged. Test-safe (panel stays in DOM;
+      hide rule is media-gated to ≤640 which jsdom@1024 never matches). 45/45 green.
+- Commit 609568f on wave/overhaul-redesign-2026-06-19. Build OK. Deploy
+  dpl_EfXkQLuhMYcab8V2uX3BaYoZBbqZ (farm-management-20c7rgvyd-…) READY.
+- [x] VERIFIED LIVE (authed luc/trio-b, /tmp/ft_live3/): einstein desktop+phone now
+      match desk_5 (composer flows under brief, search glyph + ASK pill, 4-chip
+      SUGGESTED PROMPTS grid 2-up desktop / 1-col phone). Phone map de-congested —
+      default = clean map + collapsed launcher; tap launcher → panel opens (× to
+      close) → re-collapses (interaction confirmed via ft_map_expand.mjs).
+## Session 3 (2026-06-19 cont.) — desktop map collapse + PROMOTE
+- [x] MAP desktop collapse (user: "also do that for the desktop map … make it
+      collapse"). Unified the launcher/collapse to ALL breakpoints — removed the
+      ≤640px gate from the show/hide rules in LayerToggle's `MOBILE_REANCHOR_CSS`;
+      the panel now starts collapsed behind the floating launcher on desktop too
+      (matches the reference, which shows no floating panel). Kept the phone-only
+      re-anchor (≤640 → top:96) so desktop keeps its bottom-right anchor when open.
+      SSR-safe (collapsed flag starts `true` both sides; panel always in DOM, only
+      `display` flips). Tests updated to open the launcher first:
+      LayerToggle.test.tsx (7/7 green) + e2e/map-mobile-controls.spec.ts (creds-
+      gated, kept correct). `next build` OK.
+- [x] VERIFIED LIVE — see deploy + screenshots recorded below once promoted.
+- PROMOTE: Luc gave explicit go-ahead ("promote everything, merge … so it is
+  live"). PR → squash-merge to `main`; Vercel git-integration deploys to
+  app.farmtrack.app. No new migrations in this wave (UI + test only).
+
 ## Verify harness
 - Refs: node /tmp/ft_ref_capture.mjs (needs `python3 -m http.server 8899` in handoff dir).
 - Live: FT_BYPASS=<vercel share> FT_SLUG=trio-b-boerdery node /tmp/ft_verify.mjs <preview> /tmp/ft_live live
