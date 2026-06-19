@@ -114,13 +114,12 @@ async function getFarmModeCookie(
 async function readTotalAnimalsCount(
   page: import('@playwright/test').Page,
 ): Promise<number | null> {
-  const label = page.getByText('Total Animals', { exact: true }).first();
+  const label = page.locator('[data-ft-kpi="animals"]').first();
   try {
-    // The numeric value is immediately before the label in the same Link tile.
-    // We read the page's innerText and parse the number that precedes "Total Animals".
+    // The Animals KPI value carries a stable `data-ft-kpi-value="animals"`
+    // anchor (copy-independent — survives the frozen-design relabel).
     const html = await page.content();
-    // Match a digit sequence immediately followed (within the same stat tile) by "Total Animals"
-    const m = html.match(/(\d[\d,]*)\s*(?:<\/[^>]+>\s*)*Total Animals/);
+    const m = html.match(/data-ft-kpi-value="animals"[^>]*>\s*(\d[\d,]*)/);
     if (!m) return null;
     return parseInt(m[1].replace(/,/g, ''), 10);
   } catch {

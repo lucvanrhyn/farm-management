@@ -5,6 +5,7 @@ import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
 import DoNextPanel from "@/components/admin/DoNextPanel";
 import DataHealthCard from "@/components/admin/DataHealthCard";
 import ThisWeekBriefing from "@/components/admin/ThisWeekBriefing";
+import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import { Card, StatusDot, Label, Icon, Spark, makeSpark } from "@/components/ds";
 import {
   getCachedDashboardOverviewByMode,
@@ -122,72 +123,82 @@ interface Props {
   mode: SpeciesId;
   /** Tenant's resolved assistant name (assistant-name contract — never hardcode "Einstein"). */
   assistantName: string;
+  /** Farm coordinates for the body-column weather card (frozen-design Col 3). */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
-// ── Presentational KPI tile (command layout) ─────────────────────────────────
-// Token-driven .ft-card surface tile: icon + status dot, big tabnums value,
-// label + sub. The value text node is followed by the label text with ONLY a
-// closing </span> between them (no intervening opening element) so the tolerant
-// e2e greps — `(\d[\d,]*)\s*(?:</[^>]+>\s*)*Total Animals` etc — keep matching.
+// ── Presentational domain KPI tile (command layout — frozen design) ──────────
+// Matches the prototype `DomainTile` in adminlayouts.jsx (measured @1440 from the
+// live spec): Card padding 15; top row = 32px accent-faint icon square + 7px
+// status dot; value 23px/500 tabnums + inline mono unit; 9.5px uppercase label;
+// 11.5px muted sub. The whole tile is a Link to its product area.
+//
+// e2e contract: admin-journey / dashboard-counter-stability / multi-species
+// specs read the live counts. They are migrated to the stable `data-ft-kpi`
+// attribute (copy-independent) — the value carries `data-ft-kpi-value` so the
+// SSR HTML grep stays robust regardless of label copy. Do NOT remove these.
 function KpiTile({
+  kpiKey,
   icon: IconEl,
-  iconColor,
   value,
+  unit,
   label,
   sub,
   status,
-  spark,
-  accentValue,
+  valueTone,
   href,
 }: {
+  kpiKey: string;
   icon: React.ReactNode;
-  iconColor: string;
   value: React.ReactNode;
+  unit?: string;
   label: string;
   sub?: React.ReactNode;
   status: Status;
-  spark?: number[];
-  accentValue?: Status;
+  valueTone?: Status;
   href: string;
 }) {
-  const valueColor = accentValue
-    ? { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[accentValue]
+  const valueColor = valueTone
+    ? { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[valueTone]
     : "var(--ft-text)";
   return (
     <Link
       href={href}
+      data-ft-kpi={kpiKey}
       className="ft-card ft-card-interactive flex flex-col"
-      style={{ padding: "var(--ft-card-pad)", cursor: "pointer" }}
+      style={{ padding: 15, cursor: "pointer" }}
     >
-      <div className="flex items-start justify-between">
-        <span style={{ color: iconColor }}>{IconEl}</span>
+      <div className="flex items-center justify-between">
+        <span
+          style={{
+            width: 32, height: 32, borderRadius: "var(--ft-r-sm)", flexShrink: 0,
+            background: "var(--ft-accent-faint)", color: "var(--ft-accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {IconEl}
+        </span>
         <StatusDot status={status} />
       </div>
-      <div className="mt-3 flex items-end gap-2">
-        {/* The wrapping span carries the label-style; the value span overrides
-            with the big tabnums treatment. CRITICAL: the label text must sit
-            directly after the value span with ONLY a closing tag between them
-            so the tolerant e2e greps —
-            `(\d[\d,]*)\s*(?:</[^>]+>\s*)*Total Animals` (admin-journey,
-            dashboard-counter-stability, multi-species-toggle specs) — keep
-            matching. Do NOT interpose a unit/opening element between the value
-            digits and the label; per-tile units live in the `sub` caption. */}
+      <div className="flex items-baseline gap-1.5" style={{ marginTop: 12 }}>
         <span
-          style={{ fontSize: 12.5, color: "var(--ft-muted)", lineHeight: 1 }}
+          className="ft-tabnums"
+          data-ft-ticker
+          data-ft-kpi-value={kpiKey}
+          style={{ fontSize: 23, fontWeight: 500, lineHeight: 1, letterSpacing: "-0.02em", color: valueColor }}
         >
-          <span
-            className="ft-tabnums"
-            data-ft-ticker
-            style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: valueColor, letterSpacing: "-0.01em", display: "block", marginBottom: 8 }}
-          >
-            {value}
-          </span>
-          {label}
+          {value}
         </span>
-        {spark && <Spark values={spark} w={56} h={18} color="var(--ft-good)" className="mb-0.5" />}
+        {unit && (
+          <span className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)" }}>
+            {unit}
+          </span>
+        )}
       </div>
+      <div className="ft-label" style={{ fontSize: 9.5, marginTop: 6 }}>{label}</div>
       {sub && (
-        <div className="mt-1.5" style={{ fontSize: 11.5, color: "var(--ft-subtle)", lineHeight: 1.45 }}>
+        <div style={{ fontSize: 11.5, color: "var(--ft-muted)", marginTop: 5, lineHeight: 1.35 }}>
           {sub}
         </div>
       )}
@@ -195,7 +206,7 @@ function KpiTile({
   );
 }
 
-export default async function DashboardContent({ farmSlug, prisma, tier, mode, assistantName }: Props) {
+export default async function DashboardContent({ farmSlug, prisma, tier, mode, assistantName, latitude, longitude }: Props) {
   const isBasic = tier === "basic";
 
   const session = await getSession();
@@ -227,7 +238,6 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
     healthIssuesThisWeek,
     recentHealth,
     deathsToday,
-    birthsToday,
     mtdTransactions,
     dashboardAlerts,
   } = byMode;
@@ -252,9 +262,6 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
     return mtdBalance < 0 ? `−R ${formatted}` : `R ${formatted}`;
   })();
 
-  // ── Poor doers ───────────────────────────────────────────────────────────────
-  const poorDoerAlert = dashboardAlerts.amber.find(a => a.id === "poor-doers");
-  const poorDoerCount = poorDoerAlert?.count ?? 0;
 
   // ── Camp grazing quality tally ────────────────────────────────────────────────
   const grazingCounts: Record<string, number> = { Good: 0, Fair: 0, Poor: 0, Overgrazed: 0 };
@@ -271,100 +278,90 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
     grazingCounts.Overgrazed = 0;
   }
 
-  // ── KPI ribbon — restyle of the real stat-bar values ─────────────────────────
-  const inspectionPct = Math.round((inspectedToday / (totalCamps || 1)) * 100);
+  // ── KPI ribbon — the six frozen-design domain tiles (window.DOMAINS), each
+  //    mapped to REAL data (never fabricated). Order + labels match the
+  //    reference: Animals · Breeding · Camps · Grazing · Finance · Compliance.
+  const grazeable = (grazingCounts.Good ?? 0) + (grazingCounts.Fair ?? 0);
+  const needRest = (grazingCounts.Poor ?? 0) + (grazingCounts.Overgrazed ?? 0);
+  const inCalf = reproStats.scanCounts.pregnant;
+  const conception = reproStats.conceptionRate; // real % or null
   const kpis: Array<React.ComponentProps<typeof KpiTile>> = [
     {
-      icon: <Icon.animals size={16} />,
-      iconColor: "var(--ft-good)",
+      kpiKey: "animals",
+      icon: <Icon.animals size={17} />,
       value: totalAnimals,
-      label: "Total Animals",
-      sub: `${totalAnimals.toLocaleString()} head active${withdrawalCount > 0 ? ` · ${withdrawalCount} in withdrawal` : ""}`,
+      unit: "head",
+      label: "Animals",
+      sub: healthIssuesThisWeek > 0 || withdrawalCount > 0
+        ? `${healthIssuesThisWeek} health ${healthIssuesThisWeek === 1 ? "flag" : "flags"} · ${withdrawalCount} in withdrawal`
+        : "herd steady · no flags",
       status: "good",
-      accentValue: "good",
-      spark: makeSpark("herd", 7),
+      valueTone: "good",
       href: `/${farmSlug}/admin/animals`,
     },
     {
-      icon: <Icon.camps size={16} />,
-      iconColor: "var(--ft-muted)",
-      value: totalCamps,
-      label: "Total Camps",
-      sub: lowGrazingCount > 0
-        ? `${totalCamps} camps · ${lowGrazingCount} below 7d grazing`
-        : `${totalCamps} camps · grazing steady`,
-      status: lowGrazingCount > 0 ? "fair" : "good",
-      href: `/${farmSlug}/admin/camps`,
-    },
-    {
-      icon: <Icon.check size={16} />,
-      iconColor: inspectedToday === totalCamps ? "var(--ft-good)" : "var(--ft-fair)",
-      value: `${inspectedToday}/${totalCamps}`,
-      label: "Inspections Today",
-      sub: `${inspectionPct}% done`,
-      status: inspectedToday === totalCamps ? "good" : "fair",
-      accentValue: inspectedToday === totalCamps ? "good" : undefined,
-      href: `/${farmSlug}/admin/observations`,
-    },
-    {
-      icon: <Icon.health size={16} />,
-      iconColor: healthIssuesThisWeek === 0 ? "var(--ft-good)" : healthIssuesThisWeek > 3 ? "var(--ft-crit)" : "var(--ft-poor)",
-      value: healthIssuesThisWeek,
-      label: "Health Issues · 7d",
-      sub: healthIssuesThisWeek === 0
-        ? "All clear · no flags this week"
-        : `${healthIssuesThisWeek} flags · ${healthIssuesThisWeek > 3 ? "critical — review now" : "monitor affected"}`,
-      status: healthIssuesThisWeek === 0 ? "good" : healthIssuesThisWeek > 3 ? "critical" : "poor",
-      accentValue: healthIssuesThisWeek === 0 ? "good" : undefined,
-      href: `/${farmSlug}/admin/observations`,
-    },
-    {
-      icon: <Icon.calving size={16} />,
-      iconColor: birthsToday > 0 ? "var(--ft-good)" : "var(--ft-subtle)",
-      value: birthsToday,
-      label: "Calvings Today",
-      sub: birthsToday > 0 ? "New calvings" : "None today",
-      status: birthsToday > 0 ? "good" : "good",
-      accentValue: birthsToday > 0 ? "good" : undefined,
+      kpiKey: "breeding",
+      icon: <Icon.breeding size={17} />,
+      value: inCalf,
+      unit: "in calf",
+      label: "Breeding",
+      sub: conception != null
+        ? `${conception}% conception · ${reproStats.calvingsDue30d} calving 30d`
+        : reproStats.calvingsDue30d > 0
+          ? `${reproStats.calvingsDue30d} calving in 30d`
+          : "no scans recorded",
+      status: "good",
       href: `/${farmSlug}/admin/reproduction`,
     },
     {
-      icon: <Icon.death size={16} />,
-      iconColor: deathsToday > 0 ? "var(--ft-crit)" : "var(--ft-subtle)",
-      value: deathsToday,
-      label: "Deaths Today",
-      sub: deathsToday > 0 ? "Alert" : "None today",
-      status: deathsToday > 0 ? "critical" : "good",
-      href: `/${farmSlug}/admin/observations`,
+      kpiKey: "camps",
+      icon: <Icon.camps size={17} />,
+      value: totalCamps,
+      unit: "camps",
+      label: "Camps",
+      sub: lowGrazingCount > 0 ? `${lowGrazingCount} below 7d grazing` : "grazing steady",
+      status: lowGrazingCount > 0 ? "critical" : "good",
+      valueTone: lowGrazingCount > 0 ? "critical" : undefined,
+      href: `/${farmSlug}/admin/camps`,
     },
     {
-      icon: <Icon.treat size={16} />,
-      iconColor: withdrawalCount > 0 ? "var(--ft-fair)" : "var(--ft-subtle)",
-      value: withdrawalCount,
-      label: "In Withdrawal",
-      sub: withdrawalCount > 0 ? "Caution" : "All clear",
-      status: withdrawalCount > 0 ? "fair" : "good",
-      href: `/${farmSlug}/admin/animals`,
-    },
-    {
-      icon: <Icon.trend size={16} />,
-      iconColor: poorDoerCount > 0 ? "var(--ft-poor)" : "var(--ft-subtle)",
-      value: poorDoerCount,
-      label: "Poor Doers",
-      sub: poorDoerCount > 0 ? "Monitor" : "All clear",
-      status: poorDoerCount > 0 ? "poor" : "good",
-      href: `/${farmSlug}/admin/animals`,
+      kpiKey: "grazing",
+      icon: <Icon.grass size={17} />,
+      value: grazeable,
+      unit: "grazeable",
+      label: "Grazing",
+      sub: needRest > 0
+        ? `${needRest} need rest · feed ${lowGrazingCount > 0 ? "down" : "steady"}`
+        : `feed ${lowGrazingCount > 0 ? "trending down" : "holding"}`,
+      status: needRest > 0 ? "fair" : "good",
+      href: `/${farmSlug}/admin/grazing`,
     },
     ...(!isBasic ? [{
-      icon: <Icon.finance size={16} />,
-      iconColor: mtdBalance < 0 ? "var(--ft-poor)" : "var(--ft-good)",
+      kpiKey: "finance",
+      icon: <Icon.finance size={17} />,
       value: mtdFormatted,
-      label: "Revenue · MTD",
-      sub: "Finance · MTD",
+      unit: "MTD",
+      label: "Finance",
+      sub: "revenue · month to date",
       status: (mtdBalance < 0 ? "poor" : "good") as Status,
-      accentValue: (mtdBalance < 0 ? undefined : "good") as Status | undefined,
+      valueTone: (mtdBalance < 0 ? "poor" : "good") as Status,
       href: `/${farmSlug}/admin/finansies`,
     }] : []),
+    {
+      kpiKey: "compliance",
+      icon: <Icon.reports size={17} />,
+      value: `${dataHealth.overall}%`,
+      unit: "complete",
+      label: "Records",
+      sub: (
+        <>
+          grade {dataHealth.grade} ·{" "}
+          <span data-ft-inspections>{inspectedToday}/{totalCamps}</span> inspected today
+        </>
+      ),
+      status: dataHealth.overall >= 85 ? "good" : dataHealth.overall >= 70 ? "fair" : "poor",
+      href: `/${farmSlug}/admin/reports`,
+    },
   ];
 
   // ── Einstein brief — derived from the same real signals ──────────────────────
@@ -406,77 +403,67 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
 
   return (
     <>
-      {/* KPI ribbon — command-layout tiles. Responsive column counts (NOT a
-          single auto-fill min-width) so phone shows a COMPACT multi-up tile
-          grid instead of one full-width card per KPI — matching the reference
-          phone "stat" layout's tile row rather than a tall stack. Desktop lands
-          on 6-across like the reference command layout. */}
-      <div className="grid gap-3 mb-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      {/* KPI ribbon — the six frozen-design domain tiles. Desktop lands on
+          6-across (`repeat(6,1fr)`, gap 10) exactly like the reference command
+          layout; collapses to 3-/2-up on smaller widths. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {kpis.map((k) => (
-          <KpiTile key={k.label} {...k} />
+          <KpiTile key={k.kpiKey} {...k} />
         ))}
       </div>
 
-      {/* Low-grazing alert — dedicated, clickable jump to camp performance.
-          Kept as its own element (not folded into the generic strip below) so
-          the farmer gets a one-tap rotation-planning CTA. Issue #369: the space
-          before `with` MUST stay an explicit {" "} expression — a bare literal
-          space is dropped by the production SWC whitespace strip. */}
-      {lowGrazingCount > 0 && (
-        <Link
-          href={`/${farmSlug}/admin/performance`}
-          className="flex items-center gap-2.5 mb-5 ft-card-lift"
-          style={{
-            padding: "13px 18px",
-            background: "var(--ft-crit-bg)",
-            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
-            borderRadius: "var(--ft-r)",
-            color: "var(--ft-crit)",
-          }}
-        >
-          <Icon.alerts size={17} />
-          <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>GRAZING</span>
-          <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
-            {lowGrazingCount}{" "}
-            {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
-            with &lt;7 days grazing remaining
-          </p>
-          <span className="ml-auto ft-mono" style={{ fontSize: 11.5, color: "var(--ft-crit)" }}>Plan rotations →</span>
-        </Link>
-      )}
-
-      {/* Full-width urgent strip — sits directly under the KPI row, summarising
-          the urgent health / death signals composed from the same real data.
-          Reference desktop-operations.png: the crit strip spans the whole width
-          beneath the KPIs rather than being buried in a column. */}
-      {critItems.length > 0 && (
-        <div
-          className="flex items-center gap-2.5 mb-5"
-          style={{
-            padding: "13px 18px",
-            background: "var(--ft-crit-bg)",
-            border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
-            borderRadius: "var(--ft-r)",
-            color: "var(--ft-crit)",
-          }}
-        >
-          <Icon.alerts size={17} />
-          <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>URGENT</span>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
-        </div>
-      )}
-
-      {/* ── Primary hero — 2-column: NEEDS ATTENTION (left) + Einstein
-          TODAY'S BRIEF (right). Reference desktop-operations.png. The rest of
-          the real cards (reproduction, recent activity, camp status, feed,
-          quick actions, data health) are kept as secondary sections below. */}
-      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-[1.25fr_1fr] mb-4">
-        {/* Hero left — Proactive Nudges "Do Next" feed (#566) above Needs
-            Attention (#565 per-animal Herd Triage teaser). Both are fail-open
-            and self-hide when empty. */}
+      {/* ── Command body — the frozen-design 3-column grid (measured 1.3fr /
+          1fr / .9fr, gap 16, margin-top 18). Col 1 = alerts + Do-Next + Needs
+          Attention; Col 2 = Einstein Today's Brief + Recent Activity; Col 3 =
+          Weather + Feed-on-offer. Collapses to one column < lg. */}
+      <div
+        className="grid gap-4 items-start grid-cols-1 lg:grid-cols-[1.3fr_1fr_.9fr]"
+        style={{ marginTop: 18 }}
+      >
+        {/* Col 1 — alerts, Do-Next nudges, Needs Attention */}
         <div className="flex flex-col gap-4 min-w-0">
-          {/* Proactive Nudges v1 — one-tap "Do Next" actions (fail-open: the
-              loader returns no items on any error, so the panel self-hides). */}
+          {/* Low-grazing alert — clickable jump to camp performance. Issue #369:
+              the space before `with` MUST stay an explicit {" "} expression — a
+              bare literal space is dropped by the production SWC whitespace strip. */}
+          {lowGrazingCount > 0 && (
+            <Link
+              href={`/${farmSlug}/admin/performance`}
+              className="flex items-center gap-2.5 ft-card-lift"
+              style={{
+                padding: "13px 18px",
+                background: "var(--ft-crit-bg)",
+                border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+                borderRadius: "var(--ft-r)",
+                color: "var(--ft-crit)",
+              }}
+            >
+              <Icon.alerts size={17} />
+              <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>GRAZING</span>
+              <p className="text-sm font-medium" style={{ color: "var(--ft-crit)" }}>
+                {lowGrazingCount}{" "}
+                {lowGrazingCount === 1 ? "camp" : "camps"}{" "}
+                with &lt;7 days grazing remaining
+              </p>
+              <span className="ml-auto ft-mono" style={{ fontSize: 11.5, color: "var(--ft-crit)" }}>Plan rotations →</span>
+            </Link>
+          )}
+          {critItems.length > 0 && (
+            <div
+              className="flex items-center gap-2.5"
+              style={{
+                padding: "13px 18px",
+                background: "var(--ft-crit-bg)",
+                border: "1px solid color-mix(in oklab, var(--ft-crit) 35%, transparent)",
+                borderRadius: "var(--ft-r)",
+                color: "var(--ft-crit)",
+              }}
+            >
+              <Icon.alerts size={17} />
+              <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".14em", fontWeight: 600 }}>URGENT</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{critItems.join(" · ")}</span>
+            </div>
+          )}
+          {/* Proactive Nudges v1 — one-tap "Do Next" (fail-open: self-hides). */}
           <DoNextPanel
             items={doNext.items}
             farmSlug={farmSlug}
@@ -486,38 +473,98 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
           <NeedsAttentionPanel alerts={dashboardAlerts} farmSlug={farmSlug} triage={triageItems} />
         </div>
 
-        {/* Hero right — Einstein "Today's Brief" rotating border-beam card */}
-        <Card className="ft-brief min-w-0" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "14px 18px" }}>
-            <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
-              <Icon.einstein size={17} />
-              <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · TODAY&apos;S BRIEF</span>
-              <span className="flex-1" />
-              <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
+        {/* Col 2 — Einstein "Today's Brief" beam card + Recent Activity */}
+        <div className="flex flex-col gap-4 min-w-0">
+          <Card className="ft-brief min-w-0" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px" }}>
+              <div className="flex items-center gap-2.5 mb-3" style={{ color: "var(--ft-accent)" }}>
+                <Icon.einstein size={17} />
+                <span className="ft-mono" style={{ fontSize: 10.5, letterSpacing: ".16em", fontWeight: 600 }}>{assistantName.toUpperCase()} · TODAY&apos;S BRIEF</span>
+                <span className="flex-1" />
+                <span className="ft-mono" style={{ fontSize: 10, color: "var(--ft-subtle)" }}>06:00</span>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {briefBullets.map((b, i) => (
+                  <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 13.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
+                    <span>{b.text}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3.5 flex gap-2">
+                <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary" style={{ fontSize: 12, padding: "7px 12px" }}>
+                  <Icon.einstein size={13} /> Open advisor
+                </Link>
+                <Link href={`/${farmSlug}/admin/performance`} className="ft-btn" style={{ fontSize: 12, padding: "7px 12px" }}>
+                  Plan rotations
+                </Link>
+              </div>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {briefBullets.map((b, i) => (
-                <div key={i} className="flex items-start gap-2.5" style={{ fontSize: 13.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, marginTop: 5, flexShrink: 0, background: { good: "var(--ft-good)", fair: "var(--ft-fair)", poor: "var(--ft-poor)", critical: "var(--ft-crit)" }[b.tone] }} />
-                  <span>{b.text}</span>
+          </Card>
+
+          {/* Recent activity — health-incident timeline (24h) */}
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div className="flex items-center justify-between" style={{ padding: "15px 20px 11px", borderBottom: "1px solid var(--ft-border)" }}>
+              <Label>Recent Activity</Label>
+              <span className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)" }}>24h</span>
+            </div>
+            {recentHealth.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--ft-subtle)", padding: "14px 20px" }}>No health incidents recorded.</p>
+            ) : (
+              recentHealth.map((obs, i, arr) => (
+                <div
+                  key={obs.id}
+                  className="flex gap-3"
+                  style={{ padding: "12px 20px", borderBottom: i < arr.length - 1 ? "1px solid var(--ft-border)" : 0 }}
+                >
+                  <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-subtle)", minWidth: 70, paddingTop: 2 }}>
+                    {obs.observedAt.split("T")[0]}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="ft-mono" style={{ fontSize: 13, lineHeight: 1.4, color: "var(--ft-text)" }}>
+                      {obs.animalId ?? "Unknown"} · Camp {obs.campId}
+                    </div>
+                    <div className="ft-mono" style={{ fontSize: 9.5, color: "var(--ft-subtle)", marginTop: 3 }}>
+                      {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"} · health
+                    </div>
+                  </div>
                 </div>
-              ))}
+              ))
+            )}
+          </Card>
+        </div>
+
+        {/* Col 3 — Weather + Feed-on-offer */}
+        <div className="flex flex-col gap-4 min-w-0">
+          <WeatherWidget latitude={latitude} longitude={longitude} />
+          <Card style={{ padding: "var(--ft-card-pad)" }}>
+            <Label className="block">Feed on Offer · 30d</Label>
+            <div className="mt-2">
+              <Spark values={makeSpark(`feed-${farmSlug}`, 22)} w={220} h={48} color="var(--ft-fair)" />
             </div>
-            <div className="mt-3.5 flex gap-2">
-              <Link href={`/${farmSlug}/admin/einstein`} className="ft-btn ft-btn-primary" style={{ fontSize: 12, padding: "7px 12px" }}>
-                <Icon.einstein size={13} /> Open advisor
-              </Link>
-              <Link href={`/${farmSlug}/admin/performance`} className="ft-btn" style={{ fontSize: 12, padding: "7px 12px" }}>
-                Plan rotations
-              </Link>
-            </div>
-          </div>
-        </Card>
+            <p className="mt-2" style={{ fontSize: 11.5, color: "var(--ft-muted)" }}>
+              {lowGrazingCount > 0
+                ? "Trending down — plan rotations for the low-grazing camps."
+                : "Holding steady across the herd's grazing block."}
+            </p>
+          </Card>
+        </div>
       </div>
 
-      {/* ── Secondary sections — all the remaining real cards, kept below the
-          hero. 3-column dense grid: 1col (mobile) → 2col (lg) → 1.3/1/.9 (xl). */}
-      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr]">
+      {/* ── "More" — the frozen-design Operations screen ends after the 3-column
+          body above. The remaining real-data panels (reproduction, weekly
+          briefing, camp status, quick actions, data health, danger zone) are
+          relocated here in a default-collapsed disclosure so the above-fold view
+          matches the reference exactly while nothing is lost. */}
+      <details className="ft-more mt-4">
+        <summary
+          className="ft-mono flex items-center gap-2 cursor-pointer select-none"
+          style={{ fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ft-subtle)", padding: "10px 2px", fontWeight: 600 }}
+        >
+          <Icon.chevron size={13} className="ft-more-caret" />
+          More — reproduction, weekly briefing, camp status &amp; data health
+        </summary>
+      <div className="grid gap-4 items-start grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_1fr_.9fr] mt-4">
         {/* Column 1 — reproduction overview */}
         <div className="flex flex-col gap-4 min-w-0">
           {/* Reproductive overview — locked for basic tier */}
@@ -598,40 +645,9 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
               Einstein "Today's Brief" lives in the hero above, so it is not
               duplicated in this column. */}
           {thisWeek && <ThisWeekBriefing payload={thisWeek} farmSlug={farmSlug} />}
-
-          {/* Recent activity — restyle of "Recent Health Incidents" timeline */}
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <div className="flex items-center justify-between" style={{ padding: "15px 20px 11px", borderBottom: "1px solid var(--ft-border)" }}>
-              <Label>Recent Activity</Label>
-              <span className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)" }}>24h</span>
-            </div>
-            {recentHealth.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--ft-subtle)", padding: "14px 20px" }}>No health incidents recorded.</p>
-            ) : (
-              recentHealth.map((obs, i, arr) => (
-                <div
-                  key={obs.id}
-                  className="flex gap-3"
-                  style={{ padding: "12px 20px", borderBottom: i < arr.length - 1 ? "1px solid var(--ft-border)" : 0 }}
-                >
-                  <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-subtle)", minWidth: 70, paddingTop: 2 }}>
-                    {obs.observedAt.split("T")[0]}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="ft-mono" style={{ fontSize: 13, lineHeight: 1.4, color: "var(--ft-text)" }}>
-                      {obs.animalId ?? "Unknown"} · Camp {obs.campId}
-                    </div>
-                    <div className="ft-mono" style={{ fontSize: 9.5, color: "var(--ft-subtle)", marginTop: 3 }}>
-                      {Array.isArray(obs.details.symptoms) ? obs.details.symptoms.join(", ") : "Health issue"} · health
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </Card>
         </div>
 
-        {/* Column 3 — camp status, feed-on-offer sparkline, quick actions */}
+        {/* Column 3 — camp status, quick actions, data health */}
         <div className="flex flex-col gap-4 min-w-0">
           {/* Camp status summary */}
           <Card style={{ padding: "var(--ft-card-pad)" }}>
@@ -669,19 +685,6 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
             </div>
           </Card>
 
-          {/* Feed on offer · 30d sparkline */}
-          <Card style={{ padding: "var(--ft-card-pad)" }}>
-            <Label className="block">Feed on Offer · 30d</Label>
-            <div className="mt-2">
-              <Spark values={makeSpark(`feed-${farmSlug}`, 22)} w={220} h={48} color="var(--ft-fair)" />
-            </div>
-            <p className="mt-2" style={{ fontSize: 11.5, color: "var(--ft-muted)" }}>
-              {lowGrazingCount > 0
-                ? "Trending down — plan rotations for the low-grazing camps."
-                : "Holding steady across the herd's grazing block."}
-            </p>
-          </Card>
-
           {/* Quick actions */}
           <Card style={{ padding: "var(--ft-card-pad)" }}>
             <Label className="block mb-3">Quick Actions</Label>
@@ -709,14 +712,11 @@ export default async function DashboardContent({ farmSlug, prisma, tier, mode, a
 
           {/* Data health */}
           <DataHealthCard score={dataHealth} />
+
+          {isAdmin && <DangerZone />}
         </div>
       </div>
-
-      {isAdmin && (
-        <div className="mt-4">
-          <DangerZone />
-        </div>
-      )}
+      </details>
     </>
   );
 }

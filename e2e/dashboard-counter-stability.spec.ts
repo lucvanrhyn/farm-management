@@ -67,29 +67,23 @@ const MODE_COOKIE = (slug: string) => `farmtrack-mode-${slug}`;
  * `<inspected>/<totalCamps>` (e.g. "3/9"). Returns null if the tile is not
  * present (page bounced to /login or did not hydrate).
  *
- * The tile structure (see `components/admin/DashboardContent.tsx:155-164`):
- *   <p>{inspectedToday}/{totalCamps}</p>
- *   <p>Inspections Today</p>
- *
- * We grep the HTML for `(\d+)/(\d+)` immediately preceding "Inspections Today"
- * to avoid coupling to the exact DOM tree (tile re-layouts must not break
- * the regression guard).
+ * Frozen-design Operations renders inspections inside the "Records" KPI tile
+ * sub-line as `<span data-ft-inspections>{inspectedToday}/{totalCamps}</span>`.
+ * We grep the stable `data-ft-inspections` anchor (copy-independent — survives
+ * the tile relabel) rather than the old "Inspections Today" label text.
  */
 function parseInspectionsTile(html: string): { inspected: number; total: number } | null {
-  const m = html.match(/(\d+)\s*\/\s*(\d+)\s*(?:<\/[^>]+>\s*)*Inspections Today/);
+  const m = html.match(/data-ft-inspections[^>]*>\s*(\d+)\s*\/\s*(\d+)/);
   if (!m) return null;
   return { inspected: parseInt(m[1], 10), total: parseInt(m[2], 10) };
 }
 
 /**
- * Read the rendered "Total Camps" tile value.
- *
- * The tile structure:
- *   <p>{totalCamps}</p>
- *   <p>Total Camps</p>
+ * Read the rendered Camps KPI tile value from the stable
+ * `data-ft-kpi-value="camps"` anchor (frozen-design relabel of "Total Camps").
  */
 function parseTotalCampsTile(html: string): number | null {
-  const m = html.match(/(\d[\d,]*)\s*(?:<\/[^>]+>\s*)*Total Camps/);
+  const m = html.match(/data-ft-kpi-value="camps"[^>]*>\s*(\d[\d,]*)/);
   if (!m) return null;
   return parseInt(m[1].replace(/,/g, ''), 10);
 }
@@ -119,11 +113,11 @@ async function snapshotCampsTiles(
   await page.goto(`${BASE_URL}/${slug}/admin`, { waitUntil: 'domcontentloaded' });
   await expect(page).not.toHaveURL(/\/login/);
   // KPI grid renders both tiles; wait for the "Total Camps" label to appear.
-  await expect(page.getByText('Total Camps', { exact: true }).first()).toBeVisible({
+  await expect(page.locator('[data-ft-kpi="camps"]').first()).toBeVisible({
     timeout: 15_000,
   });
   await expect(
-    page.getByText('Inspections Today', { exact: true }).first(),
+    page.locator('[data-ft-inspections]').first(),
   ).toBeVisible({ timeout: 15_000 });
 
   const html = await page.content();

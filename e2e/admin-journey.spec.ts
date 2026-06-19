@@ -120,9 +120,11 @@ test.describe('PRD #128 admin journey — every critical route renders', () => {
     // Now visit /admin and assert the count card text matches farm.animalCount.
     await page.goto(`/${TENANT_SLUG}/admin`);
     const html = await page.content();
-    // The overview renders "X Total Animals". Tolerant grep — survives copy tweaks.
-    const m = html.match(/(\d[\d,]*)\s*(?:<\/[^>]+>\s*)*Total Animals/);
-    expect(m, '/admin page must render "<N> Total Animals" matching /api/farm').not.toBeNull();
+    // The overview renders the Animals KPI tile. Read its value from the stable
+    // `data-ft-kpi-value="animals"` anchor (copy-independent — survives the
+    // frozen-design relabel from "Total Animals" to "Animals").
+    const m = html.match(/data-ft-kpi-value="animals"[^>]*>\s*(\d[\d,]*)/);
+    expect(m, '/admin page must render the Animals KPI value matching /api/farm').not.toBeNull();
     if (m) {
       const adminAnimalCount = Number(m[1].replace(/,/g, ''));
       expect(adminAnimalCount).toBe(farm.animalCount);

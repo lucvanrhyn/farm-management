@@ -459,6 +459,14 @@
 }
 @keyframes ftRipple { to { transform: scale(2.4); opacity: 0; } }
 
+/* "More" disclosure on the Operations command screen — hide the native marker
+   and rotate the caret when open. */
+.ft-more > summary { list-style: none; }
+.ft-more > summary::-webkit-details-marker { display: none; }
+.ft-more > summary:hover { color: var(--ft-muted); }
+.ft-more > summary .ft-more-caret { transition: transform .18s ease; }
+.ft-more[open] > summary .ft-more-caret { transform: rotate(90deg); }
+
 @media (prefers-reduced-motion: reduce) {
   .ft-brief::before,
   .ft-card::before,
