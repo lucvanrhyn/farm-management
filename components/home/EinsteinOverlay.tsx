@@ -65,12 +65,12 @@ export function EinsteinOverlay({
 
   return (
     <div
-      className="dark-surface ft-einstein-overlay"
+      className="paper-surface ft-einstein-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Einstein AI Advisor"
     >
-      {/* scrim */}
+      {/* scrim — dims the Home surface behind the sheet (phone_5) */}
       <button
         type="button"
         aria-label="Close Einstein"
@@ -78,7 +78,8 @@ export function EinsteinOverlay({
         className="ft-einstein-scrim"
       />
 
-      {/* panel — modal on desktop, bottom sheet on mobile */}
+      {/* panel — modal on desktop, bottom sheet on mobile. Light "paper"
+          surface so the sheet reads cream over the dimmed Home (phone_5). */}
       <div className="ft-einstein-panel">
         <span className="ft-einstein-grabber" aria-hidden />
 
@@ -98,6 +99,8 @@ export function EinsteinOverlay({
           firstName={firstName}
           brief={SHEET_BRIEF}
           suggestedPrompts={SHEET_PROMPTS}
+          surface="inherit"
+          advisorMode={false}
         />
       </div>
 
@@ -107,24 +110,23 @@ export function EinsteinOverlay({
 }
 
 /**
- * Scoped overlay CSS. The overlay carries its OWN `dark-surface` scope — the
- * Home root is now the light "cream" surface, so the Einstein chat reads as a
- * self-contained dark modal whose warm "stage" gradient lifts above the scrim.
+ * Scoped overlay CSS. The overlay carries its OWN `paper-surface` scope so the
+ * sheet reads as a light "paper" card over the dimmed Home (phone_5 shows a
+ * cream sheet, not a dark modal). The scrim dims + frost-blurs the Home behind.
  */
 const OVERLAY_CSS = `
 .ft-einstein-overlay {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
-  /* The dark-surface class on this container supplies the modal's DARK token
-     set (the Home behind is now the light "cream" surface). We null its opaque
-     background (var --ft-bg) here so the translucent scrim below can still
-     frost-blur the cream Home through the overlay. */
+  /* The paper-surface class on this container supplies the modal's LIGHT token
+     set. We null its opaque background here so the translucent scrim below can
+     still frost-blur the Home through the overlay. */
   background: transparent;
 }
 .ft-einstein-scrim {
   position: absolute; inset: 0;
-  background: rgba(8,6,5,.55);
+  background: rgba(8,6,5,.45);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   border: 0; cursor: pointer;
@@ -134,10 +136,10 @@ const OVERLAY_CSS = `
   position: relative;
   width: min(560px, 96vw); height: min(680px, 88vh);
   display: flex; flex-direction: column; overflow: hidden;
-  background: radial-gradient(ellipse at 50% 28%, #2a2018, #14110d 70%);
+  background: var(--ft-bg);
   border-radius: var(--ft-r-xl, 22px);
-  border: 1px solid var(--ft-border, rgba(255,235,210,.13));
-  box-shadow: 0 40px 120px -20px rgba(0,0,0,.7);
+  border: 1px solid var(--ft-border);
+  box-shadow: 0 40px 120px -20px rgba(0,0,0,.4);
   animation: ftModalIn .26s cubic-bezier(.32,.72,.3,1) both;
 }
 .ft-einstein-grabber { display: none; }
@@ -159,14 +161,14 @@ const OVERLAY_CSS = `
     width: 100%; height: 88%;
     border-radius: 26px 26px 0 0;
     border-bottom: 0;
-    box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+    box-shadow: 0 -20px 60px rgba(0,0,0,.3);
     animation: ftSheetUp .32s cubic-bezier(.32,.72,.3,1) both;
   }
   .ft-einstein-grabber {
     display: block;
     position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
     width: 38px; height: 4px; border-radius: 999px; z-index: 6;
-    background: var(--ft-border2, rgba(255,235,210,.2));
+    background: var(--ft-border2);
   }
 }
 `;

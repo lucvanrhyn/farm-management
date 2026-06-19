@@ -17,9 +17,10 @@ import { applyAuth } from './fixtures/auth';
  *      bounding boxes DO NOT intersect, and the Draw button is fully visible
  *      inside the viewport (not clipped, not painted over).
  *
- *   2. Desktop (1440px): the Layers panel keeps its bottom-right anchor — the
- *      desktop control layout is unchanged. This guards against the mobile fix
- *      leaking into the desktop breakpoint.
+ *   2. Desktop (1440px): the Layers panel is now collapsible on every breakpoint
+ *      (it opens from a launcher), but once OPEN it keeps its bottom-right anchor
+ *      — it does NOT inherit the phone top-right re-anchor. This guards against
+ *      the mobile re-anchor leaking into the desktop breakpoint.
  *
  * Auth-credential self-skip mirrors admin-journey / death-disposal: forks
  * without secrets do not fail the suite. CI sets the env from secrets.
@@ -65,6 +66,10 @@ async function gotoAdminMap(page: import('@playwright/test').Page) {
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 20_000 });
   // The Draw Camp Boundary button is part of the always-on action cluster.
   await expect(page.getByTestId('map-action-cluster')).toBeVisible({ timeout: 15_000 });
+  // The Layers panel now starts collapsed behind a launcher on every breakpoint;
+  // open it so the bounding-box assertions below can measure the panel.
+  await expect(page.getByTestId('map-layers-button')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('map-layers-button').click();
   await expect(page.getByTestId('map-layer-toggle')).toBeVisible({ timeout: 15_000 });
   // Let the flyTo animation + control layout settle so bounding boxes are stable.
   await page.waitForTimeout(1_500);
@@ -106,7 +111,7 @@ test.describe('Issue #468 — map controls do not overlap on mobile', () => {
     expect(drawBox.y + drawBox.height, 'Draw button bottom within 844px').toBeLessThanOrEqual(844);
   });
 
-  test('1440px: Layers panel keeps its bottom-right anchor (desktop unchanged)', async ({ page }) => {
+  test('1440px: open Layers panel keeps its bottom-right anchor (no phone re-anchor)', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoAdminMap(page);
 

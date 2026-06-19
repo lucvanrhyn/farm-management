@@ -6,12 +6,16 @@
  * One entry surface, four destinations:
  *   ADMIN → Operations · LOGGER → Camp Rounds · EINSTEIN → AI Advisor · MAP → Farm Map
  *
- * Responsive (CSS, not a device toggle):
- *   - desktop (>620px) → "centered" editorial layout: brand top-left, greeting
- *     top-right, giant Fraunces farm-name headline, glass stat pill, optional
- *     Cattle/Sheep mode toggle, a 4-column destination card grid, status footer.
- *   - mobile (<=620px) → "stack" layout: compact header, Einstein brief peek,
- *     four full-width rows, and a sticky bottom tab bar.
+ * Responsive (CSS, not a device toggle) — the two locked frozen layouts:
+ *   - desktop (>620px) → "rail" layout (home.jsx HomeRail → desk_4.jpg): a
+ *     330px masthead aside (brand, "{breed} FMS" eyebrow, giant DM-Serif
+ *     farm-name headline, BREED/ANIMALS/CAMPS/OWNER definition list, status
+ *     footer) beside a flexible column of four destination rows (each with a
+ *     200px image slot). Collapses to a single stacked column at <=920px — the
+ *     width the desk_4.jpg masthead crop was captured at.
+ *   - mobile (<=620px) → "cover" layout (home.jsx PhoneCover → phone_1.jpg):
+ *     compact header, a cover image with the farm headline overlaid, four
+ *     full-width rows, and a sticky bottom tab bar.
  *
  * Einstein (AI Advisor) opens an IN-PLACE chat overlay (onAskEinstein) and does
  * NOT navigate. All real farm data (name, breed, owner, counts, mode) is passed
@@ -19,7 +23,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Icon, Card, Kbd, DotLine } from "@/components/ds";
+import { Icon, Card, Kbd } from "@/components/ds";
 import type { FarmMode } from "@/lib/farm-mode";
 import { useAssistantName } from "@/hooks/useAssistantName";
 
@@ -59,13 +63,6 @@ export interface HomePortalProps {
   /** Sign the user out. */
   onSignOut: () => void;
 }
-
-// Einstein morning brief (static demo — Home has no live brief source yet).
-const BRIEF: ReadonlyArray<readonly [string, string]> = [
-  ["Move Camp H mob — water empty", "var(--ft-poor)"],
-  ["VR-014 thin in B1 — pull to kraal", "var(--ft-fair)"],
-  ["3 cows clear withdrawal Saturday", "var(--ft-info)"],
-];
 
 const ENGLISH_DAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -137,9 +134,11 @@ function GreetChip({ firstName, hour, date }: { firstName: string; hour: number;
 }
 
 /**
- * Definition list of the four farm facts (BREED / ANIMALS / CAMPS / OWNER).
- * Mono-uppercase label left (.ft-label), serif value right, dotted divider
- * between rows (DotLine primitive). Replaces the old glass StatPill.
+ * Definition list of the four farm facts (BREED / ANIMALS / CAMPS / OWNER) —
+ * the `rail` masthead's signature block (home.jsx StatLine). Mono-uppercase
+ * label left (.ft-label), Space-Mono value right-aligned, a dashed divider
+ * above every row (top dashed border + a dashed rule between rows). Matches
+ * desk_4.jpg: full-width rows, values flush right.
  */
 function StatList({
   breed,
@@ -159,62 +158,53 @@ function StatList({
     { label: "Owner", value: owner },
   ];
   return (
-    <dl style={{ width: "100%", maxWidth: 420, margin: "0 auto", display: "flex", flexDirection: "column", gap: 0 }}>
-      {rows.map((r, i) => (
-        <div key={r.label}>
-          {i > 0 && <DotLine style={{ margin: "0" }} />}
-          <div
-            style={{
-              display: "flex", alignItems: "baseline", justifyContent: "space-between",
-              gap: 16, padding: "11px 2px",
-            }}
+    <dl style={{ width: "100%", margin: 0, borderTop: "1px dashed var(--ft-border)" }}>
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 16, padding: "12px 0", borderBottom: "1px dashed var(--ft-border)",
+          }}
+        >
+          <dt className="ft-label" style={{ margin: 0, color: "var(--ft-subtle)" }}>{r.label}</dt>
+          <dd
+            className={`ft-mono${r.tabnums ? " ft-tabnums" : ""}`}
+            style={{ margin: 0, fontSize: 13, color: "var(--ft-text)", textAlign: "right", lineHeight: 1.3 }}
           >
-            <dt className="ft-label" style={{ margin: 0 }}>{r.label}</dt>
-            <dd
-              className={`ft-serif${r.tabnums ? " ft-tabnums" : ""}`}
-              style={{ margin: 0, fontSize: 19, color: "var(--ft-text)", textAlign: "right", lineHeight: 1.1 }}
-            >
-              {r.value}
-            </dd>
-          </div>
+            {r.value}
+          </dd>
         </div>
       ))}
     </dl>
   );
 }
 
+/**
+ * Masthead footer block (home.jsx `rail` aside foot): the GreetChip line, the
+ * status row (Online · Synced · owner · Sign out) and the ⌘K hint, stacked and
+ * left-aligned. Matches the bottom of desk_4.jpg.
+ */
 function StatusFooter({
   owner,
-  greeting,
+  firstName,
+  hour,
   date,
   onSignOut,
 }: {
   owner: string;
-  greeting: string;
+  firstName: string;
+  hour: number;
   date: string;
   onSignOut: () => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-      {/* greeting + date line (reuses the GreetChip greeting+date) */}
-      <div
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap",
-          gap: 10, color: "var(--ft-muted)", fontSize: 13,
-        }}
-      >
-        <span>{greeting}</span>
-        <span style={{ color: "var(--ft-subtle)" }}>·</span>
-        <span className="ft-mono">{date}</span>
-        <span style={{ color: "var(--ft-subtle)" }}>·</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-          Press <Kbd>⌘K</Kbd> anywhere to jump
-        </span>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 16 }}>
+      <GreetChip firstName={firstName} hour={hour} date={date} />
       {/* status row */}
       <div
         style={{
-          display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap",
+          display: "flex", alignItems: "center", flexWrap: "wrap",
           gap: 15, color: "var(--ft-muted)", fontSize: 13,
         }}
       >
@@ -240,6 +230,9 @@ function StatusFooter({
           <Icon.signout size={14} /> Sign out
         </button>
       </div>
+      <div className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)", display: "inline-flex", alignItems: "center", gap: 7 }}>
+        Press <Kbd>⌘K</Kbd> anywhere to jump
+      </div>
     </div>
   );
 }
@@ -253,8 +246,62 @@ function cardBorder(d: HomeDestination): string {
   return d.ai || d.featured ? "color-mix(in oklab, var(--ft-accent) 45%, transparent)" : "var(--ft-border)";
 }
 
-/** Desktop destination tile. */
-function DestCardBlock({ d, onActivate }: { d: HomeDestination; onActivate: () => void }) {
+/**
+ * Image placeholder slot (home.jsx ImageSlot, "dashed" treatment for cream).
+ * A surface panel with a dashed inner border, a centered muted photo glyph, and
+ * a bottom-left mono caption chip. Used by the desktop DestRow (200px wide).
+ */
+function ImageSlot({
+  label,
+  height = 92,
+  radius = 12,
+  width,
+}: {
+  label: string;
+  height?: number;
+  radius?: number;
+  width?: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative", borderRadius: radius, overflow: "hidden", height, width,
+        background: "var(--ft-surface)", border: "1.5px dashed var(--ft-border)",
+        display: "flex", alignItems: "flex-end", flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center",
+          justifyContent: "center", color: "var(--ft-subtle)",
+        }}
+      >
+        <Icon.image size={Math.min(34, Math.round(height * 0.32))} />
+      </div>
+      <div
+        className="ft-mono"
+        style={{
+          position: "relative", margin: 12, padding: "4px 10px", borderRadius: 999,
+          fontSize: 10.5, letterSpacing: ".06em", fontWeight: 500,
+          background: "rgba(255,255,255,.7)", color: "rgba(40,30,20,.7)",
+          backdropFilter: "blur(6px)", border: ".5px solid rgba(0,0,0,.06)",
+          maxWidth: "calc(100% - 24px)", overflow: "hidden", textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Desktop destination row (home.jsx `rail` DestRow withImage). A wide retro
+ * card laid out as a 5-track grid: icon box · text block · stat · 200px image ·
+ * chevron. Logger (featured) + AI Advisor (ai) get the accent surface/icon.
+ * Matches the right column of the desktop `rail` reference.
+ */
+function DestRow({ d, onActivate }: { d: HomeDestination; onActivate: () => void }) {
   const [hover, setHover] = useState(false);
   const accenty = d.featured || d.ai;
   return (
@@ -263,31 +310,44 @@ function DestCardBlock({ d, onActivate }: { d: HomeDestination; onActivate: () =
       onClick={onActivate}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      className="ft-home-destrow"
       style={{
-        position: "relative", padding: "30px 26px", textAlign: "left", cursor: "pointer",
-        background: cardBg(d), border: `1px solid ${cardBorder(d)}`, borderRadius: 18,
-        color: "var(--ft-text)", transition: "transform .25s ease, background .25s ease",
-        transform: hover ? "translateY(-3px)" : "none", backdropFilter: "blur(8px)", height: "100%",
+        display: "grid",
+        gridTemplateColumns: "auto 1fr auto 200px auto",
+        alignItems: "center", gap: 22, width: "100%", textAlign: "left", cursor: "pointer",
+        padding: 16, background: cardBg(d), border: `1px solid ${cardBorder(d)}`,
+        borderRadius: 18, color: "var(--ft-text)",
+        transition: "transform .2s ease, background .2s ease",
+        transform: hover ? "translateX(5px)" : "none",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--ft-accent)" }}>
-        <d.Icon size={26} />
-        <Icon.chevron size={16} />
-      </div>
-      <div className="ft-mono" style={{ fontSize: 10, letterSpacing: ".2em", color: "var(--ft-subtle)", marginTop: 26 }}>
-        {d.label}
-      </div>
-      <div className="ft-serif" style={{ fontSize: 28, marginTop: 4, lineHeight: 1.1 }}>{d.title}</div>
-      <div style={{ fontSize: 13, color: "var(--ft-muted)", marginTop: 4 }}>{d.subtitle}</div>
       <div
-        className="ft-mono"
         style={{
-          marginTop: 22, paddingTop: 14, borderTop: "1px dashed var(--ft-border)",
-          fontSize: 12, color: accenty ? "var(--ft-accent)" : "var(--ft-muted)",
+          width: 54, height: 54, borderRadius: 14, display: "flex", alignItems: "center",
+          justifyContent: "center", flexShrink: 0,
+          background: accenty ? "var(--ft-accent)" : "var(--ft-surface2)",
+          color: accenty ? "#fff" : "var(--ft-accent)",
         }}
+      >
+        <d.Icon size={26} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div className="ft-mono" style={{ fontSize: 10, letterSpacing: ".2em", color: "var(--ft-subtle)" }}>
+          {d.label}
+        </div>
+        <div className="ft-serif" style={{ fontSize: 25, lineHeight: 1.1, marginTop: 3 }}>{d.title}</div>
+        <div style={{ fontSize: 13, color: "var(--ft-muted)", marginTop: 3 }}>{d.subtitle}</div>
+      </div>
+      <div
+        className="ft-mono ft-home-destrow-stat"
+        style={{ fontSize: 12, color: accenty ? "var(--ft-accent)" : "var(--ft-muted)", whiteSpace: "nowrap" }}
       >
         {d.stat}
       </div>
+      <div className="ft-home-destrow-img">
+        <ImageSlot label={d.title} width={200} height={92} radius={12} />
+      </div>
+      <Icon.chevron size={20} style={{ color: "var(--ft-accent)", flexShrink: 0 }} />
     </button>
   );
 }
@@ -304,9 +364,9 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
       onClick={onActivate}
       style={{
         display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
-        padding: "15px 16px", minHeight: 80, color: "var(--ft-text)",
+        padding: "15px 16px", minHeight: 80, borderRadius: 17, color: "var(--ft-text)",
         // accent tint for Logger (featured) + Einstein (ai); plain surface otherwise.
-        background: cardBg(d),
+        background: cardBg(d), borderColor: cardBorder(d),
       }}
     >
       <div
@@ -320,10 +380,10 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
         <d.Icon size={24} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="ft-mono" style={{ fontSize: 10, letterSpacing: ".2em", color: "var(--ft-subtle)" }}>
+        <div className="ft-mono" style={{ fontSize: 9.5, letterSpacing: ".18em", color: "var(--ft-subtle)" }}>
           {d.label}
         </div>
-        <div className="ft-serif" style={{ fontSize: 27, lineHeight: 1.05, marginTop: 2 }}>{d.title}</div>
+        <div className="ft-serif" style={{ fontSize: 21, lineHeight: 1.05, marginTop: 1 }}>{d.title}</div>
         {d.key === "logger" ? (
           <div style={{ marginTop: 7, height: 5, borderRadius: 999, background: "var(--ft-surface2)", overflow: "hidden" }}>
             <div style={{ width: `${pct}%`, height: "100%", background: "var(--ft-accent)" }} />
@@ -349,65 +409,26 @@ function PhoneRow({ d, onActivate }: { d: HomeDestination; onActivate: () => voi
 }
 
 /**
- * Cover image slot (mobile) — signature element of the phone "cover" layout.
- * Full-width rounded retro card (.ft-card) with a dashed inner frame, a muted
- * centered Icon.image glyph, and a bottom-left "Aerial — {farmName}" caption.
- * Placeholder until a real cover photo source exists.
+ * Cover image slot (mobile) — signature element of the phone "cover" layout
+ * (home.jsx PhoneCover). A 150px-tall rounded image placeholder (dashed frame +
+ * muted photo glyph + "Aerial — {farmName}" caption chip) with the serif farm
+ * headline overlaid bottom-left ("{head} {tail}", tail italic). Matches
+ * phone_1.jpg. Placeholder until a real cover photo source exists.
  */
-function PhoneCover({ farmName }: { farmName: string }) {
+function PhoneCover({ head, tail }: { head: string; tail: string }) {
   return (
-    <Card style={{ position: "relative", height: 190, overflow: "hidden", padding: 12 }}>
-      <div
-        style={{
-          position: "absolute", inset: 12, borderRadius: 12,
-          border: "1.5px dashed var(--ft-border2)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "var(--ft-subtle)",
-        }}
-      >
-        <Icon.image size={40} />
+    <div style={{ position: "relative", borderRadius: 20, overflow: "hidden" }}>
+      <ImageSlot label={`Aerial — ${head || tail}`} height={150} radius={20} />
+      <div style={{ position: "absolute", left: 16, bottom: 14, right: 16 }}>
+        <h1
+          className="ft-serif"
+          style={{ fontSize: 30, lineHeight: 0.92, margin: 0, color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,.5)" }}
+        >
+          {head && <>{head} </>}
+          <span style={{ fontStyle: "italic" }}>{tail}</span>
+        </h1>
       </div>
-      <div
-        className="ft-mono"
-        style={{
-          position: "absolute", left: 18, bottom: 16, fontSize: 11,
-          letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ft-muted)",
-        }}
-      >
-        Aerial — {farmName}
-      </div>
-    </Card>
-  );
-}
-
-/** Compact Einstein brief peek (mobile). */
-function PhoneBriefPeek({ onAskEinstein }: { onAskEinstein: () => void }) {
-  const assistantName = useAssistantName();
-  return (
-    <button
-      type="button"
-      onClick={onAskEinstein}
-      className="ft-brief"
-      style={{
-        textAlign: "left", cursor: "pointer", width: "100%", padding: "14px 16px",
-        color: "var(--ft-text)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div className="ft-mono" style={{ fontSize: 9.5, letterSpacing: ".16em", color: "var(--ft-subtle)" }}>
-          TODAY&apos;S BRIEF · 06:00
-        </div>
-        <span className="ft-mono" style={{ fontSize: 10.5, color: "var(--ft-accent)" }}>Ask {assistantName} →</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-        {BRIEF.map(([txt, c]) => (
-          <div key={txt} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12.5, color: "var(--ft-muted)", lineHeight: 1.5 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, marginTop: 5, flexShrink: 0, background: c }} />
-            <span>{txt}</span>
-          </div>
-        ))}
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -507,41 +528,40 @@ export function HomePortal({
 
   return (
     <div className="ft-home-root">
-      {/* ---- desktop chrome (brand + greeting) ---- */}
-      <header className="ft-home-brand">
-        <BrandMark />
-      </header>
-      <div className="ft-home-greet">
-        <GreetChip firstName={firstName} hour={hour} date={date} />
-      </div>
+      {/* ============================================================= *
+       *  DESKTOP — "rail" layout (home.jsx HomeRail → desk_4.jpg)      *
+       *  330px masthead aside + flexible destination-row main.         *
+       *  Collapses to a single stacked column at <= 920px (the         *
+       *  desk_4.jpg crop shows the full-width masthead at that width). *
+       * ============================================================= */}
+      <div className="ft-home-rail">
+        <aside className="ft-home-rail-aside">
+          <BrandMark />
 
-      {/* ---- desktop centered column ---- */}
-      <div className="ft-home-desktop">
-        <div
-          className="ft-mono"
-          style={{ fontSize: 12, color: "var(--ft-accent)", letterSpacing: ".22em", textTransform: "uppercase", marginBottom: 24 }}
-        >
-          {breed} FMS
-        </div>
-        <h1
-          className="ft-serif ft-home-headline"
-          style={{ fontWeight: 400, lineHeight: 0.95, margin: 0, letterSpacing: "-.04em", color: "var(--ft-text)" }}
-        >
-          {/* Keep the name a single contiguous text run (a real space, not <br>)
-              so textContent stays "Head Tail"; the tail block-wraps to its own
-              line visually via .ft-home-tail. */}
-          {head && <>{head} </>}
-          <span className="ft-home-tail" style={{ fontStyle: "italic", color: "var(--ft-accent)" }}>
-            {tail}
-          </span>
-        </h1>
+          <div>
+            <div
+              className="ft-mono"
+              style={{ fontSize: 11, color: "var(--ft-accent)", letterSpacing: ".2em", textTransform: "uppercase", marginBottom: 14 }}
+            >
+              {breed} FMS
+            </div>
+            <h1
+              className="ft-serif ft-home-headline"
+              style={{ fontWeight: 400, lineHeight: 0.95, margin: 0, letterSpacing: "-.03em", color: "var(--ft-text)" }}
+            >
+              {/* Single contiguous "Head Tail" text run (real space, not <br>)
+                  so textContent stays accessible; the italic accent tail drops
+                  to its own line visually via .ft-home-tail. */}
+              {head && <>{head} </>}
+              <span className="ft-home-tail" style={{ fontStyle: "italic", color: "var(--ft-accent)" }}>
+                {tail}
+              </span>
+            </h1>
+          </div>
 
-        <div style={{ marginTop: 34 }}>
           <StatList breed={breed} animalCount={animalCount} campCount={campCount} owner={owner} />
-        </div>
 
-        {isMultiMode && (
-          <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
+          {isMultiMode && (
             <div className="ft-segmented" role="tablist" aria-label="Species view">
               <button
                 type="button"
@@ -562,26 +582,31 @@ export function HomePortal({
                 <Icon.sheep size={15} /> Sheep
               </button>
             </div>
+          )}
+
+          <div className="ft-home-rail-foot">
+            <StatusFooter
+              owner={owner}
+              firstName={firstName}
+              hour={hour}
+              date={date}
+              onSignOut={onSignOut}
+            />
           </div>
-        )}
+        </aside>
 
-        <div className="ft-home-grid">
+        <main className="ft-home-rail-main">
           {destinations.map((d) => (
-            <DestCardBlock key={d.key} d={d} onActivate={activate(d)} />
+            <DestRow key={d.key} d={d} onActivate={activate(d)} />
           ))}
-        </div>
-
-        <div style={{ marginTop: 44 }}>
-          <StatusFooter
-            owner={owner}
-            greeting={`${greetingFor(hour)}${firstName ? `, ${firstName}` : ""}`}
-            date={date}
-            onSignOut={onSignOut}
-          />
-        </div>
+        </main>
       </div>
 
-      {/* ---- mobile stack ---- */}
+      {/* ============================================================= *
+       *  MOBILE — "cover" layout (home.jsx PhoneCover → phone_1.jpg)   *
+       *  compact header + cover image (headline overlaid) + 4 full-    *
+       *  width rows + sticky bottom tab bar.                           *
+       * ============================================================= */}
       <div className="ft-home-mobile">
         <div className="ft-home-mobile-scroll">
           <div className="ft-home-mobile-header">
@@ -597,12 +622,9 @@ export function HomePortal({
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ft-text)" }}>FarmTrack</span>
               </div>
-              <div style={{ marginTop: 14 }}>
-                <div className="ft-serif" style={{ fontSize: 26, lineHeight: 1.05, color: "var(--ft-text)", letterSpacing: "-.02em" }}>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 13, color: "var(--ft-muted)" }}>
                   {greetingFor(hour)}{firstName ? `, ${firstName}` : ""}
-                </div>
-                <div className="ft-mono" style={{ fontSize: 11, color: "var(--ft-subtle)", marginTop: 6 }}>
-                  {breed} · {animalCount} animals · {campCount} camps
                 </div>
               </div>
             </div>
@@ -612,9 +634,7 @@ export function HomePortal({
             </span>
           </div>
 
-          <PhoneCover farmName={head || farmName} />
-
-          <PhoneBriefPeek onAskEinstein={onAskEinstein} />
+          <PhoneCover head={head} tail={tail} />
 
           {destinations.map((d) => (
             <PhoneRow key={d.key} d={d} onActivate={activate(d)} />
@@ -641,31 +661,52 @@ const HOME_CSS = `
     radial-gradient(ellipse 70% 50% at 82% -10%, rgba(196,99,58,.08), transparent 55%),
     linear-gradient(180deg, #F5EFE3 0%, #EFE7D6 100%);
 }
-.ft-home-brand { position: absolute; top: 32px; left: 36px; z-index: 2; }
-.ft-home-greet { position: absolute; top: 35px; right: 36px; z-index: 2; }
 
-.ft-home-desktop {
-  max-width: 1200px; margin: 0 auto; padding: 140px 32px 72px;
-  text-align: center; position: relative; z-index: 1;
+/* ---- desktop "rail": 330px masthead aside + flexible row main ---- */
+.ft-home-rail {
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  min-height: 100vh;
 }
-.ft-home-headline { font-size: clamp(48px, 6vw, 72px); }
+.ft-home-rail-aside {
+  border-right: 1px solid var(--ft-border);
+  background: var(--ft-surface);
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.ft-home-headline { font-size: clamp(40px, 4vw, 56px); }
 /* Tail word drops to its own line (the design's two-line treatment) while the
    markup keeps a contiguous "Head Tail" text run for accessibility/tests. */
 .ft-home-tail { display: block; }
-.ft-home-grid {
-  margin: 56px auto 0; display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 18px; max-width: 1120px;
+/* footer pinned to the bottom of the aside (home.jsx margin-top:auto). */
+.ft-home-rail-foot { margin-top: auto; }
+.ft-home-rail-aside .ft-segmented { align-self: flex-start; }
+
+.ft-home-rail-main {
+  padding: 36px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
 }
 
 /* mobile shell hidden on desktop */
 .ft-home-mobile { display: none; }
 
+/* ---- collapse to a single stacked column (desk_4.jpg crop width) ---- */
 @media (max-width: 920px) {
-  .ft-home-grid { grid-template-columns: repeat(2, 1fr); }
+  .ft-home-rail { grid-template-columns: 1fr; }
+  .ft-home-rail-aside { border-right: none; border-bottom: 1px solid var(--ft-border); }
+  .ft-home-rail-main { justify-content: flex-start; }
+  /* the 200px image slot + its stat collapse out of the row on narrow widths */
+  .ft-home-destrow { grid-template-columns: auto 1fr auto; }
+  .ft-home-destrow-img { display: none; }
 }
 
 @media (max-width: 620px) {
-  .ft-home-brand, .ft-home-greet, .ft-home-desktop { display: none; }
+  .ft-home-rail { display: none; }
   .ft-home-mobile {
     display: flex; flex-direction: column; min-height: 100vh;
   }

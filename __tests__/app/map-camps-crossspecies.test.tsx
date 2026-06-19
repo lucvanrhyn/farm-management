@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
 const campFindManyMock = vi.fn();
+const animalGroupByMock = vi.fn();
 const farmSettingsFindFirstMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
 const getFarmModeMock = vi.fn();
@@ -90,6 +91,11 @@ const FIXTURE_CAMPS = [
 function buildPrismaMock() {
   return {
     camp: { findMany: campFindManyMock },
+    // The admin map now rolls up a per-camp head count via animal.groupBy
+    // (decorative status panel, desk_3.jpg). It's not part of the #364
+    // cross-species camp-list contract under test, so a no-op stub keeps the
+    // facade's groupBy wrapper from throwing on the missing delegate.
+    animal: { groupBy: animalGroupByMock },
     farmSettings: { findFirst: farmSettingsFindFirstMock },
   };
 }
@@ -101,6 +107,7 @@ beforeEach(() => {
   getFarmCredsMock.mockResolvedValue({ tier: "advanced" });
   getSessionMock.mockResolvedValue({ user: { email: "luc@example.com" } });
   getPrismaForFarmMock.mockResolvedValue(buildPrismaMock());
+  animalGroupByMock.mockResolvedValue([]);
   farmSettingsFindFirstMock.mockResolvedValue({ latitude: -33, longitude: 22 });
   // Faithful Prisma semantics: a `where.species` predicate filters the
   // result; absence of one returns every camp (the cross-species read).

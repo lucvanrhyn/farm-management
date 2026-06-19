@@ -11,12 +11,59 @@ import Link from "next/link";
 import { getCategoryLabel, getAnimalAge } from "@/lib/utils";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
-import { Pill, Kbd, Icon } from "@/components/ds";
+import { Pill, Kbd, Icon, Spark } from "@/components/ds";
 import { useFarmModeSafe } from "@/lib/farm-mode";
 import { getSpeciesModule, isValidSpecies } from "@/lib/species/registry";
 import { useResyncOnPropChange } from "@/lib/client/use-resync-on-prop-change";
 
 const PAGE_SIZE = 50;
+
+// Grid column templates for the catalogue table (desk_2.jpg). The Active grid
+// is the 9-column reference layout (ID · TYPE · SEX · CAMP · WEIGHT · ADG ·
+// STATUS/FLAGS · ADG TREND · chevron); Deceased keeps a leaner 6-column grid.
+const ACTIVE_COLS =
+  "minmax(110px,1.2fr) 84px 48px 80px 90px 72px minmax(150px,1.5fr) 110px 40px";
+const DECEASED_COLS = "minmax(110px,1.2fr) 84px 48px 90px minmax(120px,1fr) 130px";
+
+// [sortKey, label, textAlign]. Empty key = non-sortable (chevron) column.
+type HeaderCol = [string, string, ("left" | "right" | "center")?];
+const ACTIVE_HEADERS: HeaderCol[] = [
+  ["animalId", "ID"],
+  ["category", "Type"],
+  ["sex", "Sex"],
+  ["currentCamp", "Camp"],
+  ["", "Weight"],
+  ["", "ADG"],
+  ["status", "Status / flags"],
+  ["", "ADG trend"],
+  ["", ""],
+];
+const DECEASED_HEADERS: HeaderCol[] = [
+  ["animalId", "ID"],
+  ["category", "Type"],
+  ["sex", "Sex"],
+  ["dateOfBirth", "Age"],
+  ["currentCamp", "Last camp"],
+  ["deceasedAt", "Deceased on"],
+];
+
+/**
+ * Real per-animal weight/ADG facts the catalogue table renders. Sourced from
+ * `getAnimalWeightSummaries` (one batched weighing read, grouped server-side)
+ * and serialized to a plain record keyed by `animalId`. An animal with no
+ * weighing history is simply absent from `weightById`, so the row renders an
+ * honest "—" — these numbers are never fabricated.
+ */
+export interface AnimalWeightInfo {
+  /** kg of the latest weighing, or null when never weighed. */
+  weight: number | null;
+  /** Best available ADG (kg/day), or null when fewer than 2 weighings. */
+  adg: number | null;
+  /** true when `adg` sits below the farm's poor-doer threshold. */
+  isPoorDoer: boolean;
+  /** Chronological weight readings (kg) for the inline sparkline. */
+  series: number[];
+}
 
 interface Props {
   animals: PrismaAnimal[];
@@ -24,6 +71,14 @@ interface Props {
   farmSlug: string;
   withdrawalIds?: Set<string>;
   mobs?: Mob[];
+  /**
+   * Real WEIGHT / ADG / ADG-trend per animal, keyed by `animalId`. Covers the
+   * SSR-hydrated batch; rows streamed in via "Load more" (which the /api/animals
+   * endpoint serves without weight history) fall back to "—". Never fabricated.
+   */
+  weightById?: Record<string, AnimalWeightInfo>;
+  /** Farm's poor-doer ADG threshold (kg/day) — colours the ADG cell crit below it. */
+  poorDoerThreshold?: number;
   /**
    * Cursor (`animalId`) pointing at the first row *past* the SSR-hydrated
    * batch. When null, there are no more rows to load. Optional so callers
@@ -102,6 +157,8 @@ export default function AnimalsTable({
   farmSlug,
   withdrawalIds,
   mobs,
+  weightById,
+  poorDoerThreshold = 0.7,
   initialNextCursor,
   species,
   speciesTotal,
@@ -379,12 +436,6 @@ export default function AnimalsTable({
     </span>
   );
 
-  const mobMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const mob of mobs ?? []) m.set(mob.id, mob.name);
-    return m;
-  }, [mobs]);
-
   // Issue #323 — taxonomy must follow the explicit route contract, not the
   // ambient (localStorage/cookie-backed) FarmMode. /sheep/animals passes
   // species="sheep"; if we read `mode` here a stale "cattle" cookie made the
@@ -487,45 +538,59 @@ export default function AnimalsTable({
         })}
       </div>
 
-      {/* Full-width search with ⌘K hint */}
+      {/* Search + category chips in ONE bar — mirrors desk_2.jpg: full-width
+          search with ⌘K keycap, a hairline divider, then the category chip row
+          (All + real species categories; active = filled accent). */}
       <div
-        className="ft-card flex items-center gap-2.5"
-        style={{ padding: "9px 14px", boxShadow: "var(--ft-shadow-sm)" }}
+        className="ft-card flex flex-col gap-2 sm:flex-row sm:items-center"
+        style={{ padding: 4 }}
       >
-        <span style={{ color: "var(--ft-accent)" }}><Icon.search size={16} /></span>
-        <input
-          type="text"
-          placeholder="Search by ID, camp, mob…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="flex-1 bg-transparent text-sm focus:outline-none"
-          style={{ color: "var(--ft-text)", border: 0 }}
-        />
-        <Kbd>⌘K</Kbd>
-      </div>
-
-      {/* Category filter — retro chip row (All + real category values). Active
-          chip = filled accent. Replaces the native category <select>. */}
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by category">
-        <FilterChip
-          label="All"
-          active={categoryFilter === "all"}
-          onClick={() => { setCategoryFilter("all"); setPage(1); }}
-        />
-        {categories.map((c) => (
-          <FilterChip
-            key={c}
-            label={getCategoryLabel(c)}
-            active={categoryFilter === c}
-            onClick={() => { setCategoryFilter(c); setPage(1); }}
+        <div className="flex flex-1 items-center gap-2.5" style={{ padding: "8px 14px" }}>
+          <span style={{ color: "var(--ft-muted)" }}><Icon.search size={16} /></span>
+          <input
+            type="text"
+            placeholder="Search by ID, camp, mob…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="flex-1 bg-transparent text-sm focus:outline-none"
+            style={{ color: "var(--ft-text)", border: 0 }}
           />
-        ))}
+          <Kbd>⌘K</Kbd>
+        </div>
+        <div
+          aria-hidden="true"
+          className="hidden sm:block"
+          style={{ width: 1, height: 24, background: "var(--ft-border)" }}
+        />
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          style={{ padding: "2px 6px 2px 2px" }}
+          role="group"
+          aria-label="Filter by category"
+        >
+          <FilterChip
+            label="All"
+            active={categoryFilter === "all"}
+            onClick={() => { setCategoryFilter("all"); setPage(1); }}
+          />
+          {categories.map((c) => (
+            <FilterChip
+              key={c}
+              label={getCategoryLabel(c)}
+              active={categoryFilter === c}
+              onClick={() => { setCategoryFilter(c); setPage(1); }}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Camp / status selects + result count */}
+      {/* Secondary filters (camp / status) + result count. Not in the frozen
+          reference, which only shows the chip row — kept here as a slim row so
+          real camp/status filtering isn't lost (decision: match spec, relocate
+          extras — nothing dropped). */}
       <div className="flex flex-wrap items-center gap-3">
         <select
           value={campFilter}
@@ -588,50 +653,76 @@ export default function AnimalsTable({
         </p>
       )}
 
-      {/* Table */}
-      <div className="ft-card overflow-x-auto" style={{ padding: 0 }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ borderBottom: "1.5px solid var(--ft-border)" }}>
-              {(tab === "active"
-                ? [["animalId", "ID"], ["category", "Type"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Camp"], ...(mobs && mobs.length > 0 ? [["mobId", "Mob"]] : []), ["status", "Status"], ["", ""]] as [string, string][]
-                : [["animalId", "ID"], ["category", "Type"], ["sex", "Sex"], ["dateOfBirth", "Age"], ["currentCamp", "Last Camp"], ["deceasedAt", "Deceased On"]] as [string, string][]
-              ).map(([key, label]) => (
-                <th
-                  key={key || "__actions"}
-                  className={`ft-mono text-left px-3 py-2.5 text-[10px] font-semibold uppercase ${key ? "cursor-pointer select-none" : ""}`}
-                  style={{ color: "var(--ft-subtle)", background: "var(--ft-surface2)", letterSpacing: ".08em" }}
-                  onClick={() => key && toggleSort(key)}
-                >
-                  {label}
-                  {key && <SortIcon col={key} />}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageData.length === 0 && (
-              <tr>
-                <td
-                  colSpan={
-                    tab === "active"
-                      ? 7 + (mobs && mobs.length > 0 ? 1 : 0)
-                      : 6
-                  }
-                  className="px-4 py-10 text-center text-sm"
-                  style={{ color: "var(--ft-subtle)" }}
-                >
-                  No animals found.
-                </td>
-              </tr>
-            )}
-            {pageData.map((animal) => (
-              <tr
-                key={animal.animalId}
-                className="ft-row-hover transition-colors"
-                style={{ borderBottom: "1px solid var(--ft-border)" }}
+      {/* Table — CSS-grid catalogue matching desk_2.jpg. Active columns:
+          ID · TYPE · SEX · CAMP · WEIGHT · ADG · STATUS / FLAGS · ADG TREND ·
+          chevron. Header row is mono/uppercase on --ft-surface2 with a 1.5px
+          divider; rows carry a 1px border + row-hover. WEIGHT / ADG / trend are
+          real (weightById); animals never weighed render "—". */}
+      <div className="ft-card overflow-x-auto" style={{ padding: 0 }} role="table" aria-label="Animals">
+        <div style={{ minWidth: tab === "active" ? 820 : 640 }}>
+          {/* Header row */}
+          <div
+            role="row"
+            className="ft-mono"
+            style={{
+              display: "grid",
+              gridTemplateColumns: tab === "active" ? ACTIVE_COLS : DECEASED_COLS,
+              padding: "12px 20px",
+              background: "var(--ft-surface2)",
+              borderBottom: "1.5px solid var(--ft-border)",
+              fontSize: 10,
+              letterSpacing: ".08em",
+              color: "var(--ft-subtle)",
+              textTransform: "uppercase",
+              fontWeight: 600,
+              alignItems: "center",
+            }}
+          >
+            {(tab === "active" ? ACTIVE_HEADERS : DECEASED_HEADERS).map(([key, label, align]) => (
+              <div
+                key={key || label || "__chevron"}
+                role="columnheader"
+                onClick={() => key && toggleSort(key)}
+                className={key ? "cursor-pointer select-none" : ""}
+                style={{ textAlign: align ?? "left" }}
               >
-                <td className="px-3 py-2">
+                {label}
+                {key && <SortIcon col={key} />}
+              </div>
+            ))}
+          </div>
+
+          {/* Empty state */}
+          {pageData.length === 0 && (
+            <div
+              role="row"
+              className="px-4 py-10 text-center text-sm"
+              style={{ color: "var(--ft-subtle)" }}
+            >
+              No animals found.
+            </div>
+          )}
+
+          {/* Data rows */}
+          {pageData.map((animal, i) => {
+            const w = weightById?.[animal.animalId];
+            const adgLow = w?.adg != null && w.adg < poorDoerThreshold;
+            return (
+              <div
+                key={animal.animalId}
+                role="row"
+                className="ft-row-hover transition-colors"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: tab === "active" ? ACTIVE_COLS : DECEASED_COLS,
+                  padding: "14px 20px",
+                  borderBottom: i < pageData.length - 1 ? "1px solid var(--ft-border)" : 0,
+                  alignItems: "center",
+                  fontSize: 13,
+                }}
+              >
+                {/* ID */}
+                <div role="cell">
                   <Link
                     href={`/${farmSlug}/admin/animals/${animal.animalId}`}
                     className="ft-mono text-sm font-semibold transition-colors"
@@ -641,50 +732,75 @@ export default function AnimalsTable({
                   >
                     {animal.animalId}
                   </Link>
-                </td>
-                <td className="px-3 py-2">
+                </div>
+                {/* TYPE */}
+                <div role="cell">
                   <Pill tone="muted">{getCategoryLabel(animal.category)}</Pill>
-                </td>
-                <td className="px-3 py-2 text-sm" style={{ color: "var(--ft-muted)" }}>
-                  {animal.sex === "Male" ? "Male" : "Female"}
-                </td>
-                <td className="px-3 py-2 text-sm ft-mono" style={{ color: "var(--ft-subtle)" }}>
-                  {getAnimalAge(animal.dateOfBirth ?? undefined)}
-                </td>
-                <td className="px-3 py-2">
-                  <Link
-                    href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
-                    className="text-sm font-medium ft-mono transition-colors"
-                    style={{ color: "var(--ft-muted)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-accent)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-muted)")}
-                  >
-                    {animal.currentCamp}
-                  </Link>
-                </td>
+                </div>
+                {/* SEX */}
+                <div role="cell" className="ft-mono text-sm" style={{ color: "var(--ft-muted)" }}>
+                  {animal.sex === "Male" ? "M" : "F"}
+                </div>
                 {tab === "active" ? (
                   <>
-                    {mobs && mobs.length > 0 && (
-                      <td className="px-3 py-2 text-sm" style={{ color: "var(--ft-muted)" }}>
-                        {animal.mobId ? (mobMap.get(animal.mobId) ?? "—") : "—"}
-                      </td>
-                    )}
-                    <td className="px-3 py-2">
-                      {/* Status as uppercase token pills — stacks the lifecycle
-                          status (ACTIVE/SOLD) with any in-withdrawal flag the
-                          real data carries (no synthetic "pregnant" flag — the
-                          animal row has no such field). */}
-                      <span className="flex items-center gap-1.5 flex-wrap">
+                    {/* CAMP */}
+                    <div role="cell">
+                      <Link
+                        href={`/${farmSlug}/dashboard/camp/${animal.currentCamp}`}
+                        className="text-sm font-medium ft-mono transition-colors"
+                        style={{ color: "var(--ft-muted)" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ft-accent)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ft-muted)")}
+                      >
+                        {animal.currentCamp}
+                      </Link>
+                    </div>
+                    {/* WEIGHT */}
+                    <div role="cell" className="ft-mono ft-tabnums text-sm" style={{ color: "var(--ft-text)" }}>
+                      {w?.weight != null ? `${Math.round(w.weight)} kg` : <span style={{ color: "var(--ft-subtle)" }}>—</span>}
+                    </div>
+                    {/* ADG */}
+                    <div
+                      role="cell"
+                      className="ft-mono ft-tabnums text-sm"
+                      style={{ color: adgLow ? "var(--ft-crit)" : "var(--ft-text)" }}
+                    >
+                      {w?.adg != null ? w.adg.toFixed(2) : <span style={{ color: "var(--ft-subtle)" }}>—</span>}
+                    </div>
+                    {/* STATUS / FLAGS — stacked token pills. The lifecycle
+                        status (real: Active/Sold) leads in a green tone that
+                        visually mirrors the reference's "HEALTHY" pill, then any
+                        real flags stack below it. We deliberately do NOT relabel
+                        "Active" as "Healthy" — the Animal row carries no health
+                        assessment, only lifecycle status + the derived Low-ADG /
+                        in-withdrawal signals. */}
+                    <div role="cell">
+                      <span className="flex flex-wrap items-center gap-1.5">
                         <Pill tone={animal.status === "Active" ? "good" : "muted"}>
                           {animal.status}
                         </Pill>
+                        {adgLow && <Pill tone="poor">Low ADG</Pill>}
                         {withdrawalIds?.has(animal.animalId) && (
                           <Pill tone="fair">In withdrawal</Pill>
                         )}
                       </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-1.5">
+                    </div>
+                    {/* ADG TREND — real weight-series sparkline (only when ≥2 reads) */}
+                    <div role="cell">
+                      {w && w.series.length >= 2 ? (
+                        <Spark
+                          values={w.series}
+                          w={90}
+                          h={26}
+                          color={adgLow ? "var(--ft-crit)" : "var(--ft-good)"}
+                        />
+                      ) : (
+                        <span className="text-sm" style={{ color: "var(--ft-subtle)" }}>—</span>
+                      )}
+                    </div>
+                    {/* Row actions + chevron */}
+                    <div role="cell">
+                      <div className="flex items-center justify-end gap-1">
                         {animal.status === "Active" && (
                           <AnimalActions animalId={animal.animalId} campId={animal.currentCamp} variant="row" />
                         )}
@@ -699,17 +815,28 @@ export default function AnimalsTable({
                           <Icon.chevron size={16} />
                         </Link>
                       </div>
-                    </td>
+                    </div>
                   </>
                 ) : (
-                  <td className="px-3 py-2 text-sm ft-mono" style={{ color: "var(--ft-crit)" }}>
-                    {animal.deceasedAt ? new Date(animal.deceasedAt).toLocaleDateString("en-ZA") : "—"}
-                  </td>
+                  <>
+                    {/* AGE */}
+                    <div role="cell" className="ft-mono text-sm" style={{ color: "var(--ft-subtle)" }}>
+                      {getAnimalAge(animal.dateOfBirth ?? undefined)}
+                    </div>
+                    {/* LAST CAMP */}
+                    <div role="cell" className="ft-mono text-sm" style={{ color: "var(--ft-muted)" }}>
+                      {animal.currentCamp}
+                    </div>
+                    {/* DECEASED ON */}
+                    <div role="cell" className="ft-mono text-sm" style={{ color: "var(--ft-crit)" }}>
+                      {animal.deceasedAt ? new Date(animal.deceasedAt).toLocaleDateString("en-ZA") : "—"}
+                    </div>
+                  </>
                 )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* In-page pagination (client-side slice of the already-hydrated

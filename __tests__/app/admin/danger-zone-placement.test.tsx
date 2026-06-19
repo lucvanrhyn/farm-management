@@ -133,6 +133,14 @@ beforeEach(() => {
     },
     camp: { findMany: vi.fn().mockResolvedValue([]) },
     mob: { findMany: vi.fn().mockResolvedValue([]) },
+    // Overhaul rebuild — the admin/animals page now also derives real WEIGHT /
+    // ADG per row from a batched `observation.findMany` (getAnimalWeightSummaries)
+    // and reads `farmSettings.adgPoorDoerThreshold` for the poor-doer cutoff.
+    // The scoped-prisma facade dereferences these models synchronously, so a
+    // missing mock throws a TypeError before any `.catch` — empty/null is fine
+    // for this placement test (it only inspects the danger-zone wrapper).
+    observation: { findMany: vi.fn().mockResolvedValue([]) },
+    farmSettings: { findFirst: vi.fn().mockResolvedValue(null) },
     transaction: { findMany: vi.fn().mockResolvedValue([]) },
     transactionCategory: {
       findMany: vi.fn().mockResolvedValue([]),

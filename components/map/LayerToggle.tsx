@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { Icon } from "@/components/ds";
 
 export interface LayerState {
   campOverlay:     boolean;
@@ -112,21 +113,30 @@ interface Props {
 }
 
 /**
- * Mobile re-anchor (issue #468). On desktop the Layers panel sits bottom-right
- * and the action cluster sits bottom-left — they clear each other with room to
- * spare. At narrow widths the two overlays meet in the middle of the bottom
- * band and the panel paints over the *Draw Camp Boundary* button.
+ * Collapsible Layers panel (all breakpoints) + phone re-anchor.
  *
- * The fix is purely spatial and font-independent: below 640px the panel docks
- * to the TOP-right (under the Mapbox nav controls) instead of the bottom-right,
- * which removes any vertical overlap with the bottom-left action cluster. The
- * `!important` is required to beat the component's inline `bottom`/`right`.
- * CSS-only ⇒ SSR-safe (no hydration branch) and the desktop layout is byte-for-
- * byte unchanged (the rule never matches above 640px).
+ * Congestion fix: the always-open 9-row panel painted over a large slice of the
+ * map — worst on phone, but the frozen reference shows no floating layers panel
+ * on desktop either. The panel now starts COLLAPSED on every breakpoint as a
+ * small floating `.ft-map-layers-btn` launcher; tapping it opens the panel, and
+ * the panel's `.ft-map-layers-close` × re-collapses it.
+ *
+ * Issue #468 (phone re-anchor): on desktop the open panel sits bottom-right and
+ * the action cluster sits bottom-left — they clear each other. At ≤640px the two
+ * would meet in the middle of the bottom band, so on phone the OPEN panel docks
+ * to the top-right instead. Desktop keeps the bottom-right anchor.
+ *
+ * CSS-only collapse ⇒ SSR-safe: the `collapsed` flag starts `true` identically
+ * on server and client (no hydration branch); both launcher and panel are always
+ * in the DOM and only their `display` flips. The flag changes on user interaction.
  */
 const MOBILE_REANCHOR_CSS = `
+.ft-map-layers-btn[data-collapsed="true"]    { display: inline-flex !important; }
+.ft-map-layers-btn[data-collapsed="false"]   { display: none !important; }
+.ft-map-layers-close                         { display: inline-flex; }
+.ft-map-layer-toggle[data-collapsed="true"]  { display: none !important; }
 @media (max-width: 640px) {
-  .ft-map-layer-toggle {
+  .ft-map-layer-toggle[data-collapsed="false"] {
     bottom: auto !important;
     top: 96px !important;
     max-height: calc(100% - 132px);
@@ -136,11 +146,50 @@ const MOBILE_REANCHOR_CSS = `
 `;
 
 export default function LayerToggle({ value, onChange }: Props) {
+  // Collapse state (all breakpoints). Starts collapsed — identical SSR markup
+  // on server and client — so the panel-hide CSS shows just the launcher until
+  // the user opens it. Flips only on interaction (no hydration branch).
+  const [collapsed, setCollapsed] = useState(true);
+  const dc = collapsed ? "true" : "false";
+
   return (
     <>
     <style>{MOBILE_REANCHOR_CSS}</style>
+
+    {/* Floating launcher. Visible while collapsed (every breakpoint); opens the
+        panel. Hidden once the panel is open. */}
+    <button
+      type="button"
+      data-collapsed={dc}
+      data-testid="map-layers-button"
+      aria-label="Map layers"
+      aria-expanded={!collapsed}
+      onClick={() => setCollapsed(false)}
+      className="ft-map-layers-btn dark-surface"
+      style={{
+        position: "absolute",
+        top: 96,
+        right: 16,
+        zIndex: 11,
+        alignItems: "center",
+        justifyContent: "center",
+        width: 40,
+        height: 40,
+        borderRadius: "var(--ft-r-sm)",
+        background: "color-mix(in oklab, var(--ft-surface) 92%, transparent)",
+        backdropFilter: "blur(14px) saturate(140%)",
+        border: "1px solid var(--ft-border2)",
+        boxShadow: "var(--ft-shadow-lg)",
+        color: "var(--ft-text)",
+        cursor: "pointer",
+      }}
+    >
+      <Icon.layers size={18} />
+    </button>
+
     <div
       data-testid="map-layer-toggle"
+      data-collapsed={dc}
       className="ft-map-layer-toggle dark-surface"
       style={{
         position: "absolute",
@@ -164,16 +213,48 @@ export default function LayerToggle({ value, onChange }: Props) {
       }}
     >
       <div
-        className="ft-mono"
-        style={{
-          fontSize: 10,
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          color: "var(--ft-muted)",
-          marginBottom: 8,
-        }}
+        className="flex items-center justify-between"
+        style={{ marginBottom: 8 }}
       >
-        Layers
+        <span
+          className="ft-mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: "var(--ft-muted)",
+          }}
+        >
+          Layers
+        </span>
+        {/* Close control — re-collapses the panel back to the launcher. */}
+        <button
+          type="button"
+          aria-label="Close layers"
+          onClick={() => setCollapsed(true)}
+          className="ft-map-layers-close items-center justify-center"
+          style={{
+            width: 22,
+            height: 22,
+            marginRight: -4,
+            borderRadius: "var(--ft-r-sm)",
+            color: "var(--ft-muted)",
+            cursor: "pointer",
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       {TOGGLES.map((opt) => (
         <label

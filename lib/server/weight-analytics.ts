@@ -151,6 +151,94 @@ export async function getAnimalWeightData(
 }
 
 /**
+ * Compact weight summary for one animal in a list/table context. Carries just
+ * the fields the catalogue Animals table renders (latest weight, the best
+ * available ADG signal, the poor-doer flag, and the raw weight series so a
+ * sparkline can plot the real trend). A row with no weighings yields
+ * `latestWeight: null` / `adg: null` / `series: []` so the table can render an
+ * honest "—".
+ */
+export interface AnimalWeightSummary {
+  /** kg of the most recent weighing, or null when the animal was never weighed. */
+  latestWeight: number | null;
+  /** Best available ADG (90-day → long-run → last-interval), kg/day, or null. */
+  adg: number | null;
+  /** true when `adg` is below the configured poor-doer threshold. */
+  isPoorDoer: boolean;
+  /** Chronological weight readings (kg) for the inline sparkline. */
+  series: number[];
+}
+
+/**
+ * Batched per-animal weight summaries. Reads EVERY weighing observation for the
+ * tenant in a single `findMany` (the same shape `getHerdAdgTrend` already uses)
+ * and groups in-memory by `animalId` — so the Animals catalogue can show a real
+ * WEIGHT / ADG / ADG-trend column for a 50-row page without one query per row.
+ *
+ * Returns a `Map<animalId, AnimalWeightSummary>`; animals with no weighing rows
+ * are simply absent from the map (the caller renders "—" for those).
+ */
+export async function getAnimalWeightSummaries(
+  prisma: PrismaClient,
+  poorDoerThreshold = 0.7,
+): Promise<Map<string, AnimalWeightSummary>> {
+  const rawObs = await crossSpecies(prisma, "analytics-rollup").observation.findMany({
+    where: { type: "weighing", animalId: { not: null } },
+    select: { animalId: true, observedAt: true, details: true },
+    orderBy: { observedAt: "asc" },
+  });
+
+  // Build per-animal chronological weight timelines.
+  const byAnimal = new Map<string, WeightRecord[]>();
+  for (const obs of rawObs) {
+    if (!obs.animalId) continue;
+    const d = parseWeightDetails(obs.details);
+    if (typeof d.weight_kg !== "number") continue;
+    const existing = byAnimal.get(obs.animalId) ?? [];
+    existing.push({ id: "", observedAt: obs.observedAt, weightKg: d.weight_kg });
+    byAnimal.set(obs.animalId, existing);
+  }
+
+  const summaries = new Map<string, AnimalWeightSummary>();
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000);
+
+  for (const [animalId, records] of byAnimal.entries()) {
+    if (records.length === 0) continue;
+    const latest = records[records.length - 1];
+    const latestWeight = latest.weightKg;
+
+    // Best available ADG signal: 90-day window → long-run → last interval. Same
+    // precedence `getAnimalWeightData` uses for its poor-doer flag.
+    let adg: number | null = null;
+    const windowRecords = records.filter((r) => r.observedAt >= ninetyDaysAgo);
+    if (windowRecords.length >= 2) {
+      const first90 = windowRecords[0];
+      const days = (latest.observedAt.getTime() - first90.observedAt.getTime()) / 86_400_000;
+      if (days > 0) adg = (latestWeight - first90.weightKg) / days;
+    }
+    if (adg === null && records.length >= 2) {
+      const first = records[0];
+      const days = (latest.observedAt.getTime() - first.observedAt.getTime()) / 86_400_000;
+      if (days > 0) adg = (latestWeight - first.weightKg) / days;
+    }
+    if (adg === null && records.length >= 2) {
+      const prev = records[records.length - 2];
+      const days = (latest.observedAt.getTime() - prev.observedAt.getTime()) / 86_400_000;
+      if (days > 0) adg = (latestWeight - prev.weightKg) / days;
+    }
+
+    summaries.set(animalId, {
+      latestWeight,
+      adg,
+      isPoorDoer: adg !== null && adg < poorDoerThreshold,
+      series: records.map((r) => r.weightKg),
+    });
+  }
+
+  return summaries;
+}
+
+/**
  * Returns per-camp average ADG points for the Grafieke herd ADG chart.
  * Groups all weighing observations by camp, computes ADG between consecutive
  * weigh dates, then averages across all animals weighed on the same date.

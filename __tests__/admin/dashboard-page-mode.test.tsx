@@ -185,7 +185,7 @@ describe("DashboardContent — calls getCachedDashboardOverviewByMode with mode 
     );
     // The shared fetcher is called WITHOUT mode — that's the #411 fix.
     expect(mocks.getCachedDashboardOverviewShared).toHaveBeenCalledWith("trio-b");
-    expect(screen.getByText("Total Animals")).toBeTruthy();
+    expect(screen.getByText("Animals")).toBeTruthy();
     expect(screen.getAllByText("10").length).toBeGreaterThan(0);
   });
 
@@ -212,7 +212,7 @@ describe("DashboardContent — calls getCachedDashboardOverviewByMode with mode 
       "sheep",
     );
     expect(mocks.getCachedDashboardOverviewShared).toHaveBeenCalledWith("trio-b");
-    expect(screen.getByText("Total Animals")).toBeTruthy();
+    expect(screen.getByText("Animals")).toBeTruthy();
     expect(screen.getAllByText("5").length).toBeGreaterThan(0);
   });
 });

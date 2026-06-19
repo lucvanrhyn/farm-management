@@ -20,9 +20,11 @@ const animalFindManyMock = vi.fn();
 const animalCountMock = vi.fn();
 const campFindManyMock = vi.fn();
 const mobFindManyMock = vi.fn();
+const farmSettingsFindFirstMock = vi.fn();
 const getPrismaForFarmMock = vi.fn();
 const getFarmModeMock = vi.fn();
 const getAnimalsInWithdrawalMock = vi.fn();
+const getAnimalWeightSummariesMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -50,6 +52,9 @@ vi.mock("@/components/admin/RecordBirthButton", () => ({
 }));
 vi.mock("@/components/admin/ExportButton", () => ({
   default: () => <div data-testid="export-stub" />,
+}));
+vi.mock("@/lib/server/weight-analytics", () => ({
+  getAnimalWeightSummaries: getAnimalWeightSummariesMock,
 }));
 vi.mock("@/lib/farm-mode", () => ({
   useFarmModeSafe: () => ({ mode: "cattle" }),
@@ -104,9 +109,13 @@ beforeEach(() => {
   getPrismaForFarmMock.mockReset();
   getFarmModeMock.mockReset();
   getAnimalsInWithdrawalMock.mockReset();
+  getAnimalWeightSummariesMock.mockReset();
+  farmSettingsFindFirstMock.mockReset();
 
   getFarmModeMock.mockResolvedValue("cattle");
   getAnimalsInWithdrawalMock.mockResolvedValue([]);
+  getAnimalWeightSummariesMock.mockResolvedValue(new Map());
+  farmSettingsFindFirstMock.mockResolvedValue({ adgPoorDoerThreshold: 0.7 });
   campFindManyMock.mockResolvedValue([{ campId: "camp-1", campName: "Camp 1" }]);
   mobFindManyMock.mockResolvedValue([]);
   // Issue #205 — page.tsx now fires two `animal.count` calls (species total +
@@ -118,6 +127,7 @@ beforeEach(() => {
     animal: { findMany: animalFindManyMock, count: animalCountMock },
     camp: { findMany: campFindManyMock },
     mob: { findMany: mobFindManyMock },
+    farmSettings: { findFirst: farmSettingsFindFirstMock },
   });
 });
 

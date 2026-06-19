@@ -65,6 +65,18 @@ const DEFAULT_ACTIONS: readonly AdvisorAction[] = [
   },
 ];
 
+/**
+ * Suggested-prompt chips shown below the composer (desk_5). Each chip seeds the
+ * chat send path verbatim — these are the four exemplar questions from the
+ * frozen design, demonstrating the breadth of what the advisor can answer.
+ */
+const DEFAULT_SUGGESTED_PROMPTS: readonly string[] = [
+  "Which cows haven't calved in 14 months?",
+  "Compare ADG between Brangus heifers and steers",
+  "Forecast feed on offer for next 30 days",
+  "What's the cheapest rotation plan for June?",
+];
+
 export default async function EinsteinPage({
   params,
 }: {
@@ -97,20 +109,26 @@ export default async function EinsteinPage({
 
   return (
     <div
+      // Natural document flow (desk_5): the brief card, composer and suggested
+      // prompts stack top-to-bottom and the composer sits directly UNDER the
+      // brief — it is not pinned to the bottom of the fold. The page grows with
+      // transcript content once a conversation starts.
       className="ft-scope flex min-h-screen min-w-0 flex-col"
       style={{ background: "var(--ft-bg)", color: "var(--ft-text)" }}
     >
       {/* Desktop advisor composition — serif H1 + model pill, always-on brief
-          card, action-button row and the real <EinsteinChat>. The assistant
-          name routes through the SSR fetch above; "AI Advisor" is the surface
-          label, never a hardcoded assistant name. The brief/actions seed the
-          chat's existing send path (no chat logic forked). */}
-      <div className="min-h-0 flex-1 px-4 py-4 md:px-8 md:py-8">
+          card, action-button row, the real <EinsteinChat> composer and the
+          suggested-prompt grid. The assistant name routes through the SSR fetch
+          above; "AI Advisor" is the surface label, never a hardcoded assistant
+          name. The brief/actions/prompts all seed the chat's existing send path
+          (no chat logic forked). */}
+      <div className="px-4 py-4 md:px-8 md:py-8">
         <EinsteinAdvisorPanel
           farmSlug={farmSlug}
           assistantName={assistantName}
           briefItems={DEFAULT_BRIEF}
           actions={DEFAULT_ACTIONS}
+          suggestedPrompts={DEFAULT_SUGGESTED_PROMPTS}
         />
       </div>
     </div>

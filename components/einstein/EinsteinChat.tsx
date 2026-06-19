@@ -132,6 +132,27 @@ export interface EinsteinChatProps {
   readonly advisorMode?: boolean;
   /** Hide the internal chat header (host surfaces that supply their own). */
   readonly hideHeader?: boolean;
+  /**
+   * Suppress the empty-state copy entirely. Used by the desktop advisor page,
+   * which renders its own always-on brief card above the chat — the chat below
+   * should show only the composer (and transcript once messages arrive), not a
+   * duplicate "Ask …" prompt. Has no effect once messages exist.
+   */
+  readonly hideEmptyState?: boolean;
+  /**
+   * Drop the form's top hairline + padding so the composer reads as a free
+   * standing rounded bar rather than a panel footer. Used by the desktop
+   * advisor page where the composer sits directly on the page surface.
+   */
+  readonly bareComposer?: boolean;
+  /**
+   * Surface mode. `"dark"` (default) forces the dark token set used by the
+   * Home modal / phone bottom-sheet. `"inherit"` drops the dark-surface scope
+   * and the opaque background so the chat reads on whatever themed surface the
+   * host renders into (the desktop advisor page lives on the light paper admin
+   * surface — `desk_5` shows a cream composer, not a dark one).
+   */
+  readonly surface?: "dark" | "inherit";
 }
 
 type MessageRole = "user" | "assistant" | "error";
@@ -174,7 +195,11 @@ export function EinsteinChat({
   placeholder,
   advisorMode = true,
   hideHeader = false,
+  hideEmptyState = false,
+  bareComposer = false,
+  surface = "dark",
 }: EinsteinChatProps) {
+  const inheritSurface = surface === "inherit";
   const assistantName = useAssistantName();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -377,11 +402,16 @@ export function EinsteinChat({
 
   const canSend = !streaming && input.trim().length > 0;
 
+  const hasTranscript = messages.length > 0 || streaming || error !== null;
+
   return (
     <div
-      className={`dark-surface ft-scope flex flex-col h-full ${className ?? ""}`}
+      className={`${inheritSurface ? "" : "dark-surface "}ft-scope flex flex-col h-full ${className ?? ""}`}
       data-testid="einstein-chat"
-      style={{ background: "var(--ft-bg)", color: "var(--ft-text)" }}
+      style={{
+        background: inheritSurface ? "transparent" : "var(--ft-bg)",
+        color: "var(--ft-text)",
+      }}
     >
       <EinsteinChatStyles />
 
@@ -446,13 +476,21 @@ export function EinsteinChat({
 
       <div
         ref={scrollRef}
-        className="ft-scrollbar flex-1 overflow-y-auto px-5 py-5 space-y-3"
+        className={
+          bareComposer
+            ? // Desktop advisor page: the brief card above is the empty-state, so
+              // the transcript area fills the gap between the card and the
+              // bottom-pinned composer (desk_5). Light side padding so message
+              // bubbles align under the brief card; vertical padding only once
+              // there is real transcript content to show.
+              `ft-scrollbar flex-1 overflow-y-auto space-y-3${hasTranscript ? " px-1 py-3" : ""}`
+            : "ft-scrollbar flex-1 overflow-y-auto px-5 py-5 space-y-3"
+        }
         data-testid="einstein-transcript"
       >
-        {messages.length === 0 && !streaming ? (
+        {messages.length === 0 && !streaming && !hideEmptyState ? (
           brief && brief.length > 0 ? (
             <BriefEmptyState
-              assistantName={assistantName}
               firstName={firstName}
               brief={brief}
               suggestedPrompts={suggestedPrompts}
@@ -495,12 +533,16 @@ export function EinsteinChat({
       </div>
 
       <form
-        className="p-4"
+        className={bareComposer ? "" : "p-4"}
         onSubmit={(e) => {
           e.preventDefault();
           void handleSend();
         }}
-        style={{ borderTop: "1px solid var(--ft-border)" }}
+        style={
+          bareComposer
+            ? undefined
+            : { borderTop: "1px solid var(--ft-border)" }
+        }
       >
         <label className="sr-only" htmlFor="einstein-input">
           Ask {assistantName}
@@ -541,6 +583,16 @@ export function EinsteinChat({
               />
               Advisor
             </span>
+          ) : bareComposer ? (
+            // Desktop advisor composer leads with a search glyph (desk_5) in
+            // place of the mode pill — reads as a "ask anything" search bar.
+            <span
+              aria-hidden="true"
+              className="flex shrink-0 items-center justify-center self-center"
+              style={{ paddingLeft: 6, color: "var(--ft-subtle)" }}
+            >
+              <Icon.search size={16} />
+            </span>
           ) : null}
           <textarea
             id="einstein-input"
@@ -558,30 +610,51 @@ export function EinsteinChat({
             type="submit"
             disabled={!canSend}
             aria-label={`Ask ${assistantName}`}
-            className="flex shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed"
+            className={`flex shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed${
+              bareComposer ? " ft-mono" : ""
+            }`}
             data-testid="einstein-send"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 999,
-              background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
-              color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
-            }}
+            style={
+              bareComposer
+                ? {
+                    // Desktop advisor composer: a labelled "ASK" pill (desk_5)
+                    // rather than the phone's circular arrow.
+                    borderRadius: 999,
+                    padding: "9px 18px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                    background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
+                    color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
+                  }
+                : {
+                    width: 38,
+                    height: 38,
+                    borderRadius: 999,
+                    background: canSend ? "var(--ft-accent)" : "var(--ft-surface2)",
+                    color: canSend ? "#FFF6EE" : "var(--ft-subtle)",
+                  }
+            }
           >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M5 12h14" />
-              <path d="M13 6l6 6-6 6" />
-            </svg>
+            {bareComposer ? (
+              "Ask"
+            ) : (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14" />
+                <path d="M13 6l6 6-6 6" />
+              </svg>
+            )}
           </button>
         </div>
       </form>
@@ -617,7 +690,20 @@ export interface EinsteinAdvisorPanelProps {
   readonly greeting?: string;
   readonly briefItems: readonly AdvisorBriefItem[];
   readonly actions: readonly AdvisorAction[];
+  /**
+   * Exemplar questions rendered as a labelled chip grid BELOW the composer
+   * (desk_5). Each chip seeds the chat send path. Omitted → no grid renders.
+   */
+  readonly suggestedPrompts?: readonly string[];
 }
+
+/** Leading glyphs for the suggested-prompt chips, cycled by index. */
+const SUGGESTED_PROMPT_ICONS = [
+  <Icon.breeding key="breeding" size={15} />,
+  <Icon.animals key="animals" size={15} />,
+  <Icon.finance key="finance" size={15} />,
+  <Icon.camps key="camps" size={15} />,
+] as const;
 
 /**
  * Desktop "AI Advisor" composition. Renders the always-on brief card and an
@@ -634,6 +720,7 @@ export function EinsteinAdvisorPanel({
   greeting,
   briefItems,
   actions,
+  suggestedPrompts,
 }: EinsteinAdvisorPanelProps) {
   const chatRef = useRef<EinsteinChatHandle>(null);
   const greetLine =
@@ -641,7 +728,7 @@ export function EinsteinAdvisorPanel({
     `Good morning${firstName?.trim() ? ` ${firstName.trim()}` : ""}. Three things worth your attention before lunch:`;
 
   return (
-    <div className="ft-scope flex h-full min-h-0 flex-col gap-4">
+    <div className="ft-scope flex flex-col gap-4">
       {/* Title row — serif H1 36px + mono model pill + subtitle */}
       <div>
         <div className="flex flex-wrap items-center gap-3">
@@ -676,25 +763,43 @@ export function EinsteinAdvisorPanel({
         </div>
       </div>
 
-      {/* Always-on brief card (accent beam) — numbered, entities bold */}
+      {/* Always-on brief card (accent beam) — icon + EINSTEIN label, greeting,
+          numbered list, and the action buttons INSIDE the card (desk_5). The
+          accent beam runs on this single card only. */}
       <div className="ft-brief px-5 py-4" data-testid="advisor-brief">
-        <div
-          className="ft-mono"
-          style={{
-            fontSize: 10,
-            letterSpacing: ".14em",
-            textTransform: "uppercase",
-            color: "var(--ft-accent)",
-          }}
-        >
-          {assistantName}
+        {/* header row — sun avatar + assistant-name label (mono, accent) */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex shrink-0 items-center justify-center"
+            aria-hidden="true"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "var(--ft-r-sm)",
+              background: "var(--ft-accent-faint)",
+              color: "var(--ft-accent)",
+            }}
+          >
+            <Icon.einstein size={16} />
+          </span>
+          <span
+            className="ft-mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              color: "var(--ft-accent)",
+            }}
+          >
+            {assistantName}
+          </span>
         </div>
         <p
           style={{
             fontSize: 14.5,
             lineHeight: 1.6,
             color: "var(--ft-text)",
-            margin: "8px 0 10px",
+            margin: "10px 0 10px",
           }}
         >
           {greetLine}
@@ -727,32 +832,96 @@ export function EinsteinAdvisorPanel({
             </li>
           ))}
         </ol>
+
+        {/* Action buttons — outline retro buttons, inside the card → seed the
+            chat send path (desk_5 places these at the card's lower edge). */}
+        <div
+          className="flex flex-wrap gap-2"
+          data-testid="advisor-actions"
+          style={{ marginTop: 16 }}
+        >
+          {actions.map((a) => (
+            <Button
+              key={a.label}
+              variant="default"
+              className="ft-mono"
+              onClick={() => chatRef.current?.sendPrompt(a.prompt ?? a.label)}
+              style={{
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+                fontSize: 11,
+              }}
+            >
+              {a.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {/* Action button row — outline retro buttons → seed the chat send path */}
-      <div className="flex flex-wrap gap-2" data-testid="advisor-actions">
-        {actions.map((a) => (
-          <Button
-            key={a.label}
-            variant="default"
-            className="ft-mono"
-            onClick={() => chatRef.current?.sendPrompt(a.prompt ?? a.label)}
-            style={{ textTransform: "uppercase", letterSpacing: ".06em", fontSize: 11 }}
-          >
-            {a.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* The real chat panel (unchanged behaviour) */}
-      <div className="ft-card min-h-0 flex-1 overflow-hidden">
+      {/* The real chat panel — bare (no card frame): the composer reads as a
+          free-standing rounded bar sitting directly UNDER the brief card on the
+          light paper admin surface (desk_5). With no fixed height the empty
+          transcript collapses, so the composer flows under the brief; it grows
+          downward once a conversation starts. Behaviour unchanged — streaming,
+          citations, feedback all live in <EinsteinChat>. */}
+      <div className="flex flex-col">
         <EinsteinChat
           farmSlug={farmSlug}
           controlsRef={chatRef}
-          placeholder="Ask about herd performance…"
-          className="h-full"
+          placeholder="Ask about herd performance, grazing, finance, breeding…"
+          hideHeader
+          hideEmptyState
+          bareComposer
+          advisorMode={false}
+          surface="inherit"
         />
       </div>
+
+      {/* Suggested-prompt grid (desk_5) — labelled section under the composer.
+          A two-up chip grid of exemplar questions; each seeds the chat send
+          path verbatim via the same imperative handle the action row uses. */}
+      {suggestedPrompts && suggestedPrompts.length > 0 ? (
+        <div data-testid="advisor-suggested-prompts">
+          <div
+            className="ft-mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              color: "var(--ft-muted)",
+              marginBottom: 10,
+            }}
+          >
+            Suggested prompts
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {suggestedPrompts.map((p, i) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => chatRef.current?.sendPrompt(p)}
+                className="ft-mono ft-row-hover flex items-center gap-2.5 text-left"
+                data-testid="advisor-suggested-chip"
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "var(--ft-r-sm)",
+                  background: "var(--ft-surface)",
+                  border: "1px solid var(--ft-border)",
+                  color: "var(--ft-text)",
+                  fontSize: 12,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span className="shrink-0" style={{ color: "var(--ft-accent)" }}>
+                  {SUGGESTED_PROMPT_ICONS[i % SUGGESTED_PROMPT_ICONS.length]}
+                </span>
+                <span>{p}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -840,13 +1009,11 @@ const WEEKDAY = [
  * (no literal "Einstein" in the transcript) stays green.
  */
 function BriefEmptyState({
-  assistantName,
   firstName,
   brief,
   suggestedPrompts,
   onPrompt,
 }: {
-  assistantName: string;
   firstName?: string;
   brief: readonly EinsteinBriefItem[];
   suggestedPrompts?: readonly string[];
@@ -857,7 +1024,7 @@ function BriefEmptyState({
 
   return (
     <div className="space-y-3" data-testid="einstein-brief-empty">
-      {/* greeting "bubble" — surface card, assistant-name aware via context */}
+      {/* greeting "bubble" — plain warm-surface card (phone_5) */}
       <div className="flex justify-start">
         <div
           className="ft-card max-w-[88%] px-3.5 py-2.5 text-sm"
@@ -871,19 +1038,13 @@ function BriefEmptyState({
         </div>
       </div>
 
-      {/* brief card — coloured StatusDots, one line per prioritized item */}
-      <div className="ft-brief px-3.5 py-3" data-testid="einstein-brief-card">
-        <div
-          className="ft-mono mb-2.5"
-          style={{
-            fontSize: 10,
-            letterSpacing: ".12em",
-            textTransform: "uppercase",
-            color: "var(--ft-accent)",
-          }}
-        >
-          {assistantName} · Today&rsquo;s brief
-        </div>
+      {/* brief card — plain warm-surface card (phone_5 shows no beam ring and
+          no label here, just the coloured-dot priority lines). */}
+      <div
+        className="ft-card px-3.5 py-3"
+        data-testid="einstein-brief-card"
+        style={{ background: "var(--ft-surface)", color: "var(--ft-text)" }}
+      >
         <ul className="space-y-2.5" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {brief.map((item, i) => (
             <li key={i} className="flex items-start gap-2.5">

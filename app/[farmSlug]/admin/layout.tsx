@@ -14,11 +14,6 @@ import {
   effectiveAssistantName,
   parseAiSettings,
 } from "@/lib/einstein/settings-schema";
-import {
-  methodologyCompleteness,
-  type MethodologyCompleteness,
-} from "@/lib/einstein/methodology-completeness";
-import { MethodologyNudgeBanner } from "@/components/einstein/MethodologyNudgeBanner";
 import { logger } from "@/lib/logger";
 
 /**
@@ -113,11 +108,6 @@ export default async function AdminLayout({
   let enabledSpecies: string[] | undefined;
   let onboardingComplete = true; // fail-open: if settings fetch fails, do NOT bounce
   let assistantName: string | null = null; // null → provider falls back to "Einstein"
-  // Methodology-adoption nudge inputs (#526). Defaults are inert: Einstein off
-  // and a fully-"missing" score so the banner renders nothing if settings fail
-  // to load — a DB blip must never spam a farmer with the nudge.
-  let einsteinEnabled = false;
-  let methodologyScore: MethodologyCompleteness = methodologyCompleteness(undefined);
 
   const [credsResult, prismaResult] = await Promise.allSettled([
     getFarmCreds(farmSlug),
@@ -172,10 +162,6 @@ export default async function AdminLayout({
       // effectiveAssistantName returns the default when unset — passing the
       // default through the provider is fine (it normalises again).
       assistantName = resolved;
-      // Methodology-nudge inputs (#526): the RAG kill-switch + a score over the
-      // already-parsed blob — no extra round trip, no schema/prompt change.
-      einsteinEnabled = aiBlob.ragConfig?.enabled === true;
-      methodologyScore = methodologyCompleteness(aiBlob.methodology);
     } else {
       logger.error('[AdminLayout] farmSettings.findFirst failed', {
         farmSlug,
@@ -202,11 +188,6 @@ export default async function AdminLayout({
     <AssistantNameProvider name={assistantName}>
       <TierProvider tier={tier}>
         <StudioShell tier={tier} enabledSpecies={enabledSpecies}>
-          <MethodologyNudgeBanner
-            farmSlug={farmSlug}
-            einsteinEnabled={einsteinEnabled}
-            completeness={methodologyScore}
-          />
           {children}
         </StudioShell>
       </TierProvider>

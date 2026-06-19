@@ -7,7 +7,6 @@ import { getCachedFarmSettings } from "@/lib/server/cached";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { parseAiSettings, effectiveAssistantName } from "@/lib/einstein/settings-schema";
 import DashboardContent from "@/components/admin/DashboardContent";
-import WeatherWidget from "@/components/dashboard/WeatherWidget";
 import { PageHeader, Icon } from "@/components/ds";
 import type { FarmTier } from "@/lib/tier";
 
@@ -16,15 +15,16 @@ import type { FarmTier } from "@/lib/tier";
 
 function KpiRibbonSkeleton() {
   return (
-    <div
-      className="grid gap-3 mb-5 animate-pulse"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
-    >
-      {Array.from({ length: 9 }).map((_, i) => (
-        <div key={i} className="ft-card" style={{ padding: "var(--ft-card-pad)" }}>
-          <div className="h-4 w-4 rounded mb-4" style={{ background: "var(--ft-surface2)" }} />
-          <div className="h-7 w-12 rounded mb-2" style={{ background: "var(--ft-surface2)" }} />
-          <div className="h-3 w-20 rounded" style={{ background: "var(--ft-border)" }} />
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 animate-pulse">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="ft-card" style={{ padding: 15 }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="h-8 w-8 rounded" style={{ background: "var(--ft-surface2)" }} />
+            <div className="h-2 w-2 rounded-full" style={{ background: "var(--ft-border)" }} />
+          </div>
+          <div className="h-6 w-14 rounded mb-2" style={{ background: "var(--ft-surface2)" }} />
+          <div className="h-2.5 w-16 rounded mb-2" style={{ background: "var(--ft-border)" }} />
+          <div className="h-2.5 w-20 rounded" style={{ background: "var(--ft-border)" }} />
         </div>
       ))}
     </div>
@@ -114,15 +114,9 @@ export default async function AdminPage({
         }
       />
 
-      {/* Weather widget in admin header */}
-      <div className="mb-5 sm:max-w-md">
-        <WeatherWidget
-          latitude={farmSettings.latitude}
-          longitude={farmSettings.longitude}
-        />
-      </div>
-
-      {/* Data-dependent content streams in once ready */}
+      {/* Data-dependent content streams in once ready. Weather now lives inside
+          the command body's third column (frozen-design Operations), not the
+          header — see DashboardContent. */}
       <Suspense
         fallback={
           <>
@@ -131,7 +125,7 @@ export default async function AdminPage({
           </>
         }
       >
-        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} mode={mode} assistantName={assistantName} />
+        <DashboardContent farmSlug={farmSlug} prisma={prisma} tier={tier} mode={mode} assistantName={assistantName} latitude={farmSettings.latitude} longitude={farmSettings.longitude} />
       </Suspense>
     </div>
   );

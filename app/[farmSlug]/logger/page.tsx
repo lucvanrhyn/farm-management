@@ -193,7 +193,12 @@ export default async function LoggerPage({
 
   return (
     <div className="paper-surface ft-scope min-h-screen">
-      {/* Header — light "paper" editorial chrome (locked loggerTheme: paper) */}
+      {/* Header — compact "paper" editorial chrome (locked loggerTheme: paper).
+          Mirrors the Camp Rounds reference (phone_3.jpg): a single slim row
+          carrying ONLY the back chevron, the "LOGGER" eyebrow + farm name,
+          and the single profile button. The "Camp Rounds" masthead and the
+          round / tasks / camp-grid all live in the scroll body below — the
+          reference shows no date bar and no heavy status row in this chrome. */}
       <div
         className="sticky top-0 z-10"
         style={{
@@ -203,8 +208,8 @@ export default async function LoggerPage({
           borderBottom: '1px solid var(--ft-border)',
         }}
       >
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* Back chevron → hub home (Camp Rounds reference, top-left). A
                 plain link works in this server component and gives field
                 workers a one-tap exit. Sign-out lives in the profile button
@@ -212,11 +217,10 @@ export default async function LoggerPage({
             <a
               href={`/${farmSlug}/home`}
               className="ft-action-btn shrink-0"
-              style={{ marginLeft: -8, marginTop: 2 }}
               title="Back to home"
               aria-label="Back to home"
             >
-              <Icon.chevronL size={20} />
+              <Icon.chevronL size={18} />
             </a>
             <div className="min-w-0 flex-1">
               {/* Eyebrow: mono uppercase "LOGGER" with the farm name beneath. */}
@@ -227,19 +231,10 @@ export default async function LoggerPage({
                 Logger
               </div>
               <div
-                className="ft-mono truncate"
-                style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 2 }}
+                className="truncate"
+                style={{ fontSize: 13, fontWeight: 500, marginTop: 2, color: 'var(--ft-text)' }}
               >
                 {farmName}
-              </div>
-              <h1
-                className="ft-serif truncate"
-                style={{ fontSize: 29, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, marginTop: 6, color: 'var(--ft-text)' }}
-              >
-                Camp Rounds
-              </h1>
-              <div className="ft-mono" style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 5 }}>
-                {loggerName} · {weekday}
               </div>
             </div>
           </div>
@@ -251,46 +246,60 @@ export default async function LoggerPage({
           </div>
         </div>
 
-        {/* Date bar */}
-        <div
-          className="ft-mono text-center"
-          style={{
-            fontSize: 11,
-            letterSpacing: '.04em',
-            padding: '6px 16px',
-            backgroundColor: 'var(--ft-surface)',
-            borderTop: '1px solid var(--ft-border)',
-            color: 'var(--ft-subtle)',
-          }}
-        >
-          {todayLabel}
-        </div>
-
-        {/* Offline status bar — logic preserved, chrome restyled to tokens */}
+        {/* Offline status bar — logic preserved, chrome restyled to tokens.
+            Kept as a thin row beneath the header so the real offline/sync
+            state stays visible without disrupting the reference masthead. */}
         <LoggerStatusBar />
       </div>
 
-      {/* Today's round — Camp Rounds reference card directly under the
-          header. Real data only: `total` is the camp count for the active
-          species and `done` is the number inspected today (derived from the
-          species-scoped cached camp list, no extra fetch). Hidden when there
-          are no camps for the active mode (e.g. the sheep empty-state path)
-          so we never show a fake "0/0" round. */}
+      {/* Scroll body — the Camp Rounds masthead lives here (not in the sticky
+          header), exactly as the prototype's GridIntro renders it. */}
+      <div style={{ padding: '20px 16px 0' }}>
+        <h1
+          className="ft-serif"
+          style={{ fontSize: 30, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.05, color: 'var(--ft-text)' }}
+        >
+          Camp Rounds
+        </h1>
+        <div className="ft-mono" style={{ fontSize: 11, color: 'var(--ft-muted)', marginTop: 6 }}>
+          {loggerName} · {weekday}
+        </div>
+        {/* Hidden full date — preserves the human-readable date for AT/SR
+            users now that the visible date bar is gone (reference has none). */}
+        <span className="sr-only">{todayLabel}</span>
+      </div>
+
+      {/* Today's round — Camp Rounds reference card. Real data only: `total`
+          is the camp count for the active species and `done` is the number
+          inspected today (derived from the species-scoped cached camp list,
+          no extra fetch). Hidden when there are no camps for the active mode
+          (e.g. the sheep empty-state path) so we never show a fake "0/0". */}
       {round.total > 0 && (
         <div className="px-4 pt-4">
-          <div className="ft-card p-4">
+          <div className="ft-card" style={{ padding: '13px 15px' }}>
             <div className="flex items-center justify-between gap-3">
-              <span className="ft-label" style={{ margin: 0 }}>Today&apos;s round</span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ft-text)' }}>
+                Today&apos;s round
+              </span>
               <span
-                className="ft-mono"
-                style={{ fontSize: 11, color: round.freshness ? 'var(--ft-good)' : 'var(--ft-subtle)' }}
+                className="ft-mono inline-flex items-center gap-1.5 whitespace-nowrap"
+                style={{ fontSize: 12, color: 'var(--ft-muted)' }}
               >
-                ● {round.freshness ?? 'No rounds yet'}
+                <span
+                  className="inline-block rounded-full"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    background: round.freshness ? 'var(--ft-good)' : 'var(--ft-subtle)',
+                    boxShadow: round.freshness ? '0 0 8px var(--ft-good)' : 'none',
+                  }}
+                />
+                {round.freshness ?? 'No rounds yet'}
               </span>
             </div>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-2.5 flex items-center gap-2.5">
               <div
-                className="h-2 flex-1 overflow-hidden rounded-full"
+                className="h-[7px] flex-1 overflow-hidden rounded-full"
                 style={{ backgroundColor: 'var(--ft-surface2)' }}
                 role="progressbar"
                 aria-valuenow={round.done}
@@ -303,13 +312,13 @@ export default async function LoggerPage({
                   style={{
                     width: `${Math.round((round.done / round.total) * 100)}%`,
                     backgroundColor: 'var(--ft-accent)',
-                    transition: 'width .3s ease',
+                    transition: 'width .4s cubic-bezier(.3,.7,.4,1)',
                   }}
                 />
               </div>
               <span
-                className="ft-mono shrink-0"
-                style={{ fontSize: 12, fontWeight: 600, color: 'var(--ft-text)' }}
+                className="ft-mono ft-tabnums shrink-0"
+                style={{ fontSize: 11, color: 'var(--ft-muted)' }}
               >
                 {round.done}/{round.total}
               </span>
