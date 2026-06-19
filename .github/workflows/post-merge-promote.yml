@@ -106,8 +106,19 @@ jobs:
               .write();
 
       - name: Recycle clone
+        # Cosmetic cleanup ONLY — by this point the prod promote (migrations +
+        # meta flip, step "Promote branch to prod") has already succeeded. A
+        # transient Turso platform throttle (the MISLEADING "TURSO_API_TOKEN
+        # invalid" rate-limit signal, not real expiry) must NEVER red the promote
+        # or auto-open a false incident. destroyBranchDb already retries the
+        # transient class; if it STILL fails we swallow the error and emit a
+        # warning annotation naming the orphan clone — visible for manual cleanup
+        # but non-fatal. A genuine promote failure happens in an earlier step and
+        # still trips the `if: failure()` incident step below.
         if: success()
-        run: pnpm ops:destroy-branch "$BRANCH_NAME"
+        run: |
+          pnpm ops:destroy-branch "$BRANCH_NAME" \
+            || echo "::warning title=Recycle clone skipped (non-fatal)::Promote for '$BRANCH_NAME' SUCCEEDED; branch clone was not recycled (transient Turso throttle). Orphan clone may remain — destroy manually: turso db destroy ft-clone-<branch>-<hash> --yes"
 
       - name: Comment failure on PR + open incident
         if: failure()

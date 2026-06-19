@@ -837,6 +837,119 @@ describe('destroyBranchDb — turso failure preserves meta row', () => {
   });
 });
 
+describe('destroyBranchDb — transient-failure retry (recycle-clone hardening)', () => {
+  // Turso's platform API surfaces a transient rate-limit/throttle as a
+  // MISLEADING "token ... is invalid" error — NOT a real auth failure (ops
+  // root-cause 2026-06-13). A cosmetic clone teardown must tolerate it by
+  // retrying instead of stranding the clone + reddening the prod promote.
+  const transientErr = () =>
+    new TursoCliError(
+      ['db', 'destroy', 'ft-clone-x', '--yes'],
+      1,
+      'Error: token in TURSO_API_TOKEN env var is invalid. Update the env var with a valid value, or unset it to use a token from the configuration file',
+    );
+
+  /** A cli fake whose `db destroy` fails its first `failTimes` calls, then succeeds. */
+  function flakyDestroyCli(failTimes: number, err: () => Error) {
+    const calls: { args: string[] }[] = [];
+    let destroyCount = 0;
+    return {
+      calls,
+      destroyCalls() {
+        return calls.filter((c) => c.args[0] === 'db' && c.args[1] === 'destroy');
+      },
+      async run(args: readonly string[]): Promise<string> {
+        calls.push({ args: [...args] });
+        if (args[0] === 'db' && args[1] === 'destroy') {
+          destroyCount++;
+          if (destroyCount <= failTimes) throw err();
+        }
+        return '';
+      },
+    };
+  }
+
+  it('retries a transient destroy failure and ultimately succeeds', async () => {
+    const cli = flakyDestroyCli(1, transientErr); // fail once, then succeed
+    const sleeps: number[] = [];
+    const destroyBranchDb = await getDestroyBranchDb();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/transient-retry',
+      tursoDbName: 'ft-clone-transient-abc',
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await destroyBranchDb({
+      branchName: 'wave/transient-retry',
+      cli,
+      metaClient: memClient,
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(result.tursoDestroyed).toBe(true);
+    expect(result.metaRowDeleted).toBe(true);
+    expect(cli.destroyCalls()).toHaveLength(2); // 1 fail + 1 success
+    expect(sleeps).toHaveLength(1); // backed off exactly once
+    expect(await getBranchClone('wave/transient-retry')).toBeNull();
+  });
+
+  it('gives up after the max attempts on a persistent transient failure and preserves the meta row', async () => {
+    const cli = flakyDestroyCli(Number.POSITIVE_INFINITY, transientErr); // always fails
+    const destroyBranchDb = await getDestroyBranchDb();
+    const { getBranchClone } = await import('@/lib/meta-db');
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/transient-forever',
+      tursoDbName: 'ft-clone-forever-abc',
+      createdAt: new Date().toISOString(),
+    });
+
+    await expect(
+      destroyBranchDb({
+        branchName: 'wave/transient-forever',
+        cli,
+        metaClient: memClient,
+        sleep: async () => {},
+      }),
+    ).rejects.toBeInstanceOf(TursoCliError);
+
+    // Bounded: exactly 3 attempts (initial + 2 retries), then give up.
+    expect(cli.destroyCalls()).toHaveLength(3);
+    // Meta row preserved so the operator can retry with skipTursoDestroy.
+    expect(await getBranchClone('wave/transient-forever')).not.toBeNull();
+  });
+
+  it('does NOT retry a non-transient destroy error (fails fast, single attempt)', async () => {
+    const cli = flakyDestroyCli(
+      Number.POSITIVE_INFINITY,
+      () => new TursoCliError(['db', 'destroy', 'ft-clone-x', '--yes'], 1, 'Error: database not found'),
+    );
+    const destroyBranchDb = await getDestroyBranchDb();
+
+    await insertCloneRow(memClient, {
+      branchName: 'wave/non-transient',
+      tursoDbName: 'ft-clone-nontransient-abc',
+      createdAt: new Date().toISOString(),
+    });
+
+    await expect(
+      destroyBranchDb({
+        branchName: 'wave/non-transient',
+        cli,
+        metaClient: memClient,
+        sleep: async () => {},
+      }),
+    ).rejects.toBeInstanceOf(TursoCliError);
+
+    // Genuine errors are not transient → no retry, single attempt.
+    expect(cli.destroyCalls()).toHaveLength(1);
+  });
+});
+
 describe('destroyBranchDb — skipTursoDestroy flag', () => {
   it('skips the CLI call but still deletes the meta row when skipTursoDestroy=true', async () => {
     const cli = makeFakeCli({});
