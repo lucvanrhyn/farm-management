@@ -153,11 +153,16 @@ export async function getAnimalProfitabilityView(
   if (activeAnimals.length > 0) {
     const activeTags = activeAnimals.map((a) => a.animalId);
     // Latest weighing per active tag — observations carry weight_kg in details.
+    // `observedAt` MUST be in the select: the libsql query engine panics ("no
+    // entry found for key", query-structure/record.rs) when it orders by a
+    // column that is absent from the projection, and that surfaces at scale
+    // (a large active herd). The sibling get-triage weighings read selects
+    // observedAt for the same reason.
     // audit-allow-findmany: weighing observations for active roster; bounded to the active tag set + type.
     const weighings = await crossSpecies(prisma, "farm-wide-audit").observation.findMany({
       where: { type: "weighing", animalId: { in: activeTags } },
       orderBy: { observedAt: "asc" },
-      select: { animalId: true, details: true },
+      select: { animalId: true, observedAt: true, details: true },
     });
     // Ascending order means the last write per tag is the latest weighing.
     for (const obs of weighings) {
