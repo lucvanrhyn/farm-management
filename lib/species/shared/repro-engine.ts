@@ -119,18 +119,24 @@ export async function getReproStatsForSpecies(
   // window and must include since-Sold/Deceased animals; scoped() would
   // inject status:ACTIVE and silently drop their breeding history. Species
   // correctness is held by the explicit where:{ species } predicate.
+  //
+  // CRITICAL: project the human TAG (`Animal.animalId`), NOT the cuid
+  // `Animal.id`. `Observation.animalId` stores the TAG, so an id-set built
+  // from the cuid never matches a single observation row — the bug that left
+  // this whole engine (and the cattle dashboard calving alerts) dead in prod.
+  // See gotcha-observation-animalid-is-tag-not-cuid.
   const speciesAnimalIds = await crossSpecies(prisma, "analytics-rollup")
     .animal.findMany({
       where: { species },
-      select: { id: true },
+      select: { animalId: true },
     })
-    .then((rows) => rows.map((r) => r.id));
+    .then((rows) => rows.map((r) => r.animalId));
 
   const animalIdFilter =
     speciesAnimalIds.length > 0 ? { in: speciesAnimalIds } : { in: [] as string[] };
 
   const speciesScoped = scoped(prisma, species as SpeciesId);
-  const [reproObs, birthObs, allCamps] = await Promise.all([
+  const [reproObs, birthObs, allCamps, activeAnimals] = await Promise.all([
     speciesScoped.observation.findMany({
       where: {
         type: { in: [heatObsType, inseminationObsType, pregnancyScanObsType] },
@@ -150,11 +156,19 @@ export async function getReproStatsForSpecies(
       select: selectFields,
     }),
     speciesScoped.camp.findMany({ select: { campId: true, campName: true } }),
+    // ADR-0010 active roster (scoped() injects status:Active, keyed on the
+    // TAG to match Observation.animalId). The cross-status reproObs/birthObs
+    // above intentionally include since-Sold/Deceased animals for the
+    // historical KPIs, but the upcomingBirths *projection* must intersect the
+    // active roster — otherwise a dead/sold cow's retained insemination
+    // surfaces as a phantom "due to calve" (the deceased-leak class).
+    speciesScoped.animal.findMany({ select: { animalId: true }, take: 50_000 }),
   ]);
 
   type ObsRow = (typeof reproObs)[0];
 
   const campMap = new Map(allCamps.map((c) => [c.campId, c.campName]));
+  const activeAnimalIds = new Set(activeAnimals.map((a) => a.animalId));
 
   // ── Activity KPIs ─────────────────────────────────────────────────────────
 
@@ -265,6 +279,11 @@ export async function getReproStatsForSpecies(
 
   const upcomingBirths: UpcomingBirth[] = [];
   for (const animalId of candidateIds) {
+    // ADR-0010: a since-Deceased/Sold/Culled cow keeps its breeding history,
+    // so candidateIds (drawn from retained inseminations/scans) can include
+    // non-active animals. Exclude them from the "upcoming births" projection
+    // — counting/listing surfaces must track the active population only.
+    if (!activeAnimalIds.has(animalId)) continue;
     const scanObs = latestScanByAnimal.get(animalId);
     const insemObs = latestInsemByAnimal.get(animalId);
     const useScan =

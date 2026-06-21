@@ -93,16 +93,6 @@ export const cattleModule: SpeciesModule = {
       (c) => c.daysAway > 7 && c.daysAway <= calvingAlertDays,
     ).length;
 
-    // ── Open cows ────────────────────────────────────────────────────────────
-    const daysOpenRecords = (
-      reproStats as { daysOpen?: { daysOpen: number | null; isExtended: boolean }[] }
-    ).daysOpen ?? [];
-    const openCowsOverLimit = daysOpenRecords.filter(
-      (d) =>
-        (d.daysOpen !== null && d.daysOpen > daysOpenLimit) ||
-        (d.daysOpen === null && d.isExtended),
-    ).length;
-
     // ── Poor doers (weighing) ────────────────────────────────────────────────
     // Detection is shared with Herd Triage via the pure `detectPoorDoers`
     // helper (lib/species/cattle/poor-doer.ts). The alert COUNTs the
@@ -134,6 +124,26 @@ export const cattleModule: SpeciesModule = {
       weighingObs,
       adgPoorDoerThreshold,
     ).filter((id) => activeIds.has(id)).length;
+
+    // ── Open cows (active roster only — ADR-0010) ─────────────────────────────
+    // The engine builds daysOpen from retained calvings, so it spans
+    // since-Deceased/Sold cows (kept for the cross-status averages, matching
+    // reproduction-analytics). The alert COUNT must exclude non-active animals
+    // — same intersection as the poor-doer count above and Herd Triage's
+    // open-cow finding (get-triage.ts) — else a dead cow that never reconceived
+    // is counted as "open". Latent until repro-engine's cuid→tag fix made
+    // daysOpen non-empty.
+    const daysOpenRecords = (
+      reproStats as {
+        daysOpen?: { animalId: string; daysOpen: number | null; isExtended: boolean }[];
+      }
+    ).daysOpen ?? [];
+    const openCowsOverLimit = daysOpenRecords.filter(
+      (d) =>
+        activeIds.has(d.animalId) &&
+        ((d.daysOpen !== null && d.daysOpen > daysOpenLimit) ||
+          (d.daysOpen === null && d.isExtended)),
+    ).length;
 
     // ── Build alert list ─────────────────────────────────────────────────────
     const alerts: SpeciesAlert[] = [];
