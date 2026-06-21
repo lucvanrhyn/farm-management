@@ -61,6 +61,9 @@ const redirectMock = vi.fn();
 
 vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
+// Feed mechanism (PRD 2026-06-19): finansies page now fetches the camp list via
+// getCachedCampList (unstable_cache — no incrementalCache in unit SSR).
+vi.mock("@/lib/server/cached", () => ({ getCachedCampList: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 vi.mock("@/lib/server/treatment-analytics", () => ({
   getAnimalsInWithdrawal: getAnimalsInWithdrawalMock,

@@ -52,6 +52,13 @@ export interface AttentionItem {
   urgency: number;
   severity: ReasonSeverity;
   species: SpeciesId;
+  /**
+   * Optional informational note that the item carries a PROJECTED / advisory
+   * flag (e.g. `unprofitable` computed on the unsold active roster's margin,
+   * not a banked realised loss). Surfaced as a small "(advisory)" tag in the
+   * UI. Optional so existing fixtures and the firm reasons omit it.
+   */
+  advisory?: string;
 }
 
 /** A raw per-animal finding emitted by a detector, before projection. */
@@ -59,4 +66,10 @@ export interface Finding {
   animalId: string;
   reasonId: string;
   species: SpeciesId;
+  /**
+   * Optional advisory note for a projected/estimate-based finding. Carried
+   * through projection onto the matching `AttentionItem`. Optional so the
+   * firm detectors (and every existing test fixture) need not set it.
+   */
+  advisory?: string;
 }

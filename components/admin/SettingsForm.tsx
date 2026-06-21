@@ -11,6 +11,8 @@ export interface FarmSettingsData {
   adgPoorDoerThreshold: number;
   calvingAlertDays: number;
   daysOpenLimit: number;
+  repeatedTreatmentCount: number;
+  repeatedTreatmentWindowDays: number;
   campGrazingWarningDays: number;
   targetStockingRate: number | null;
   // Location
@@ -331,6 +333,32 @@ export default function SettingsForm({ farmSlug, initial }: SettingsFormProps) {
             min="1"
             value={values.daysOpenLimit}
             onChange={(e) => handleNumber("daysOpenLimit", e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Repeated Treatments — count" description="Flag an animal that receives at least this many treatment/health observations in the window below.">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            value={values.repeatedTreatmentCount}
+            onChange={(e) => handleNumber("repeatedTreatmentCount", e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            onFocus={focusStyle}
+            onBlur={blurStyle}
+          />
+        </FieldRow>
+        <FieldRow label="Repeated Treatments — window (days)" description="Rolling window over which repeated treatments are counted (default 90).">
+          <input
+            type="number"
+            step="1"
+            min="1"
+            value={values.repeatedTreatmentWindowDays}
+            onChange={(e) => handleNumber("repeatedTreatmentWindowDays", e.target.value)}
             className={inputCls}
             style={inputStyle}
             onFocus={focusStyle}

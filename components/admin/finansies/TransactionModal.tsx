@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import ModalHeader from "@/components/ui/ModalHeader";
+import AnimalPicker from "@/components/observations/AnimalPicker";
 
 interface Category {
   id: string;
@@ -17,6 +18,7 @@ interface Transaction {
   date: string;
   description: string;
   animalId: string | null;
+  campId?: string | null;
   saleType?: string | null;
   counterparty?: string | null;
   quantity?: number | null;
@@ -33,6 +35,12 @@ interface Props {
   expenseCategories: Category[];
   onClose: () => void;
   onSaved: () => void;
+  /** Camp list for the optional camp <select>. When absent/empty the select is hidden. */
+  camps?: { camp_id: string; camp_name: string }[];
+  /** Farm mode/species — forwarded to AnimalPicker to scope its search. Optional. */
+  species?: string | null;
+  /** Pre-tag the transaction to this animal (fast-follow: animal-detail Investment tab). */
+  animalId?: string;
 }
 
 const LIVESTOCK_CATEGORIES = ["Animal Sales", "Animal Purchases"];
@@ -54,6 +62,9 @@ export default function TransactionModal({
   expenseCategories,
   onClose,
   onSaved,
+  camps,
+  species,
+  animalId: injectedAnimalId,
 }: Props) {
   const isEdit = !!transaction;
   const [type, setType] = useState<"income" | "expense">(
@@ -85,6 +96,12 @@ export default function TransactionModal({
     transaction?.isForeign === true,
   );
 
+  // Optional taggers — feed mechanism for per-animal / per-camp profitability.
+  // `animalId` is the business TAG (e.g. "B042"), not a cuid. Injected prop
+  // pre-tags the modal when opened from the animal-detail Investment tab.
+  const [animalId, setAnimalId] = useState(transaction?.animalId ?? injectedAnimalId ?? "");
+  const [campId, setCampId] = useState(transaction?.campId ?? "");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -115,6 +132,8 @@ export default function TransactionModal({
         date,
         description,
         isForeign,
+        animalId: animalId || null,
+        campId: campId || null,
       };
 
       if (isLivestock) {
@@ -239,6 +258,39 @@ export default function TransactionModal({
               style={fieldStyle}
             />
           </div>
+
+          {/* Animal tagger (optional) — searchable, in-tenant. onChange yields the
+              business tag (e.g. "B042"), exactly what Transaction.animalId stores. */}
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>
+              Animal (optional)
+            </label>
+            <AnimalPicker
+              species={species}
+              value={animalId}
+              onChange={setAnimalId}
+              campId={campId || undefined}
+            />
+          </div>
+
+          {/* Camp tagger (optional) — feed/lick/dip allocation across the camp's animals. */}
+          {camps && camps.length > 0 && (
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>
+                Camp (optional)
+              </label>
+              <select
+                value={campId}
+                onChange={(e) => setCampId(e.target.value)}
+                style={{ ...fieldStyle, colorScheme: "light" }}
+              >
+                <option value="">No camp</option>
+                {camps.map((c) => (
+                  <option key={c.camp_id} value={c.camp_id}>{c.camp_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Foreign-derived flag — drives SARS source code 0192/0193 on the ITR12. */}
           <label className="flex items-center gap-2 cursor-pointer text-xs" style={{ color: "var(--ft-text)" }}>

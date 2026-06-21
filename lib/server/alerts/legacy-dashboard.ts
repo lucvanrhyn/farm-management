@@ -23,6 +23,8 @@ const DEFAULT_THRESHOLDS: AlertThresholds = {
   daysOpenLimit: 365,
   campGrazingWarningDays: 7,
   staleCampInspectionHours: 48,
+  repeatedTreatmentCount: 3,
+  repeatedTreatmentWindowDays: 90,
 };
 
 function thresholdsFromSettings(s: FarmSettings): AlertThresholds {
@@ -34,6 +36,10 @@ function thresholdsFromSettings(s: FarmSettings): AlertThresholds {
       s.campGrazingWarningDays ?? DEFAULT_THRESHOLDS.campGrazingWarningDays,
     staleCampInspectionHours:
       s.alertThresholdHours ?? DEFAULT_THRESHOLDS.staleCampInspectionHours,
+    repeatedTreatmentCount:
+      s.repeatedTreatmentCount ?? DEFAULT_THRESHOLDS.repeatedTreatmentCount,
+    repeatedTreatmentWindowDays:
+      s.repeatedTreatmentWindowDays ?? DEFAULT_THRESHOLDS.repeatedTreatmentWindowDays,
   };
 }
 

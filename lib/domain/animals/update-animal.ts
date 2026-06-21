@@ -82,6 +82,29 @@ export async function updateAnimal(
     );
   }
 
+  // Profitability money fields: reject negative / non-finite so a bad edit can't
+  // corrupt margin numbers (mirrors the import-path guard; null clears the field).
+  for (const moneyField of ["purchasePrice", "estimatedValue"] as const) {
+    if (moneyField in body && body[moneyField] != null) {
+      const v = body[moneyField];
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+        throw new InvalidAnimalFieldError(
+          moneyField,
+          `${moneyField} must be a non-negative number`,
+        );
+      }
+    }
+  }
+  if ("purchaseDate" in body && body.purchaseDate != null) {
+    const v = body.purchaseDate;
+    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      throw new InvalidAnimalFieldError(
+        "purchaseDate",
+        "purchaseDate must be a YYYY-MM-DD date string",
+      );
+    }
+  }
+
   const allowed = [
     "name",
     "sex",
@@ -96,6 +119,9 @@ export async function updateAnimal(
     "deceasedAt",
     "tagNumber",
     "brandSequence",
+    "purchasePrice",
+    "purchaseDate",
+    "estimatedValue",
   ];
   const update: Record<string, unknown> = {};
   for (const key of allowed) {

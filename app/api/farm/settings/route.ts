@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
     adgPoorDoerThreshold: settings?.adgPoorDoerThreshold ?? 0.7,
     calvingAlertDays: settings?.calvingAlertDays ?? 14,
     daysOpenLimit: settings?.daysOpenLimit ?? 365,
+    repeatedTreatmentCount: settings?.repeatedTreatmentCount ?? 3,
+    repeatedTreatmentWindowDays: settings?.repeatedTreatmentWindowDays ?? 90,
     campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
     targetStockingRate: settings?.targetStockingRate ?? null,
     latitude: settings?.latitude ?? null,
@@ -84,6 +86,8 @@ export async function PATCH(req: NextRequest) {
     "adgPoorDoerThreshold",
     "calvingAlertDays",
     "daysOpenLimit",
+    "repeatedTreatmentCount",
+    "repeatedTreatmentWindowDays",
     "campGrazingWarningDays",
     "defaultRestDays",
     "defaultMaxGrazingDays",
@@ -135,6 +139,8 @@ export async function PATCH(req: NextRequest) {
     adgPoorDoerThreshold?: number;
     calvingAlertDays?: number;
     daysOpenLimit?: number;
+    repeatedTreatmentCount?: number;
+    repeatedTreatmentWindowDays?: number;
     campGrazingWarningDays?: number;
     targetStockingRate?: number | null;
     latitude?: number | null;
@@ -178,6 +184,12 @@ export async function PATCH(req: NextRequest) {
   }
   if (typeof body.daysOpenLimit === "number") {
     updateData.daysOpenLimit = Math.round(body.daysOpenLimit);
+  }
+  if (typeof body.repeatedTreatmentCount === "number") {
+    updateData.repeatedTreatmentCount = Math.round(body.repeatedTreatmentCount);
+  }
+  if (typeof body.repeatedTreatmentWindowDays === "number") {
+    updateData.repeatedTreatmentWindowDays = Math.round(body.repeatedTreatmentWindowDays);
   }
   if (typeof body.campGrazingWarningDays === "number") {
     updateData.campGrazingWarningDays = Math.round(body.campGrazingWarningDays);
@@ -300,6 +312,8 @@ export async function PATCH(req: NextRequest) {
       adgPoorDoerThreshold: updateData.adgPoorDoerThreshold ?? 0.7,
       calvingAlertDays: updateData.calvingAlertDays ?? 14,
       daysOpenLimit: updateData.daysOpenLimit ?? 365,
+      repeatedTreatmentCount: updateData.repeatedTreatmentCount ?? 3,
+      repeatedTreatmentWindowDays: updateData.repeatedTreatmentWindowDays ?? 90,
       campGrazingWarningDays: updateData.campGrazingWarningDays ?? 7,
       targetStockingRate: updateData.targetStockingRate ?? null,
       latitude: updateData.latitude ?? null,

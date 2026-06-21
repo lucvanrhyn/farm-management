@@ -44,7 +44,7 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
 
     expect(txFindMany).toHaveBeenCalledWith({
       where: {},
-      select: { animalId: true, campId: true, type: true, amount: true },
+      select: { animalId: true, campId: true, type: true, amount: true, category: true },
     });
     expect(animalFindMany).toHaveBeenCalledWith({
       where: { status: "Active" },
@@ -53,6 +53,7 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
         name: true,
         category: true,
         currentCamp: true,
+        purchasePrice: true,
       },
     });
   });
@@ -65,18 +66,18 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
 
     expect(txFindMany).toHaveBeenCalledWith({
       where: { date: { gte: "2026-01-01", lte: "2026-12-31" } },
-      select: { animalId: true, campId: true, type: true, amount: true },
+      select: { animalId: true, campId: true, type: true, amount: true, category: true },
     });
   });
 
   it("partitions tagged (animalId != null) vs camp-level (campId != null && animalId == null) transactions and lowercases type", async () => {
     txFindMany.mockResolvedValue([
-      { animalId: "B042", campId: null, type: "Income", amount: 100 },
-      { animalId: null, campId: "C1", type: "EXPENSE", amount: 30 },
+      { animalId: "B042", campId: null, type: "Income", amount: 100, category: "Livestock Sales" },
+      { animalId: null, campId: "C1", type: "EXPENSE", amount: 30, category: "Feed" },
       // animalId present AND campId present -> tagged (animalId wins)
-      { animalId: "B007", campId: "C2", type: "Income", amount: 50 },
+      { animalId: "B007", campId: "C2", type: "Income", amount: 50, category: "Livestock Sales" },
       // neither -> belongs to neither partition
-      { animalId: null, campId: null, type: "Income", amount: 9 },
+      { animalId: null, campId: null, type: "Income", amount: 9, category: "Other" },
     ]);
     animalFindMany.mockResolvedValue([]);
 
@@ -84,8 +85,8 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
 
     expect(calcProfitabilityByAnimal).toHaveBeenCalledWith({
       taggedTransactions: [
-        { animalId: "B042", type: "income", amount: 100 },
-        { animalId: "B007", type: "income", amount: 50 },
+        { animalId: "B042", type: "income", amount: 100, category: "Livestock Sales" },
+        { animalId: "B007", type: "income", amount: 50, category: "Livestock Sales" },
       ],
       campTransactions: [{ campId: "C1", type: "expense", amount: 30 }],
       animals: [],
@@ -100,6 +101,7 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
         name: "Daisy",
         category: "Cow",
         currentCamp: "North",
+        purchasePrice: 7500,
       },
     ]);
 
@@ -115,6 +117,7 @@ describe("getProfitabilityByAnimal(prisma, dateRange?)", () => {
           name: "Daisy",
           category: "Cow",
           currentCamp: "North",
+          purchasePrice: 7500,
         },
       ],
     });

@@ -29,6 +29,8 @@ export default async function SettingsPage({
     adgPoorDoerThreshold: raw?.adgPoorDoerThreshold ?? 0.7,
     calvingAlertDays: raw?.calvingAlertDays ?? 14,
     daysOpenLimit: raw?.daysOpenLimit ?? 365,
+    repeatedTreatmentCount: raw?.repeatedTreatmentCount ?? 3,
+    repeatedTreatmentWindowDays: raw?.repeatedTreatmentWindowDays ?? 90,
     campGrazingWarningDays: raw?.campGrazingWarningDays ?? 7,
     targetStockingRate: raw?.targetStockingRate ?? null,
     latitude: raw?.latitude ?? null,

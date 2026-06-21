@@ -55,6 +55,18 @@ export const REASON_REGISTRY = {
   // in-withdrawal: drug residue window still open. RED — selling or
   // slaughtering this animal is a food-safety / regulatory breach.
   "in-withdrawal": { severity: "red", weight: RED_BASE + 1 },
+
+  // ── Underperformer reasons (repro / margin / treatment-cost) ────────────
+  // All AMBER management signals (red stays reserved for in-withdrawal food
+  // safety). Weights stay strictly < RED_BASE so any red still outranks them.
+  // open-cow: cow open beyond the days-open limit — a breeding-failure signal.
+  "open-cow": { severity: "amber", weight: AMBER_BASE + 8 },
+  // unprofitable: realised per-animal margin negative or bottom-quartile of
+  // its own category. Computed on the unsold active roster, so always advisory.
+  "unprofitable": { severity: "amber", weight: AMBER_BASE + 9 },
+  // repeated-treatments: ≥N treatment/health observations inside a rolling
+  // window — a recurring-cost / chronic-illness signal.
+  "repeated-treatments": { severity: "amber", weight: AMBER_BASE + 10 },
 } as const satisfies Record<string, ReasonMeta>;
 
 export type ReasonId = keyof typeof REASON_REGISTRY;

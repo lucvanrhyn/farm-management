@@ -217,6 +217,7 @@ Canonical field -> description -> type:
 - \`status\` -> "Active", "Sold", or "Deceased". Default "Active" when absent.
 - \`species\` -> "cattle" | "sheep" | "game". Infer from category. Default "cattle".
 - \`deceasedAt\` -> YYYY-MM-DD. Only set when \`status = "Deceased"\`.
+- \`purchasePrice\` -> Acquisition cost in Rand for a PURCHASED animal (number, no currency symbol). Null/blank for home-bred animals. Optional.
 - \`sireNote\` -> Free-text fallback when \`fatherId\` references an animal not in this file. E.g. "Van Aswegen bull, 2023". String, optional.
 - \`damNote\` -> Free-text fallback when \`motherId\` references an animal not in this file. String, optional.
 - \`importJobId\` -> Set by the commit pipeline, not by you.
@@ -271,6 +272,7 @@ Species and category determine LSU (Large Stock Units) for pricing:
 - "Kamp" -> currentCamp
 - "Status" -> status
 - "Sterfdatum" / "Vrek datum" -> deceasedAt
+- "Koopprys" / "Aankoopprys" / "Purchase Price" / "Cost" -> purchasePrice
 
 # Date rules (South Africa)
 
@@ -410,4 +412,4 @@ export const SYSTEM_PROMPT_APPROX_TOKEN_COUNT = Math.ceil(SYSTEM_PROMPT.length /
  * Prompt version. Bump when you change SYSTEM_PROMPT content so callers can
  * detect stale cached entries, cost-telemetry rows, and regression fixtures.
  */
-export const SYSTEM_PROMPT_VERSION = "1.0.0";
+export const SYSTEM_PROMPT_VERSION = "1.1.0";

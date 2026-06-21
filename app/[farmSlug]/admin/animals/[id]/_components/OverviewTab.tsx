@@ -5,6 +5,7 @@
 import Link from "next/link";
 import type { Animal, Camp } from "@prisma/client";
 import { getAnimalAge } from "@/lib/utils";
+import OverviewPhotoHolder from "./OverviewPhotoHolder";
 
 interface OverviewTabProps {
   animal: Animal;
@@ -18,6 +19,13 @@ export function OverviewTab({ animal, camp, farmSlug }: OverviewTabProps) {
       className="rounded-2xl border p-5"
       style={{ background: "var(--ft-surface)", border: "1px solid var(--ft-border)" }}
     >
+      <div className="mb-5">
+        <OverviewPhotoHolder
+          animalId={animal.animalId}
+          photoUrl={animal.photoUrl}
+          alt={`${animal.animalId} photo`}
+        />
+      </div>
       <h2 className="text-xs font-semibold uppercase tracking-wide mb-4" style={{ color: "var(--ft-subtle)" }}>Identity</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
         <div>

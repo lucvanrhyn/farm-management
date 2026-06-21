@@ -47,6 +47,8 @@ export default async function TriagePage({
     daysOpenLimit: settings?.daysOpenLimit ?? 365,
     campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
     staleCampInspectionHours: settings?.alertThresholdHours ?? 48,
+    repeatedTreatmentCount: settings?.repeatedTreatmentCount ?? 3,
+    repeatedTreatmentWindowDays: settings?.repeatedTreatmentWindowDays ?? 90,
   };
 
   const items = await getTriage(prisma, farmSlug, thresholds, mode);

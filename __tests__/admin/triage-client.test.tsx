@@ -130,9 +130,20 @@ describe("TriageClient — unlock-more strip (slice 5)", () => {
   });
 
   it("hides the unlock strip entirely when every history reason is present", () => {
-    // ITEMS carries poor-doer + dosing-overdue + in-withdrawal — nothing left
-    // to unlock, so the whole strip is absent.
-    render(<TriageClient items={ITEMS} farmSlug={FARM} />);
+    // Every history reason present (the original three plus the three
+    // underperformer reasons added 2026-06-19) -> nothing left to unlock, so
+    // the whole strip is absent.
+    const allHistory: AttentionItem[] = [
+      item("COW-ALL", [
+        "poor-doer",
+        "dosing-overdue",
+        "in-withdrawal",
+        "open-cow",
+        "unprofitable",
+        "repeated-treatments",
+      ]),
+    ];
+    render(<TriageClient items={allHistory} farmSlug={FARM} />);
     expect(screen.queryByTestId("triage-unlock-strip")).toBeNull();
   });
 

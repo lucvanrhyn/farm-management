@@ -42,6 +42,10 @@ async function loadTriageTeaser(
       daysOpenLimit: settings?.daysOpenLimit ?? 365,
       campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
       staleCampInspectionHours: settings?.alertThresholdHours ?? 48,
+      // Honour the per-farm repeated-treatments config so the dashboard teaser
+      // flags the same animals as /admin/triage + /admin/profitability.
+      repeatedTreatmentCount: settings?.repeatedTreatmentCount ?? 3,
+      repeatedTreatmentWindowDays: settings?.repeatedTreatmentWindowDays ?? 90,
     };
     return await getTriage(prisma, farmSlug, thresholds, mode);
   } catch {

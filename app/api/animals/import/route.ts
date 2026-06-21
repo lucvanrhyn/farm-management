@@ -289,6 +289,12 @@ export const POST = adminWrite({
                           String(row.mother_id ?? "").trim() || null,
                         fatherId:
                           String(row.father_id ?? "").trim() || null,
+                        purchasePrice: (() => {
+                          const raw = String(row.purchase_price ?? "").trim();
+                          if (!raw) return null;
+                          const n = Number(raw);
+                          return Number.isFinite(n) && n >= 0 ? n : null;
+                        })(),
                         dateAdded:
                           String(row.date_added ?? "").trim() ||
                           new Date().toISOString().split("T")[0],
@@ -307,6 +313,12 @@ export const POST = adminWrite({
                           String(row.mother_id ?? "").trim() || null,
                         fatherId:
                           String(row.father_id ?? "").trim() || null,
+                        purchasePrice: (() => {
+                          const raw = String(row.purchase_price ?? "").trim();
+                          if (!raw) return null;
+                          const n = Number(raw);
+                          return Number.isFinite(n) && n >= 0 ? n : null;
+                        })(),
                         dateAdded:
                           String(row.date_added ?? "").trim() ||
                           new Date().toISOString().split("T")[0],

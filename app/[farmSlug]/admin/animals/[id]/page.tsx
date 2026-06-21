@@ -49,7 +49,7 @@ export default async function AnimalDetailPage({
 
   const isBull = animal.category === "Bull";
 
-  const [observations, camp, weightData, investmentData, offspring, allCamps, photos] = await Promise.all([
+  const [observations, camp, weightData, investmentData, offspring, allCamps, photos, txCategories] = await Promise.all([
     scoped(prisma, animal.species as SpeciesId).observation.findMany({
       where: { animalId: id },
       orderBy: { observedAt: "desc" },
@@ -73,7 +73,13 @@ export default async function AnimalDetailPage({
     scoped(prisma, animal.species as SpeciesId).camp.findMany({ orderBy: { campName: "asc" } }),
     // Wave 5a / #264 — photos aggregation for the new Photos tab.
     getAnimalPhotos(prisma, id),
+    // Transaction categories for the Investment tab's "Add cost / income" modal.
+    // audit-allow-findmany: category list is bounded (~30 default categories per farm).
+    prisma.transactionCategory.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
   ]);
+
+  const incomeCategories = txCategories.filter((c) => c.type === "income");
+  const expenseCategories = txCategories.filter((c) => c.type === "expense");
 
   // Fetch calving observations for offspring birth weights & difficulty.
   // A calving is recorded against the DAM (Observation.animalId = dam tag), with
@@ -187,7 +193,14 @@ export default async function AnimalDetailPage({
         )}
 
         {activeTab === "investment" && (
-          <InvestmentTab investmentData={investmentData} weightData={weightData} />
+          <InvestmentTab
+            investmentData={investmentData}
+            weightData={weightData}
+            animalId={animal.animalId}
+            species={animal.species}
+            incomeCategories={incomeCategories}
+            expenseCategories={expenseCategories}
+          />
         )}
 
         {activeTab === "photos" && (

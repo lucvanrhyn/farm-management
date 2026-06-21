@@ -1,0 +1,25 @@
+-- 0031_animal_photo_url.sql
+--
+-- Image-holder feature (PRD 2026-06-19) — a single primary/profile photo per
+-- animal, distinct from the multi-photo gallery (which is Observation
+-- .attachmentUrl rows, not a chosen "primary" image). The reusable <ImageHolder>
+-- primitive renders this column: empty → "Add image"; click → zoom; existing →
+-- zoom + "Change image". A standalone primary photo has no parent observation,
+-- so it needs its own column rather than riding the observation-photo pipeline.
+--
+-- Column:
+--   * Animal.photoUrl TEXT — Vercel Blob URL of the animal's primary photo (null = none)
+--
+-- Discipline notes (mirror 0029_task_water_point_id.sql):
+--   * Additive only — pure `ALTER TABLE … ADD COLUMN` on Animal. No DROP/RENAME,
+--     no User/_migrations touch → within promote scope (runs on promote across
+--     every tenant clone; a nullable ADD COLUMN is safe).
+--   * NULLABLE, no backfill, no default. Existing animals keep photoUrl = NULL.
+--   * Idempotency comes from the migrator's per-tenant `_migrations` bookkeeping
+--     (lib/migrator.ts) — SQLite/libSQL has no `ADD COLUMN IF NOT EXISTS`.
+--   * `verifyMigrationApplied` (#141) parses the ALTER and probes
+--     pragma_table_info; `checkPrismaColumnParity` (#137) verifies the live
+--     column matches the Prisma declaration (`Animal.photoUrl`) in this commit.
+--   * Identifier quoting per feedback-quote-sql-keywords-in-migrations.md.
+
+ALTER TABLE "Animal" ADD COLUMN "photoUrl" TEXT;

@@ -15,6 +15,8 @@ export type { SegmentedOption } from "./Segmented";
 export { PageHeader } from "./PageHeader";
 export { Spark, makeSpark } from "./Spark";
 export { KpiCard } from "./KpiCard";
+export { ImageHolder } from "./ImageHolder";
+export type { ImageHolderProps } from "./ImageHolder";
 export { Label, Kbd, DotLine } from "./primitives";
 export { FxRuntime } from "./FxRuntime";
 export { FxBackground } from "./FxBackground";

@@ -77,6 +77,8 @@ async function resolveThresholds(prisma: PrismaClient) {
         daysOpenLimit: true,
         campGrazingWarningDays: true,
         alertThresholdHours: true,
+        repeatedTreatmentCount: true,
+        repeatedTreatmentWindowDays: true,
         latitude: true,
         longitude: true,
       },
@@ -89,6 +91,10 @@ async function resolveThresholds(prisma: PrismaClient) {
       daysOpenLimit: settings?.daysOpenLimit ?? 365,
       campGrazingWarningDays: settings?.campGrazingWarningDays ?? 7,
       staleCampInspectionHours: settings?.alertThresholdHours ?? 48,
+      // Per-farm repeated-treatments config so the weekly briefing flags the
+      // same animals as the triage + profitability pages (not the hardcoded default).
+      repeatedTreatmentCount: settings?.repeatedTreatmentCount ?? 3,
+      repeatedTreatmentWindowDays: settings?.repeatedTreatmentWindowDays ?? 90,
     },
     latitude: settings?.latitude ?? null,
     longitude: settings?.longitude ?? null,

@@ -46,6 +46,13 @@ export interface AlertThresholds {
   daysOpenLimit: number;            // default 365
   campGrazingWarningDays: number;   // default 7
   staleCampInspectionHours: number; // default 48
+  // Repeated-treatments underperformer triage (PRD 2026-06-19). OPTIONAL so
+  // the many existing callers that build an AlertThresholds literal compile
+  // unchanged; the single consumer (lib/server/triage/get-triage.ts) applies
+  // the `?? 3` / `?? 90` defaults at the read point, the same per-caller-default
+  // pattern the other thresholds use.
+  repeatedTreatmentCount?: number;      // default 3 — treatments in window that flag an animal
+  repeatedTreatmentWindowDays?: number; // default 90 — rolling lookback window (days)
 }
 
 /**
@@ -68,6 +75,8 @@ function toThresholdsRecord(t: AlertThresholds): Record<string, number> {
     daysOpenLimit: t.daysOpenLimit,
     campGrazingWarningDays: t.campGrazingWarningDays,
     staleCampInspectionHours: t.staleCampInspectionHours,
+    repeatedTreatmentCount: t.repeatedTreatmentCount ?? 3,
+    repeatedTreatmentWindowDays: t.repeatedTreatmentWindowDays ?? 90,
   };
 }
 

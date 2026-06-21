@@ -30,6 +30,9 @@ const REASON_PHRASES: Record<ReasonId, string> = {
   "poor-doer": "low weight gain (poor doer)",
   "dosing-overdue": "dosing overdue",
   "in-withdrawal": "an open drug-withdrawal period",
+  "open-cow": "open well beyond the days-open limit",
+  "unprofitable": "running at a net loss",
+  "repeated-treatments": "repeated treatments on record",
 };
 
 function phraseFor(reasonId: string): string {

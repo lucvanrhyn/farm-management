@@ -71,6 +71,10 @@ CREATE TABLE "Animal" (
     "tagNumber" TEXT,
     "brandSequence" TEXT,
     "clientLocalId" TEXT,
+    "purchasePrice" REAL,
+    "purchaseDate" TEXT,
+    "estimatedValue" REAL,
+    "photoUrl" TEXT,
     CONSTRAINT "Animal_importJobId_fkey" FOREIGN KEY ("importJobId") REFERENCES "ImportJob" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
@@ -118,6 +122,8 @@ CREATE TABLE "FarmSettings" (
     "calvingAlertDays" INTEGER NOT NULL DEFAULT 14,
     "daysOpenLimit" INTEGER NOT NULL DEFAULT 365,
     "campGrazingWarningDays" INTEGER NOT NULL DEFAULT 7,
+    "repeatedTreatmentWindowDays" INTEGER NOT NULL DEFAULT 90,
+    "repeatedTreatmentCount" INTEGER NOT NULL DEFAULT 3,
     "defaultRestDays" INTEGER NOT NULL DEFAULT 60,
     "defaultMaxGrazingDays" INTEGER NOT NULL DEFAULT 7,
     "rotationSeasonMode" TEXT NOT NULL DEFAULT 'auto',
@@ -1035,4 +1041,6 @@ export const BASELINE_MIGRATION_NAMES: readonly string[] = [
   '0027_einstein_budget_atomic_counter.sql',
   '0028_einstein_chunk_observed_at.sql',
   '0029_task_water_point_id.sql',
+  '0030_animal_profitability_and_repeated_treatment_thresholds.sql',
+  '0031_animal_photo_url.sql',
 ];

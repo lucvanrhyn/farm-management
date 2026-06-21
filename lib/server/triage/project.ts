@@ -36,10 +36,10 @@ function isKnownReason(id: string): id is ReasonId {
  * severity-less item). Duplicate (animalId, reasonId) pairs collapse to one.
  */
 export function projectAttentionItems(findings: readonly Finding[]): AttentionItem[] {
-  // animalId → { species, reasonIds set }
+  // animalId → { species, reasonIds set, advisory? }
   const byAnimal = new Map<
     string,
-    { species: Finding["species"]; reasonIds: Set<ReasonId> }
+    { species: Finding["species"]; reasonIds: Set<ReasonId>; advisory?: string }
   >();
 
   for (const finding of findings) {
@@ -47,16 +47,22 @@ export function projectAttentionItems(findings: readonly Finding[]): AttentionIt
     const existing = byAnimal.get(finding.animalId);
     if (existing) {
       existing.reasonIds.add(finding.reasonId);
+      // First advisory note wins; carry it onto the animal's item so a
+      // projected/estimate-based finding (e.g. unprofitable) is flagged.
+      if (existing.advisory === undefined && finding.advisory !== undefined) {
+        existing.advisory = finding.advisory;
+      }
     } else {
       byAnimal.set(finding.animalId, {
         species: finding.species,
         reasonIds: new Set<ReasonId>([finding.reasonId]),
+        advisory: finding.advisory,
       });
     }
   }
 
   const items: AttentionItem[] = [];
-  for (const [animalId, { species, reasonIds }] of byAnimal) {
+  for (const [animalId, { species, reasonIds, advisory }] of byAnimal) {
     const reasons: Reason[] = [...reasonIds].map((id) => {
       const meta = REASON_REGISTRY[id];
       return { id, severity: meta.severity, weight: meta.weight };
@@ -65,7 +71,11 @@ export function projectAttentionItems(findings: readonly Finding[]): AttentionIt
     const severity: ReasonSeverity = reasons.some((r) => r.severity === "red")
       ? "red"
       : "amber";
-    items.push({ animalId, reasons, urgency, severity, species });
+    items.push(
+      advisory !== undefined
+        ? { animalId, reasons, urgency, severity, species, advisory }
+        : { animalId, reasons, urgency, severity, species },
+    );
   }
 
   // Stable ranking: urgency DESC, then reason count DESC, then animalId ASC.

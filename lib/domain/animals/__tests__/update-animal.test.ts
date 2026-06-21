@@ -194,6 +194,59 @@ describe("updateAnimal — field allowlist projection", () => {
       data: { name: "X" },
     });
   });
+
+  it("keeps purchasePrice / purchaseDate / estimatedValue in the allowlist (silent-drop guard)", async () => {
+    // EditAnimalModal sends purchasePrice/estimatedValue as JS numbers and
+    // purchaseDate as a "YYYY-MM-DD" string; all three must survive the
+    // allowlist projection and reach prisma.animal.update untouched.
+    await call("ADMIN", "C-001", {
+      purchasePrice: 1500,
+      purchaseDate: "2026-01-15",
+      estimatedValue: 80000,
+    });
+
+    expect(animalUpdate.mock.calls[0][0].data).toEqual({
+      purchasePrice: 1500,
+      purchaseDate: "2026-01-15",
+      estimatedValue: 80000,
+    });
+  });
+
+  it("passes a null purchasePrice/estimatedValue straight through (clearing the value)", async () => {
+    await call("ADMIN", "C-001", {
+      purchasePrice: null,
+      estimatedValue: null,
+    });
+
+    expect(animalUpdate.mock.calls[0][0].data).toEqual({
+      purchasePrice: null,
+      estimatedValue: null,
+    });
+  });
+
+  it("rejects a negative purchasePrice / estimatedValue (no corrupt money reaches the DB)", async () => {
+    await expect(call("ADMIN", "C-001", { purchasePrice: -500 })).rejects.toBeInstanceOf(
+      InvalidAnimalFieldError,
+    );
+    await expect(call("ADMIN", "C-001", { estimatedValue: -1 })).rejects.toBeInstanceOf(
+      InvalidAnimalFieldError,
+    );
+    expect(animalUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-finite or wrongly-typed purchasePrice", async () => {
+    await expect(
+      call("ADMIN", "C-001", { purchasePrice: "1500" as unknown as number }),
+    ).rejects.toBeInstanceOf(InvalidAnimalFieldError);
+    expect(animalUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed purchaseDate (must be YYYY-MM-DD)", async () => {
+    await expect(call("ADMIN", "C-001", { purchaseDate: "15/01/2026" })).rejects.toBeInstanceOf(
+      InvalidAnimalFieldError,
+    );
+    expect(animalUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("updateAnimal — hoisted single read + guard gating", () => {

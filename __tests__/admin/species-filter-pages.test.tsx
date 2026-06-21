@@ -133,6 +133,11 @@ function buildPrismaMock() {
     farmSettings: {
       findFirst: farmSettingsFindFirstMock,
     },
+    // Feed mechanism (PRD 2026-06-19): the animal-detail page now fetches
+    // transaction categories to pre-tag the Investment-tab "Add cost/income".
+    transactionCategory: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   };
 }
 

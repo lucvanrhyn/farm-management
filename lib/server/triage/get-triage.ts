@@ -24,6 +24,7 @@ import type { AlertThresholds } from "@/lib/server/dashboard-alerts";
 import { getEnabledSpeciesModules } from "@/lib/server/species-modules";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import { getAnimalsInWithdrawal } from "@/lib/server/treatment-analytics";
+import { getReproStats } from "@/lib/server/reproduction-analytics";
 import { detectPoorDoers } from "@/lib/species/cattle/poor-doer";
 import { getDosingOverdue } from "@/lib/species/sheep/analytics";
 import {
@@ -37,6 +38,103 @@ const DOSING_OVERDUE_DAYS = 90;
 
 /** Species we triage per-animal. Game is population-tracked → excluded. */
 const PER_ANIMAL_SPECIES = new Set<SpeciesId>(["cattle", "sheep"]);
+
+/**
+ * Observation types that count as a treatment/health event for the
+ * `repeated-treatments` reason. `treatment` is the same type the withdrawal
+ * tracker reads (lib/server/treatment-analytics.ts); `dosing` and
+ * `health_check` are the other recurring health interventions a farmer would
+ * count as "treated again". Kept as a Set so the observation read can filter
+ * on `type in […]` in one query.
+ */
+const TREATMENT_OBS_TYPES = ["treatment", "dosing", "health_check"] as const;
+
+/**
+ * Advisory note attached to `unprofitable` findings. The active roster is
+ * UNSOLD, so its per-animal margin is computed from whatever income/cost is
+ * tagged so far — a projection, never a banked realised loss. The page firms
+ * this up once an animal is sold; triage only ever flags it as advisory.
+ */
+const UNPROFITABLE_ADVISORY = "projected margin — not a banked loss";
+
+/**
+ * `unprofitable` rule (CONTEXT.md "Underperformer flag"): flag an active
+ * animal whose realised per-animal margin is NEGATIVE or in the BOTTOM
+ * QUARTILE of its OWN category (category-relative, self-calibrating). Only
+ * animals with ≥1 tagged transaction are eligible — an untouched animal has
+ * unfed data, not a loss. Margin = Σ tag-keyed income − Σ tag-keyed expenses
+ * (Transaction.animalId is the TAG, same as Observation.animalId).
+ *
+ * Pure + deterministic over its inputs so it is unit-testable in isolation.
+ */
+export function detectUnprofitable(
+  animals: ReadonlyArray<{ animalId: string; category: string | null }>,
+  taggedTx: ReadonlyArray<{ animalId: string | null; type: string; amount: number }>,
+): string[] {
+  // Σ income − Σ expense per animal tag, counting only animals with ≥1 tx.
+  const margin = new Map<string, number>();
+  const touched = new Set<string>();
+  for (const tx of taggedTx) {
+    if (tx.animalId == null) continue;
+    if (tx.type !== "income" && tx.type !== "expense") continue;
+    touched.add(tx.animalId);
+    const signed = tx.type === "income" ? tx.amount : -tx.amount;
+    margin.set(tx.animalId, (margin.get(tx.animalId) ?? 0) + signed);
+  }
+
+  // Group the eligible (touched, active) animals by category for the
+  // bottom-quartile cut. An animal with no category is its own "" bucket.
+  const byCategory = new Map<string, Array<{ animalId: string; margin: number }>>();
+  for (const a of animals) {
+    if (!touched.has(a.animalId)) continue; // unfed data, not a loss
+    const cat = a.category ?? "";
+    const entry = { animalId: a.animalId, margin: margin.get(a.animalId) ?? 0 };
+    byCategory.set(cat, [...(byCategory.get(cat) ?? []), entry]);
+  }
+
+  const flagged: string[] = [];
+  for (const group of byCategory.values()) {
+    // A negative margin ALWAYS flags (a banked/projected loss). The
+    // category-relative bottom-quartile cut only kicks in once the category is
+    // big enough (≥4) for a quartile to be meaningful — otherwise a lone or
+    // tiny cohort of PROFITABLE animals would be flagged just for being the
+    // "bottom" of a cohort of one.
+    const sorted = [...group].sort((x, y) => x.margin - y.margin);
+    const quartileMargin =
+      sorted.length >= 4
+        ? sorted[Math.floor(sorted.length / 4) - 1].margin
+        : Number.NEGATIVE_INFINITY;
+    for (const a of group) {
+      if (a.margin < 0 || a.margin <= quartileMargin) flagged.push(a.animalId);
+    }
+  }
+  return flagged;
+}
+
+/**
+ * `repeated-treatments` rule (CONTEXT.md): flag an active animal with ≥
+ * `count` treatment/health observations inside a rolling `windowDays` window.
+ * Pure + deterministic over its inputs (the `now` clock is passed in).
+ */
+export function detectRepeatedTreatments(
+  treatmentObs: ReadonlyArray<{ animalId: string | null; observedAt: Date }>,
+  windowDays: number,
+  count: number,
+  now: Date,
+): string[] {
+  const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+  const perAnimal = new Map<string, number>();
+  for (const o of treatmentObs) {
+    if (o.animalId == null) continue;
+    if (o.observedAt < windowStart) continue;
+    perAnimal.set(o.animalId, (perAnimal.get(o.animalId) ?? 0) + 1);
+  }
+  const flagged: string[] = [];
+  for (const [animalId, n] of perAnimal) {
+    if (n >= count) flagged.push(animalId);
+  }
+  return flagged;
+}
 
 /**
  * Narrow an arbitrary species string (e.g. the cross-species
@@ -111,6 +209,25 @@ async function findingsForSpecies(
       if (!activeIds.has(animalId)) continue; // drop dead/sold animals with stale weighings
       findings.push({ animalId, reasonId: "poor-doer", species: "cattle" });
     }
+
+    // open-cow: cows open beyond the days-open limit. Source = the LIVE,
+    // tag-keyed reproduction engine (reproduction-analytics.getReproStats),
+    // NOT lib/species/shared/repro-engine.ts (dead cuid/tag filter — its
+    // days-open is empty in prod). getReproStats filters observations by
+    // type/date only, so obs.animalId (= TAG) flows through to
+    // daysOpen[].animalId unbroken. Mirror the dashboard "open beyond limit"
+    // filter and intersect with activeIds (drop sold/dead cows with stale
+    // calvings). Cattle-only; .catch keeps a repro read failure from sinking
+    // the whole species' findings.
+    const repro = await getReproStats(prisma, { species: "cattle" }).catch(() => null);
+    for (const d of repro?.daysOpen ?? []) {
+      const open =
+        (d.daysOpen !== null && d.daysOpen > thresholds.daysOpenLimit) ||
+        (d.daysOpen === null && d.isExtended);
+      if (!open) continue;
+      if (!activeIds.has(d.animalId)) continue;
+      findings.push({ animalId: d.animalId, reasonId: "open-cow", species: "cattle" });
+    }
   } else if (speciesId === "sheep") {
     // Sheep have no weighing-based alert; no-weight-on-record still applies,
     // and self-suppresses when the herd has zero weighings (day-1 import).
@@ -145,6 +262,54 @@ async function findingsForSpecies(
         findings.push({ animalId, reasonId: "dosing-overdue", species: "sheep" });
       }
     }
+  }
+
+  // ── unprofitable (cross-species, advisory) ────────────────────────────────
+  // Self-contained per-animal margin from tag-keyed Transaction rows. Triage
+  // owns this calc (does NOT import the profitability page's calc): margin =
+  // Σ animalId-tagged income − Σ animalId-tagged expenses, then NEGATIVE or
+  // bottom-quartile of its own category is flagged. Transaction.animalId is
+  // the TAG (same as Observation.animalId), so it joins to a.animalId. We only
+  // pass this species' active animals, so the category cohorts are per-species.
+  // Marked advisory: the active roster is unsold → projected, not banked.
+  const taggedTx = (await prisma.transaction
+    .findMany({
+      where: { animalId: { in: [...activeIds] }, type: { in: ["income", "expense"] } },
+      select: { animalId: true, type: true, amount: true },
+    })
+    .catch(() => [])) as Array<{ animalId: string | null; type: string; amount: number }>;
+  for (const animalId of detectUnprofitable(rows, taggedTx)) {
+    if (!activeIds.has(animalId)) continue;
+    findings.push({
+      animalId,
+      reasonId: "unprofitable",
+      species: speciesId,
+      advisory: UNPROFITABLE_ADVISORY,
+    });
+  }
+
+  // ── repeated-treatments (cross-species) ───────────────────────────────────
+  // Count treatment/health observations per active animal in the rolling
+  // window; flag when count ≥ threshold. scoped().observation reads carry NO
+  // status filter (observations persist after death/sale) → intersect with
+  // activeIds. animalId is the TAG, group by it directly.
+  const treatmentObs = (await scoped(prisma, speciesId).observation
+    .findMany({
+      where: { type: { in: [...TREATMENT_OBS_TYPES] }, animalId: { not: null } },
+      select: { animalId: true, observedAt: true },
+      take: 100_000,
+    })
+    .catch(() => [])) as Array<{ animalId: string | null; observedAt: Date }>;
+  // Defaults applied here (the per-caller-default pattern): the AlertThresholds
+  // fields are optional so existing callers compile unchanged.
+  for (const animalId of detectRepeatedTreatments(
+    treatmentObs,
+    thresholds.repeatedTreatmentWindowDays ?? 90,
+    thresholds.repeatedTreatmentCount ?? 3,
+    now,
+  )) {
+    if (!activeIds.has(animalId)) continue;
+    findings.push({ animalId, reasonId: "repeated-treatments", species: speciesId });
   }
 
   return findings;

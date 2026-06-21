@@ -36,6 +36,10 @@ interface Props {
   onChanged: () => void;
   /** Active farm slug; animal links are tenant-scoped (`/${slug}/admin/animals/…`). */
   farmSlug?: string;
+  /** Camp list forwarded to TransactionModal's optional camp <select>. */
+  camps?: { camp_id: string; camp_name: string }[];
+  /** Farm mode/species forwarded to TransactionModal's AnimalPicker. */
+  species?: string | null;
 }
 
 export default function TransactionLedger({
@@ -44,6 +48,8 @@ export default function TransactionLedger({
   expenseCategories,
   onChanged,
   farmSlug,
+  camps,
+  species,
 }: Props) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -282,6 +288,8 @@ export default function TransactionLedger({
           transaction={modal === "add" ? undefined : modal}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
+          camps={camps}
+          species={species}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); onChanged(); }}
         />

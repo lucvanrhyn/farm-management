@@ -57,6 +57,7 @@ export type ImportRow = {
   deceasedAt?: Date | string; // ISO or Date — only meaningful with status Deceased
   sireNote?: string; // free-text fallback when the sire isn't in this file
   damNote?: string; // free-text fallback when the dam isn't in this file
+  purchasePrice?: string; // acquisition cost in Rand — string on the wire (materializeRows emits strings), parsed → Float here
 };
 
 export type CommitImportInput = {
@@ -142,6 +143,8 @@ type ValidatedRow = {
   deceasedAtIso?: string;
   sireNote?: string;
   damNote?: string;
+  /** Parsed acquisition cost in Rand (Float?); undefined = home-bred / not supplied. */
+  purchasePriceZar?: number;
 };
 
 function parseDateOnly(value: Date | string): string | null {
@@ -229,6 +232,19 @@ function validateRow(
     deceasedAtIso = parsed;
   }
 
+  // purchasePrice arrives as a string (materializeRows emits strings only).
+  // Parse → non-negative Float here; reject NaN / negative with a per-row error
+  // so a malformed acquisition cost never silently becomes 0 or null.
+  let purchasePriceZar: number | undefined;
+  const rawPurchasePrice = trimmedOrUndefined(row.purchasePrice);
+  if (rawPurchasePrice !== undefined) {
+    const parsed = Number(rawPurchasePrice);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return { err: { row: rowNum, earTag: rawEarTag, reason: "invalid purchasePrice" } };
+    }
+    purchasePriceZar = parsed;
+  }
+
   let status: string | undefined;
   const rawStatus = trimmedOrUndefined(row.status);
   if (rawStatus !== undefined) {
@@ -262,6 +278,7 @@ function validateRow(
       deceasedAtIso,
       sireNote: sanitizedOrUndefined(row.sireNote),
       damNote: sanitizedOrUndefined(row.damNote),
+      purchasePriceZar,
     },
   };
 }
@@ -687,6 +704,7 @@ export async function commitImport(
               fatherId: resolvedSire,
               dateAdded: todayIso,
               species: row.species ?? defaultSpecies,
+              purchasePrice: row.purchasePriceZar ?? null,
               importJobId,
               // Unresolved-ref note wins; otherwise pass through any
               // wizard-provided free-text note for the same slot.

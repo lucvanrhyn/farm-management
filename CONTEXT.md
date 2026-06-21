@@ -396,3 +396,222 @@ licences, general fuel). Shown as a separate "unallocated" line, **never
 spread across camps by a formula** — keeps camp profitability honest rather
 than arbitrarily allocated. (Contrast camp-tagged costs, which ARE allocated
 to the camp's animals.)
+
+---
+
+## Animal & Mob Profitability
+
+PRD (Animal/Mob Profitability, grilling session 2026-06-19). Extends the
+existing per-animal (`calcProfitabilityByAnimal`) and per-camp
+(`rollUpProfitByCamp`) views, which already ship but are **un-feedable** — the
+transaction form has no animal picker, so every animal-tagged figure is empty.
+This feature makes profitability feedable (purchase price + animal-tagging),
+adds a **projected** margin for animals still on the farm, surfaces it in a
+discoverable place, and flags underperformers. Terms below pin the contract.
+
+### Purchase price
+
+The acquisition cost of an animal, held as a first-class **`Animal.purchasePrice`**
+(`Float?` — the first money column on `Animal`) **+ `purchaseDate` (`String?`,
+"YYYY-MM-DD")** attribute. NB the date is `String?` not `DateTime?` — FarmTrack
+stores every user-facing event date on tenant tables as a `String` (`Transaction.date`,
+`Animal.dateOfBirth`/`dateAdded`/`deceasedAt`); `DateTime` is reserved for system
+timestamps. Settable at herd import (one CSV column) and on the
+animal form — so day-1 profitability is populated from imported attributes alone
+(the Triage "snapshot reason" philosophy), not from N hand-keyed transactions.
+For a home-bred animal `purchasePrice` is null (its cost is its accrued rearing
+expenses, not an acquisition). Distinct from a purchase **Transaction**
+(`category: "Animal Purchases"`), which is the ledger event.
+
+### Purchase-price reconciliation (column-wins)
+
+The dedupe rule that keeps **one** accounting truth. An animal's opening cost in
+the profitability view is `purchasePrice` when the column is set; **else** it
+falls back to the sum of that animal's `animalId`-tagged `"Animal Purchases"`
+expense transactions — **never both** (counting both double-charges the animal,
+since a tagged purchase expense already flows into `expenses` today). The
+farm-level P&L (`getFinancialKPIs`) stays the authoritative ledger total;
+profitability remains a reporting attribution. The one legitimate divergence —
+purchase prices captured as attributes but never journalled — is documented, not
+reconciled away.
+
+### Profitability section
+
+The dedicated, discoverable home for animal/mob/category profitability: a
+top-level `/admin/profitability` route, **gated exactly like finance**:
+`creds?.tier === "basic"` → `UpgradePrompt` (there is **no "premium" tier** —
+`FarmTier` is `basic | advanced | consulting`), and registered in the **"Finance"**
+nav group of `components/admin/nav-model.tsx` with `premiumOnly: true` (the flag the
+nav converts to `locked` for basic), English label **"Profitability"**. It hosts the
+**grouping toggle** and the underperformer panel. It is *reuse, not rebuild* — but
+note the mounting nuance: `ProfitPerCampSection` mounts directly on `finansies`
+(safe to relocate), whereas `CategoryProfitability` is nested inside
+`FinancialKPISection` (do **not** gut the KPI section — reuse the component / extract
+it cleanly, and add a per-animal section via `getProfitabilityByAnimal`). Leave a
+"See Profitability →" link on `finansies` for discoverability. The farm P&L,
+the transaction ledger, budget-vs-actual, and cost-of-gain stay on
+`/admin/finansies`; profitability is the "which animals/groups make money"
+lens, kept separate from the "what were my transactions" ledger.
+
+### Grouping axis
+
+The Profitability section's toggle. Three axes ship because they have data on
+day one and shipped calculators: **Animal** (per-head list, reuses
+`getProfitabilityByAnimal`), **Category** (Bull/Cow/Heifer/Calf, reuses
+`CategoryProfitability`), and **Camp** (reuses `rollUpProfitByCamp` last-camp
+attribution). **Mob** is a deferred 4th axis that *unlocks* once a farm tags
+animals into mobs — 0% adoption on the reference farm (875 animals, 0 mobs), so
+a mob-first toggle would render blank. The mob rollup is the same per-animal
+calc grouped by `mobId`, so it is purely additive. No axis ever shows an empty
+primary screen on a populated farm.
+
+### Estimated sale value (projected margin)
+
+The value driver for animals **still on the farm**. Realised margin needs a real
+sale `Transaction`; until then margin is *projected* against an estimate. The
+estimate is a **two-tier** model, cheapest input first, so it is populated on a
+zero-weights farm and sharpens as data accrues:
+
+1. **Per-species-per-category R/kg × latest logged weight** — the farmer sets an
+   R/kg assumption **keyed by species _and_ category** (`Record<SpeciesId,
+   Record<category, number>>`), NOT a flat per-category map: `Animal.category` is
+   free-text and species-agnostic, so a flat map silently merges species. Reuse the
+   already-species-keyed **`marketPricePerKg`** shape + name from
+   `FarmSettings.speciesAlertThresholds` (a *sale* price; do not reuse
+   `purchasePricePerKg`, which is a purchase price). Weight gain is **not a separate
+   line** — more kg × R/kg is a higher projected value, so gain enters the margin
+   through this term.
+2. **Per-category flat R/head fallback** — used when an animal has no weight on
+   record (the trio-b reality: Cost-of-Gain renders empty, weights are sparse).
+   Guarantees a populated projection on day one.
+3. **Per-animal override** — a single typed value for the known exception (a stud
+   bull worth R80k), wins over both tiers for that animal.
+
+Two invariants: **realised always wins** — once an animal is sold its actual sale
+`Transaction` replaces the estimate (projection is only for live animals); and
+**projected ≠ realised** — projected margin is shown distinctly from banked
+margin and is never silently summed with real money (same honesty discipline as
+the [Profitability section] reporting-attribution rule and ADR-0012).
+
+### Underperformer flag
+
+The "which animals/groups need attention" output. It is **not** a new AI system —
+it rides the existing **Triage** read-model (`lib/server/triage/`), which already
+does *rules-detect → rank → narrate*: a `REASON_REGISTRY` (`reasons.ts`) tags each
+animal with `Reason`s, `project.ts` ranks by `urgency = Σ weight` / `severity =
+max`, and narration is deterministic offline (`narrate.ts`) with an **optional
+online Einstein one-liner that already falls back to the templates on
+no-key/error**. The AI only narrates the likely cause — it never decides the flag
+and never invents numbers (rules-detect / LLM-narrate).
+
+The feature is **additive**: four reasons cover the farmer's themes, two existing,
+two net-new.
+
+| Theme | Reason id | Status |
+|---|---|---|
+| gaining weight too slowly | `poor-doer` (ADG < `adgPoorDoerThreshold`) | exists — reuse |
+| failing to breed | `open-cow` (days-open > limit) | data in `repro-engine.ts`; **promote** to a triage reason |
+| consuming money | `unprofitable` | **net-new** (this feature's calc) |
+| getting repeated treatments | `repeated-treatments` | **net-new** (no frequency rule today) |
+
+Two definitions pinned:
+
+- **`unprofitable` = margin in the bottom quartile *of its own category*, or
+  negative.** Category-relative, not an absolute Rand cutoff, so it self-calibrates
+  per farm (a R200 margin is fine for a calf, alarming for a stud bull). A
+  **group** (category / camp / mob) is flagged when it holds a cluster of flagged
+  animals **or** its aggregate margin is bottom-quartile / negative — this is the
+  "which animal *groups* consume money" answer.
+- **`repeated-treatments` = ≥ N treatment/health observations in a rolling
+  window** (default ≥3 in 90 days), threshold living in `AlertThresholds` beside
+  `adgPoorDoerThreshold` (the established config pattern).
+
+All four are **amber** management signals; **red** stays reserved for food-safety
+(`in-withdrawal`). Honesty carry-over from [Estimated sale value (projected
+margin)]: an `unprofitable` flag computed on a *projected* margin is labelled
+**projected/advisory** — an animal is never accused of losing money on an estimate
+as if it were banked; realised-margin flags are firm.
+
+### Feed mechanism (how the data gets in)
+
+The fix that makes the whole feature non-empty — today the per-animal/category
+views ship but are starved because `TransactionModal` tags nothing. The transaction
+**API already accepts** `animalId` **and** `campId` (`app/api/transactions/route.ts:130-131`);
+the modal simply never sets them. Three inputs:
+
+1. **Two optional taggers in `TransactionModal`** — a **searchable animal picker**
+   (typeahead by tag/name; must be search, not a dropdown — 875 head) setting
+   `animalId`, and a **camp picker** (dropdown, ~19 camps) setting `campId`. The
+   camp tag is the **feed/lick/dip allocation mechanism**: `calcProfitabilityByAnimal`
+   already splits camp expenses evenly across the camp's active animals, so a
+   "Lick — camp D" expense reaches every animal in D with no extra plumbing. Both
+   optional; untagged = the existing **unallocated** line. Shown on every category.
+2. **Purchase price as a stored attribute** — new `Animal.purchasePrice` +
+   `purchaseDate` columns via one **numbered tenant migration** (all 5 prod tenants,
+   the established pattern), surfaced on the animal create/edit form and as **one
+   optional `purchasePrice` import column**. Day-1 populated from import; the
+   [Purchase-price reconciliation (column-wins)] rule blocks double-counting.
+3. **Bulk sales stay aggregate in v1** — tag the camp (or keep the existing
+   quantity/avg-mass aggregate); per-animal multi-select (`animalIds`) is **deferred
+   to v2** (an 875-head multi-select is heavy UI and camp-tagging already attributes
+   the money correctly).
+
+Entry point: the picker in `TransactionModal` is the core (the general finance flow
+needs it anyway). Fast-follow (not v1-critical): the animal detail **Investment**
+tab grows an "Add cost / income" button that opens the *same* modal pre-tagged to
+that animal — same component, no new form.
+
+### Consistency audit (2026-06-19) — implementation deltas
+
+Two parallel sub-agent audits (backend + UX) confirmed **every design decision fits
+existing FarmTrack patterns**; the corrections were implementation-level and are
+folded into the terms above. The remaining "which files / which gotcha" deltas:
+
+- **Migration:** next free tenant migration is **`0030`** (latest is
+  `0029_task_water_point_id.sql`). Pure nullable `ALTER TABLE "Animal" ADD COLUMN`,
+  double-quoted identifiers, no default/backfill. Then regenerate
+  `lib/farm-schema.ts` (`pnpm db:gen-schema`) or the governance-gate freshness check
+  fails; promote-time `checkPrismaColumnParity` + `verifyMigrationApplied` also guard.
+- **Realised-margin roster:** `getProfitabilityByAnimal` filters `status: 'Active'`
+  only — it drops sold/deceased animals **and their banked sale income**. A realised
+  per-animal/category view MUST use the disposed-inclusive roster
+  (`status ∈ {Active,Sold,Deceased,Culled}`, as `getProfitPerCamp` already does), or
+  banked sale margin never appears. Projected view stays Active-only (live animals).
+- **Projected-value plumbing is real, not a tweak:** `calcProfitabilityByAnimal` /
+  `getProfitabilityByCategory` derive everything from realised `Transaction` rows.
+  The projected value (weight × R/kg) is a NEW input that must be threaded through
+  `AnimalProfitabilityInput` → the domain fetch; it is purely additive (no caller
+  breaks) but is new wiring.
+- **Triage = FIVE files per new reason, not three:** `reasons.ts` (registry entry,
+  weight `AMBER_BASE + N` < 100 to hold the band-invariant test), `narrate.ts`
+  (`REASON_PHRASES`, compile-mandatory), **`labels.ts`** (add to `HISTORY_REASON_IDS`
+  + `REASON_LABELS` + `UNLOCK_HINTS` — exhaustiveness tests fail otherwise), and
+  **`get-triage.ts`** (the actual detector — the real work for `open-cow` /
+  `unprofitable` / `repeated-treatments`). `types.ts` needs **no** edit (`ReasonId` is
+  registry-derived). The projected/advisory flag rides the finding/narration payload,
+  not the registry (which only stores severity+weight).
+- **`repeatedTreatments*` thresholds:** for per-farm parity with the existing five
+  (`adgPoorDoerThreshold`, `daysOpenLimit`, …) add two **`FarmSettings` columns**
+  (fold into the same `0030` migration) + API validation + admin `SettingsForm` field;
+  there is no shared default const, so the literal fallback (`?? 90` / `?? 3`) must be
+  set at each load site. (Code-only defaults avoid the migration but break parity —
+  columns is the clean-arch choice.)
+- **Pickers — reuse, don't hand-roll:** the animal typeahead is the existing
+  **`components/observations/AnimalPicker.tsx`** (debounced → `GET /api/animals?search=`,
+  already `--ft-*`-themed, scales to 875). The ⌘K palette is **nav-only** — not a
+  reusable typeahead. The camp `<select>` is genuinely net-new: copy the markup from
+  legacy `components/admin/TransactionForm.tsx` (already matches the modal's inline
+  `fieldStyle`). Wire an `animalId` prop into `TransactionModal`'s POST payload (the
+  same change the Investment-tab fast-follow needs — do them together; the modal is a
+  server-data consumer so the Investment tab needs a small client wrapper +
+  transaction-category fetch).
+- **Animal form + import gotchas:** edit form = `EditAnimalModal` `FIELDS` array;
+  create = `RecordBirthButton` / `create-animal.ts`. **`update-animal.ts` has a field
+  allowlist (~line 95) — a new column silently drops on PATCH unless added there.**
+  Import = the canonical `IMPORT_ROW_FIELDS` + `ImportRow` lock-step
+  (`lib/onboarding/`); a **second legacy importer** (`AnimalImporter` /
+  `api/animals/import`) exists — decide whether the column is needed there too.
+  Admin animal create/edit are **online-only** (no offline-store impact).
+- **Design system:** wrap in `AdminPage` + `PageHeader` (`@/components/ds`), `--ft-*`
+  tokens only; exemplar to copy is `app/[farmSlug]/admin/reports/page.tsx`. Serif is
+  **DM Serif Display** (inherited via PageHeader) — Fraunces is legacy-fallback only.
