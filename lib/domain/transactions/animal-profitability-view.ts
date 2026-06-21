@@ -33,6 +33,7 @@ import {
   estimateSaleValue,
   type ProjectedBasis,
 } from "@/lib/calculators/projected-sale-value";
+import { parseWeighingMassKg } from "@/lib/domain/observations/weighing-mass";
 
 export interface AnimalProfitabilityViewRow {
   animalId: string;
@@ -46,26 +47,6 @@ export interface AnimalProfitabilityViewRow {
   projectedValue: number | null;
   projectedMargin: number | null;
   projectedBasis: ProjectedBasis;
-}
-
-const DISPOSED_INCLUSIVE_STATUSES = ["Active", "Sold", "Deceased", "Culled"];
-
-/**
- * Read a weighing mass (kg) from observation details. Weighings are stored under
- * TWO key conventions: the logger/admin modal writes snake_case `weight_kg`,
- * while weighings created on task completion write camelCase `weightKg`
- * (lib/tasks/observation-mapping.ts; the canonical schema accepts both). Read
- * both so a task-completion weighing still upgrades the projection to the per-kg
- * tier instead of silently falling back to per-head.
- */
-function parseLatestWeightKg(raw: string): number | null {
-  try {
-    const d = JSON.parse(raw) as { weight_kg?: number; weightKg?: number };
-    const w = d.weight_kg ?? d.weightKg;
-    return typeof w === "number" && Number.isFinite(w) ? w : null;
-  } catch {
-    return null;
-  }
 }
 
 export async function getAnimalProfitabilityView(
@@ -167,7 +148,7 @@ export async function getAnimalProfitabilityView(
     // Ascending order means the last write per tag is the latest weighing.
     for (const obs of weighings) {
       if (!obs.animalId) continue;
-      const w = parseLatestWeightKg(obs.details);
+      const w = parseWeighingMassKg(obs.details);
       if (w != null) {
         latestWeightByTag.set(obs.animalId, w);
       }
