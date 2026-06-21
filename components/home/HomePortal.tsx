@@ -23,6 +23,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useClientTime } from "@/lib/hooks/use-client-time";
 import { Icon, Card, Kbd } from "@/components/ds";
 import type { FarmMode } from "@/lib/farm-mode";
 import { useAssistantName } from "@/hooks/useAssistantName";
@@ -121,12 +122,12 @@ function BrandMark() {
   );
 }
 
-function GreetChip({ firstName, hour, date }: { firstName: string; hour: number; date: string }) {
+function GreetChip({ firstName, hour, date, greeting }: { firstName: string; hour: number; date: string; greeting: string }) {
   const GI = hour < 6 || hour >= 19 ? Icon.moon : Icon.sun;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 11, fontSize: 13, color: "var(--ft-muted)" }}>
       <GI size={16} />
-      <span>{greetingFor(hour)}{firstName ? `, ${firstName}` : ""}</span>
+      <span>{greeting}{firstName ? `, ${firstName}` : ""}</span>
       <span style={{ color: "var(--ft-subtle)" }}>·</span>
       <span className="ft-mono">{date}</span>
     </div>
@@ -190,17 +191,19 @@ function StatusFooter({
   firstName,
   hour,
   date,
+  greeting,
   onSignOut,
 }: {
   owner: string;
   firstName: string;
   hour: number;
   date: string;
+  greeting: string;
   onSignOut: () => void;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 16 }}>
-      <GreetChip firstName={firstName} hour={hour} date={date} />
+      <GreetChip firstName={firstName} hour={hour} date={date} greeting={greeting} />
       {/* status row */}
       <div
         style={{
@@ -492,9 +495,15 @@ export function HomePortal({
   onAskEinstein,
   onSignOut,
 }: HomePortalProps) {
-  const now = useMemo(() => new Date(), []);
-  const hour = now.getHours();
-  const date = useMemo(() => formatDate(now), [now]);
+  // Wall-clock strings routed through useClientTime: SSR and the client's
+  // first render emit the stable placeholder, then swap to the real
+  // locale/timezone value post-mount. Reading new Date() in the render body
+  // straddled greeting/day boundaries between the server's UTC clock and the
+  // browser's local clock → the recurring React #418 hydration mismatch this
+  // page threw on every load. Mirrors DashboardClient's "Good day" gate.
+  const greeting = useClientTime((now) => greetingFor(now.getHours()), "Good day");
+  const hour = useClientTime((now) => now.getHours(), 12);
+  const date = useClientTime((now) => formatDate(now), "");
   const firstName = owner.trim().split(/\s+/)[0] ?? "";
   const { head, tail } = splitName(farmName);
   const assistantName = useAssistantName();
@@ -590,6 +599,7 @@ export function HomePortal({
               firstName={firstName}
               hour={hour}
               date={date}
+              greeting={greeting}
               onSignOut={onSignOut}
             />
           </div>
@@ -624,7 +634,7 @@ export function HomePortal({
               </div>
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 13, color: "var(--ft-muted)" }}>
-                  {greetingFor(hour)}{firstName ? `, ${firstName}` : ""}
+                  {greeting}{firstName ? `, ${firstName}` : ""}
                 </div>
               </div>
             </div>
