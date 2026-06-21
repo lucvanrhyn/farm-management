@@ -159,7 +159,11 @@ export async function reconstructStockSnapshots(
   // string-comparison-correct and must NOT change. Only the Observation
   // predicate needs the Date coercion.
   const exitTypes = ["death", "predation_loss", "game_mortality", "game_predation", "animal_movement"];
-  const animalIds = animals.map((a) => a.id);
+  // Observation.animalId stores the animal TAG (Animal.animalId), not the cuid
+  // Animal.id — the exit-obs filter below and exitDateByAnimal lookup must both
+  // key on the tag, else every Observation-driven exit is silently dropped and
+  // the SARS opening/closing inventory is overstated.
+  const animalIds = animals.map((a) => a.animalId);
   let exitObsRaw: ObservationRow[] = [];
   if (animalIds.length > 0) {
     const observedAtGte = new Date(`${start}T00:00:00.000Z`);
@@ -249,7 +253,7 @@ export async function reconstructStockSnapshots(
     if (!dateAdded) continue;
 
     const deceasedAt = toIsoDate(animal.deceasedAt);
-    const exitDate = deceasedAt ?? exitDateByAnimal.get(animal.id) ?? null;
+    const exitDate = deceasedAt ?? exitDateByAnimal.get(animal.animalId) ?? null;
 
     // ── Closing inventory (at yearEnd) ──
     // Animal counts at closing iff: addedOn ≤ yearEnd AND no exit ≤ yearEnd

@@ -28,7 +28,14 @@ function makePrismaStub(animals: AnimalRow[], observations: ObservationRow[]): I
     },
     observation: {
       async findMany({ where }) {
-        const types: string[] | undefined = where?.type?.in ?? where?.type ? [where?.type] : undefined;
+        // Honour both `{ type: { in: [...] } }` and `{ type: "x" }`. (The prior
+        // `a ?? b ? c : d` form mis-parsed the `{in}` object and silently
+        // returned zero observations, masking the obs-driven exit path.)
+        const types: string[] | undefined = Array.isArray(where?.type?.in)
+          ? where.type.in
+          : where?.type
+            ? [where.type]
+            : undefined;
         const animalIds: string[] | undefined = where?.animalId?.in;
         const start: string | undefined = where?.observedAt?.gte;
         const end: string | undefined = where?.observedAt?.lte;
@@ -88,7 +95,7 @@ describe("reconstructStockSnapshots — death in tax year", () => {
         {
           id: "o1",
           type: "death",
-          animalId: "a2",
+          animalId: "BAR-COW-1", // Observation.animalId stores the TAG, not the cuid
           observedAt: "2025-08-10",
         },
       ],
@@ -144,7 +151,7 @@ describe("reconstructStockSnapshots — sold animal", () => {
         {
           id: "o2",
           type: "animal_movement",
-          animalId: "a4",
+          animalId: "BAR-OX-1", // Observation.animalId stores the TAG, not the cuid
           observedAt: "2025-11-01",
           details: JSON.stringify({ direction: "sold" }),
         },
@@ -172,6 +179,42 @@ describe("reconstructStockSnapshots — purchase mid-year", () => {
     const result = await reconstructStockSnapshots(prisma, taxYear);
     expect(result.opening.find((r) => r.ageCategory === "Tollies & heifers 1-2 years")?.count ?? 0).toBe(0);
     expect(result.closing.find((r) => r.ageCategory === "Tollies & heifers 1-2 years")?.count).toBe(1);
+  });
+});
+
+describe("reconstructStockSnapshots — exit via observation only (tag-joined)", () => {
+  it("an ACTIVE animal dispatched mid-year via an animal_movement obs (no deceasedAt) drops from closing", async () => {
+    // Production shape: Observation.animalId is the TAG, and the exit event is
+    // the only signal (status never flipped, deceasedAt null). The replay must
+    // join the obs on the tag — joining on the cuid silently keeps the animal
+    // in closing stock and overstates the SARS closing inventory.
+    const ox: AnimalRow = {
+      id: "ckexitcuid000000000000001",
+      animalId: "BAR-OX-MOVE",
+      species: "cattle",
+      category: "Ox",
+      status: "Active",
+      dateAdded: "2023-04-01",
+      dateOfBirth: "2021-06-01",
+      deceasedAt: null,
+    };
+    const prisma = makePrismaStub(
+      [ox],
+      [
+        {
+          id: "o3",
+          type: "animal_movement",
+          animalId: "BAR-OX-MOVE", // the TAG, not the cuid
+          observedAt: "2025-11-01",
+          details: JSON.stringify({ direction: "sold" }),
+        },
+      ],
+    );
+    const result = await reconstructStockSnapshots(prisma, taxYear);
+    // alive on 1 March → in opening
+    expect(result.opening.find((r) => r.ageCategory === "Oxen")?.count).toBe(1);
+    // exited mid-year via the obs → NOT in closing
+    expect(result.closing.find((r) => r.ageCategory === "Oxen")?.count ?? 0).toBe(0);
   });
 });
 
