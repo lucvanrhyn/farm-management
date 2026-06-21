@@ -43,11 +43,14 @@ const PER_ANIMAL_SPECIES = new Set<SpeciesId>(["cattle", "sheep"]);
  * Observation types that count as a treatment/health event for the
  * `repeated-treatments` reason. `treatment` is the same type the withdrawal
  * tracker reads (lib/server/treatment-analytics.ts); `dosing` and
- * `health_check` are the other recurring health interventions a farmer would
- * count as "treated again". Kept as a Set so the observation read can filter
- * on `type in […]` in one query.
+ * `health_issue` are the other recurring health interventions a farmer would
+ * count as "treated again". These are the SANCTIONED observation-type values
+ * (lib/species/types.ts SHARED_OBSERVATION_TYPES + sheep's `dosing`); a value
+ * not in the registry (e.g. the never-persisted "health_check") would match
+ * zero rows and silently drop that whole category. Exported so a unit test can
+ * pin the filter against the registry. Used as `type in […]` in one query.
  */
-const TREATMENT_OBS_TYPES = ["treatment", "dosing", "health_check"] as const;
+export const TREATMENT_OBS_TYPES = ["treatment", "dosing", "health_issue"] as const;
 
 /**
  * Advisory note attached to `unprofitable` findings. The active roster is

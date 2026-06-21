@@ -67,6 +67,32 @@ describe("detectPoorDoers", () => {
     ).toEqual([]);
   });
 
+  it("reads task-completion weighings stored under camelCase `weightKg` (not only snake_case)", () => {
+    // Regression (wave animal-mob-profitability): weighings logged via task
+    // completion persist details as { weightKg } (camelCase, raw — no key
+    // normalization on the write path), while the logger/modal writes
+    // { weight_kg }. The /admin/profitability page co-renders this poor-doer
+    // detection next to a projected-value reader that DOES read both keys, so a
+    // snake-only parse here meant the underperformer panel disagreed with the
+    // projection column on whether the animal had weighings. Read both keys.
+    const camel = (animalId: string, date: string, weightKg: number): WeighingObs => ({
+      animalId,
+      observedAt: day(date),
+      details: JSON.stringify({ weightKg }),
+    });
+    // 10 kg gain over 100 days = 0.1 kg/day < 0.7 → poor-doer
+    const ids = detectPoorDoers([camel("TW1", "2026-01-01", 400), camel("TW1", "2026-04-11", 410)], 0.7);
+    expect(ids).toEqual(["TW1"]);
+  });
+
+  it("mixes snake_case and camelCase weighings for the same animal", () => {
+    const mixed: WeighingObs[] = [
+      { animalId: "M1", observedAt: day("2026-01-01"), details: JSON.stringify({ weight_kg: 400 }) },
+      { animalId: "M1", observedAt: day("2026-04-11"), details: JSON.stringify({ weightKg: 410 }) },
+    ];
+    expect(detectPoorDoers(mixed, 0.7)).toEqual(["M1"]);
+  });
+
   it("uses first vs last reading by chronological order (long-run ADG)", () => {
     // Out-of-order input; first=Jan(400) last=Apr(410) → 0.1 kg/day < 0.7
     const ids = detectPoorDoers(

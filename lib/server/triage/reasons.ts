@@ -12,11 +12,15 @@
  * urgency weight.
  *
  * Weight scheme (intentionally simple + auditable for v1):
- *  - every `red` reason weighs strictly more than every `amber` reason, so
- *    an animal carrying ANY red always sorts ahead of an all-amber animal
- *    on the dominant urgency axis;
- *  - within a band, weights encode relative priority (a withdrawal breach
- *    that could put residue in the food chain > a missing date-of-birth).
+ *  - weights encode relative priority WITHIN a severity band (a withdrawal
+ *    breach that could put residue in the food chain > a missing
+ *    date-of-birth). Keeping reds numerically above ambers is a readability
+ *    convention, NOT the cross-band ordering guarantee;
+ *  - the "any red outranks all-amber" invariant is enforced STRUCTURALLY by
+ *    project.ts, which sorts on severity TIER first and only then on summed
+ *    urgency. (Summed amber urgency CAN exceed a lone red's weight once an
+ *    animal stacks enough amber reasons, so the per-reason band alone is not
+ *    sufficient — see project.ts.)
  *
  * `urgency = Σ reason.weight` and `item.severity = max reason severity` are
  * computed in `project.ts`; this file only declares the per-reason facts.
@@ -58,7 +62,8 @@ export const REASON_REGISTRY = {
 
   // ── Underperformer reasons (repro / margin / treatment-cost) ────────────
   // All AMBER management signals (red stays reserved for in-withdrawal food
-  // safety). Weights stay strictly < RED_BASE so any red still outranks them.
+  // safety). Their SUMMED urgency on one animal can exceed a lone red's weight;
+  // project.ts tiers by severity first so a red still outranks them regardless.
   // open-cow: cow open beyond the days-open limit — a breeding-failure signal.
   "open-cow": { severity: "amber", weight: AMBER_BASE + 8 },
   // unprofitable: realised per-animal margin negative or bottom-quartile of

@@ -73,7 +73,9 @@ import {
   getTriage,
   detectUnprofitable,
   detectRepeatedTreatments,
+  TREATMENT_OBS_TYPES,
 } from "@/lib/server/triage/get-triage";
+import { SHARED_OBSERVATION_TYPES } from "@/lib/species/types";
 
 const THRESHOLDS = {
   adgPoorDoerThreshold: 0.7,
@@ -118,6 +120,27 @@ const sheep = (animalId: string, over: Record<string, unknown> = {}) => ({
   dateOfBirth: "2024-01-01",
   category: "Ewe",
   ...over,
+});
+
+describe("TREATMENT_OBS_TYPES (the repeated-treatments query filter)", () => {
+  it("counts the canonical health-event type 'health_issue', never a non-existent 'health_check'", () => {
+    // Regression (wave animal-mob-profitability): the filter listed
+    // "health_check" — a type that is never persisted (the observation
+    // allowlist rejects it), so every real health event was silently dropped
+    // from the repeated-treatments count. The sanctioned health type is
+    // "health_issue".
+    expect(TREATMENT_OBS_TYPES).toContain("health_issue");
+    expect(TREATMENT_OBS_TYPES).not.toContain("health_check");
+  });
+
+  it("only filters on sanctioned observation types", () => {
+    // 'dosing' is sheep-exclusive (lib/species/sheep/config.ts); the rest are
+    // shared. A typo'd / non-existent type would match zero rows in prod.
+    const valid = new Set([...SHARED_OBSERVATION_TYPES.map((t) => t.value), "dosing"]);
+    for (const t of TREATMENT_OBS_TYPES) {
+      expect(valid.has(t)).toBe(true);
+    }
+  });
 });
 
 describe("getTriage", () => {
