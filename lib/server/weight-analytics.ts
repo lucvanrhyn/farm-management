@@ -1,6 +1,7 @@
 // lib/server/weight-analytics.ts
 import type { PrismaClient } from "@prisma/client";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { parseWeighingMassKg } from "@/lib/domain/observations/weighing-mass";
 
 // ADR-0005 Wave 2: per-animal ADG + herd-ADG trend are analytics
 // roll-ups. crossSpecies() forwards args verbatim — the per-animalId /
@@ -37,14 +38,6 @@ export interface HerdAdgPoint {
   avgAdg: number;
 }
 
-function parseWeightDetails(raw: string): { weight_kg?: number } {
-  try {
-    return JSON.parse(raw) as { weight_kg?: number };
-  } catch {
-    return {};
-  }
-}
-
 export function calcAdgTrend(adg: number): "good" | "ok" | "poor" {
   if (adg > 0.9) return "good";
   if (adg >= 0.7) return "ok";
@@ -62,13 +55,13 @@ export async function getAnimalWeightData(
   });
 
   const records: WeightRecord[] = rawObs.flatMap((obs) => {
-    const details = parseWeightDetails(obs.details);
-    if (typeof details.weight_kg !== "number") return [];
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) return [];
     return [
       {
         id: obs.id,
         observedAt: obs.observedAt,
-        weightKg: details.weight_kg,
+        weightKg,
       },
     ];
   });
@@ -192,10 +185,10 @@ export async function getAnimalWeightSummaries(
   const byAnimal = new Map<string, WeightRecord[]>();
   for (const obs of rawObs) {
     if (!obs.animalId) continue;
-    const d = parseWeightDetails(obs.details);
-    if (typeof d.weight_kg !== "number") continue;
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) continue;
     const existing = byAnimal.get(obs.animalId) ?? [];
-    existing.push({ id: "", observedAt: obs.observedAt, weightKg: d.weight_kg });
+    existing.push({ id: "", observedAt: obs.observedAt, weightKg });
     byAnimal.set(obs.animalId, existing);
   }
 
@@ -265,10 +258,10 @@ export async function getHerdAdgTrend(
   const byAnimal = new Map<string, { campId: string; date: Date; weightKg: number }[]>();
   for (const obs of rawObs) {
     if (!obs.animalId) continue;
-    const d = parseWeightDetails(obs.details);
-    if (typeof d.weight_kg !== "number") continue;
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) continue;
     const existing = byAnimal.get(obs.animalId) ?? [];
-    existing.push({ campId: obs.campId, date: obs.observedAt, weightKg: d.weight_kg });
+    existing.push({ campId: obs.campId, date: obs.observedAt, weightKg });
     byAnimal.set(obs.animalId, existing);
   }
 

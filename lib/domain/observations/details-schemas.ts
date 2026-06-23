@@ -43,6 +43,7 @@
 import { z } from "zod";
 
 import type { ObservationType } from "./registry";
+import { weighingMassKg } from "./weighing-mass";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Typed errors — the live wire contract. Relocated here (ADR-0007 §Cleanup) so
@@ -256,18 +257,12 @@ function coerceDetails(details: unknown): Record<string, unknown> | null {
 
 /**
  * Parse the weight field into a finite number, or `null` if absent / NaN.
- * Canonical key is `weight_kg`; `weightKg` is accepted as a fallback for the
- * historical camelCase drift. A numeric or numeric-string value is accepted.
+ * Delegates to the shared `weighingMassKg` reader so the on-write validator and
+ * every downstream reader agree, byte-for-byte, on what a valid weighing mass
+ * is (dual-key `weight_kg` ?? `weightKg`, number or numeric-string, finite).
  */
 function parseWeight(details: Record<string, unknown> | null): number | null {
-  if (!details) return null;
-  const raw = details.weight_kg ?? details.weightKg;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw === "string" && raw.trim().length > 0) {
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
+  return weighingMassKg(details);
 }
 
 /**

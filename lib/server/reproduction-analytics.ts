@@ -1,6 +1,7 @@
 // lib/server/reproduction-analytics.ts
 import type { PrismaClient } from "@prisma/client";
 import { scoped } from "@/lib/server/species-scoped-prisma";
+import { isLiveBirth } from "@/lib/domain/observations/calving-details";
 
 const GESTATION_DAYS = 285; // SA midpoint: Bonsmara/Brangus/Nguni 283–285d
 const VOLUNTARY_WAITING_PERIOD_DAYS = 45; // VWP after calving before cow is eligible
@@ -297,7 +298,7 @@ export async function getReproStats(
   const calvingObs12m = calvingObs.filter((o) => o.observedAt >= twelveMonthsAgo);
   const totalInseminations12m = reproObs.filter((o) => o.type === "insemination").length;
   const liveCalvings12m = calvingObs12m.filter(
-    (o) => parseDetails(o.details).calf_status === "live"
+    (o) => isLiveBirth(parseDetails(o.details))
   ).length;
   const calvingRate =
     totalInseminations12m > 0

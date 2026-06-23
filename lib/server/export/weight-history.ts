@@ -6,6 +6,7 @@ import { weightHistoryToCSV, type WeightHistoryRow } from "@/lib/server/export-c
 import type { ExportArtifact, ExportContext } from "./types";
 import { buildPdf, csvFilename, pdfFilename } from "./pdf";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { parseWeighingMassKg } from "@/lib/domain/observations/weighing-mass";
 
 export async function exportWeightHistory(ctx: ExportContext): Promise<ExportArtifact> {
   const weighingWhere: Record<string, unknown> = { type: "weighing" };
@@ -24,25 +25,23 @@ export async function exportWeightHistory(ctx: ExportContext): Promise<ExportArt
     select: { animalId: true, observedAt: true, details: true },
   });
 
-  // Build a map of animalId → name + camp for enrichment
-  const animalIds = [...new Set(obs.map((o) => o.animalId).filter(Boolean))] as string[];
-  // cross-species by design: weight-history rows are looked up by id only.
-  const animals = animalIds.length > 0
+  // Build a map of tag → name + camp for enrichment. Observation.animalId
+  // stores the animal TAG (Animal.animalId @unique), NOT the cuid Animal.id —
+  // so enrich by matching tag→tag, else every Name/Camp column comes back blank
+  // (see gotcha-observation-animalid-is-tag-not-cuid).
+  const animalTags = [...new Set(obs.map((o) => o.animalId).filter(Boolean))] as string[];
+  const animals = animalTags.length > 0
     ? await xs.animal.findMany({
-        where: { id: { in: animalIds } },
-        select: { id: true, animalId: true, name: true, currentCamp: true },
+        where: { animalId: { in: animalTags } },
+        select: { animalId: true, name: true, currentCamp: true },
       })
     : [];
-  const animalMap = new Map(animals.map((a) => [a.id, a]));
+  const animalMap = new Map(animals.map((a) => [a.animalId, a]));
 
   const rows: WeightHistoryRow[] = obs
     .map((o) => {
       const animal = o.animalId ? animalMap.get(o.animalId) : undefined;
-      let weightKg = 0;
-      try {
-        const d = JSON.parse(o.details);
-        weightKg = Number(d.weight_kg ?? d.weightKg ?? 0);
-      } catch { /* skip */ }
+      const weightKg = parseWeighingMassKg(o.details) ?? 0;
       if (!weightKg) return null;
       return {
         animalId: animal?.animalId ?? o.animalId ?? "",

@@ -366,10 +366,30 @@ export async function getWithdrawalTracker(prisma: PrismaClient): Promise<Withdr
     orderBy: { observedAt: "desc" },
   });
 
+  // "Animals not yet cleared for market" must list only LIVE animals — a cow
+  // that died, was sold, or was culled the day after a treatment has left the
+  // herd and cannot be in withdrawal. Join the treated tags to their Animal rows
+  // and keep only Active ones (mirrors the sibling getAnimalsInWithdrawal in
+  // treatment-analytics.ts). Observation.animalId stores the TAG, so the lookup
+  // joins tag→tag.
+  const treatedTags = [...new Set(rows.map((r) => r.animalId).filter(Boolean))] as string[];
+  const activeTags = new Set<string>();
+  if (treatedTags.length > 0) {
+    const activeAnimals = await crossSpecies(prisma, "analytics-rollup").animal.findMany({
+      where: { animalId: { in: treatedTags }, status: "Active" },
+      select: { animalId: true },
+    });
+    for (const a of activeAnimals) activeTags.add(a.animalId);
+  }
+
   const today = new Date();
   const results: WithdrawalRecord[] = [];
 
   for (const row of rows) {
+    // Drop treatments for animals that have left the herd (deceased/sold/culled)
+    // or no longer exist; a null-animal treatment can't be tracked per-animal.
+    if (!row.animalId || !activeTags.has(row.animalId)) continue;
+
     let details: Record<string, string | number> = {};
     try { details = JSON.parse(row.details); } catch { continue; }
 

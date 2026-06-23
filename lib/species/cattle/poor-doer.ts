@@ -17,6 +17,8 @@
  * PURE: takes already-fetched weighing observations, returns animalIds.
  */
 
+import { parseWeighingMassKg } from "@/lib/domain/observations/weighing-mass";
+
 export interface WeighingObs {
   animalId: string | null;
   observedAt: Date;
@@ -40,15 +42,13 @@ export function detectPoorDoers(
 
   for (const obs of weighingObs) {
     if (!obs.animalId) continue;
-    let details: { weight_kg?: number } = {};
-    try {
-      details = JSON.parse(obs.details) as { weight_kg?: number };
-    } catch {
-      continue;
-    }
-    if (typeof details.weight_kg !== "number") continue;
+    // Dual-key weighing mass via the single shared reader: the logger/modal
+    // write snake_case `weight_kg`, task-completion weighings persist camelCase
+    // `weightKg` — both must count or task-logged animals are silently ignored.
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) continue;
     const existing = byAnimal.get(obs.animalId) ?? [];
-    existing.push({ date: obs.observedAt, weightKg: details.weight_kg });
+    existing.push({ date: obs.observedAt, weightKg });
     byAnimal.set(obs.animalId, existing);
   }
 
