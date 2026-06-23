@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { Check, Database, Dna, ListChecks, Sparkles, type LucideIcon } from "lucide-react";
+import { formatNumber } from "@/lib/format/locale";
 import type {
   CommitProgressFrame,
   CommitResultFrame,
@@ -227,7 +228,7 @@ function ProgressRing({ frame }: { frame: CommitProgressFrame | null }) {
 
   // Smoothly animate the counter digits.
   const counter = useMotionValue(0);
-  const rounded = useTransform(counter, (v) => Math.round(v).toLocaleString());
+  const rounded = useTransform(counter, (v) => formatNumber(Math.round(v)));
   useEffect(() => {
     const target = frame?.processed ?? 0;
     const controls = animate(counter, target, {
@@ -341,7 +342,7 @@ function ProgressRing({ frame }: { frame: CommitProgressFrame | null }) {
                       fontWeight: 500,
                     }}
                   >
-                    / {frame.total.toLocaleString()}
+                    / {formatNumber(frame.total)}
                   </span>
                 ) : null}
               </div>

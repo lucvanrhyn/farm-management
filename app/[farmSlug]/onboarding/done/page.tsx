@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { formatNumber } from "@/lib/format/locale";
 import {
   AlertTriangle,
   ArrowRight,
@@ -341,7 +342,7 @@ function StatCard({
               letterSpacing: "-0.015em",
             }}
           >
-            {value.toLocaleString()}
+            {formatNumber(value)}
           </div>
         </div>
         <div

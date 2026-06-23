@@ -24,6 +24,7 @@
 
 import { useMemo, useState } from "react";
 import { useClientTime } from "@/lib/hooks/use-client-time";
+import { formatNumber } from "@/lib/format/locale";
 import { Icon, Card, Kbd } from "@/components/ds";
 import type { FarmMode } from "@/lib/farm-mode";
 import { useAssistantName } from "@/hooks/useAssistantName";
@@ -154,8 +155,8 @@ function StatList({
 }) {
   const rows: ReadonlyArray<{ label: string; value: string; tabnums?: boolean }> = [
     { label: "Breed", value: breed },
-    { label: "Animals", value: animalCount.toLocaleString(), tabnums: true },
-    { label: "Camps", value: campCount.toLocaleString(), tabnums: true },
+    { label: "Animals", value: formatNumber(animalCount), tabnums: true },
+    { label: "Camps", value: formatNumber(campCount), tabnums: true },
     { label: "Owner", value: owner },
   ];
   return (
@@ -512,7 +513,7 @@ export function HomePortal({
     () => [
       {
         key: "admin", Icon: Icon.overview, label: "ADMIN", title: "Operations",
-        subtitle: sections.admin, stat: `${animalCount.toLocaleString()} animals`, path: "/admin",
+        subtitle: sections.admin, stat: `${formatNumber(animalCount)} animals`, path: "/admin",
       },
       {
         key: "logger", Icon: Icon.logger, label: "LOGGER", title: "Camp Rounds",

@@ -13,6 +13,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, FileSpreadsheet, RotateCcw } from "lucide-react";
+import { formatNumber } from "@/lib/format/locale";
 import { useParams, useRouter } from "next/navigation";
 import { CommitProgress } from "@/components/onboarding/CommitProgress";
 import { FileDropzone } from "@/components/onboarding/FileDropzone";
@@ -221,7 +222,7 @@ export default function OnboardingImportPage() {
       <span aria-hidden="true" style={{ color: ONBOARDING_COLORS.whisper }}>
         ·
       </span>
-      <span>{state.fullRowCount.toLocaleString()} rows</span>
+      <span>{formatNumber(state.fullRowCount)} rows</span>
     </motion.div>
   );
 
@@ -238,7 +239,7 @@ export default function OnboardingImportPage() {
               color: ONBOARDING_COLORS.amberBright,
             }}
           >
-            {state.fullRowCount.toLocaleString()}
+            {formatNumber(state.fullRowCount)}
           </span>{" "}
           animals.
         </>

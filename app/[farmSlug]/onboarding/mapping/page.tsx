@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { formatNumber } from "@/lib/format/locale";
 import { useParams, useRouter } from "next/navigation";
 import { useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import { MappingRow } from "@/components/onboarding/MappingRow";
@@ -166,7 +167,7 @@ export default function MappingPage() {
           {modelName}
         </span>
         <span aria-hidden="true">·</span>
-        <span>{rowCount.toLocaleString()} rows</span>
+        <span>{formatNumber(rowCount)} rows</span>
         <span aria-hidden="true">·</span>
         <span>{proposal.proposal.mapping.length} mapped</span>
         {proposal.proposal.unmapped.length > 0 ? (
