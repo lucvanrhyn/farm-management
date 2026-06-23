@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { CheckSquare, Plus, X, Calendar, AlertCircle, Clock, Check, Trash2 } from "lucide-react";
+import { formatNumber } from "@/lib/format/locale";
 
 interface Task {
   id: string;
@@ -473,7 +474,7 @@ export function TaskBoard({
               background: "var(--ft-surface)",
             }}
           >
-            {loadingMore ? "Loading…" : `Load more (${tasks.length.toLocaleString()} loaded)`}
+            {loadingMore ? "Loading…" : `Load more (${formatNumber(tasks.length)} loaded)`}
           </button>
         </div>
       )}

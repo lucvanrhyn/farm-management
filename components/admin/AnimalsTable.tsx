@@ -9,6 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { getCategoryLabel, getAnimalAge } from "@/lib/utils";
+import { formatNumber } from "@/lib/format/locale";
 import type { AnimalCategory, AnimalStatus, Camp, Mob, PrismaAnimal } from "@/lib/types";
 import AnimalActions from "@/components/admin/finansies/AnimalActions";
 import { Pill, Kbd, Icon, Spark } from "@/components/ds";
@@ -486,20 +487,20 @@ export default function AnimalsTable({
       >
         {typeof speciesTotal === "number" ? (
           <>
-            Showing {loaded.toLocaleString()} of{" "}
-            {speciesTotal.toLocaleString()}
+            Showing {formatNumber(loaded)} of{" "}
+            {formatNumber(speciesTotal)}
             {species ? ` ${species}` : ""}
             {showReconciliation && (
               <>
                 {" "}
-                ({crossSpeciesActiveTotal!.toLocaleString()} total Active
+                ({formatNumber(crossSpeciesActiveTotal!)} total Active
                 across species)
               </>
             )}
           </>
         ) : (
           <>
-            Showing first {loaded.toLocaleString()} · scroll or Load more to
+            Showing first {formatNumber(loaded)} · scroll or Load more to
             see the rest
           </>
         )}
@@ -531,7 +532,7 @@ export default function AnimalsTable({
             >
               {t === "active" ? "Active / Sold" : "Deceased"}
               <span className="ft-mono ft-tabnums" style={{ fontSize: 10.5, color: "var(--ft-subtle)" }}>
-                {count.toLocaleString()}
+                {formatNumber(count)}
               </span>
             </button>
           );
@@ -629,7 +630,7 @@ export default function AnimalsTable({
           </select>
         )}
         <span className="ml-auto text-sm self-center ft-mono" style={{ color: "var(--ft-subtle)" }}>
-          {filtered.length.toLocaleString()} animals found
+          {formatNumber(filtered.length)} animals found
         </span>
       </div>
 
@@ -873,7 +874,7 @@ export default function AnimalsTable({
             disabled={loadingMore}
             className="ft-btn disabled:opacity-50"
           >
-            {loadingMore ? "Loading…" : `Load more (${animals.length.toLocaleString()} loaded)`}
+            {loadingMore ? "Loading…" : `Load more (${formatNumber(animals.length)} loaded)`}
           </button>
         </div>
       )}

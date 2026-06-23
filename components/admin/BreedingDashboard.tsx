@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useClientTime } from "@/lib/hooks/use-client-time";
 import type { BreedingSnapshot, InbreedingRisk, PairingSuggestion } from "@/lib/server/breeding-analytics";
 import type { BreedingAIResponse } from "@/app/api/[farmSlug]/breeding/analyze/route";
 
@@ -17,6 +18,37 @@ const STATUS_COLORS = {
   alert:   { bar: "var(--ft-poor)", text: "var(--ft-poor)", bg: "rgba(192,87,76,0.10)" },
   neutral: { bar: "var(--ft-subtle)", text: "var(--ft-subtle)", bg: "rgba(156,142,122,0.10)" },
 };
+
+/**
+ * Mount-gated countdown badge for an upcoming calving (React #418).
+ *
+ * The relative day count derives from the wall clock: the server reads it at
+ * render time (UTC) and the client at hydration (browser zone), so across a
+ * calendar-day rollover the two disagree → #418. `useClientTime` returns the
+ * stable `null` placeholder on the first (server-equivalent) render and only
+ * computes the live countdown after the client mounts, so the server render and
+ * the client's first render always agree byte-for-byte. (Reading the clock via
+ * the hook also keeps the impure `new Date()` out of the render body, which the
+ * React-Compiler lint rule forbids.)
+ */
+export function CalvingCountdownBadge({ expectedDate }: { expectedDate: string }) {
+  const daysAway = useClientTime<number | null>(
+    (now) => Math.round((new Date(expectedDate).getTime() - now.getTime()) / 86_400_000),
+    null,
+  );
+  const className = "text-xs px-2 py-0.5 rounded-md font-medium";
+  if (daysAway === null) {
+    const c = STATUS_COLORS.neutral;
+    return <span className={className} style={{ background: c.bg, color: c.text }}>…</span>;
+  }
+  const urgency = daysAway < 0 ? "alert" : daysAway <= 14 ? "warning" : "neutral";
+  const c = STATUS_COLORS[urgency];
+  return (
+    <span className={className} style={{ background: c.bg, color: c.text }}>
+      {daysAway < 0 ? `${Math.abs(daysAway)}d overdue` : daysAway === 0 ? "Today" : `${daysAway}d away`}
+    </span>
+  );
+}
 
 function getScoreColor(score: number): { bg: string; text: string; border: string } {
   if (score > 70) return { bg: "rgba(74,124,89,0.12)", text: "var(--ft-good)", border: "rgba(74,124,89,0.3)" };
@@ -443,33 +475,21 @@ export default function BreedingDashboard({
           <SectionTitle>Upcoming Calvings (Next 60 Days)</SectionTitle>
           <Card>
             <ul className="space-y-2">
-              {snapshot.calendarEntries.map((entry, i) => {
-                const date = new Date(entry.expectedDate);
-                const daysAway = Math.round((date.getTime() - Date.now()) / 86_400_000);
-                const urgency =
-                  daysAway < 0 ? "alert" : daysAway <= 14 ? "warning" : "neutral";
-                const c = STATUS_COLORS[urgency];
-                return (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between gap-4 py-2"
-                    style={{ borderBottom: i < snapshot.calendarEntries.length - 1 ? "1px solid var(--ft-surface)" : "none" }}
-                  >
-                    <span className="font-mono text-sm font-medium" style={{ color: "var(--ft-text)" }}>
-                      {entry.animalTag}
-                    </span>
-                    <span className="text-sm" style={{ color: "var(--ft-subtle)" }}>
-                      {date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                    </span>
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-md font-medium"
-                      style={{ background: c.bg, color: c.text }}
-                    >
-                      {daysAway < 0 ? `${Math.abs(daysAway)}d overdue` : daysAway === 0 ? "Today" : `${daysAway}d away`}
-                    </span>
-                  </li>
-                );
-              })}
+              {snapshot.calendarEntries.map((entry, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between gap-4 py-2"
+                  style={{ borderBottom: i < snapshot.calendarEntries.length - 1 ? "1px solid var(--ft-surface)" : "none" }}
+                >
+                  <span className="font-mono text-sm font-medium" style={{ color: "var(--ft-text)" }}>
+                    {entry.animalTag}
+                  </span>
+                  <span className="text-sm" style={{ color: "var(--ft-subtle)" }}>
+                    {new Date(entry.expectedDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                  <CalvingCountdownBadge expectedDate={entry.expectedDate} />
+                </li>
+              ))}
             </ul>
           </Card>
         </div>
