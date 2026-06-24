@@ -89,10 +89,11 @@ export async function getBreedingSnapshot(
   const femaleCows = allAnimals.filter(
     (a) => a.sex === "Female" && femaleCategorySet.has(a.category),
   );
-  const openCows = femaleCows.filter((a) => !pregnantAnimalIds.has(a.id)).length;
+  // pregnantAnimalIds holds Observation.animalId values (TAGs) — test membership
+  // by the tag, not the cuid, or no cow is ever recognised as pregnant.
+  const openCows = femaleCows.filter((a) => !pregnantAnimalIds.has(a.animalId)).length;
 
   const calendarEntries: Array<{ animalId: string; animalTag: string; expectedDate: string }> = [];
-  const animalTagMap = new Map(allAnimals.map((a) => [a.id, a.animalId]));
 
   const latestInsemByAnimal = new Map<string, Date>();
   for (const obs of recentInseminations) {
@@ -117,7 +118,9 @@ export async function getBreedingSnapshot(
     if (expectedDate > sixtyDaysFromNow) continue;
     if (daysFromNow(expectedDate) < -7) continue;
 
-    const tag = animalTagMap.get(animalId) ?? animalId;
+    // candidateIds are Observation.animalId values (TAGs), so the loop var IS
+    // the display tag — no cuid->tag translation needed.
+    const tag = animalId;
     calendarEntries.push({
       animalId,
       animalTag: tag,

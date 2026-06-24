@@ -25,6 +25,7 @@ import { logger } from "@/lib/logger";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import { parseBreedingCompletion } from "@/lib/server/adapters/openai-breeding-door";
+import { isLiveBirth } from "@/lib/domain/observations/calving-details";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export const POST = tenantWriteSlug<unknown, { farmSlug: string }>({
     }
 
     const liveCalvings = recentCalvingObs.filter(
-      (o) => parseDetails(o.details).calf_status === "live",
+      (o) => isLiveBirth(parseDetails(o.details)),
     ).length;
 
     const herdData = {

@@ -75,12 +75,19 @@ export default async function AnimalDetailPage({
     getAnimalPhotos(prisma, id),
   ]);
 
-  // Fetch calving observations for offspring birth weights & difficulty
-  const offspringCalvingObs = isBull && offspring.length > 0
+  // Fetch calving observations for offspring birth weights & difficulty.
+  // A calving is recorded against the DAM (Observation.animalId = dam tag), with
+  // the calf's tag in details.calfAnimalId — so we fetch the offspring's DAMS'
+  // calvings and match them to each calf by tag in ProgenyTab. Querying by the
+  // calf tags returns the wrong rows (a calf's own later calving, or nothing).
+  const damTags = isBull
+    ? ([...new Set(offspring.map((o) => o.motherId).filter(Boolean))] as string[])
+    : [];
+  const offspringCalvingObs = damTags.length > 0
     ? await scoped(prisma, animal.species as SpeciesId).observation.findMany({
         where: {
           type: "calving",
-          animalId: { in: offspring.map((o) => o.animalId) },
+          animalId: { in: damTags },
         },
         select: { animalId: true, details: true },
       })

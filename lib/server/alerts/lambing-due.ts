@@ -58,14 +58,15 @@ export async function evaluate(
   });
   if (ewes.length === 0) return [];
 
-  const eweIds = ewes.map((e) => e.id);
+  // Observation.animalId stores the ewe TAG (Animal.animalId), not the cuid.
+  const eweTags = ewes.map((e) => e.animalId);
 
   // Pull heat/insemination/joining/pregnancy_scan observations for these ewes
   // in one query, then reduce per-animal. LAMBING_DUE is sheep-only — route
   // through the scoped() door so species: "sheep" is injected structurally.
   const obs = (await scoped(prisma, "sheep").observation.findMany({
     where: {
-      animalId: { in: eweIds },
+      animalId: { in: eweTags },
       type: { in: ["insemination", "heat_detection", "joining", "pregnancy_scan"] },
     },
     select: { id: true, type: true, animalId: true, observedAt: true, details: true },
@@ -99,8 +100,8 @@ export async function evaluate(
   const candidates: AlertCandidate[] = [];
 
   for (const ewe of ewes) {
-    if (!pregnantByAnimal.get(ewe.id)) continue;
-    const lastMating = lastMatingByAnimal.get(ewe.id);
+    if (!pregnantByAnimal.get(ewe.animalId)) continue;
+    const lastMating = lastMatingByAnimal.get(ewe.animalId);
     if (!lastMating) continue;
     const due = addDays(lastMating, DEFAULT_GESTATION_DAYS);
     if (due < now || due > windowEnd) continue;

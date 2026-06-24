@@ -7,6 +7,12 @@ import type { Animal } from "@prisma/client";
 import { getCategoryChipColor, getCategoryLabel } from "@/lib/utils";
 import type { AnimalCategory } from "@/lib/types";
 import { parseDetails } from "./tabs";
+import {
+  isLiveBirth,
+  offspringTag,
+  birthWeightKg,
+  calvingDifficulty,
+} from "@/lib/domain/observations/calving-details";
 
 type CalvingObs = { animalId: string | null; details: string };
 
@@ -23,15 +29,29 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
   const alive = offspring.filter((o) => o.status === "Active").length;
   const deceased = offspring.filter((o) => o.status === "Deceased").length;
 
-  // Parse calving obs for birth weights + difficulty
+  // offspringCalvingObs are the DAMS' calving records (a calving is recorded
+  // against the dam, with the calf's tag in details.calfAnimalId). Keep only the
+  // ones that are births of THIS bull's progeny, matched by calf tag.
+  const offspringTagSet = new Set(offspring.map((o) => o.animalId));
+  const progenyCalvings = offspringCalvingObs.filter((o) => {
+    const tag = offspringTag(parseDetails(o.details));
+    return tag !== null && offspringTagSet.has(tag);
+  });
+
+  // Parse calving obs for birth weights + difficulty. Dual-convention: the
+  // dedicated Calving tile writes camelCase birthWeight/calvingDifficulty;
+  // ReproductionForm/legacy use snake_case — read both via the shared reader.
   const calvingDataMap = new Map<string, { birthWeight?: number; difficulty?: number }>();
-  for (const obs of offspringCalvingObs) {
-    if (!obs.animalId) continue;
+  for (const obs of progenyCalvings) {
     const d = parseDetails(obs.details);
+    const calfTag = offspringTag(d);
+    if (!calfTag) continue;
     const entry: { birthWeight?: number; difficulty?: number } = {};
-    if (d.birth_weight) entry.birthWeight = parseFloat(String(d.birth_weight));
-    if (d.calving_difficulty) entry.difficulty = parseInt(String(d.calving_difficulty), 10);
-    calvingDataMap.set(obs.animalId, entry);
+    const bw = birthWeightKg(d);
+    if (bw !== null) entry.birthWeight = bw;
+    const diff = calvingDifficulty(d);
+    if (diff !== null) entry.difficulty = diff;
+    calvingDataMap.set(calfTag, entry);
   }
 
   const birthWeights = Array.from(calvingDataMap.values())
@@ -48,11 +68,10 @@ export function ProgenyTab({ offspring, offspringCalvingObs, farmSlug }: Progeny
     ? difficulties.reduce((a, b) => a + b, 0) / difficulties.length
     : null;
 
-  const liveBorn = offspringCalvingObs.filter((o) => {
-    const d = parseDetails(o.details);
-    return d.calf_status !== "stillborn";
-  }).length;
-  const totalCalved = offspringCalvingObs.length;
+  const liveBorn = progenyCalvings.filter((o) =>
+    isLiveBirth(parseDetails(o.details)),
+  ).length;
+  const totalCalved = progenyCalvings.length;
   const survivalRate = totalCalved > 0 ? (liveBorn / totalCalved) * 100 : null;
 
   return (

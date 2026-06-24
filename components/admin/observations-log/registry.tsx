@@ -207,7 +207,14 @@ const parseMobMovement = (o: Record<string, unknown>): string => {
 };
 
 const parseCalving = (o: Record<string, unknown>): string => {
-  const outcome = pick(o, "outcome", "calf_status", "ease_of_birth");
+  // The dedicated Calving tile records a boolean `calfAlive` (+ camelCase
+  // `easeOfBirth`); only ReproductionForm writes a `calf_status` string. Derive
+  // the live/stillborn label from the boolean when present so a tile-logged
+  // calving isn't shown without an outcome.
+  const outcome =
+    pick(o, "outcome", "calf_status") ??
+    (typeof o.calfAlive === "boolean" ? (o.calfAlive ? "Live" : "Stillborn") : undefined) ??
+    pick(o, "ease_of_birth", "easeOfBirth");
   const sex = pick(o, "calfSex", "sex", "calf_sex");
   const calfId = pick(o, "calfAnimalId", "calf_animal_id", "calf_id", "calf_tag");
   const twinCount = pick(o, "twin_count", "twinCount");
@@ -220,7 +227,10 @@ const parseCalving = (o: Record<string, unknown>): string => {
 };
 
 const parseLambing = (o: Record<string, unknown>): string => {
-  const outcome = pick(o, "outcome", "calf_status", "ease_of_birth");
+  const outcome =
+    pick(o, "outcome", "calf_status") ??
+    (typeof o.calfAlive === "boolean" ? (o.calfAlive ? "Live" : "Stillborn") : undefined) ??
+    pick(o, "ease_of_birth", "easeOfBirth");
   const sex = pick(o, "calfSex", "sex", "calf_sex");
   const lambId = pick(o, "calfAnimalId", "calf_animal_id", "calf_id", "calf_tag");
   const twinCount = pick(o, "twin_count", "twinCount", "lambs_born", "lambsBorn");

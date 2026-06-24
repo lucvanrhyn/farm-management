@@ -2,6 +2,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { scoped, crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { isLiveBirth } from "@/lib/domain/observations/calving-details";
 import type { SpeciesId, SpeciesReproStats, UpcomingBirth } from "../types";
 
 // ── Engine Config ──────────────────────────────────────────────────────────────
@@ -226,7 +227,7 @@ export async function getReproStatsForSpecies(
     (o) => o.type === inseminationObsType,
   ).length;
   const liveBirths12m = births12m.filter(
-    (o) => parseDetails(o.details).calf_status === "live",
+    (o) => isLiveBirth(parseDetails(o.details)),
   ).length;
   const birthRate =
     totalInseminations12m > 0

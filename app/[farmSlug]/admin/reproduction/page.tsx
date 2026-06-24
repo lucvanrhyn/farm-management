@@ -7,6 +7,7 @@ import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getReproStats } from "@/lib/server/reproduction-analytics";
+import { isLiveBirth, offspringTag } from "@/lib/domain/observations/calving-details";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
 import nextDynamic from "next/dynamic";
@@ -714,10 +715,13 @@ export default async function ReproductionPage({
                 } else if (obs.type === "calving" || obs.type === "lambing" || obs.type === "fawning") {
                   // Offspring status + tag; wording uses the species copy so
                   // sheep farmers see "Live lamb", game farmers see "Live fawn".
-                  subDetail = det.calf_status === "live" || det.offspring_status === "live"
+                  // Birth outcome is dual-convention (dedicated tile writes the
+                  // boolean `calfAlive`; ReproductionForm writes `calf_status`),
+                  // so a tile-logged live birth must not display as "Stillborn".
+                  subDetail = isLiveBirth(det)
                     ? `Live ${copy.offspring}`
                     : "Stillborn";
-                  const tag = det.calf_tag || det.lamb_tag || det.fawn_tag || det.offspring_tag;
+                  const tag = offspringTag(det);
                   if (tag) subDetail += ` · ${tag}`;
                 }
 

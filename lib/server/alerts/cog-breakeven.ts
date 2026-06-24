@@ -64,11 +64,15 @@ export async function evaluate(
   })) as AnimalRow[];
   if (animals.length === 0) return [];
 
-  const animalIds = animals.map((a) => a.id);
+  // Observation.animalId and Transaction.animalId store the animal TAG
+  // (Animal.animalId @unique), NOT the cuid Animal.id. Filtering/joining those
+  // rows by cuid silently matches NOTHING — which is why this alert had never
+  // fired in production (see gotcha-observation-animalid-is-tag-not-cuid).
+  const animalTags = animals.map((a) => a.animalId);
 
   // Pull expense transactions tagged to each animal (feed, treatment, labour).
   const txns = (await prisma.transaction.findMany({
-    where: { type: "expense", animalId: { in: animalIds } },
+    where: { type: "expense", animalId: { in: animalTags } },
     select: { type: true, category: true, amount: true, animalId: true },
   })) as TxnRow[];
 
@@ -78,20 +82,26 @@ export async function evaluate(
     spendByAnimal.set(t.animalId, (spendByAnimal.get(t.animalId) ?? 0) + (t.amount || 0));
   }
 
-  // Latest weighing per animal (proxy for current body mass).
+  // Latest weighing per animal (proxy for current body mass). Weighings are
+  // written under two key conventions — snake_case `weight_kg` (logger/modal)
+  // and camelCase `weightKg` (task completion) — so COALESCE both, else
+  // task-logged weighings are invisible (see lib/domain/observations/weighing-mass).
   const weights = (await prisma.$queryRawUnsafe<WeightRow[]>(
-    `SELECT animalId, CAST(json_extract(details, '$.weight_kg') AS REAL) AS weightKg
+    `SELECT animalId, CAST(COALESCE(json_extract(details, '$.weight_kg'), json_extract(details, '$.weightKg')) AS REAL) AS weightKg
      FROM Observation
      WHERE type = 'weighing'
-       AND animalId IN (${animalIds.map(() => "?").join(",") || "''"})
+       AND animalId IN (${animalTags.map(() => "?").join(",") || "''"})
      ORDER BY observedAt DESC`,
-    ...animalIds,
+    ...animalTags,
   )) as WeightRow[];
 
   const latestWeight = new Map<string, number>();
   for (const w of weights) {
-    if (!w.animalId || !w.weightKg || w.weightKg <= 0) continue;
-    if (!latestWeight.has(w.animalId)) latestWeight.set(w.animalId, w.weightKg);
+    // libsql returns integer-valued raw-SQL columns as BigInt; coerce to a JS
+    // number so the cogPerKg division below never mixes BigInt with number.
+    const kg = Number(w.weightKg);
+    if (!w.animalId || !Number.isFinite(kg) || kg <= 0) continue;
+    if (!latestWeight.has(w.animalId)) latestWeight.set(w.animalId, kg);
   }
 
   const now = new Date();
@@ -102,8 +112,8 @@ export async function evaluate(
   for (const a of animals) {
     const market = marketByS[a.species];
     if (!market) continue;
-    const spend = spendByAnimal.get(a.id) ?? 0;
-    const weightKg = latestWeight.get(a.id);
+    const spend = spendByAnimal.get(a.animalId) ?? 0;
+    const weightKg = latestWeight.get(a.animalId);
     if (!weightKg || weightKg <= 0) continue;
 
     const cogPerKg = spend / weightKg;

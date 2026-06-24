@@ -97,7 +97,7 @@ export async function suggestPairings(
   const openCows = allAnimals.filter((a) => {
     if (a.sex !== "Female") return false;
     if (!femaleCategorySet.has(a.category)) return false;
-    const scan = latestScanResult.get(a.id);
+    const scan = latestScanResult.get(a.animalId);
     return scan !== "pregnant";
   });
 
@@ -106,13 +106,15 @@ export async function suggestPairings(
 
   // Batch-fetch all trait observations in 3 queries instead of O(N) per-animal calls.
   const threeYearsAgo = new Date(Date.now() - 3 * 365 * 86_400_000);
-  const allAnimalIds = [...bulls.map((b) => b.id), ...openCows.map((c) => c.id)];
+  // Observation.animalId stores the TAG (Animal.animalId), not the cuid — the
+  // trait-obs filter and the in-memory builders both compare against obs.animalId.
+  const allAnimalTags = [...bulls.map((b) => b.animalId), ...openCows.map((c) => c.animalId)];
 
   const [traitObs, cowCalvingObs, bullCalvingObs] = await Promise.all([
     // Trait observations (BCS, temperament, scrotal circumference) for all bulls + cows
     db.observation.findMany({
       where: {
-        animalId: { in: allAnimalIds },
+        animalId: { in: allAnimalTags },
         type: { in: ["body_condition_score", "temperament_score", "scrotal_circumference"] },
       },
       orderBy: { observedAt: "desc" },
@@ -120,7 +122,7 @@ export async function suggestPairings(
     }),
     // Calving observations linked to cows (by animalId)
     db.observation.findMany({
-      where: { animalId: { in: openCows.map((c) => c.id) }, type: "calving" },
+      where: { animalId: { in: openCows.map((c) => c.animalId) }, type: "calving" },
       select: { animalId: true, details: true },
     }),
     // Calving observations for bull offspring detection (time-bounded, filtered in memory)
@@ -130,12 +132,15 @@ export async function suggestPairings(
     }),
   ]);
 
+  // Cache keyed by cuid (read by bull.id/cow.id below), but the builders match
+  // observations on obs.animalId (the TAG) and parentage on details.fatherId/
+  // bull_id (also tags) — so the builder's animalId arg MUST be the tag.
   const profileCache = new Map<string, TraitProfile>();
   for (const bull of bulls) {
-    profileCache.set(bull.id, buildBullProfileInMemory(bull.id, traitObs, bullCalvingObs));
+    profileCache.set(bull.id, buildBullProfileInMemory(bull.animalId, traitObs, bullCalvingObs));
   }
   for (const cow of openCows) {
-    profileCache.set(cow.id, buildCowProfileInMemory(cow.id, traitObs, cowCalvingObs));
+    profileCache.set(cow.id, buildCowProfileInMemory(cow.animalId, traitObs, cowCalvingObs));
   }
 
   // Generate scored pairings

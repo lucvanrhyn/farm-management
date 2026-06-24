@@ -5,6 +5,7 @@
 import Link from "next/link";
 import type { Observation } from "@prisma/client";
 import { parseDetails } from "./tabs";
+import { isLiveBirth } from "@/lib/domain/observations/calving-details";
 
 const REPRO_BADGE: Record<string, { bg: string; text: string; label: string }> = {
   heat_detection:    { bg: "rgba(180,110,20,0.12)",  text: "var(--ft-fair)", label: "In Heat"   },
@@ -22,8 +23,10 @@ function reproBadgeLabel(type: string, details: Record<string, unknown>): string
     return "Scan";
   }
   if (type === "calving") {
-    const s = details.calf_status as string | undefined;
-    return s === "stillborn" ? "Calving — Stillborn" : "Calving — Live";
+    // Birth outcome is dual-convention (tile writes boolean `calfAlive`;
+    // ReproductionForm writes `calf_status`) — a tile-logged stillbirth must not
+    // display as "Live". See lib/domain/observations/calving-details.
+    return isLiveBirth(details) ? "Calving — Live" : "Calving — Stillborn";
   }
   return REPRO_BADGE[type]?.label ?? type.replace(/_/g, " ");
 }
@@ -36,10 +39,9 @@ function reproBadgeStyle(type: string, details: Record<string, unknown>): { bg: 
     return { bg: "rgba(180,110,20,0.12)", text: "var(--ft-fair)" };
   }
   if (type === "calving") {
-    const s = details.calf_status as string | undefined;
-    return s === "stillborn"
-      ? { bg: "rgba(192,87,76,0.12)", text: "var(--ft-crit)" }
-      : { bg: "rgba(13,148,136,0.12)", text: "#0F766E" };
+    return isLiveBirth(details)
+      ? { bg: "rgba(13,148,136,0.12)", text: "#0F766E" }
+      : { bg: "rgba(192,87,76,0.12)", text: "var(--ft-crit)" };
   }
   return REPRO_BADGE[type] ?? { bg: "rgba(156,142,122,0.12)", text: "var(--ft-subtle)" };
 }

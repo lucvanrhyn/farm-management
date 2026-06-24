@@ -35,9 +35,11 @@ export async function evaluate(
   })) as AnimalRow[];
   if (animals.length === 0) return [];
 
-  const animalIds = animals.map((a) => a.id);
+  // Observation.animalId stores the animal TAG (Animal.animalId), not the cuid
+  // Animal.id — the filter AND the per-animal Map must both key on the tag.
+  const animalTags = animals.map((a) => a.animalId);
   const rows = (await xs.observation.findMany({
-    where: { animalId: { in: animalIds }, type: "weighing" },
+    where: { animalId: { in: animalTags }, type: "weighing" },
     select: { animalId: true, observedAt: true },
     orderBy: { observedAt: "desc" },
   })) as WeighRow[];
@@ -54,7 +56,7 @@ export async function evaluate(
   const candidates: AlertCandidate[] = [];
 
   for (const a of animals) {
-    const last = latestByAnimal.get(a.id);
+    const last = latestByAnimal.get(a.animalId);
     const daysSince = last ? diffDays(now, last) : null;
     if (daysSince !== null && daysSince < STALE_DAYS) continue;
 

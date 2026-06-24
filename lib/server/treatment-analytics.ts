@@ -101,15 +101,19 @@ export async function getAnimalsInWithdrawal(
     if (!activeAnimalMap.has(animalId)) continue;
 
     const details = parseDetails(obs.details);
-    const treatmentType = typeof details.treatment_type === "string"
-      ? details.treatment_type
-      : "Other";
+    // Dual-key: every persisted writer (TreatmentForm, CreateObservationModal)
+    // emits camelCase `treatmentType` / `withdrawalDays`; only non-persisted
+    // demo data ever used snake_case. Reading snake-only made EVERY treatment
+    // fall back to "Other" + the default window, discarding the entered values.
+    const treatmentTypeRaw = details.treatmentType ?? details.treatment_type;
+    const treatmentType = typeof treatmentTypeRaw === "string" ? treatmentTypeRaw : "Other";
 
+    const withdrawalRaw = details.withdrawalDays ?? details.withdrawal_days;
     const withdrawalDays =
-      typeof details.withdrawal_days === "number"
-        ? details.withdrawal_days
-        : typeof details.withdrawal_days === "string" && !isNaN(Number(details.withdrawal_days))
-        ? Number(details.withdrawal_days)
+      typeof withdrawalRaw === "number"
+        ? withdrawalRaw
+        : typeof withdrawalRaw === "string" && !isNaN(Number(withdrawalRaw))
+        ? Number(withdrawalRaw)
         : (DEFAULT_WITHDRAWAL_DAYS[treatmentType] ?? 7);
 
     // Zero withdrawal period — animal is never "in withdrawal" for this treatment

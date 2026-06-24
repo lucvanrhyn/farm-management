@@ -5,6 +5,7 @@ import {
   type CogScope,
 } from "@/lib/calculators/cost-of-gain";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
+import { parseWeighingMassKg } from "@/lib/domain/observations/weighing-mass";
 
 export interface FinancialAnalyticsResult {
   grossMargin: number;
@@ -56,11 +57,6 @@ export interface BudgetVsActualRow {
   months: number;
 }
 
-function parseWeightDetails(raw: string): { weight_kg?: number } {
-  try { return JSON.parse(raw) as { weight_kg?: number }; }
-  catch { return {}; }
-}
-
 export async function getFinancialAnalytics(
   prisma: PrismaClient,
   from: Date,
@@ -108,11 +104,11 @@ export async function getFinancialAnalytics(
   const byAnimal = new Map<string, { date: Date; weightKg: number }[]>();
   for (const obs of weighingsRaw) {
     if (!obs.animalId) continue;
-    const d = parseWeightDetails(obs.details);
-    if (typeof d.weight_kg !== "number") continue;
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) continue;
     byAnimal.set(obs.animalId, [
       ...(byAnimal.get(obs.animalId) ?? []),
-      { date: obs.observedAt, weightKg: d.weight_kg },
+      { date: obs.observedAt, weightKg },
     ]);
   }
 
@@ -443,10 +439,10 @@ async function computeKgGainedByAnimal(
   const byAnimal = new Map<string, { date: Date; weightKg: number }[]>();
   for (const obs of weighings) {
     if (!obs.animalId) continue;
-    const d = parseWeightDetails(obs.details);
-    if (typeof d.weight_kg !== "number") continue;
+    const weightKg = parseWeighingMassKg(obs.details);
+    if (weightKg === null) continue;
     const list = byAnimal.get(obs.animalId) ?? [];
-    list.push({ date: obs.observedAt, weightKg: d.weight_kg });
+    list.push({ date: obs.observedAt, weightKg });
     byAnimal.set(obs.animalId, list);
   }
 
@@ -559,8 +555,12 @@ export async function getCogByAnimal(
       where: { ...buildExpenseWhere(from, to, scope), animalId: { not: null } },
       select: { animalId: true, amount: true },
     }),
-    // cross-species by design: COG-by-animal lookup needs every species.
+    // cross-species by design: COG-by-animal lookup needs every species, but
+    // ONLY live animals — a deceased/sold/culled animal that had in-period
+    // cost/gain must not appear as a live row (the By-Camp + Summary siblings
+    // both filter status:"Active"; this view silently did not).
     crossSpecies(prisma, "farm-wide-audit").animal.findMany({
+      where: { status: "Active" },
       select: {
         animalId: true,
         name: true,

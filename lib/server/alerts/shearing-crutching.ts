@@ -37,13 +37,14 @@ export async function evaluate(
   });
   if (ewes.length === 0) return [];
 
-  const eweIds = ewes.map((e) => e.id);
+  // Observation.animalId stores the ewe TAG (Animal.animalId), not the cuid.
+  const eweTags = ewes.map((e) => e.animalId);
 
   // SHEARING/CRUTCHING is sheep-only — route through the scoped() door so
   // species: "sheep" is injected structurally (ADR-0005 Wave 2).
   const obs = (await scoped(prisma, "sheep").observation.findMany({
     where: {
-      animalId: { in: eweIds },
+      animalId: { in: eweTags },
       type: { in: ["shearing", "insemination", "joining", "heat_detection"] },
     },
     select: { type: true, animalId: true, observedAt: true },
@@ -69,7 +70,7 @@ export async function evaluate(
   const candidates: AlertCandidate[] = [];
 
   for (const ewe of ewes) {
-    const lastShear = lastShearByAnimal.get(ewe.id);
+    const lastShear = lastShearByAnimal.get(ewe.animalId);
     const daysSinceShear = lastShear ? diffDays(now, lastShear) : null;
     if (daysSinceShear === null || daysSinceShear >= SHEAR_INTERVAL_DAYS) {
       candidates.push({
@@ -92,7 +93,7 @@ export async function evaluate(
       });
     }
 
-    const lastMating = lastMatingByAnimal.get(ewe.id);
+    const lastMating = lastMatingByAnimal.get(ewe.animalId);
     if (lastMating) {
       const predictedLambing = addDays(lastMating, LAMBING_GESTATION_DAYS);
       const crutchWindowStart = addDays(predictedLambing, -CRUTCH_PRELAMBING_DAYS);

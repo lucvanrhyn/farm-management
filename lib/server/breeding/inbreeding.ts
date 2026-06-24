@@ -7,7 +7,11 @@ import { MAX_PEDIGREE_DEPTH } from "./constants";
 
 export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
   const risks: InbreedingRisk[] = [];
-  const animalMap = new Map(animals.map((a) => [a.id, a]));
+  // Animal.motherId / Animal.fatherId store the parent's TAG (Animal.animalId),
+  // NOT the cuid Animal.id — so the pedigree map and every parent-link comparison
+  // must key on the tag, else parent_offspring / shared_grandparent never match
+  // (see gotcha-observation-animalid-is-tag-not-cuid).
+  const animalMap = new Map(animals.map((a) => [a.animalId, a]));
 
   for (let i = 0; i < animals.length; i++) {
     const a = animals[i];
@@ -15,10 +19,10 @@ export function detectInbreedingRisk(animals: AnimalRow[]): InbreedingRisk[] {
       const b = animals[j];
 
       if (
-        (a.motherId && a.motherId === b.id) ||
-        (a.fatherId && a.fatherId === b.id) ||
-        (b.motherId && b.motherId === a.id) ||
-        (b.fatherId && b.fatherId === a.id)
+        (a.motherId && a.motherId === b.animalId) ||
+        (a.fatherId && a.fatherId === b.animalId) ||
+        (b.motherId && b.motherId === a.animalId) ||
+        (b.fatherId && b.fatherId === a.animalId)
       ) {
         risks.push({
           animalId: a.id,
@@ -90,9 +94,14 @@ export function calculateCOI(
   animalB: AnimalRow,
   allAnimals: AnimalRow[],
 ): number {
-  const animalMap = new Map(allAnimals.map((a) => [a.id, a]));
+  // Pedigree is linked by TAG: Animal.motherId / Animal.fatherId hold the
+  // parent's Animal.animalId (tag), not the cuid Animal.id. Key the map by tag
+  // and traverse by tag, else getAncestors dead-ends after depth 1 (the parent
+  // tags never resolve in a cuid-keyed map) and COI collapses to ~0 — silently
+  // recommending inbred matings as "safe".
+  const animalMap = new Map(allAnimals.map((a) => [a.animalId, a]));
 
-  // Build ancestor maps: id -> set of paths (each path = list of IDs from animal to ancestor)
+  // Build ancestor maps: tag -> set of paths (each path = list of TAGs from animal to ancestor)
   function getAncestors(
     animalId: string,
     depth: number,
@@ -124,13 +133,14 @@ export function calculateCOI(
     return result;
   }
 
-  // Get ancestors from both sides (from the perspective of a hypothetical offspring)
-  const sireAncestors = getAncestors(animalA.id, MAX_PEDIGREE_DEPTH, [animalA.id]);
-  const damAncestors = getAncestors(animalB.id, MAX_PEDIGREE_DEPTH, [animalB.id]);
+  // Get ancestors from both sides (from the perspective of a hypothetical
+  // offspring). Seed with the animal's TAG so the parent-tag links resolve.
+  const sireAncestors = getAncestors(animalA.animalId, MAX_PEDIGREE_DEPTH, [animalA.animalId]);
+  const damAncestors = getAncestors(animalB.animalId, MAX_PEDIGREE_DEPTH, [animalB.animalId]);
 
   // Also include the parents themselves as ancestors of the offspring
-  sireAncestors.set(animalA.id, [[animalA.id]]);
-  damAncestors.set(animalB.id, [[animalB.id]]);
+  sireAncestors.set(animalA.animalId, [[animalA.animalId]]);
+  damAncestors.set(animalB.animalId, [[animalB.animalId]]);
 
   // Find common ancestors
   let coi = 0;
