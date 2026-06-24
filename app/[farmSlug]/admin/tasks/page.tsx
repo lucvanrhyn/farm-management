@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
@@ -8,7 +8,6 @@ import { getFarmCreds } from "@/lib/meta-db";
 import { TaskBoard } from "@/components/admin/TaskBoard";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
 import { PageHeader } from "@/components/ds";
-import { redirect } from "next/navigation";
 import {
   TASK_CURSOR_ORDER_BY,
   decodeTaskCursor,
@@ -34,8 +33,7 @@ export default async function TasksPage({
   const { farmSlug } = await params;
   const { cursor } = (searchParams ? await searchParams : {}) ?? {};
 
-  const session = await getSession();
-  if (!session) redirect(`/${farmSlug}/login`);
+  await requireSession(`/${farmSlug}/admin/tasks`);
 
   const creds = await getFarmCreds(farmSlug);
   if (creds?.tier === "basic") {

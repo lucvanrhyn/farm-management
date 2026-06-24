@@ -21,8 +21,7 @@ export const dynamic = "force-dynamic";
  * down `TenantMapClient` that hosts FarmMap without the admin-only chrome.
  */
 
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
@@ -38,8 +37,7 @@ export default async function TenantMapPage({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getSession();
-  if (!session) redirect(`/${farmSlug}/login`);
+  await requireSession(`/${farmSlug}/map`);
 
   const creds = await getFarmCreds(farmSlug);
   if (!creds) {

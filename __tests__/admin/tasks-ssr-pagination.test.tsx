@@ -23,7 +23,7 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
-vi.mock("@/lib/auth", () => ({ getSession: getSessionMock }));
+vi.mock("@/lib/auth", () => ({ getSession: getSessionMock, requireSession: getSessionMock }));
 
 vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));

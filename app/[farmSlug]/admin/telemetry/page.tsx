@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
-import { redirect } from "next/navigation";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
-import { getSession, getUserRoleForFarm } from "@/lib/auth";
+import { requireSession, requireFarmAdmin } from "@/lib/auth";
 import { PageHeader } from "@/components/ds";
 
 
@@ -31,10 +30,8 @@ export default async function TelemetryPage({
   const { farmSlug } = await params;
 
   // Defense-in-depth: enforce ADMIN at the page level even though layout also guards.
-  const session = await getSession();
-  if (!session || getUserRoleForFarm(session, farmSlug) !== "ADMIN") {
-    redirect(`/${farmSlug}/home`);
-  }
+  const session = await requireSession(`/${farmSlug}/admin/telemetry`);
+  await requireFarmAdmin(session, farmSlug);
 
   const prisma = await getPrismaForFarm(farmSlug);
 
