@@ -262,9 +262,23 @@ export default function TransactionModal({
           {/* Animal tagger (optional) — searchable, in-tenant. onChange yields the
               business tag (e.g. "B042"), exactly what Transaction.animalId stores. */}
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "var(--ft-subtle)" }}>
-              Animal (optional)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs block" style={{ color: "var(--ft-subtle)" }}>
+                Animal (optional)
+              </label>
+              {animalId && (
+                // The picker only ever emits a non-empty tag, so without this an
+                // edit-mode tag could be re-pointed but never cleared back to null.
+                <button
+                  type="button"
+                  onClick={() => setAnimalId("")}
+                  className="text-xs font-medium"
+                  style={{ color: "var(--ft-muted)", cursor: "pointer" }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
             <AnimalPicker
               species={species}
               value={animalId}

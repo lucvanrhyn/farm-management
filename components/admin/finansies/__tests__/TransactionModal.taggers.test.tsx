@@ -111,6 +111,38 @@ describe("TransactionModal taggers", () => {
     expect(screen.getByTestId("picker-value").textContent).toBe("B999");
   });
 
+  it("can clear an existing animal tag in edit mode (sends animalId: null)", async () => {
+    const existing = {
+      id: "t1",
+      type: "expense",
+      category: "Feed",
+      amount: 100,
+      date: "2026-06-01",
+      description: "",
+      animalId: "B042",
+    };
+    render(
+      <TransactionModal
+        transaction={existing}
+        incomeCategories={incomeCategories}
+        expenseCategories={expenseCategories}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Edit mode seeds the tag; a Clear affordance is offered.
+    expect(screen.getByTestId("picker-value").textContent).toBe("B042");
+    fireEvent.click(screen.getByText("Clear"));
+    expect(screen.getByTestId("picker-value").textContent).toBe("");
+
+    fireEvent.click(screen.getByText("Save Changes"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect(String(url)).toBe("/api/transactions/t1");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(lastPostBody().animalId).toBeNull();
+  });
+
   it("renders the camp <select> only when camps are supplied and sends camp_id", async () => {
     const { rerender } = render(
       <TransactionModal

@@ -77,6 +77,33 @@ describe('ImageHolder — populated state', () => {
   });
 });
 
+describe('ImageHolder — broken image fallback', () => {
+  it('degrades to the "Add image" affordance when the populated image fails to load', () => {
+    const { container } = render(
+      <ImageHolder src="https://blob/dead.jpg" alt="Cow 42" onUpload={vi.fn()} />,
+    );
+    const img = screen.getByAltText('Cow 42');
+    // Simulate the blob URL being unreachable (deleted blob / rotated bucket).
+    fireEvent.error(img);
+    // Falls back to the empty state: no <img>, the "Add image" affordance shows.
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add image' })).toBeTruthy();
+  });
+
+  it('auto-retries when the caller swaps in a new src after a failure', () => {
+    const { container, rerender } = render(
+      <ImageHolder src="https://blob/dead.jpg" alt="Cow 42" onUpload={vi.fn()} />,
+    );
+    fireEvent.error(screen.getByAltText('Cow 42'));
+    expect(container.querySelector('img')).toBeNull();
+    // A fresh upload changes src → the holder retries the new URL.
+    rerender(<ImageHolder src="https://blob/fresh.jpg" alt="Cow 42" onUpload={vi.fn()} />);
+    const img = screen.getByAltText('Cow 42') as HTMLImageElement;
+    expect(img).toBeTruthy();
+    expect(img.src).toContain('fresh.jpg');
+  });
+});
+
 describe('ImageHolder — validation', () => {
   it('shows an alert and does NOT call onUpload for an oversize file', async () => {
     const onUpload = vi.fn();
