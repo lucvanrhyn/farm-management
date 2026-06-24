@@ -68,11 +68,11 @@ export function VeldAssessmentForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="space-y-4 rounded-lg border bg-[var(--ft-surface)] p-4 shadow-sm">
       <h2 className="text-lg font-semibold">New assessment</h2>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <label className="flex flex-col text-sm">
-          <span className="text-gray-600">Camp</span>
+          <span className="text-[var(--ft-muted)]">Camp</span>
           <select value={campId} onChange={(e) => setCampId(e.target.value)} className="rounded border p-2">
             {camps.map((c) => (
               <option key={c.campId} value={c.campId}>
@@ -82,7 +82,7 @@ export function VeldAssessmentForm({
           </select>
         </label>
         <label className="flex flex-col text-sm">
-          <span className="text-gray-600">Date</span>
+          <span className="text-[var(--ft-muted)]">Date</span>
           <input
             type="date"
             value={assessmentDate}
@@ -91,7 +91,7 @@ export function VeldAssessmentForm({
           />
         </label>
         <label className="flex flex-col text-sm">
-          <span className="text-gray-600">Assessor</span>
+          <span className="text-[var(--ft-muted)]">Assessor</span>
           <input
             type="text"
             value={assessor}
@@ -131,7 +131,7 @@ export function VeldAssessmentForm({
       </div>
 
       <label className="flex flex-col text-sm">
-        <span className="text-gray-600">Notes</span>
+        <span className="text-[var(--ft-muted)]">Notes</span>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -141,25 +141,25 @@ export function VeldAssessmentForm({
         />
       </label>
 
-      <div className="flex flex-wrap items-center gap-4 rounded bg-emerald-50 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-4 rounded bg-[var(--ft-good-bg)] p-3 text-sm">
         <div>
-          <div className="text-xs uppercase text-emerald-700">Live score</div>
-          <div className="text-2xl font-semibold text-emerald-900">{liveScore.toFixed(1)} / 10</div>
+          <div className="text-xs uppercase text-[var(--ft-good)]">Live score</div>
+          <div className="text-2xl font-semibold text-[var(--ft-good)]">{liveScore.toFixed(1)} / 10</div>
         </div>
         <div>
-          <div className="text-xs uppercase text-emerald-700">Grazing capacity</div>
-          <div className="text-lg text-emerald-900">
+          <div className="text-xs uppercase text-[var(--ft-good)]">Grazing capacity</div>
+          <div className="text-lg text-[var(--ft-good)]">
             {liveCapacity.haPerLsu ? `${liveCapacity.haPerLsu} ha/LSU` : '—'}
           </div>
         </div>
       </div>
 
-      {error && <div className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded bg-[var(--ft-crit-bg)] p-2 text-sm text-[var(--ft-crit)]">{error}</div>}
 
       <button
         type="submit"
         disabled={isPending || !assessor}
-        className="rounded bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800 disabled:opacity-50"
+        className="rounded bg-[var(--ft-good)] px-4 py-2 text-white hover:bg-[var(--ft-good)] disabled:opacity-50"
       >
         {isPending ? 'Saving…' : 'Save assessment'}
       </button>
@@ -180,7 +180,7 @@ function Slider({
 }) {
   return (
     <label className="flex flex-col text-sm">
-      <span className="text-gray-600">
+      <span className="text-[var(--ft-muted)]">
         {label} — <strong>{value}%</strong>
       </span>
       <input
@@ -190,7 +190,7 @@ function Slider({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      <span className="text-xs text-gray-400">{hint}</span>
+      <span className="text-xs text-[var(--ft-subtle)]">{hint}</span>
     </label>
   );
 }
@@ -208,7 +208,7 @@ function LevelPicker({
 }) {
   return (
     <div className="flex flex-col text-sm">
-      <span className="text-gray-600">{label}</span>
+      <span className="text-[var(--ft-muted)]">{label}</span>
       <div className="mt-1 flex gap-1">
         {labels.map((lab, idx) => (
           <button
@@ -216,7 +216,7 @@ function LevelPicker({
             type="button"
             onClick={() => onChange(idx)}
             className={`flex-1 rounded border p-2 text-xs ${
-              value === idx ? 'bg-emerald-700 text-white' : 'bg-white'
+              value === idx ? 'bg-[var(--ft-good)] text-white' : 'bg-[var(--ft-surface)]'
             }`}
           >
             {lab}

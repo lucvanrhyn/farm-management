@@ -36,16 +36,16 @@ export function VeldHistoryTable({
 
   if (initial.length === 0) {
     return (
-      <div className="rounded border bg-white p-4 text-sm text-gray-500">
+      <div className="rounded border bg-[var(--ft-surface)] p-4 text-sm text-[var(--ft-subtle)]">
         No assessments yet. Record your first camp walk above.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-white">
+    <div className="overflow-x-auto rounded-lg border bg-[var(--ft-surface)]">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+        <thead className="bg-[var(--ft-surface)] text-left text-xs uppercase text-[var(--ft-subtle)]">
           <tr>
             <th className="p-2">Date</th>
             <th className="p-2">Camp</th>
@@ -66,13 +66,13 @@ export function VeldHistoryTable({
                 <ScoreChip score={a.veldScore} />
               </td>
               <td className="p-2">{a.haPerLsu ?? '—'}</td>
-              <td className="max-w-xs truncate p-2 text-gray-500">{a.notes ?? ''}</td>
+              <td className="max-w-xs truncate p-2 text-[var(--ft-subtle)]">{a.notes ?? ''}</td>
               <td className="p-2 text-right">
                 <button
                   type="button"
                   onClick={() => onDelete(a.id)}
                   disabled={busyId === a.id}
-                  className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                  className="text-xs text-[var(--ft-crit)] hover:underline disabled:opacity-50"
                 >
                   Delete
                 </button>
@@ -88,10 +88,10 @@ export function VeldHistoryTable({
 function ScoreChip({ score }: { score: number }) {
   const color =
     score >= 7
-      ? 'bg-emerald-100 text-emerald-800'
+      ? 'bg-[var(--ft-good-bg)] text-[var(--ft-good)]'
       : score >= 4
-      ? 'bg-amber-100 text-amber-800'
-      : 'bg-red-100 text-red-800';
+      ? 'bg-[var(--ft-fair-bg)] text-[var(--ft-fair)]'
+      : 'bg-[var(--ft-crit-bg)] text-[var(--ft-crit)]';
   return (
     <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>
       {score.toFixed(1)}

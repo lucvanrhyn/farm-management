@@ -15,13 +15,13 @@ export function DroughtClient({ payload, farmSlug }: Props) {
   // Empty state: no lat/lng configured on this farm
   if (!payload.hasCoords) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-        <p className="text-sm text-gray-600">
+      <div className="rounded-lg border border-dashed border-[var(--ft-border)] bg-[var(--ft-surface)] p-8 text-center">
+        <p className="text-sm text-[var(--ft-muted)]">
           Farm location is required to compute drought indices.
         </p>
         <a
           href={`/${farmSlug}/admin/settings`}
-          className="mt-3 inline-block rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+          className="mt-3 inline-block rounded-md bg-[var(--ft-good)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ft-good)]"
         >
           Set farm location in Settings →
         </a>
@@ -47,7 +47,7 @@ export function DroughtClient({ payload, farmSlug }: Props) {
           <SpiTrendChart monthly={payload.monthly} />
         </>
       ) : (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed border-[var(--ft-border)] bg-[var(--ft-surface)] p-6 text-center text-sm text-[var(--ft-subtle)]">
           No rainfall data available yet. Record rainfall observations in the Logger to build your drought history.
         </div>
       )}
@@ -55,7 +55,7 @@ export function DroughtClient({ payload, farmSlug }: Props) {
       <DroughtSeverityLegend />
 
       {payload.lastFarmObserved && (
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-[var(--ft-subtle)]">
           Last farm-recorded rainfall: {payload.lastFarmObserved}. Months without farm records use ERA5 archive data.
         </p>
       )}

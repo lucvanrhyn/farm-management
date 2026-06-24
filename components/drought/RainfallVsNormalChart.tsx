@@ -29,8 +29,8 @@ export function RainfallVsNormalChart({ monthly }: Props) {
   }));
 
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">
+    <div className="rounded-lg border bg-[var(--ft-surface)] p-4">
+      <h3 className="mb-3 text-sm font-semibold text-[var(--ft-text)]">
         Rainfall vs. 30-Year Normal (last 24 months)
       </h3>
       <ResponsiveContainer width="100%" height={260}>
@@ -73,7 +73,7 @@ export function RainfallVsNormalChart({ monthly }: Props) {
           />
         </BarChart>
       </ResponsiveContainer>
-      <p className="mt-1 text-xs text-gray-400">
+      <p className="mt-1 text-xs text-[var(--ft-subtle)]">
         Dimmed months use ERA5 archive data where no farm record exists.
       </p>
     </div>

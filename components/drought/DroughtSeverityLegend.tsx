@@ -3,6 +3,9 @@
  * Purely presentational — no interactivity.
  */
 
+// Diverging SPI severity scale (drought ↔ wet). Each band needs a DISTINCT hue to
+// convey gradation, so this is a data-viz palette — exempt from --ft tokenisation
+// like the categorical chart palettes (the warm token set has no 9-step ramp).
 const BANDS = [
   { label: 'Extreme Drought', bg: 'bg-red-900',    text: 'text-white'      },
   { label: 'Severe Drought',  bg: 'bg-red-600',    text: 'text-white'      },
@@ -17,8 +20,8 @@ const BANDS = [
 
 export function DroughtSeverityLegend() {
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div className="rounded-lg border bg-[var(--ft-surface)] p-4">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ft-subtle)]">
         SPI Severity Scale
       </p>
       <div className="flex flex-wrap gap-1">
@@ -31,7 +34,7 @@ export function DroughtSeverityLegend() {
           </span>
         ))}
       </div>
-      <p className="mt-2 text-xs text-gray-400">
+      <p className="mt-2 text-xs text-[var(--ft-subtle)]">
         SPI &lt; −1 = drought conditions. SPI method: Z-score vs 30-year ERA5 normal (WMO 2012).
       </p>
     </div>

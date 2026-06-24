@@ -21,8 +21,8 @@ export function FeedOnOfferTrendChart({ trendData }: { trendData: readonly Trend
   if (trendData.length < 2) return null;
 
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <h3 className="text-sm font-semibold text-gray-700">Farm-wide Feed on Offer trend</h3>
+    <div className="rounded-lg border bg-[var(--ft-surface)] p-4">
+      <h3 className="text-sm font-semibold text-[var(--ft-text)]">Farm-wide Feed on Offer trend</h3>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={[...trendData]}>
           <CartesianGrid strokeDasharray="3 3" />

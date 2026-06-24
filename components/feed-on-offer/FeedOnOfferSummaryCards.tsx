@@ -44,13 +44,13 @@ function Kpi({
 }) {
   const bg =
     tone === 'red'
-      ? 'bg-red-50 border-red-200'
+      ? 'bg-[var(--ft-crit-bg)] border-[var(--ft-crit)]'
       : tone === 'amber'
-      ? 'bg-amber-50 border-amber-200'
-      : 'bg-white';
+      ? 'bg-[var(--ft-fair-bg)] border-[var(--ft-fair)]'
+      : 'bg-[var(--ft-surface)]';
   return (
     <div className={`rounded-lg border p-4 ${bg}`}>
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-[var(--ft-subtle)]">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
     </div>
   );
