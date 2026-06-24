@@ -85,6 +85,13 @@ export function ImageHolder({
   const inputRef = useRef<HTMLInputElement>(null);
   const [zoomOpen, setZoomOpen] = useState(false);
   const [error, setError] = useState<HolderError | null>(null);
+  // Tracks the exact URL that failed to load (not a boolean) so that when the
+  // caller swaps `src` to a new image the holder auto-retries the new URL — no
+  // effect needed, and a still-broken replacement re-fails on its own onError.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // A dead/unreachable image URL degrades to the empty "Add image" affordance
+  // instead of the browser's broken-image glyph.
+  const imageBroken = src != null && failedSrc === src;
 
   const { isOnline } = useOffline();
   const offline = !isOnline;
@@ -172,7 +179,8 @@ export function ImageHolder({
   ) : null;
 
   // ── EMPTY STATE ──────────────────────────────────────────────────────────
-  if (!src) {
+  // Also the fallback when a populated `src` fails to load (broken/deleted blob).
+  if (!src || imageBroken) {
     return (
       <div>
         {hiddenInput}
@@ -238,6 +246,7 @@ export function ImageHolder({
           <img
             src={src}
             alt={alt}
+            onError={() => setFailedSrc(src)}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         </button>
