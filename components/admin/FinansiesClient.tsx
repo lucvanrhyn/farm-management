@@ -27,6 +27,10 @@ interface Props {
   initialTransactions: Transaction[];
   initialIncome: Category[];
   initialExpense: Category[];
+  /** Camp list threaded down to the TransactionModal camp <select>. */
+  camps?: { camp_id: string; camp_name: string }[];
+  /** Farm mode/species threaded down to the TransactionModal AnimalPicker. */
+  species?: string | null;
 }
 
 export default function FinansiesClient({
@@ -34,6 +38,8 @@ export default function FinansiesClient({
   initialTransactions,
   initialIncome,
   initialExpense,
+  camps,
+  species,
 }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [incomeCategories, setIncomeCategories] = useState<Category[]>(initialIncome);
@@ -151,6 +157,8 @@ export default function FinansiesClient({
         expenseCategories={expenseCategories}
         onChanged={refreshTransactions}
         farmSlug={farmSlug}
+        camps={camps}
+        species={species}
       />
 
       {/* Category manager */}

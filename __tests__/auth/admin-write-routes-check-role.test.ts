@@ -182,6 +182,11 @@ const NON_ADMIN_WRITE: ReadonlySet<string> = new Set([
   // authenticated tenant member may upload (matches the existing
   // photos/upload allowance — there is no admin-only photo channel today).
   'animals/[id]/photos/route.ts::POST',
+  // Image-holder feature (PRD 2026-06-19) — primary animal photo write. Same
+  // photo contract as the gallery upload above (uploadPhoto + a single
+  // Animal.photoUrl set). Any authenticated tenant member may set an animal's
+  // primary photo; there is no admin-only photo channel today.
+  'animals/[id]/photo/route.ts::PATCH',
 
   // Wave H1 (#173) — proxy-matcher exclusions wrapped in `publicHandler`.
   // publicHandler is the no-auth adapter; these routes intentionally have no

@@ -34,6 +34,7 @@ import {
   Cloud,
   Landmark,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import type { FarmMode } from "@/lib/farm-mode";
 import type { FarmTier } from "@/lib/tier";
@@ -88,6 +89,7 @@ const CATTLE_NAV_ITEMS: NavItem[] = [
   { path: "/tools/drought", label: "Drought", icon: Cloud, group: "Camps & Grazing", premiumOnly: true },
 
   { path: "/admin/finansies", label: "Finances", icon: Receipt, group: "Finance", premiumOnly: true },
+  { path: "/admin/profitability", label: "Profitability", icon: TrendingUp, group: "Finance", premiumOnly: true },
   { path: "/tools/break-even", label: "Break-even", icon: Calculator, group: "Finance", premiumOnly: true },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
 
@@ -119,6 +121,7 @@ const SHEEP_NAV_ITEMS: NavItem[] = [
   { path: "/tools/feed-on-offer", label: "Feed on Offer", icon: Wheat, group: "Camps & Grazing", premiumOnly: true },
   { path: "/tools/drought", label: "Drought", icon: Cloud, group: "Camps & Grazing", premiumOnly: true },
 
+  { path: "/admin/profitability", label: "Profitability", icon: TrendingUp, group: "Finance", premiumOnly: true },
   { path: "/tools/break-even", label: "Break-even", icon: Calculator, group: "Finance", premiumOnly: true },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
 
@@ -149,6 +152,7 @@ const GAME_NAV_ITEMS: NavItem[] = [
   { path: "/tools/feed-on-offer", label: "Feed on Offer", icon: Wheat, group: "Camps & Grazing", premiumOnly: true },
   { path: "/tools/drought", label: "Drought", icon: Cloud, group: "Camps & Grazing", premiumOnly: true },
 
+  { path: "/admin/profitability", label: "Profitability", icon: TrendingUp, group: "Finance", premiumOnly: true },
   { path: "/tools/break-even", label: "Break-even", icon: Calculator, group: "Finance", premiumOnly: true },
   { path: "/admin/settings/subscription", label: "Subscription", icon: CreditCard, group: "Finance" },
 

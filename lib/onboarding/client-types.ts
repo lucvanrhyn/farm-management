@@ -60,6 +60,7 @@ export const IMPORT_ROW_FIELDS = [
   "deceasedAt",
   "sireNote",
   "damNote",
+  "purchasePrice",
 ] as const;
 
 export type ImportRowField = (typeof IMPORT_ROW_FIELDS)[number];

@@ -34,6 +34,8 @@ const BASE_SETTINGS: FarmSettingsData = {
   calvingAlertDays: 14,
   daysOpenLimit: 365,
   campGrazingWarningDays: 7,
+  repeatedTreatmentCount: 3,
+  repeatedTreatmentWindowDays: 90,
   targetStockingRate: null,
   latitude: null,
   longitude: null,

@@ -32,8 +32,15 @@ type EditableFields = Pick<
   | "registrationNumber"
   | "motherId"
   | "fatherId"
+  | "purchasePrice"
+  | "purchaseDate"
+  | "estimatedValue"
 >;
 
+// `purchasePrice` and `estimatedValue` are Float columns — they are NOT in this
+// generic string-diff loop (handled specially in handleSubmit so they diff
+// against the stringified original and serialize as Number|null). `purchaseDate`
+// is a plain String? column, so it rides the generic loop like the other dates.
 const FIELDS: ReadonlyArray<keyof EditableFields> = [
   "name",
   "breed",
@@ -44,6 +51,7 @@ const FIELDS: ReadonlyArray<keyof EditableFields> = [
   "registrationNumber",
   "motherId",
   "fatherId",
+  "purchaseDate",
 ];
 
 function emptyToNull(v: string): string | null {
@@ -68,6 +76,11 @@ export default function EditAnimalModal({
     registrationNumber: animal.registrationNumber ?? "",
     motherId: animal.motherId ?? "",
     fatherId: animal.fatherId ?? "",
+    // Float columns: stringify the numeric original so the form holds strings
+    // uniformly. handleSubmit diffs them back against String(original).
+    purchasePrice: animal.purchasePrice != null ? String(animal.purchasePrice) : "",
+    purchaseDate: animal.purchaseDate ?? "",
+    estimatedValue: animal.estimatedValue != null ? String(animal.estimatedValue) : "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,13 +100,24 @@ export default function EditAnimalModal({
     // receives (cross-species parent guard, camp-guard); narrowing the
     // body avoids triggering those guards for fields the user didn't
     // touch.
-    const patch: Record<string, string | null> = {};
+    const patch: Record<string, string | number | null> = {};
     for (const key of FIELDS) {
       const original = (animal[key] as string | null) ?? "";
       const next = form[key];
       if (next !== original) {
         // Empty string maps to null on the server side for nullable cols.
         patch[key] = emptyToNull(next);
+      }
+    }
+
+    // purchasePrice + estimatedValue are Float columns — diff against the
+    // stringified original and send a number (or null), never a string, so
+    // prisma.animal.update writes the correct type.
+    for (const key of ["purchasePrice", "estimatedValue"] as const) {
+      const orig = animal[key] != null ? String(animal[key]) : "";
+      if (form[key] !== orig) {
+        const trimmed = form[key].trim();
+        patch[key] = trimmed === "" ? null : Number(trimmed);
       }
     }
 
@@ -189,6 +213,31 @@ export default function EditAnimalModal({
             label="Studbook / registration nr"
             value={form.registrationNumber}
             onChange={(v) => setField("registrationNumber", v)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              id="edit-animal-purchase-price"
+              label="Purchase price (R)"
+              type="number"
+              value={form.purchasePrice}
+              onChange={(v) => setField("purchasePrice", v)}
+              placeholder="Home-bred — leave blank"
+            />
+            <Field
+              id="edit-animal-purchase-date"
+              label="Purchase date"
+              type="date"
+              value={form.purchaseDate}
+              onChange={(v) => setField("purchaseDate", v)}
+            />
+          </div>
+          <Field
+            id="edit-animal-estimated-value"
+            label="Estimated sale value (R)"
+            type="number"
+            value={form.estimatedValue}
+            onChange={(v) => setField("estimatedValue", v)}
+            placeholder="Optional override"
           />
           <div className="grid grid-cols-2 gap-3">
             <Field

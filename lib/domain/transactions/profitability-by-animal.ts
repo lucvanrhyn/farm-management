@@ -31,12 +31,18 @@ export async function getProfitabilityByAnimal(
   const [transactions, animals] = await Promise.all([
     prisma.transaction.findMany({
       where: txWhere,
-      select: { animalId: true, campId: true, type: true, amount: true },
+      select: { animalId: true, campId: true, type: true, amount: true, category: true },
     }),
     // cross-species by design: profitability-per-animal spans every species.
     crossSpecies(prisma, 'analytics-rollup').animal.findMany({
       where: { status: 'Active' },
-      select: { animalId: true, name: true, category: true, currentCamp: true },
+      select: {
+        animalId: true,
+        name: true,
+        category: true,
+        currentCamp: true,
+        purchasePrice: true,
+      },
     }),
   ])
 
@@ -48,6 +54,9 @@ export async function getProfitabilityByAnimal(
       animalId: t.animalId!,
       type: t.type.toLowerCase(),
       amount: t.amount,
+      // category carries the ledger category (e.g. "Animal Purchases") so the
+      // calc can skip a tagged purchase tx when the purchasePrice column wins.
+      category: t.category,
     }))
 
   const campTransactions = transactions
@@ -65,6 +74,8 @@ export async function getProfitabilityByAnimal(
     name: a.name,
     category: a.category,
     currentCamp: a.currentCamp,
+    // purchasePrice column wins over tagged "Animal Purchases" tx (reconciliation).
+    purchasePrice: a.purchasePrice,
   }))
 
   return calcProfitabilityByAnimal({

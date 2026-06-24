@@ -56,6 +56,42 @@ describe("projectAttentionItems", () => {
     expect(items.map((i) => i.animalId)).toEqual(["a2", "a1"]);
   });
 
+  it("a RED animal always outranks an all-amber animal even when the amber Σ-urgency is higher", () => {
+    // Regression (wave animal-mob-profitability): the three new amber reasons
+    // (open-cow 18 / unprofitable 19 / repeated-treatments 20) let one animal's
+    // SUMMED amber urgency exceed a single red's weight (in-withdrawal = 101).
+    // Severity tier must be the PRIMARY sort key so a food-safety / regulatory
+    // red is never buried under a stack of amber management signals. The
+    // per-reason weight band (min red > max amber) does NOT guarantee this once
+    // an animal carries many ambers — only a severity-first sort does.
+    const items = projectAttentionItems([
+      f("amber1", "no-camp"), // 15
+      f("amber1", "missing-id"), // 14
+      f("amber1", "poor-doer"), // 16
+      f("amber1", "open-cow"), // 18
+      f("amber1", "unprofitable"), // 19
+      f("amber1", "repeated-treatments"), // 20  → Σ = 102
+      f("red1", "in-withdrawal"), // 101
+    ]);
+    const amberItem = items.find((i) => i.animalId === "amber1")!;
+    const redItem = items.find((i) => i.animalId === "red1")!;
+    // The amber stack IS numerically higher in urgency …
+    expect(amberItem.urgency).toBeGreaterThan(redItem.urgency);
+    // … yet the red animal still ranks first (severity tier wins).
+    expect(items[0].animalId).toBe("red1");
+    expect(items[0].severity).toBe("red");
+  });
+
+  it("within the red tier, ranks by urgency descending", () => {
+    const items = projectAttentionItems([
+      f("r1", "in-withdrawal"), // red, urgency 101
+      f("r2", "in-withdrawal"), // red, urgency 101 + amber → higher
+      f("r2", "no-camp"),
+    ]);
+    // Both red; r2 has the higher summed urgency so it leads.
+    expect(items.map((i) => i.animalId)).toEqual(["r2", "r1"]);
+  });
+
   it("tie-break: equal urgency → more reasons first", () => {
     // Construct two animals with the same urgency total but different counts.
     // dosing-overdue(17) == no-camp(15)+no-weight-on-record(11)? No — pick a

@@ -284,6 +284,91 @@ describe("commitImport", () => {
     });
   });
 
+  // 6b. purchasePrice — parsed string → Float, lenient on absence, strict on garbage
+  describe("purchasePrice (optional import column)", () => {
+    it("parses a numeric purchasePrice string into a Float on the created animal", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "BUY-1", purchasePrice: "1500.50" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0]).toMatchObject({
+        animalId: "BUY-1",
+        purchasePrice: 1500.5,
+      });
+    });
+
+    it("writes null purchasePrice when the column is absent (home-bred)", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "HOME-1" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0].purchasePrice).toBeNull();
+    });
+
+    it("writes null purchasePrice for a blank/whitespace cell (not 0, not error)", async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "BLANK-1", purchasePrice: "   " })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(1);
+      expect(state.insertedAnimals[0].purchasePrice).toBeNull();
+    });
+
+    it('rejects a non-numeric purchasePrice with "invalid purchasePrice"', async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "BAD-PRICE", purchasePrice: "R abc" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(0);
+      expect(res.skipped).toBe(1);
+      expect(res.errors[0]).toMatchObject({
+        row: 1,
+        earTag: "BAD-PRICE",
+        reason: "invalid purchasePrice",
+      });
+    });
+
+    it('rejects a negative purchasePrice with "invalid purchasePrice"', async () => {
+      const state = makeState();
+      const { prisma } = makeMockPrisma(state);
+
+      const res = await commitImport(prisma, {
+        rows: [mkRow({ earTag: "NEG-PRICE", purchasePrice: "-100" })],
+        importJobId: DEFAULT_JOB_ID,
+        defaultSpecies: "cattle",
+      });
+
+      expect(res.inserted).toBe(0);
+      expect(res.errors[0]).toMatchObject({
+        row: 1,
+        earTag: "NEG-PRICE",
+        reason: "invalid purchasePrice",
+      });
+    });
+  });
+
   // 7. Pedigree — sire in same batch → topological sort
   it("inserts sires before children when both are in the same batch", async () => {
     const state = makeState();

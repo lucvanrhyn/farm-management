@@ -23,6 +23,10 @@ vi.mock("@/lib/server/treatment-analytics", () => ({
   getAnimalsInWithdrawal: vi.fn(() => Promise.resolve([])),
 }));
 
+vi.mock("@/lib/server/reproduction-analytics", () => ({
+  getReproStats: vi.fn(() => Promise.resolve({ daysOpen: [] })),
+}));
+
 vi.mock("@/lib/server/species-scoped-prisma", () => ({
   scoped: (_p: unknown, mode: string) => {
     mocks.scopedCalls.push(mode);
@@ -46,12 +50,17 @@ const THRESHOLDS = {
   daysOpenLimit: 365,
   campGrazingWarningDays: 7,
   staleCampInspectionHours: 48,
+  repeatedTreatmentCount: 3,
+  repeatedTreatmentWindowDays: 90,
 };
 
 function makePrisma() {
   return {
     farmSpeciesSettings: {
       findMany: vi.fn(() => Promise.resolve(mocks.speciesSettings)),
+    },
+    transaction: {
+      findMany: vi.fn(() => Promise.resolve([])),
     },
   } as unknown as Parameters<typeof getTriage>[0];
 }

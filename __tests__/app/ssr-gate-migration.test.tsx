@@ -62,6 +62,13 @@ vi.mock('@/components/admin/UpgradePrompt', () => ({ default: () => null }));
 vi.mock('@/components/rotation/RotationPlannerClient', () => ({ default: () => null }));
 vi.mock('@/lib/server/rotation-engine', () => ({ getRotationStatusByCamp: vi.fn().mockResolvedValue({ camps: [] }) }));
 vi.mock('@/lib/server/get-farm-mode', () => ({ getFarmMode: vi.fn().mockResolvedValue('cattle') }));
+// Feed mechanism (PRD 2026-06-19): finansies page now calls getCachedCampList
+// (unstable_cache — no incrementalCache in unit SSR). Spread-override so the
+// other cached helpers other pages in this multi-page test use stay intact.
+vi.mock('@/lib/server/cached', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/cached')>()),
+  getCachedCampList: vi.fn().mockResolvedValue([]),
+}));
 vi.mock('@/lib/server/species-scoped-prisma', () => ({
   scoped: vi.fn(() => ({
     camp: { findMany: vi.fn().mockResolvedValue([]) },

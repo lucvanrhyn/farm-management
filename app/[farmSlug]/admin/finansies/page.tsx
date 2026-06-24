@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { Suspense } from "react";
+import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import FinansiesClient from "@/components/admin/FinansiesClient";
 import FinancialAnalyticsPanelLazy from "@/components/admin/FinancialAnalyticsPanelLazy";
@@ -12,6 +13,8 @@ import ClearSectionButton from "@/components/admin/ClearSectionButton";
 import ExportButton from "@/components/admin/ExportButton";
 import DateRangePicker from "@/components/admin/DateRangePicker";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
+import { getCachedCampList } from "@/lib/server/cached";
+import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { DEFAULT_CATEGORIES } from "@/lib/constants/default-categories";
 import { getFarmCreds } from "@/lib/meta-db";
 import UpgradePrompt from "@/components/admin/UpgradePrompt";
@@ -57,7 +60,7 @@ export default async function FinansiesPage({
     }
   }
 
-  const [transactions, categories] = await Promise.all([
+  const [transactions, categories, camps, mode] = await Promise.all([
     prisma.transaction.findMany({
       // Newest first. Secondary sort on `id desc` gives us a deterministic
       // total order even when two rows share the exact same `date`, which
@@ -70,6 +73,10 @@ export default async function FinansiesPage({
     }),
     // audit-allow-findmany: category list is bounded (~30 default categories per farm).
     prisma.transactionCategory.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
+    // Camp list for the TransactionModal camp <select> (feed/lick allocation tagger).
+    getCachedCampList(farmSlug),
+    // Farm mode scopes the TransactionModal AnimalPicker search to the active species.
+    getFarmMode(farmSlug),
   ]);
 
   const incomeCategories = categories.filter((c) => c.type === "income");
@@ -82,7 +89,14 @@ export default async function FinansiesPage({
           title="Finance"
           subtitle="finance ledger"
           right={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/${farmSlug}/admin/profitability`}
+                className="ft-mono"
+                style={{ fontSize: 12.5, color: "var(--ft-subtle)", textDecoration: "none", whiteSpace: "nowrap" }}
+              >
+                See Profitability →
+              </Link>
               <ExportButton farmSlug={farmSlug} exportType="transactions" label="Export" />
             </div>
           }
@@ -95,6 +109,8 @@ export default async function FinansiesPage({
           }))}
           initialIncome={incomeCategories}
           initialExpense={expenseCategories}
+          camps={camps.map((c) => ({ camp_id: c.camp_id, camp_name: c.camp_name }))}
+          species={mode}
         />
         <div className="mb-4">
           <Suspense fallback={<div className="h-9" />}>

@@ -34,6 +34,9 @@ export const HISTORY_REASON_IDS = [
   "poor-doer",
   "dosing-overdue",
   "in-withdrawal",
+  "open-cow",
+  "unprofitable",
+  "repeated-treatments",
 ] as const satisfies readonly ReasonId[];
 
 export type ReasonCategory = "snapshot" | "history";
@@ -48,6 +51,9 @@ const REASON_LABELS: Record<ReasonId, string> = {
   "poor-doer": "Poor doer",
   "dosing-overdue": "Dosing overdue",
   "in-withdrawal": "In withdrawal",
+  "open-cow": "Open cow",
+  "unprofitable": "Unprofitable",
+  "repeated-treatments": "Repeated treatments",
 };
 
 /**
@@ -58,6 +64,9 @@ const UNLOCK_HINTS: Record<(typeof HISTORY_REASON_IDS)[number], string> = {
   "poor-doer": "Log weighings to surface cattle that are falling behind.",
   "dosing-overdue": "Log dosings to surface sheep that are due again.",
   "in-withdrawal": "Log treatments to flag animals inside a withdrawal window.",
+  "open-cow": "Log calvings + pregnancy scans to surface cows open too long.",
+  "unprofitable": "Tag income & costs to animals to surface money-losers.",
+  "repeated-treatments": "Log treatments to flag animals treated again and again.",
 };
 
 /** Human Title-Case label for a reason id. */

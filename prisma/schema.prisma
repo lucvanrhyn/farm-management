@@ -112,6 +112,17 @@ model Animal {
   // scope is implicitly per-farm — there is no global `Animal` table.
   clientLocalId  String?    @unique
 
+  // Profitability (PRD 2026-06-19) — acquisition cost basis + sale-value estimate.
+  // All money is ZAR; dates are String "YYYY-MM-DD" (matches dateOfBirth/dateAdded,
+  // never DateTime — DateTime is reserved for system timestamps). Null for home-bred
+  // (cost = accrued rearing) / when the farmer has not set an override.
+  purchasePrice  Float?  // total ZAR paid to acquire this animal (null = home-bred)
+  purchaseDate   String? // acquisition date, "YYYY-MM-DD"
+  estimatedValue Float?  // per-animal sale-value override (tier-3, wins over R/kg + flat fallback)
+  // Primary/profile photo (image-holder feature). A single chosen image, distinct
+  // from the multi-photo gallery (Observation.attachmentUrl rows). Null = no photo.
+  photoUrl       String? // Vercel Blob URL of the animal's primary photo
+
   @@index([currentCamp, status], name: "idx_animal_camp_status")
   @@index([status], name: "idx_animal_status")
   @@index([species, status], name: "idx_animal_species_status")
@@ -168,6 +179,9 @@ model FarmSettings {
   calvingAlertDays        Int      @default(14) // days before expected calving to alert
   daysOpenLimit           Int      @default(365) // max acceptable days open for a cow
   campGrazingWarningDays  Int      @default(7) // days grazing remaining to trigger camp warning
+  // Repeated-treatments underperformer triage (PRD 2026-06-19)
+  repeatedTreatmentWindowDays Int  @default(90) // rolling lookback window (days) for counting treatments
+  repeatedTreatmentCount      Int  @default(3) // treatment count within the window that flags an animal
   // Rotation planner defaults
   defaultRestDays         Int      @default(60) // target rest period between grazings (days)
   defaultMaxGrazingDays   Int      @default(7) // max days a mob stays in a camp before overstay alert

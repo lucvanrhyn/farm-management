@@ -30,6 +30,12 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/farm-prisma", () => ({ getPrismaForFarm: getPrismaForFarmMock, wrapPrismaWithRetry: (_slug: string, client: unknown) => client }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
 vi.mock("@/lib/constants/default-categories", () => ({ DEFAULT_CATEGORIES: [] }));
+// Feed mechanism (PRD 2026-06-19): finansies page now fetches the camp list +
+// farm mode to thread the TransactionModal animal/camp taggers. Stub both —
+// getCachedCampList wraps unstable_cache (no incrementalCache in unit SSR) and
+// getFarmMode reads cookies (no request scope).
+vi.mock("@/lib/server/cached", () => ({ getCachedCampList: vi.fn().mockResolvedValue([]) }));
+vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: vi.fn().mockResolvedValue("cattle") }));
 
 // Stub every render-heavy child so the test stays focused on the Prisma
 // call-site.

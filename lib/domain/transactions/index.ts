@@ -32,6 +32,10 @@ export {
 } from "./reset-transactions";
 export { getProfitabilityByAnimal } from "./profitability-by-animal";
 export {
+  getAnimalProfitabilityView,
+  type AnimalProfitabilityViewRow,
+} from "./animal-profitability-view";
+export {
   TransactionNotFoundError,
   InvalidSaleTypeError,
   InvalidDateFormatError,

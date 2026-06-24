@@ -76,6 +76,21 @@ function TriageRow({ item, farmSlug }: { item: AttentionItem; farmSlug: string }
       </div>
       <p className="mt-2" style={{ fontSize: 13, color: "var(--ft-muted)" }}>
         {narrateTriageItem(item)}
+        {item.advisory ? (
+          <span
+            className="ft-mono"
+            title={item.advisory}
+            style={{
+              marginLeft: 6,
+              fontSize: 11,
+              letterSpacing: ".03em",
+              textTransform: "uppercase",
+              color: "var(--ft-subtle)",
+            }}
+          >
+            (advisory)
+          </span>
+        ) : null}
       </p>
     </Link>
   );
