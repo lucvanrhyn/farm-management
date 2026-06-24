@@ -74,7 +74,7 @@ export default async function AnimalDetailPage({
     // Wave 5a / #264 — photos aggregation for the new Photos tab.
     getAnimalPhotos(prisma, id),
     // Transaction categories for the Investment tab's "Add cost / income" modal.
-    // audit-allow-findmany: category list is bounded (~30 default categories per farm).
+    // audit-allow-findmany-no-select: category list is bounded (~30 default categories per farm); the TransactionModal consumes the full TransactionCategory type.
     prisma.transactionCategory.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
   ]);
 
