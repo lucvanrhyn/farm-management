@@ -57,7 +57,7 @@ vi.mock("@/lib/farm-prisma", () => ({
 }));
 vi.mock("@/lib/server/get-farm-mode", () => ({ getFarmMode: getFarmModeMock }));
 vi.mock("@/lib/meta-db", () => ({ getFarmCreds: getFarmCredsMock }));
-vi.mock("@/lib/auth", () => ({ getSession: getSessionMock }));
+vi.mock("@/lib/auth", () => ({ getSession: getSessionMock, requireSession: getSessionMock }));
 vi.mock("@/lib/species/game/analytics", () => ({
   getCensusPopulationByCamp: getCensusPopulationByCampMock,
 }));
