@@ -23,6 +23,7 @@
 import { createClient } from '@libsql/client';
 import { hashSync } from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import { createMetaTables } from '../lib/meta-schema';
 
 // ── Validate env ──────────────────────────────────────────────────────────────
 
@@ -104,43 +105,14 @@ const client = createClient({
 // ── DDL ───────────────────────────────────────────────────────────────────────
 
 async function createTables() {
-  await client.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS users (
-      id                    TEXT PRIMARY KEY,
-      email                 TEXT UNIQUE,
-      username              TEXT UNIQUE NOT NULL,
-      password_hash         TEXT NOT NULL,
-      name                  TEXT,
-      email_verified        INTEGER NOT NULL DEFAULT 0,
-      verification_token    TEXT,
-      verification_expires  TEXT,
-      created_at            TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS farms (
-      id               TEXT PRIMARY KEY,
-      slug             TEXT UNIQUE NOT NULL,
-      display_name     TEXT NOT NULL,
-      turso_url        TEXT NOT NULL,
-      turso_auth_token TEXT NOT NULL,
-      logo_url         TEXT,
-      tier             TEXT NOT NULL DEFAULT 'advanced',
-      created_at       TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS farm_users (
-      user_id  TEXT NOT NULL REFERENCES users(id),
-      farm_id  TEXT NOT NULL REFERENCES farms(id),
-      role     TEXT NOT NULL,
-      PRIMARY KEY (user_id, farm_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS "RateLimit" (
-      "key"           TEXT PRIMARY KEY,
-      "windowStartMs" INTEGER NOT NULL,
-      "count"         INTEGER NOT NULL
-    );
-  `);
+  // Full base schema lives in lib/meta-schema.ts (META_BASE_DDL) so it is the
+  // single source of truth shared by this seed and the fresh-provision
+  // regression test. It now carries branch_db_clones, vitals_events,
+  // consulting_* and the farms subscription/billing/legacy columns that
+  // previously only existed via hand-rolled migrate-meta-*.ts scripts — closing
+  // the gap where a freshly-seeded meta DB was un-provisionable (migration 0001
+  // ALTERed a branch_db_clones table the seed never created).
+  await createMetaTables(client);
   console.log('Tables created (or already exist).');
 }
 
