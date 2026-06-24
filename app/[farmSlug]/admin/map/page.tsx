@@ -8,8 +8,7 @@ export const dynamic = "force-dynamic";
  * FarmMap's LayerToggle.
  */
 
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmCreds } from "@/lib/meta-db";
 import { crossSpecies } from "@/lib/server/species-scoped-prisma";
@@ -25,8 +24,7 @@ export default async function AdminMapPage({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getSession();
-  if (!session) redirect(`/${farmSlug}/login`);
+  await requireSession(`/${farmSlug}/admin/map`);
 
   const creds = await getFarmCreds(farmSlug);
   if (!creds) {

@@ -34,6 +34,34 @@ const eslintConfig = defineConfig([
       "no-empty": ["error", { allowEmptyCatch: false }],
     },
   },
+  // #105 cluster 2 — SSR pages/layouts must route auth through the lib/auth.ts
+  // helpers (requireSession / requireFarmAdmin / requirePlatformAdmin /
+  // getSession), never raw next-auth. The repo-wide audit-raw-getsession script
+  // bans the getServerSession *call*; this is the import-level guard at the
+  // highest-risk surface, so a hand-rolled inline SSR auth gate cannot reappear.
+  {
+    files: ["app/**/page.tsx", "app/**/layout.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next-auth",
+              importNames: ["getServerSession"],
+              message:
+                "SSR pages/layouts must use lib/auth.ts helpers (requireSession / requireFarmAdmin / getSession), not raw getServerSession.",
+            },
+            {
+              name: "@/lib/auth-options",
+              message:
+                "Do not import authOptions in pages/layouts — use the lib/auth.ts helpers (requireSession / requireFarmAdmin / getSession).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

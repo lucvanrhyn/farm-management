@@ -14,9 +14,8 @@ export const dynamic = "force-dynamic";
  *   4. Hand { pins, tour, campData } to the RouteTodayMap client.
  */
 
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { getPrismaForFarm } from "@/lib/farm-prisma";
 import { getFarmMode } from "@/lib/server/get-farm-mode";
 import { scoped } from "@/lib/server/species-scoped-prisma";
@@ -33,8 +32,7 @@ export default async function RouteTodayPage({
 }) {
   const { farmSlug } = await params;
 
-  const session = await getSession();
-  if (!session) redirect(`/${farmSlug}/login`);
+  await requireSession(`/${farmSlug}/admin/map/route-today`);
 
   const creds = await getFarmCreds(farmSlug);
   if (!creds || creds.tier === "basic") {
